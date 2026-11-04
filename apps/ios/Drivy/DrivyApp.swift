@@ -55,6 +55,9 @@ struct DrivyApp: App {
         SchoolPushCenter.shared.configure(client: configuration.map {
             SchoolNotificationClient(baseURL: $0.apiBaseURL, tokenSource: identity, transport: transport)
         })
+        // Toute fin de session révoque l'appareil push (#120). L'accroche est posée ici, avant la restauration du
+        // lancement (voir `application`) : une restauration qui échoue ne doit pas passer inaperçue.
+        identity.sessionEnded = { await SchoolPushCenter.shared.sessionEnding() }
     }
 
     var body: some Scene {

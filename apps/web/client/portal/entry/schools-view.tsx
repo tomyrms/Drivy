@@ -8,6 +8,17 @@ import { managesSchool, rolesLabel, schoolsHeading, type EntryRoutes } from './e
 import { SignedInCodePanel } from './account-entry-panel';
 import type { EntrySessionState } from './use-entry-session';
 
+/**
+ * The session is known to be signed in but /me and the schools are still being read: the code form is usable at once,
+ * with what was already typed. It grants nothing; the server answers when the code is sent.
+ */
+export function SchoolsPending({ state }: { state: EntrySessionState }) {
+  return <section className="entry-section" aria-label="Vos écoles">
+    <SignedInCodePanel typedCode={state.typedCode} onSignedIn={state.signedIn} onCancel={() => state.typedCode.set('')} />
+    <div className="entry-school-skeleton" aria-hidden="true"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>
+  </section>;
+}
+
 /** Linked schools of the signed-in person, a pending invitation and the receipt of an acceptance (#319). */
 export function SchoolsView({ state, routes }: { state: EntrySessionState; routes: EntryRoutes }) {
   const uid = useId();
@@ -35,7 +46,7 @@ export function SchoolsView({ state, routes }: { state: EntrySessionState; route
           <Button variant="ghost" disabled={busy} onClick={() => state.refresh('Actualisation de vos écoles…')}><RefreshCw aria-hidden="true" />Actualiser</Button>
         </div>}
       </div>
-      {state.enteringCode && <SignedInCodePanel onSignedIn={state.signedIn} onCancel={() => state.setEnteringCode(false)} />}
+      {state.enteringCode && <SignedInCodePanel typedCode={state.typedCode} onSignedIn={state.signedIn} onCancel={() => state.setEnteringCode(false)} />}
       {memberships.length > 0
         ? <ul className="entry-school-list">{memberships.map(member => <li key={member.membershipId}>
             <span className="entry-icon-tile"><Building2 aria-hidden="true" /></span>

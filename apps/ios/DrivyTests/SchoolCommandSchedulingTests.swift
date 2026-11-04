@@ -37,11 +37,16 @@ import Testing
     @Test func sharedDomainAndSchoolBarrierStillRejectConflictingOperations() throws {
         try inDirectory { directory in
             let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
-            let invitation = try command(.createInvitation)
-            try store.save(invitation)
-            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(command(.createInvitation)) }
+            let target = UUID()
+            let resend = try command(.resendInvitation, resourceID: target, version: 2)
+            try store.save(resend)
+            // #106 : deux invitations distinctes coexistent ; la même invitation reste séquentielle.
+            try store.save(command(.resendInvitation, resourceID: UUID(), version: 2))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.resendInvitation, resourceID: target, version: 2))
+            }
             #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(command(.updateSchool)) }
-            #expect(try store.pending(for: scope, domain: .school) == invitation)
+            #expect(try store.pending(for: scope, domain: .school) == resend)
         }
     }
 
@@ -57,15 +62,19 @@ import Testing
         }
     }
 
-    /// #112 : les signalements d’une leçon s’alignent ; ceux d’une autre leçon, la fin de leçon ou une autre époque attendent.
-    @Test func observationsOfOneLessonQueueAndStillBlockTheRestOfTeaching() throws {
+    /// #112 : les signalements d’une même leçon s’alignent ; #106 : ceux d’une autre leçon sont indépendants.
+    /// La fin de leçon, une autre époque et une invitation gardent leurs règles.
+    @Test func observationsQueuePerLessonAndAnotherLessonStaysIndependent() throws {
         try inDirectory { directory in
             let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
             let lesson = UUID()
             let first = try observation(lesson), second = try observation(lesson)
             try store.save(first)
             try store.save(second)
-            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(observation(UUID())) }
+            // Une autre leçon n'écrit ni la même leçon, ni le même brouillon, ni la même capture.
+            let elsewhere = try observation(UUID())
+            try store.save(elsewhere)
+            #expect(try store.pendingCommands(for: scope).count == 3)
             let completionID = UUID()
             let completion = PendingSchoolCommand(id: completionID, scope: scope, kind: .completeLesson, resourceVersion: 1,
                 createdAt: Date(), body: try JSONSerialization.data(withJSONObject: ["operationId": completionID.uuidString]),
@@ -77,7 +86,7 @@ import Testing
             // Une invitation reste indépendante du domaine pédagogique.
             try store.save(command(.createInvitation))
             let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
-            #expect(try reopened.pendingCommands(for: scope).prefix(2) == [first, second])
+            #expect(try reopened.pendingCommands(for: scope).prefix(3) == [first, second, elsewhere])
             #expect(try reopened.pending(for: scope, domain: .teaching) == first)
             try reopened.remove(first)
             #expect(try store.pending(for: scope, domain: .teaching) == second)
@@ -91,12 +100,13 @@ import Testing
             routeResourceID: lesson)
     }
 
-    private func command(_ kind: SchoolCommandKind, scope: SchoolCommandScope? = nil) throws -> PendingSchoolCommand {
+    private func command(_ kind: SchoolCommandKind, scope: SchoolCommandScope? = nil, resourceID: UUID? = nil,
+                         version: Int? = nil) throws -> PendingSchoolCommand {
         let id = UUID(), scope = scope ?? self.scope
         return PendingSchoolCommand(id: id, scope: scope, kind: kind,
-            resourceVersion: kind == .createInvitation ? 0 : 1, createdAt: Date(),
+            resourceVersion: version ?? (kind == .createInvitation ? 0 : 1), createdAt: Date(),
             body: try JSONSerialization.data(withJSONObject: ["operationId": id.uuidString]),
-            resourceID: kind == .savePlanningDefaults ? scope.membershipID : nil)
+            resourceID: resourceID ?? (kind == .savePlanningDefaults ? scope.membershipID : nil))
     }
     private func inDirectory(_ body: (URL) throws -> Void) throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("Scheduling-\(UUID().uuidString)")

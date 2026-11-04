@@ -217,6 +217,8 @@ struct SchoolProfileWorkspaceTests {
         api.receipt = ProfileFixture.receipt(original)
         let model = ProfileFixture.workspace(api: api, box: box)
         await model.load()
+        // Une observation en attente reste une barrière pour le dossier (l'écriture de profil est du domaine de
+        // l'école, la file la refuserait) et ne se vérifie pas depuis cet écran (#106).
         #expect(model.profile != nil && !model.canVerifyPending && !model.canRetryPending && !model.canMutate)
         await model.verifyPending()
         #expect(api.operationRequests.isEmpty && api.commands.isEmpty)

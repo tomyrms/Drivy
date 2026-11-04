@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:push-device-revocation:1",
+  "$comment": "Révocation d'un appareil push sans jeton d'accès (#120/#74). Extension hors canon OpenAPI 3.11.0 : les routes push n'y figurent pas, comme les préférences de notification. Le secret n'est rendu qu'à l'enregistrement ; seule son empreinte SHA-256 est conservée.",
+  "$defs": {
+    "PushDeviceRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "requestId": { "type": "string", "format": "uuid" },
+        "serverTime": { "type": "string", "format": "date-time" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["registered", "revocationSecret"],
+          "properties": {
+            "registered": { "const": true },
+            "revocationSecret": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{43}$",
+              "description": "32 octets aléatoires en base64url, rendus une seule fois à l'enregistrement."
+            }
+          }
+        }
+      }
+    },
+    "PushDeviceAnonymousRevocationCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "revocationSecret"],
+      "properties": {
+        "token": { "type": "string", "pattern": "^[0-9a-fA-F]{64,200}$" },
+        "revocationSecret": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "PushDeviceAnonymousRevocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {
+        "requestId": { "type": "string", "format": "uuid" },
+        "serverTime": { "type": "string", "format": "date-time" },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["revoked"],
+          "properties": { "revoked": { "const": true } }
+        }
+      }
+    }
+  }
+}

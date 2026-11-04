@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { readInvitationLink, type InvitationLink } from '../../invitation-link';
+import { clearLogoutNotice, noteSessionClosure, readLogoutNotice } from '../../logout-notice';
 import {
   acceptedSchema, endSession, errorMessage, meSchema, okSchema, previewSchema, request, RequestFailure, sessionSchema,
   type InvitationPreview, type Me, type Member, type Session,
@@ -31,6 +32,9 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
   const [linkMustReopen, setLinkMustReopen] = useState(false);
   const [linkError, setLinkError] = useState(invitationLink.error);
   const [enteringCode, setEnteringCode] = useState(false);
+  /** The code typed before the session was known; held in memory only, never in the address, storage or a log. */
+  const [typedCode, setTypedCode] = useState('');
+  const [logoutUnconfirmed, setLogoutUnconfirmed] = useState(readLogoutNotice);
   const inFlight = useRef(false);
   const generation = useRef(0);
   const acceptedSession = useRef<string | null>(null);
@@ -75,6 +79,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
       if (current !== generation.current) return;
     }
     setSession(next);
+    if (next.authenticated) { clearLogoutNotice(); setLogoutUnconfirmed(false); }
     if (invitationLink.error) throw new RequestFailure('INVITATION_INVALID');
     if (!next.authenticated) { setMe(null); return; }
     try {
@@ -159,9 +164,18 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
     if (loaded) heading.current?.focus({ preventScroll: true });
   }, [page, loaded]);
 
+  useEffect(() => {
+    // The person turned out to be signed in while a code was being typed: the code form follows them, with its text.
+    if (loaded && session?.authenticated && typedCode.trim()) setEnteringCode(true);
+  }, [loaded, session?.authenticated]);
+
   /** An opening code continues to the school form; otherwise the account page is read again. */
   function signedIn(kind: AccessKind | null) {
     setEnteringCode(false);
+    setTypedCode('');
+    // The code was read while the first reading was still waiting: that reading is now stale, replace it.
+    generation.current++;
+    inFlight.current = false;
     const destination = accountEntryDestination(kind);
     if (destination === '/app/ouvrir') { window.location.assign(routes.opening); return; }
     if (destination === '/app/invitation') navigate('invitation');
@@ -172,7 +186,9 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
   async function logout() {
     if (!session || uncertain) return;
     await perform('Déconnexion en cours…', async current => {
-      await endSession();
+      const closure = await endSession();
+      noteSessionClosure(closure);
+      setLogoutUnconfirmed(readLogoutNotice());
       if (current !== generation.current) return;
       setMe(null); setPreview(null); setSession(null); setAccepted(null); setReviewed(false);
       if (pageRef.current === 'invitation') setLinkMustReopen(true);
@@ -227,7 +243,7 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
 
   const authenticated = session?.authenticated === true;
   return {
-    page, session, me, preview, reviewed, setReviewed, loaded, busy, error, uncertain, linkMustReopen, linkError, enteringCode, setEnteringCode, heading,
+    page, session, me, preview, reviewed, setReviewed, loaded, busy, error, uncertain, linkMustReopen, linkError, enteringCode, setEnteringCode, typedCode: { value: typedCode, set: setTypedCode }, heading, logoutUnconfirmed,
     authenticated,
     personName: me?.displayName || session?.user?.displayName || 'Votre compte',
     /** The receipt of an acceptance is shown only to the session that sent it. */

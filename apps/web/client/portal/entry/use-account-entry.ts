@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { okSchema, request, sessionSchema } from '../../protocol';
+import { okSchema, request, sessionSchema, type Session } from '../../protocol';
 import {
   accessCodeSchema, accountCreationFailure, accountProblems, codeFromInput, codeProblem, createdAccountSchema, entryFailureMessage,
-  hasProblems, initialAccessKind, initialEntryStep, signInProblems, type AccessKind, type AccountDraft, type DraftProblems, type EntryStep,
+  hasProblems, initialAccessKind, initialEntryStep, signInProblems, singleFlight, type AccessKind, type AccountDraft, type DraftProblems, type EntryStep,
 } from './entry-model';
 
 export interface AccountEntryOptions {
@@ -12,6 +12,8 @@ export interface AccountEntryOptions {
   invitation?: boolean;
   /** The person is signed in and only types a code. */
   signedIn?: boolean;
+  /** The typed code can live above this form, so that it survives the page learning who is signed in. */
+  typedCode?: { value: string; set: (value: string) => void };
   onSignedIn: (kind: AccessKind | null) => void;
 }
 
@@ -20,9 +22,11 @@ export interface AccountEntryOptions {
  * Only a valid code (or link) can create an account. The password goes to the identity service and is never kept:
  * it is cleared after each attempt that leaves the form and at every change of step.
  */
-export function useAccountEntry({ initialCode, invitation = false, signedIn = false, onSignedIn }: AccountEntryOptions) {
+export function useAccountEntry({ initialCode, invitation = false, signedIn = false, typedCode, onSignedIn }: AccountEntryOptions) {
   const [step, setStep] = useState<EntryStep>(() => initialEntryStep({ signedIn, invitation, ...(initialCode ? { initialCode } : {}) }));
-  const [code, setCode] = useState(initialCode ?? '');
+  const [ownCode, setOwnCode] = useState(initialCode ?? '');
+  const code = typedCode ? typedCode.value : ownCode;
+  const setCode = typedCode ? typedCode.set : setOwnCode;
   const [kind, setKind] = useState<AccessKind | null>(() => initialAccessKind({ invitation, ...(initialCode ? { initialCode } : {}) }));
   const [schoolName, setSchoolName] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -34,39 +38,49 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
   const [showProblems, setShowProblems] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const started = useRef(false);
-  const inFlight = useRef(false);
+  const flight = useRef(singleFlight()).current;
+  const codeInput = useRef<HTMLInputElement>(null);
   const mounted = useRef(true);
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
-  useEffect(() => { if (started.current) heading.current?.focus({ preventScroll: true }); started.current = true; }, [step]);
+  useEffect(() => {
+    if (started.current) (step === 'code' ? codeInput : heading).current?.focus({ preventScroll: true });
+    started.current = true;
+  }, [step]);
   useEffect(() => {
     // An opening link already names its code: read what it opens, so that an expired link says so before the form.
-    if (initialCode) void run(async csrf => { await inspect(initialCode, csrf); });
+    if (initialCode) void run(session => inspect(initialCode, session));
   }, []);
 
-  async function run(action: (csrf: string) => Promise<void>) {
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setBusy(true); setError(null);
-    try {
-      const session = await request('session', sessionSchema);
-      if (mounted.current) await action(session.csrfToken);
-    }
-    catch (cause) { if (mounted.current) setError(entryFailureMessage(cause)); }
-    finally { inFlight.current = false; if (mounted.current) setBusy(false); }
+  async function run(action: (session: Session) => Promise<void>) {
+    await flight(async () => {
+      setBusy(true); setError(null);
+      try {
+        const session = await request('session', sessionSchema);
+        if (mounted.current) await action(session);
+      }
+      catch (cause) {
+        if (!mounted.current) return;
+        setError(entryFailureMessage(cause));
+        // The typed code stays in the field; the refusal is attached to it and takes the focus.
+        if (step === 'code') requestAnimationFrame(() => codeInput.current?.focus({ preventScroll: true }));
+      }
+      finally { if (mounted.current) setBusy(false); }
+    });
   }
-  async function inspect(value: string, csrf: string) {
-    const result = await request('access-code', accessCodeSchema, { csrf, body: { code: codeFromInput(value) } });
+  /** Reads what a code opens. Only the server's answer says whether the person is signed in, never the screen that was open. */
+  async function inspect(value: string, session: Session) {
+    const result = await request('access-code', accessCodeSchema, { csrf: session.csrfToken, body: { code: codeFromInput(value) } });
     if (!mounted.current) return;
     setKind(result.kind); setSchoolName(result.schoolName ?? null);
-    if (signedIn) { onSignedIn(result.kind); return; }
+    if (signedIn || session.authenticated) { onSignedIn(result.kind); return; }
     setStep('register');
   }
   function go(next: EntryStep) { setError(null); setShowProblems(false); setPassword(''); setStep(next); }
   function existingAccount() {
     if (!code.trim()) { go('login'); return; }
     // A typed code is read first, so that the journey it opens continues after sign-in.
-    void run(async csrf => { await inspect(code, csrf); go('login'); });
+    void run(async session => { await inspect(code, session); go('login'); });
   }
 
   const signInDraft = { email, password };
@@ -77,7 +91,7 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
   function signIn() {
     setShowProblems(true);
     if (hasProblems(signInProblems(signInDraft))) return false;
-    void run(async csrf => {
+    void run(async ({ csrfToken: csrf }) => {
       await request('password-login', okSchema, { csrf, body: { email, password } });
       if (!mounted.current) return;
       setPassword('');
@@ -88,13 +102,13 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
   function submitCode() {
     setShowProblems(true);
     if (codeProblem(code)) return false;
-    void run(csrf => inspect(code, csrf));
+    void run(session => inspect(code, session));
     return true;
   }
   function register() {
     setShowProblems(true);
     if (hasProblems(accountProblems(accountDraft))) return false;
-    void run(async csrf => {
+    void run(async ({ csrfToken: csrf }) => {
       // An e-mail invitation is named by the link already opened in this browser: no code is sent.
       const named = kind === 'EMAIL_INVITATION' ? {} : { code: codeFromInput(code) };
       let result;
@@ -110,7 +124,7 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
   }
 
   return {
-    step, kind, schoolName, busy, error, heading, showProblems,
+    step, kind, schoolName, busy, error, heading, codeInput, showProblems,
     code, setCode, email, setEmail, password, setPassword, firstName, setFirstName, lastName, setLastName,
     problems: showProblems ? problems : {}, codeProblem: showProblems ? typedCodeProblem : null,
     go, existingAccount, signIn, submitCode, register,

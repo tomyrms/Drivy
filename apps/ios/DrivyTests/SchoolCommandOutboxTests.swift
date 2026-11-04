@@ -313,23 +313,28 @@ struct SchoolCommandOutboxTests {
         }
     }
 
-    @Test func observationUndoKeepsOnePendingCommandPerSchool() throws {
+    @Test func observationUndoKeepsItsLessonAndAnotherSchoolStaysIndependent() throws {
         try inDirectory { directory in
             let original = try observationCommand()
             let requested = original.requestingObservationUndo(operationID: UUID())
             let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
             try store.save(original)
             try store.save(requested)
-            let next = try observationCommand()
-            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(next) }
+            // #106 : l'annulation conservée ferme sa leçon à toute autre écriture d'enseignement, pas une autre école.
+            let completionID = UUID()
+            let completion = PendingSchoolCommand(id: completionID, scope: original.scope, kind: .completeLesson,
+                resourceVersion: 1, createdAt: Date(),
+                body: try JSONSerialization.data(withJSONObject: ["operationId": completionID.uuidString]),
+                resourceID: original.routeResourceID)
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.save(completion) }
             let otherSchool = try observationCommand(scope: scope(schoolID: UUID()))
             try store.save(otherSchool)
             let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
             #expect(try reopened.pending(for: original.scope) == requested)
             #expect(try reopened.pending(for: otherSchool.scope) == otherSchool)
             try reopened.remove(requested)
-            try reopened.save(next)
-            #expect(try store.pending(for: original.scope) == next)
+            try reopened.save(completion)
+            #expect(try store.pending(for: original.scope) == completion)
             #expect(try store.pending(for: otherSchool.scope) == otherSchool)
         }
     }

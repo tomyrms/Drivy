@@ -269,6 +269,35 @@ describe('Entrée anonyme, limites et cache',()=>{
     expect(String(callback.headers['set-cookie'])).toContain('__Host-drivy-relogin=;');
   });
 
+  // Deux faits distincts : la session locale est fermée, la révocation distante n'est qu'un résultat possible.
+  test('une révocation acceptée par le fournisseur est annoncée comme confirmée',async()=>{
+    const h=await harness();await h.start();await h.login();
+    const out=await h.post('/app/bff/logout');
+    expect(out.statusCode).toBe(200);
+    expect(out.json()).toEqual({sessionClosed:true,revocation:'confirmed'});
+    expect(vi.mocked(h.identity.revoke)).toHaveBeenCalledWith(h.tokens);
+    expect(h.store.get(h.cookie().split('=')[1])).toBeUndefined();
+  });
+  test('un fournisseur en échec ne cache pas que la session locale est fermée',async()=>{
+    const h=await harness();await h.start();await h.login();
+    vi.mocked(h.identity.revoke).mockRejectedValueOnce(new Error('injoignable'));
+    const out=await h.post('/app/bff/logout');
+    expect(out.statusCode).toBe(200);
+    expect(out.json()).toEqual({sessionClosed:true,revocation:'failed'});
+    expect(out.body).not.toContain(h.tokens.refreshToken!);
+    expect(h.store.get(h.cookie().split('=')[1])).toBeUndefined();
+    expect((await h.get('/app/bff/session')).json().authenticated).toBe(false);
+  });
+  test('sans jeton à révoquer, aucune révocation n’est tentée',async()=>{
+    const h=await harness();await h.start();
+    vi.mocked(h.identity.complete).mockResolvedValueOnce({accessToken:h.tokens.accessToken,expiresAt:h.tokens.expiresAt,principal:h.tokens.principal});
+    await h.login();
+    const out=await h.post('/app/bff/logout');
+    expect(out.json()).toEqual({sessionClosed:true,revocation:'not-attempted'});
+    expect(h.identity.revoke).not.toHaveBeenCalled();
+    expect(h.store.get(h.cookie().split('=')[1])).toBeUndefined();
+  });
+
   test('une réauthentification refuse un autre compte sans remplacer la session initiale',async()=>{
     const h=await harness();await h.start();await h.login();
     const original=h.store.get(h.cookie().split('=')[1])!;

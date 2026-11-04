@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { commandStore, useCommandSnapshot } from '../command-store';
 import { ScopedReadCache } from './load-model';
+import { noteSessionClosure } from '../logout-notice';
 import { endSession, meSchema, request, RequestFailure, sessionSchema } from '../protocol';
 import type { Me, Member, Session } from '../protocol';
 import { readSchool, schoolSchema, type School } from '../school-api';
@@ -230,7 +231,7 @@ export function useManagementConsole() {
     working.current = true;
     setBusy(true); setLogoutError(null);
     try {
-      await endSession();
+      noteSessionClosure(await endSession());
       commandStore.clear();
       unsaved.current.clear();
       window.location.assign('/app/');

@@ -26,6 +26,9 @@ struct SchoolObservationEditor: Identifiable {
     }
     private(set) var draft: SchoolReportDraft?
     private(set) var pending: PendingSchoolCommand?
+    /// Commande conservée qui refuserait un nouveau signalement ici, lue avec la règle exacte de la file (#106) :
+    /// une autre leçon ou une invitation ne la ferment plus, une écriture de la même leçon ou de l'école si.
+    private(set) var blockingCommand: PendingSchoolCommand?
     private(set) var isLoading = false
     private(set) var isBusy = false
     private(set) var loaded = false
@@ -72,7 +75,7 @@ struct SchoolObservationEditor: Identifiable {
     }
 
     var canMutate: Bool {
-        loaded && !isLoading && !isBusy && !accessRevoked && storageAccessible && pending == nil
+        loaded && !isLoading && !isBusy && !accessRevoked && storageAccessible && blockingCommand == nil
             && ["PLANNED", "COMPLETED"].contains(lesson?.status ?? "")
     }
     var canAdd: Bool {
@@ -174,6 +177,7 @@ struct SchoolObservationEditor: Identifiable {
     func invalidate() {
         generation = UUID(); accessRevoked = true; loaded = false; isLoading = false; isBusy = false
         lesson = nil; learnerName = ""; observations = []; competencies = []; draft = nil; pending = nil
+        blockingCommand = nil
         storageAccessible = false; confirmation = nil; competenciesMessage = nil; draftMessage = nil
         isFirstSend = false; live = nil; absentPendingID = nil
         // Les demandes restent dans le coffre : seule la lecture s'arrête, jamais le geste conservé.
@@ -186,8 +190,13 @@ struct SchoolObservationEditor: Identifiable {
         generation = UUID(); let request = generation
         // Une relecture garde la liste, ses messages et sa barre d’action : `loaded` ne retombe qu’après un échec.
         isLoading = true; errorMessage = nil
-        do { pending = try outbox.pending(for: scope); storageAccessible = true }
-        catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
+        do {
+            // Deux notions distinctes (#106) : la barrière des écritures est la règle exacte de la file pour
+            // CREATE_GEO_OBSERVATION ; `pending` reste la demande de cette leçon à vérifier, affichée et reprise.
+            pending = try storedPending()
+            blockingCommand = try outbox.pending(for: scope, refusing: .createObservation, routeResourceID: lessonID)
+            storageAccessible = true
+        } catch { storageAccessible = false; errorMessage = SchoolConfigurationFailure.storage.localizedDescription }
         if pending?.id != absentPendingID { absentPendingID = nil }
         do {
             let current = try await authorizedLesson()
@@ -420,11 +429,19 @@ struct SchoolObservationEditor: Identifiable {
 
     private func rereadPending() -> PendingSchoolCommand? {
         do {
-            guard let current = try outbox.pending(for: scope), current.scope == scope,
+            guard let current = try storedPending(), current.scope == scope,
                   current.kind.isObservation, current.routeResourceID == lessonID else { return nil }
             pending = current
             return current
         } catch { fail(error); return nil }
+    }
+
+    /// Demande conservée de cette leçon (ou d'une autre portée d'accès) à vérifier ou à reprendre, affichée telle
+    /// quelle. Ce n'est pas la barrière des écritures : elle vient de `pending(for:refusing:)`.
+    private func storedPending() throws -> PendingSchoolCommand? {
+        try outbox.pendingCommands(for: scope).first {
+            $0.scope != scope || $0.routeResourceID == lessonID || $0.resourceID == lessonID
+        }
     }
 
     private func submit<Value: Encodable>(_ value: Value, operation: UUID, kind: SchoolCommandKind, resourceID: UUID?, version: Int) async -> Bool {
@@ -437,7 +454,7 @@ struct SchoolObservationEditor: Identifiable {
             do { try outbox.save(command); pending = command }
             catch {
                 storageAccessible = false
-                pending = try? outbox.pending(for: scope)
+                pending = try? storedPending()
                 throw error
             }
             return await transmit(command, fresh: true)

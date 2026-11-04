@@ -27,6 +27,21 @@ Elle est construite par `messagingPushPayload` (`apps/api/src/messaging-notifica
 5. **Aucun faux « lu »** : recevoir ou envoyer une alerte ne modifie aucune position de lecture. Un message déjà lu sur un autre appareil n'est plus alerté.
 6. **Autorisation iOS** : l'app n'enregistre un jeton qu'une fois l'autorisation système accordée. Le serveur traite donc un appareil actif comme « autorisé » ; sans appareil actif il n'envoie rien (`NO_DEVICE`).
 
+## Révocation sans jeton
+
+Ferme le cas #74 de l'audit #120 : quand la session iOS se termine sans déconnexion explicite (restauration échouée, renouvellement refusé, échec d'écriture du Trousseau), l'app n'a plus de jeton d'accès et ne peut pas appeler la route authentifiée. L'appareil reste pourtant inscrit et continue de recevoir des alertes génériques.
+
+- **Secret propre à l'appareil.** `PUT /v1/me/push-devices` engendre 32 octets aléatoires (`crypto.randomBytes(32)`, base64url) et les rend **une seule fois** dans `data.revocationSecret`. La base ne conserve que leur empreinte de 32 octets dans `drivy.push_device.revocation_digest` (migration `20261103c_push_device_revocation.sql`) ; le rôle `drivy_app` n'a aucun droit de lecture sur cette colonne, et le secret n'est jamais réécrit ni relu.
+- **Empreinte SHA-256, pas HMAC.** Le secret est engendré par le serveur avec 256 bits d'entropie et n'est jamais choisi par une personne : aucune attaque par dictionnaire ou précalcul n'est possible, donc une clé HMAC n'apporte rien. Les clés existantes (`CURSOR_SECRET`, `INVITATION_CODE_SECRET`) servent d'autres usages ; les réutiliser mélangerait deux domaines et ferait dépendre la révocation d'un secret qui n'a pas été prévu pour elle. L'empreinte est en outre inutilisable comme secret : la route hache ce qu'on lui présente, elle ne compare pas la valeur reçue à l'empreinte stockée.
+- **Route anonyme.** `POST /v1/push-devices/revoke`, sans `Authorization`, corps strict `{token, revocationSecret}` (`bodyLimit` 1 Ko) : `drivy.push_device_revoke_anonymous` retrouve la ligne du jeton, compare l'empreinte octet par octet (XOR sur 32 octets, sans sortie anticipée sur le contenu) et, si elle correspond, pose `revoked_at` — le même effet que `push_device_revoke`. Elle ne lit aucun paramètre de session et ne touche ni `person_id`, ni le jeton, ni l'empreinte.
+- **Réponse identique.** Toujours `200 {data:{revoked:true}}` : jeton inconnu, jeton déjà révoqué, mauvais secret, secret d'un autre jeton ou secret mal formé. Seuls le statut et la charge comptent ; `requestId` et `serverTime` restent propres à la requête, comme partout.
+- **Frein.** `attempt-limiter.ts`, en mémoire du processus, avec deux compteurs sur 15 minutes : 30 échecs par IP et 10 par jeton (clés dérivées par SHA-256, ni IP ni jeton en clair dans le compteur). Le 11e / 31e essai refusé répond `429 PUSH_REVOCATION_ATTEMPTS` (« Trop de tentatives. Réessayez dans quelques minutes. »), un message neutre — le frein existant parle de codes d'invitation, ce que cette route ne traite pas. Un succès ne consomme pas le budget. Une erreur base rend `503` et ne compte pas comme un échec d'authentification.
+- **Reprise d'un appareil.** Un nouvel enregistrement du même jeton remplace l'empreinte : l'ancien secret ne révoque plus rien, y compris quand un autre compte reprend l'appareil (`push_device_claim_secret`). La route authentifiée `POST /v1/me/push-devices/revoke` est inchangée et reste bornée au propriétaire.
+- **Journaux.** Ni le jeton ni le secret n'apparaissent dans un journal : les routes push ne sont pas journalisées par l'API (seule la messagerie l'est), et le frein ne garde que des horodatages et des empreintes de clé. Le test le vérifie sur des journaux capturés.
+- **Contrat.** Les routes push ne figurent pas dans l'OpenAPI canonique 3.11.0 : l'extension est décrite dans `apps/api/contracts/push-device-revocation.json` (enregistrement, commande anonyme, réponse), validée par le test d'intégration.
+- **Hors périmètre de cette tâche.** L'app iOS (T2) n'appelle pas encore la route anonyme et ne conserve pas le secret au Trousseau ; le web n'est pas concerné. Aucune preuve de réception APNs réelle n'est apportée ici.
+- **Limite assumée.** Le frein est en mémoire du processus : un redémarrage remet les compteurs à zéro, et plusieurs instances ne partagent pas leurs compteurs. C'est le même compromis que les autres routes anonymes ; le secret de 256 bits reste hors de portée d'une recherche exhaustive même sans frein.
+
 ## Préférences
 
 `GET/PUT /v1/me/notification-preferences` (même objet versionné, même `If-Match`/`ETag`) porte désormais, en plus des quatre champs de cours :
@@ -159,19 +174,47 @@ Les tests ajoutés sont dans `apps/api/test/messaging-push-a55.integration.test.
 | Deux comptes réels sur deux appareils | Aucun appareil dans cet environnement, données synthétiques seulement et transport local. Le changement de compte est prouvé au niveau du jeton, pas sur un téléphone. |
 | Autorisation iOS refusée puis réaccordée | Le serveur ne lit pas l'autorisation système ; il traite un appareil actif comme autorisé. Non vérifiable sans appareil. |
 
-### Trous constatés côté iOS (lecture seule, non corrigés)
+### Trous constatés côté iOS
 
-1. **Fin de session sans déconnexion explicite.** `SchoolPushCenter.sessionEnding()` (qui appelle `POST /v1/me/push-devices/revoke`)
-   n'est appelé que par les deux gestes de déconnexion de `SchoolRootView` (ligne « Se déconnecter » et bouton « Se reconnecter »).
-   Quand `IdentitySession` passe `isAuthenticated` à `false` sans passer par `signOut()` — restauration échouée
-   (`IdentitySession.restore`, ligne 64), renouvellement refusé (ligne 192), échec d'écriture du Trousseau (ligne 198) — le
-   jeton d'appareil reste **actif côté serveur** : les alertes continuent d'être remises à cet appareil (titre générique,
-   aucun contenu) alors que l'app affiche l'écran de connexion. Aucune révocation n'est possible à ce moment-là, faute de
-   jeton d'accès valide. Aucun test ne couvre ce cas ; il n'est pas corrigé dans cette passe.
+1. **Fin de session sans déconnexion explicite — comblé côté app (#120), non compilé ici.** `SchoolPushCenter.sessionEnding()`
+   n'était appelé que par les deux gestes de déconnexion de `SchoolRootView` (ligne « Se déconnecter » et bouton
+   « Se reconnecter »). Quand `IdentitySession` passait `isAuthenticated` à `false` sans passer par `signOut()` — restauration
+   échouée (`IdentitySession.restore`), renouvellement refusé, échec d'écriture du Trousseau — le jeton d'appareil restait
+   **actif côté serveur**. Quatre points ont été ajoutés, sans nouvelle autorisation locale ni changement de la logique
+   d'identité :
+   - **Secret au Trousseau.** `PUT /v1/me/push-devices` rend `data.revocationSecret` une fois (`SchoolNotificationClient.register`
+     le décode, facultatif : une API plus ancienne ne le renvoie pas). `SchoolPushCenter` le garde avec son jeton
+     (`SchoolPushRevocationRecord`, `KeychainSchoolPushRevocationStore` : `kSecClassGenericPassword`,
+     `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, aucune synchronisation iCloud), le remplace à chaque enregistrement
+     et l'efface après une révocation confirmée. Ni jeton ni secret n'est journalisé : aucun journal n'a été ajouté.
+   - **Route anonyme.** `SchoolNotificationClient.revokeAnonymously(token:secret:)` appelle `POST /v1/push-devices/revoke`
+     sur la même base que l'API, **sans** en-tête `Authorization` et sans passer par « /me » ni par le renouvellement du
+     jeton d'accès. À toute fin de session, la révocation authentifiée est tentée d'abord (comportement d'avant #120) ; si
+     l'école ne reconnaît plus la session (`unauthorized`), le secret prend le relais. Tant que l'école n'a pas confirmé la
+     révocation, l'enregistrement (jeton + secret) reste au Trousseau : sa présence **est** la marque d'une révocation due.
+     Un nouvel essai part à la première transition d'identité (fin de restauration ou de connexion) et à chaque retour au
+     premier plan, une fois par transition, hors session ouverte et hors restauration en cours : jamais de boucle.
+   - **Accroches.** `IdentitySession.sessionEnded` est appelée aux trois passages à `false` (restauration échouée,
+     renouvellement refusé, Trousseau en échec) ; elle est posée par `DrivyApp` **avant** `identity.restore()`, pour que
+     l'échec de la restauration du lancement soit annoncé. Si une fin de session survient avant la pose, l'identité la
+     retient et l'annonce dès que l'accroche est posée. Les deux gestes de déconnexion continuent de l'appeler avant
+     `signOut()`, sans doublon. `SchoolRootView` reprend une révocation restée à faire après le verdict du lancement
+     (`identitySettled`), à chaque fin de restauration ou de connexion sans session, et à chaque retour au premier plan
+     hors session ; `resumePendingRevocation(identityIsBusy:)` refuse de partir pendant une session ouverte ou une
+     restauration en cours.
+   - **Tests.** `apps/ios/DrivyTests/SchoolPushCenterTests.swift` (nouveau) : secret conservé puis remplacé, secret effacé
+     après succès, révocation authentifiée quand le jeton vaut, révocation anonyme sur les trois chemins d'identité,
+     fin de session annoncée après la pose de l'accroche (restauration du lancement), secret présent au lancement sans
+     session, reprise refusée pendant une session ouverte ou une restauration, retentative unique après une panne réseau,
+     école plus ancienne sans secret (comportement inchangé), forme exacte de la requête anonyme. **Ces tests n'ont pas été
+     compilés ni exécutés dans cette passe** (pas de chaîne Apple sur la machine de rédaction) : ils ne qualifient rien tant
+     que la CI Apple ne les a pas passés, et aucune réception APNs réelle n'est apportée. Le frein `429
+     PUSH_REVOCATION_ATTEMPTS` laisse la révocation en attente, comme une panne.
 2. **Changement de compte sans déconnexion.** Si un autre compte se connecte sur le même appareil sans que le premier se soit
-   déconnecté, la sécurité repose uniquement sur `push_device_claim` (le nouveau compte reprend le jeton à l'enregistrement).
-   C'est prouvé côté serveur (test ci-dessus), mais aucun test iOS ne vérifie que `sessionStarted()` est bien appelé et que
-   l'enregistrement aboutit avant qu'une alerte de l'ancien compte n'arrive.
+   déconnecté, la sécurité repose uniquement sur `push_device_claim` (le nouveau compte reprend le jeton à l'enregistrement),
+   et un nouvel enregistrement remplace le secret de révocation de l'appareil. C'est prouvé côté serveur (test ci-dessus),
+   mais aucun test iOS ne vérifie que `sessionStarted()` est bien appelé et que l'enregistrement aboutit avant qu'une alerte
+   de l'ancien compte n'arrive. Non corrigé dans cette passe.
 
 ## Limites connues
 
@@ -180,7 +223,7 @@ Les tests ajoutés sont dans `apps/api/test/messaging-push-a55.integration.test.
 - Le général peut compter beaucoup de membres : sa catégorie étant désactivée par défaut, la file n'écrit une ligne que pour ceux qui l'ont activée et qui ont un appareil.
 - **Réception APNs réelle non vérifiée** : les tests utilisent un collecteur local, jamais APNs. Aucune preuve de réception sur appareil (STATUS.md). Le regroupement est vérifié sur PostgreSQL réelle (rafale, mention, deux conversations, report de 60 s, expiration et préférence coupée pendant le report), pas sur un appareil.
 - Les alertes de messagerie sont désactivées pour les écoles hors qualification comme la messagerie elle-même : aucun message n'existe, donc aucune alerte.
-- **Matrice A55 et trou iOS** : la matrice de bout en bout ci-dessus nomme la preuve de chaque maillon. Deux points restent ouverts : la réception APNs réelle, et la fin de session sans déconnexion explicite, qui laisse le jeton d'appareil actif côté serveur faute de pouvoir appeler la révocation.
+- **Matrice A55 et trou iOS** : la matrice de bout en bout ci-dessus nomme la preuve de chaque maillon. Deux points restent ouverts : la réception APNs réelle, et la qualification de la fin de session sans déconnexion explicite — comblée côté app (#120, voir « Trous constatés côté iOS ») mais non compilée ni exécutée ici.
 
 ## Déploiement
 

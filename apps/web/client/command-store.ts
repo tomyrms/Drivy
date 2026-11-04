@@ -47,7 +47,8 @@ export function pendingActions(entry: Pick<PendingEntry, 'command' | 'phase' | '
 }
 
 const storageKey = 'drivy-gestion-demandes-v1';
-type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number };
+/** `startedAt` is when the command left the page: confirmations are kept in that order, not in the order answers arrive. */
+type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number; startedAt: number };
 /**
  * `byKind` counts the confirmations of each kind of command and `rereads` the requests given up or refused on a resend: a section that
  * reads one family of resources (see command-families) asks for a new read only when one of its kinds was confirmed, not for every
@@ -60,6 +61,8 @@ class CommandStore {
   private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null, confirmations: [], byKind: {}, rereads: 0 };
   private readonly listeners = new Set<() => void>();
   private personId: string | null = null;
+  /** The school the console currently shows: the last one scoped by `scopeToAccess`. */
+  private currentSchoolId: string | null = null;
   private generation = 0;
   private readonly accessScopes = new Map<string, string>();
 
@@ -83,10 +86,18 @@ class CommandStore {
   private update(operationId: string, entry: PendingEntry | null, confirmed?: CommandMetadata, reread = false) {
     const entries = new Map(this.snapshot.entries);
     if (entry) entries.set(operationId, entry); else entries.delete(operationId);
-    const confirmation: Confirmation | null = confirmed ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now() } : null;
+    const confirmation: Confirmation | null = confirmed
+      ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now(), startedAt: confirmed.createdAt } : null;
+    // Les réponses arrivent dans n’importe quel ordre : la liste des confirmations garde l’ordre des commandes (#106), pour
+    // qu’une section qui la rejoue finisse sur l’intention la plus récente et non sur le dernier paquet reçu.
+    const confirmations = confirmation
+      ? [...this.snapshot.confirmations, confirmation].sort((left, right) => left.startedAt - right.startedAt).slice(-50)
+      : this.snapshot.confirmations;
     this.snapshot = { entries, revision: this.snapshot.revision + (confirmed || reread ? 1 : 0),
+      // `confirmed` reste la confirmation qui vient d’arriver : un éditeur reconnaît sa propre écriture à son opération
+      // (access-controller, setup), même si une commande partie après elle a été confirmée avant.
       confirmed: confirmation ?? this.snapshot.confirmed,
-      confirmations: confirmation ? [...this.snapshot.confirmations.slice(-49), confirmation] : this.snapshot.confirmations,
+      confirmations,
       byKind: confirmed ? { ...this.snapshot.byKind, [confirmed.kind]: (this.snapshot.byKind[confirmed.kind] ?? 0) + 1 } : this.snapshot.byKind,
       rereads: this.snapshot.rereads + (reread ? 1 : 0) };
     try { window.sessionStorage.setItem(storageKey, JSON.stringify([...entries.values()].map(item => item.meta))); } catch { /* memory only */ }
@@ -100,6 +111,18 @@ class CommandStore {
 
   /** A changed membership may still verify its old receipt, but must never replay an old body. */
   scopeToAccess(schoolId: string, membershipId: string, accessEpoch: number) {
+    if (this.currentSchoolId !== null && this.currentSchoolId !== schoolId) {
+      // Le bureau n'affiche qu'une école : une réponse encore en vol pour la précédente ne s'applique pas ici (#106).
+      // Sa demande n'est pas perdue — son contenu reste connu et son résultat reste à vérifier depuis cette école.
+      const left = this.currentSchoolId;
+      this.generation++;
+      for (const entry of this.snapshot.entries.values()) {
+        if (entry.meta.schoolId !== left || (entry.phase !== 'sending' && entry.phase !== 'verifying')) continue;
+        this.update(entry.meta.operationId, { ...entry, phase: 'uncertain',
+          message: 'Vous avez changé d’école. Vérifiez le résultat de cette demande depuis l’école concernée.' });
+      }
+    }
+    this.currentSchoolId = schoolId;
     const next = `${membershipId}/${accessEpoch}`, previous = this.accessScopes.get(schoolId);
     this.accessScopes.set(schoolId, next);
     if (previous === undefined || previous === next) return;
@@ -219,6 +242,7 @@ class CommandStore {
   clear() {
     this.generation++;
     this.accessScopes.clear();
+    this.currentSchoolId = null;
     this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null, confirmations: [], byKind: this.snapshot.byKind, rereads: this.snapshot.rereads };
     try { window.sessionStorage.removeItem(storageKey); } catch { /* nothing stored */ }
     for (const listener of this.listeners) listener();

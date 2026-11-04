@@ -12,6 +12,7 @@ struct SchoolCodeJoinView: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var fieldFocused: Bool
     @ScaledMetric(relativeTo: .title2) private var codeSize: CGFloat = 28
+    @State private var wait = SchoolWaitMonitor()
 
     var body: some View {
         NavigationStack {
@@ -46,6 +47,7 @@ struct SchoolCodeJoinView: View {
             if model.canPreview { await model.inspect() }
             else if model.isReady && model.preview == nil && !model.isPending { fieldFocused = true }
         }
+        .schoolWaitAnnouncements(wait, title: busyTitle)
         .accessibilityIdentifier("join-school-code")
         .onChange(of: model.openingCode) { _, code in if let code { openSchoolWithCode?(code) } }
     }
@@ -87,7 +89,7 @@ struct SchoolCodeJoinView: View {
                         .keyboardType(.asciiCapable)
                         .textContentType(.oneTimeCode)
                         .submitLabel(.go)
-                        .onSubmit { Task { await model.inspect() } }
+                        .onSubmit { wait.run { await model.inspect() } }
                         .focused($fieldFocused)
                         .schoolJoinFieldChrome(hasError: error != nil, isFocused: fieldFocused, minHeight: 64)
                         .disabled(model.isBusy)
@@ -159,29 +161,46 @@ struct SchoolCodeJoinView: View {
         return (nil, .neutral)
     }
 
+    /// Libellé court de l’étape en attente, dans le bouton et dans l’annonce vocale.
+    private var busyTitle: String {
+        if model.isPending { "Vérification…" }
+        else if model.preview != nil { "Envoi de la demande…" }
+        else { "Vérification du code…" }
+    }
+
+    /// Chaque relance relit l’état du modèle : la demande enregistrée repart telle quelle (même opération), et
+    /// rien ne part si la réponse est déjà arrivée.
+    private var retryAction: (() -> Void)? {
+        guard model.isReady, model.isBusy, !model.isConfirmed else { return nil }
+        if model.isPending { return { wait.retry { await model.verify() } } }
+        if model.preview != nil { return { wait.retry { if model.canAccept { await model.accept() } } } }
+        return { wait.retry { if model.preview == nil, model.canPreview { await model.inspect() } } }
+    }
+
     private var actionBar: some View {
         let hint = hint
         return DrivyFormActionBar(hint: hint.text, hintTone: hint.tone) {
+            SchoolWaitLine(monitor: wait, retry: retryAction)
             if model.isConfirmed {
                 if let member = model.member {
                     Button("Ouvrir mon école") { openSchool(member) }
                         .accessibilityIdentifier("join-code-open")
                 }
             } else if model.isPending {
-                Button { Task { await model.verify() } } label: {
-                    DrivyBusyLabel(title: "Vérifier auprès de l’école", busyTitle: "Vérification…", isBusy: model.isBusy)
+                Button { wait.run { await model.verify() } } label: {
+                    DrivyBusyLabel(title: "Vérifier auprès de l’école", busyTitle: busyTitle, isBusy: model.isBusy)
                 }
                 .disabled(model.isBusy)
                 .accessibilityIdentifier("join-code-verify")
             } else if model.preview != nil {
-                Button { Task { await model.accept() } } label: {
-                    DrivyBusyLabel(title: "Rejoindre l’école", busyTitle: "Envoi…", isBusy: model.isBusy)
+                Button { wait.run { await model.accept() } } label: {
+                    DrivyBusyLabel(title: "Rejoindre l’école", busyTitle: busyTitle, isBusy: model.isBusy)
                 }
                 .disabled(!model.canAccept)
                 .accessibilityIdentifier("join-code-confirm")
             } else {
-                Button { Task { await model.inspect() } } label: {
-                    DrivyBusyLabel(title: "Continuer", busyTitle: "Vérification…", isBusy: model.isBusy)
+                Button { wait.run { await model.inspect() } } label: {
+                    DrivyBusyLabel(title: "Continuer", busyTitle: busyTitle, isBusy: model.isBusy)
                 }
                 .disabled(!model.canPreview)
                 .accessibilityIdentifier("join-code-preview")

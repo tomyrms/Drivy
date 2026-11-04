@@ -74,6 +74,7 @@ struct SchoolOpeningView: View {
     let openSchool: (SchoolOpeningReceipt) -> Void
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focus: SchoolAccountFieldID?
+    @State private var wait = SchoolWaitMonitor()
 
     var body: some View {
         NavigationStack {
@@ -103,6 +104,7 @@ struct SchoolOpeningView: View {
         .tint(DrivyTheme.accent)
         .interactiveDismissDisabled(model.isBusy || model.isPending)
         .onAppear { focus = model.displayName.isEmpty ? .displayName : .schoolName }
+        .schoolWaitAnnouncements(wait, title: "Ouverture de l’école…")
         .accessibilityIdentifier("school-opening")
     }
 
@@ -126,12 +128,15 @@ struct SchoolOpeningView: View {
 
     private var actionBar: some View {
         DrivyFormActionBar(hint: model.isPending && !model.isBusy ? "La réponse n’est pas arrivée : la même demande sera renvoyée." : nil) {
+            // La demande garde son opération : la relance renvoie la même, le serveur rend le même reçu.
+            SchoolWaitLine(monitor: wait, retry: model.isBusy && model.receipt == nil
+                ? { wait.retry { await model.submit() } } : nil)
             if let receipt = model.receipt {
                 Button("Ouvrir mon école") { openSchool(receipt) }
                     .accessibilityIdentifier("opening-open-school")
             } else {
-                Button { Task { await model.submit() } } label: {
-                    DrivyBusyLabel(title: model.isPending ? "Réessayer" : "Créer mon école", busyTitle: "Création…", isBusy: model.isBusy)
+                Button { wait.run { await model.submit() } } label: {
+                    DrivyBusyLabel(title: model.isPending ? "Réessayer" : "Créer mon école", busyTitle: "Ouverture de l’école…", isBusy: model.isBusy)
                 }
                 .disabled(!model.canSubmit)
                 .accessibilityIdentifier("opening-submit")
