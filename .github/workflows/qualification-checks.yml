@@ -113,8 +113,11 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             apps/web/package-lock.json
+            infra/dev/package-lock.json
       - run: npm ci
       - run: npm ci --prefix apps/web --ignore-scripts
+      - run: npm ci --prefix infra/dev --ignore-scripts
+      - run: node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium
       - run: npm run typecheck --prefix apps/web
       - run: npm test --prefix apps/web -- --reporter=default --reporter=json --outputFile="$RUNNER_TEMP/web-results.json"
       - name: Vérifier les tests web exécutés
