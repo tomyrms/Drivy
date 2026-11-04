@@ -37,6 +37,8 @@ struct MessagingMessageMeta: Sendable, Equatable {
     var pinned = false
     var reactions: [MessagingReaction] = []
     var poll: MessagingPollState? = nil
+    /// Server-side media reference (#97) : id, byteSize, deleted. nil for messages without media.
+    var media: MessagingMessageMediaReference? = nil
 }
 
 /// Contenu clair, encodÃ© AVANT chiffrement par MessagingCryptography. Jamais transmis tel quel.
