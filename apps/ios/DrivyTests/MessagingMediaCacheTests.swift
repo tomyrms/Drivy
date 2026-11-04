@@ -1,5 +1,6 @@
 import XCTest
 import CryptoKit
+import Security
 import UIKit
 @testable import Drivy
 
@@ -7,10 +8,11 @@ import UIKit
 ///
 /// Toutes les images de ce fichier sont **synthétiques** (aplat uni ou bruit déterministe) :
 /// aucune photo, aucun nom, aucune donnée de personne. La clé est une fixture en mémoire pour
-/// la majorité des cas ; un seul test traverse la Keychain réelle via l'initialiseur de production.
+/// la majorité des cas ; deux tests traversent Security dans un **espace Keychain temporaire**
+/// qui leur est propre, jamais le service de production.
 ///
 /// Le nom opaque d'un fichier est recalculé par les tests (`opaqueName`) uniquement pour injecter
-/// des pannes réelles : fichier remplacé, supprimé, lié symboliquement, énorme.
+/// des pannes réelles : fichier remplacé, supprimé, lié symboliquement, énorme, orphelin.
 ///
 /// Aucune assertion n'utilise `await` dans une autoclosure XCTest (interdit en Swift 6) : les
 /// lectures passent par `expectData`/`expectMissing` et leurs équivalents miniature.
@@ -192,17 +194,21 @@ final class MessagingMediaCacheTests: XCTestCase {
     func testFileCopiedFromAnotherScopeIsRefused() async throws {
         let fixture = try Fixture()
         addTeardownBlock { fixture.remove() }
-        let payload = sentinel + Data(repeating: 6, count: 128)
-        try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+        let scopePayload = sentinel + Data(repeating: 6, count: 128)
+        let otherPayload = sentinel + Data(repeating: 7, count: 128)
+        try await fixture.cache.store(scopePayload, mediaID: fixture.mediaID, scope: fixture.scope)
 
         let otherScope = MessagingScope(accountID: UUID(), schoolID: fixture.scope.schoolID,
                                         accessEpoch: fixture.scope.accessEpoch, apiBaseURL: fixture.scope.apiBaseURL)
         let otherCache = try MessagingProtectedMediaCache(scope: otherScope, root: fixture.root,
                                                           maximumScopeBytes: MessagingProtectedMediaCache.maximumScopeByteSize,
                                                           keyProvider: fixture.key.provider)
+        // L'autre scope possède une entrée valide pour le même média : seul l'échange d'octets
+        // entre scopes est alors en cause, et l'AAD doit le refuser.
+        try await otherCache.store(otherPayload, mediaID: fixture.mediaID, scope: otherScope)
         let source = try fixture.fileURL(mediaID: fixture.mediaID, genre: .original)
         let destination = try fixture.fileURL(scope: otherScope, mediaID: fixture.mediaID, genre: .original)
-        try Data(contentsOf: source).write(to: destination)
+        try Data(contentsOf: source).write(to: destination, options: [.atomic])
         await fixture.expectFailure(.protectionUnavailable) {
             _ = try await otherCache.data(mediaID: fixture.mediaID, scope: otherScope)
         }
@@ -292,6 +298,154 @@ final class MessagingMediaCacheTests: XCTestCase {
         await expectMissing(reopened, fixture.mediaID, fixture.scope)
     }
 
+    // MARK: - Orphelins : jamais servis, nettoyés de façon contrôlée
+
+    func testFileWithoutIndexEntryIsNeverServedAndIsCleaned() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        let payload = sentinel + Data(repeating: 0x31, count: 512)
+        try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+
+        // Fichier scellé présent à un chemin qu'aucune entrée ne référence (simule un fichier
+        // écrit sans commit d'index, puis une reprise) : il ne doit jamais être servi.
+        let orphanID = UUID()
+        let orphan = try fixture.fileURL(mediaID: orphanID, genre: .original)
+        let source = try fixture.fileURL(mediaID: fixture.mediaID, genre: .original)
+        try Data(contentsOf: source).write(to: orphan)
+        await expectMissing(fixture.cache, orphanID, fixture.scope)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path), "L'orphelin est nettoyé")
+        await expectData(fixture.cache, fixture.mediaID, fixture.scope, equals: payload)
+        let reopened = try fixture.makeCache()
+        await expectMissing(reopened, orphanID, fixture.scope)
+    }
+
+    func testMissingIndexWithSealedFilesIsNotAnEmptyCache() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        let payload = sentinel + Data(repeating: 0x32, count: 512)
+        try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+        try FileManager.default.removeItem(at: fixture.indexURL())
+
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+        let mediaPath = try fixture.fileURL(mediaID: fixture.mediaID, genre: .original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaPath.path),
+                       "Sans index valide, le fichier scellé n'est pas adopté : il est écarté")
+
+        let reopened = try fixture.makeCache()
+        await expectMissing(reopened, fixture.mediaID, fixture.scope)
+        let fresh = UUID()
+        try await reopened.store(payload, mediaID: fresh, scope: fixture.scope)
+        await expectData(reopened, fresh, fixture.scope, equals: payload)
+    }
+
+    func testOrphanCleanupFailureFailsClosed() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        try await fixture.cache.store(sentinel + Data(repeating: 0x33, count: 512),
+                                      mediaID: fixture.mediaID, scope: fixture.scope)
+        try FileManager.default.removeItem(at: fixture.indexURL())
+        let mediaPath = try fixture.fileURL(mediaID: fixture.mediaID, genre: .original)
+
+        let scopeDirectory = try fixture.scopeDirectory()
+        let permissions = try fixture.permissions(of: scopeDirectory)
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: scopeDirectory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: scopeDirectory.path) }
+
+        await fixture.expectFailure(.protectionUnavailable) {
+            _ = try await fixture.cache.data(mediaID: fixture.mediaID, scope: fixture.scope)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: mediaPath.path),
+                      "Rien n'est servi et rien n'est supprimé en silence quand le nettoyage échoue")
+
+        try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: scopeDirectory.path)
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaPath.path))
+    }
+
+    func testOrphanCleanupFaultIsClosedAndNotServed() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        try await fixture.cache.store(sentinel + Data(repeating: 0x34, count: 512),
+                                      mediaID: fixture.mediaID, scope: fixture.scope)
+        let orphanID = UUID()
+        let orphan = try fixture.fileURL(mediaID: orphanID, genre: .original)
+        try Data(contentsOf: fixture.fileURL(mediaID: fixture.mediaID, genre: .original)).write(to: orphan)
+        await fixture.cache.injectFaults { $0 == .orphanCleanup }
+
+        await fixture.expectFailure(.protectionUnavailable) {
+            _ = try await fixture.cache.data(mediaID: orphanID, scope: fixture.scope)
+        }
+        XCTAssertTrue(FileManager.default.fileExists(atPath: orphan.path))
+
+        await fixture.cache.injectFaults(nil)
+        await expectMissing(fixture.cache, orphanID, fixture.scope)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
+    }
+
+    // MARK: - Pannes contrôlées après rename et à la synchronisation
+
+    func testIndexCommitFailureIsNotReportedAsSuccess() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        let payload = sentinel + Data(repeating: 0x35, count: 512)
+        await fixture.cache.injectFaults { $0 == .indexBeforeCommit }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+        }
+        await fixture.cache.injectFaults(nil)
+
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+        let mediaPath = try fixture.fileURL(mediaID: fixture.mediaID, genre: .original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaPath.path),
+                       "Un fichier sans index commité ne reste pas derrière un échec")
+        let reopened = try fixture.makeCache()
+        await expectMissing(reopened, fixture.mediaID, fixture.scope)
+        try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+        await expectData(fixture.cache, fixture.mediaID, fixture.scope, equals: payload)
+    }
+
+    func testPayloadRenameFailureLeavesNoServableData() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        await fixture.cache.injectFaults { $0 == .payloadAfterRename }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.store(sentinel + Data(repeating: 0x36, count: 512),
+                                          mediaID: fixture.mediaID, scope: fixture.scope)
+        }
+        await fixture.cache.injectFaults(nil)
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+        let reopened = try fixture.makeCache()
+        await expectMissing(reopened, fixture.mediaID, fixture.scope)
+    }
+
+    func testFileSyncFailureIsNotReportedAsSuccess() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        await fixture.cache.injectFaults { $0 == .fileSync }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.store(sentinel + Data(repeating: 0x37, count: 512),
+                                          mediaID: fixture.mediaID, scope: fixture.scope)
+        }
+        await fixture.cache.injectFaults(nil)
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+        let files = try fixture.allFiles()
+        XCTAssertTrue(files.isEmpty, "Aucun artefact n'est laissé après un échec de synchronisation")
+    }
+
+    func testPurgeAllSyncFailureIsPropagated() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        try await fixture.cache.store(sentinel + Data(repeating: 0x38, count: 512),
+                                      mediaID: fixture.mediaID, scope: fixture.scope)
+        await fixture.cache.injectFaults { $0 == .directorySync }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.purgeAll(scope: fixture.scope)
+        }
+        await fixture.cache.injectFaults(nil)
+        // La purge n'a jamais annoncé de succès ; rien n'est servi depuis un index incohérent.
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+    }
+
     // MARK: - Quota et LRU
 
     func testQuotaEvictsLeastRecentlyUsedGroup() async throws {
@@ -369,6 +523,48 @@ final class MessagingMediaCacheTests: XCTestCase {
         await expectData(reopened, fourth, fixture.scope, equals: payload)
     }
 
+    func testQuotaHoldsAfterReadsAndCounterGrowth() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        let payload = Data(repeating: 0x5A, count: 1_000)
+        let first = UUID(), second = UUID()
+        try await fixture.cache.store(payload, mediaID: first, scope: fixture.scope)
+        try await fixture.cache.store(payload, mediaID: second, scope: fixture.scope)
+        // Aucune marge : la croissance de l'index (compteur LRU) doit suffire à déclencher
+        // l'éviction, et la borne doit tenir après chaque lecture.
+        let quota = try fixture.directoryUsage()
+        let tight = try fixture.makeCache(quota: quota)
+
+        for _ in 0..<12 {
+            let read = try await tight.data(mediaID: second, scope: fixture.scope)
+            XCTAssertEqual(read, payload, "Le média lu reste servi")
+            XCTAssertLessThanOrEqual(try fixture.directoryUsage(), quota,
+                                     "La borne réelle tient après une lecture qui fait croître l'index")
+        }
+        await expectData(tight, second, fixture.scope, equals: payload)
+        await expectMissing(tight, first, fixture.scope, "La croissance de l'index a évincé l'autre média")
+    }
+
+    func testTwoInstancesKeepQuotaAfterReads() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        let payload = Data(repeating: 0x5B, count: 1_000)
+        let first = UUID(), second = UUID()
+        try await fixture.cache.store(payload, mediaID: first, scope: fixture.scope)
+        try await fixture.cache.store(payload, mediaID: second, scope: fixture.scope)
+        let quota = try fixture.directoryUsage()
+        let one = try fixture.makeCache(quota: quota)
+        let two = try fixture.makeCache(quota: quota)
+
+        for index in 0..<10 {
+            let cache = index.isMultiple(of: 2) ? one : two
+            _ = try await cache.data(mediaID: second, scope: fixture.scope)
+            XCTAssertLessThanOrEqual(try fixture.directoryUsage(), quota)
+        }
+        await expectData(one, second, fixture.scope, equals: payload)
+        await expectData(two, second, fixture.scope, equals: payload)
+    }
+
     func testEvictionOrderIsDeterministicOnTies() {
         let low = UUID(uuidString: "00000000-0000-0000-0000-00000000000A")!
         let high = UUID(uuidString: "00000000-0000-0000-0000-00000000000B")!
@@ -443,6 +639,34 @@ final class MessagingMediaCacheTests: XCTestCase {
         XCTAssertEqual(try fixture.allFiles().count, 2, "Un index et un média, rien d'autre")
     }
 
+    func testPurgeAllAndEvictionLeaveOutsideSentinelsIntact() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        try await fixture.cache.store(sentinel + Data(repeating: 0x56, count: 512),
+                                      mediaID: fixture.mediaID, scope: fixture.scope)
+        let rootSentinel = fixture.root.appendingPathComponent("sentinel.bin")
+        try Data([1, 2, 3]).write(to: rootSentinel)
+        let foreignScope = fixture.root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: foreignScope, withIntermediateDirectories: true)
+        let foreignFile = foreignScope.appendingPathComponent("keep.sealed")
+        try Data([4, 5, 6]).write(to: foreignFile)
+
+        try await fixture.cache.purgeAll(scope: fixture.scope)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootSentinel.path),
+                      "La purge ne touche pas la racine")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: foreignFile.path),
+                      "La purge ne touche pas un autre répertoire")
+        await expectMissing(fixture.cache, fixture.mediaID, fixture.scope)
+
+        let tight = try fixture.makeCache(quota: 2_000)
+        let payload = Data(repeating: 0x57, count: 1_000)
+        try await tight.store(payload, mediaID: UUID(), scope: fixture.scope)
+        try await tight.store(payload, mediaID: UUID(), scope: fixture.scope)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: rootSentinel.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: foreignFile.path))
+        XCTAssertLessThanOrEqual(try fixture.scopeUsage(), 2_000)
+    }
+
     // MARK: - Pannes réelles, sans faux succès
 
     func testWriteFailureIsPropagatedWithoutFalseSuccess() async throws {
@@ -485,8 +709,11 @@ final class MessagingMediaCacheTests: XCTestCase {
     func testOversizedFileOnDiskIsRefusedBeforeReading() async throws {
         let fixture = try Fixture()
         addTeardownBlock { fixture.remove() }
+        try await fixture.cache.store(sentinel + Data(repeating: 0x98, count: 512),
+                                      mediaID: fixture.mediaID, scope: fixture.scope)
+        // L'entrée existe : c'est bien la borne de lecture qui refuse, pas la règle d'orphelin.
         let oversized = Data(repeating: 0x99, count: 8 * 1_024 * 1_024)
-        try oversized.write(to: fixture.fileURL(mediaID: fixture.mediaID, genre: .original))
+        try oversized.write(to: fixture.fileURL(mediaID: fixture.mediaID, genre: .original), options: [.atomic])
         await fixture.expectFailure(.protectionUnavailable) {
             _ = try await fixture.cache.data(mediaID: fixture.mediaID, scope: fixture.scope)
         }
@@ -524,6 +751,89 @@ final class MessagingMediaCacheTests: XCTestCase {
             keyProvider: fixture.key.provider)) { error in
             XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable)
         }
+    }
+
+    // MARK: - Confinement des répertoires possédés
+
+    func testRootReplacedBySymlinkAfterInitIsRefused() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        let payload = sentinel + Data(repeating: 0x91, count: 512)
+        try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+
+        let moved = fixture.root.deletingLastPathComponent()
+            .appendingPathComponent("drivy-media-cache-moved-" + UUID().uuidString, isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: moved) }
+        try FileManager.default.moveItem(at: fixture.root, to: moved)
+        try FileManager.default.createSymbolicLink(at: fixture.root, withDestinationURL: moved)
+
+        await fixture.expectFailure(.protectionUnavailable) {
+            _ = try await fixture.cache.data(mediaID: fixture.mediaID, scope: fixture.scope)
+        }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.store(Data([1]), mediaID: UUID(), scope: fixture.scope)
+        }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.purgeAll(scope: fixture.scope)
+        }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.purge(mediaIDs: [fixture.mediaID], scope: fixture.scope)
+        }
+    }
+
+    func testScopeDirectoryReplacedBySymlinkAfterInitIsRefused() async throws {
+        let fixture = try Fixture()
+        addTeardownBlock { fixture.remove() }
+        try await fixture.cache.store(sentinel + Data(repeating: 0x92, count: 512),
+                                      mediaID: fixture.mediaID, scope: fixture.scope)
+        let scopeDirectory = try fixture.scopeDirectory()
+        let moved = fixture.root.appendingPathComponent("moved-scope-" + UUID().uuidString, isDirectory: true)
+        try FileManager.default.moveItem(at: scopeDirectory, to: moved)
+        try FileManager.default.createSymbolicLink(at: scopeDirectory, withDestinationURL: moved)
+
+        await fixture.expectFailure(.protectionUnavailable) {
+            _ = try await fixture.cache.data(mediaID: fixture.mediaID, scope: fixture.scope)
+        }
+        await fixture.expectFailure(.protectionUnavailable) {
+            try await fixture.cache.purgeAll(scope: fixture.scope)
+        }
+    }
+
+    func testIntermediateSymlinkBeforeInitIsResolvedOnceThenVerified() async throws {
+        let base = FileManager.default.temporaryDirectory
+            .appendingPathComponent("drivy-media-cache-links-" + UUID().uuidString, isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: base) }
+        let real = base.appendingPathComponent("real", isDirectory: true)
+        let other = base.appendingPathComponent("other", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let link = base.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2,
+                                   apiBaseURL: "https://example.invalid/")
+        let key = KeyFixture()
+        let cache = try MessagingProtectedMediaCache(scope: scope, root: link.appendingPathComponent("cache"),
+                                                     maximumScopeBytes: MessagingProtectedMediaCache.maximumScopeByteSize,
+                                                     keyProvider: key.provider)
+        let payload = sentinel + Data(repeating: 0x93, count: 512)
+        let mediaID = UUID()
+        try await cache.store(payload, mediaID: mediaID, scope: scope)
+
+        let canonicalScope = real.appendingPathComponent("cache", isDirectory: true)
+            .appendingPathComponent(MessagingProtectedMediaCache.scopeFingerprint(scope), isDirectory: true)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: canonicalScope.path),
+                      "Le chemin canonique enregistré reçoit les fichiers")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: other.appendingPathComponent("cache").path),
+                       "Rien n'est écrit à travers le lien vers une autre cible")
+
+        // Le lien change de cible : l'instance enregistrée continue d'opérer sur sa racine
+        // canonique, et ne se laisse pas rediriger.
+        try FileManager.default.removeItem(at: link)
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: other)
+        await expectData(cache, mediaID, scope, equals: payload)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: canonicalScope.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: other.appendingPathComponent("cache").path))
     }
 
     // MARK: - Scope, concurrence, surface
@@ -604,7 +914,7 @@ final class MessagingMediaCacheTests: XCTestCase {
             }
             try await group.waitForAll()
         }
-        XCTAssertLessThanOrEqual(try fixture.directoryUsage(), quota)
+        XCTAssertLessThanOrEqual(try fixture.scopeUsage(), quota)
         var survivors = 0
         for id in ids {
             if let data = try await first.data(mediaID: id, scope: fixture.scope) {
@@ -639,18 +949,47 @@ final class MessagingMediaCacheTests: XCTestCase {
         XCTAssertEqual(MessagingProtectedMediaCache.maximumScopeByteSize, 52_428_800)
     }
 
-    /// Un seul cas traverse la Keychain réelle (service et compte dédiés au cache média) : il ne
-    /// partage rien avec le snapshot protégé de la messagerie.
-    func testProductionInitializerStoresSealedData() async throws {
-        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 3,
-                                   apiBaseURL: "https://example.invalid/")
-        let cache = try MessagingProtectedMediaCache(scope: scope)
-        let payload = sentinel + Data(repeating: 0xDD, count: 256)
-        let mediaID = UUID()
-        try await cache.store(payload, mediaID: mediaID, scope: scope)
-        await expectData(cache, mediaID, scope, equals: payload)
-        try await cache.purgeAll(scope: scope)
-        await expectMissing(cache, mediaID, scope)
+    // MARK: - Security réel, dans un espace de test isolé
+
+    /// Espace Keychain propre au test : jamais le service de production, jamais une clé existante
+    /// d'application. Sous Windows, ce test n'est ni compilé ni exécuté.
+    func testKeychainRoundTripInIsolatedTestSpace() throws {
+        let space = KeychainTestSpace()
+        addTeardownBlock { space.remove() }   // ne supprime que cet espace
+
+        let created = try MessagingProtectedMediaCache.keychainKey(mayCreate: true, namespace: space.namespace)
+        let reloaded = try MessagingProtectedMediaCache.keychainKey(mayCreate: false, namespace: space.namespace)
+        XCTAssertEqual(created.bitCount, 256)
+        XCTAssertEqual(created.withUnsafeBytes { Data($0) }, reloaded.withUnsafeBytes { Data($0) },
+                       "La clé relue est identique à celle créée")
+
+        let attributes = try space.attributes()
+        XCTAssertEqual(attributes[kSecAttrAccessible as String] as? String,
+                       kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
+        XCTAssertEqual(attributes[kSecAttrSynchronizable as String] as? Bool, false,
+                       "La clé n'est pas synchronisée")
+
+        let empty = KeychainTestSpace()
+        addTeardownBlock { empty.remove() }
+        XCTAssertThrowsError(try MessagingProtectedMediaCache.keychainKey(mayCreate: false,
+                                                                          namespace: empty.namespace)) { error in
+            XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable)
+        }
+    }
+
+    /// Le cache complet sur une clé réellement stockée par Security, dans l'espace du test.
+    func testCacheKeyedByIsolatedKeychainSpaceRoundTrip() async throws {
+        let space = KeychainTestSpace()
+        addTeardownBlock { space.remove() }
+        let namespace = space.namespace
+        let fixture = try Fixture(keyProvider: { mayCreate in
+            try MessagingProtectedMediaCache.keychainKey(mayCreate: mayCreate, namespace: namespace)
+        })
+        addTeardownBlock { fixture.remove() }
+        let payload = sentinel + Data(repeating: 0x9A, count: 512)
+        try await fixture.cache.store(payload, mediaID: fixture.mediaID, scope: fixture.scope)
+        let reopened = try fixture.makeCache()
+        await expectData(reopened, fixture.mediaID, fixture.scope, equals: payload)
     }
 
     // MARK: - Assertions asynchrones (aucun `await` dans une autoclosure)
@@ -724,27 +1063,62 @@ private final class KeyFixture: @unchecked Sendable {
     }
 }
 
+/// Espace Keychain temporaire, propre au test. `remove` ne supprime que ce service et ce compte.
+private struct KeychainTestSpace {
+    let namespace = MessagingMediaCacheKeychain(
+        service: "ch.drivy.test.media.cache." + UUID().uuidString.lowercased(),
+        account: "test-media-cache-key")
+
+    func remove() {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: namespace.service,
+                                    kSecAttrAccount as String: namespace.account]
+        _ = SecItemDelete(query as CFDictionary)
+    }
+
+    func attributes() throws -> [String: Any] {
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: namespace.service,
+                                    kSecAttrAccount as String: namespace.account,
+                                    kSecReturnAttributes as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitOne]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let attributes = result as? [String: Any] else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        return attributes
+    }
+}
+
 private struct Fixture {
     let root: URL
     let scope: MessagingScope
     let mediaID = UUID()
     let key = KeyFixture()
     let cache: MessagingProtectedMediaCache
+    private let provider: @Sendable (Bool) throws -> SymmetricKey
 
-    init() throws {
-        root = FileManager.default.temporaryDirectory.appendingPathComponent("drivy-media-cache-" + UUID().uuidString,
-                                                                            isDirectory: true)
+    init(keyProvider: (@Sendable (Bool) throws -> SymmetricKey)? = nil) throws {
+        let key = KeyFixture()
+        self.key = key
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("drivy-media-cache-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2,
-                               apiBaseURL: "https://example.invalid/")
+        self.root = root
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2,
+                                   apiBaseURL: "https://example.invalid/")
+        self.scope = scope
+        let provider = keyProvider ?? key.provider
+        self.provider = provider
         cache = try MessagingProtectedMediaCache(scope: scope, root: root,
                                                  maximumScopeBytes: MessagingProtectedMediaCache.maximumScopeByteSize,
-                                                 keyProvider: key.provider)
+                                                 keyProvider: provider)
     }
 
     func makeCache(quota: Int = MessagingProtectedMediaCache.maximumScopeByteSize) throws -> MessagingProtectedMediaCache {
         try MessagingProtectedMediaCache(scope: scope, root: root, maximumScopeBytes: quota,
-                                         keyProvider: key.provider)
+                                         keyProvider: provider)
     }
 
     func remove() {
@@ -772,19 +1146,31 @@ private struct Fixture {
         return scopeDirectoryFor(resolved).appendingPathComponent(name + ".sealed")
     }
 
+    func scopeUsage() throws -> Int {
+        try usage(of: scopeDirectory())
+    }
+
+    func directoryUsage() throws -> Int {
+        try usage(of: scopeDirectory())
+    }
+
+    private func usage(of directory: URL) throws -> Int {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return 0 }
+        return try FileManager.default.contentsOfDirectory(at: directory,
+                                                           includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey])
+            .reduce(0) { total, url in
+                let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
+                guard values?.isRegularFile == true, let size = values?.fileSize else { return total }
+                return total + size
+            }
+    }
+
     func allFiles() throws -> [URL] {
         let directory = try scopeDirectory()
         guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
         return try FileManager.default.contentsOfDirectory(at: directory,
                                                            includingPropertiesForKeys: [.isRegularFileKey])
             .filter { (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true }
-    }
-
-    func directoryUsage() throws -> Int {
-        try allFiles().reduce(0) { total, url in
-            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-            return total + size
-        }
     }
 
     func permissions(of url: URL) throws -> Int {

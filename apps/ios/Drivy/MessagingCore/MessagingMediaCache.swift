@@ -18,16 +18,22 @@ import UniformTypeIdentifiers
 /// et n'est **jamais** comparé aux octets clairs de ce cache : l'intégrité locale vient du tag
 /// AES-GCM et de l'AAD qui lie version, scope, identité média et genre.
 ///
+/// Règle de cohérence de cette première livraison : **un fichier qu'aucun index valide ne
+/// référence n'est jamais servi**. Il est nettoyé de façon contrôlée (l'échec du nettoyage est
+/// propagé). Un index manquant alors que des fichiers scellés existent n'est donc **pas** un
+/// cache vide : les fichiers non référencés sont écartés, jamais adoptés. L'index n'est pas une
+/// source de vérité et ne reconstruit aucun contenu : un fichier purgé n'est jamais ressuscité.
+///
 /// Aucune politique de conservation, aucune TTL, aucune purge automatique : le plafond de
 /// 50 Mio par scope est une **garde de ressources réversible**, pas une règle d'exploitation.
 /// Aucun rendu, aucune UI, aucun branchement de déconnexion.
 ///
-/// Cycle de la clé, exactement : créée au premier scellé d'un scope **seulement si aucun
-/// fichier scellé n'existe** ; jamais recréée face à des fichiers existants (clé perdue →
-/// erreur fermée) ; jamais supprimée par `purge` ni `purgeAll`, car elle est partagée par les
-/// scopes du même appareil — sa destruction relève d'un retrait Keychain hors de ce composant.
-/// `unlink` supprime le nom et les octets lisibles par le système : ce cache ne promet **ni**
-/// effacement physique du support SSD, **ni** effacement garanti de la mémoire.
+/// Cycle de la clé, exactement : créée au premier scellé **seulement si aucun fichier scellé
+/// n'existe** ; jamais recréée face à des fichiers existants (clé perdue → erreur fermée) ;
+/// jamais supprimée par `purge` ni `purgeAll`, car elle est partagée par les scopes du même
+/// appareil — sa destruction relève d'un retrait Keychain hors de ce composant. `unlink`
+/// supprime le nom et les octets lisibles par le système : ce cache ne promet **ni** effacement
+/// physique du support SSD, **ni** effacement garanti de la mémoire.
 protocol MessagingMediaCache: Sendable {
     func store(_ data: Data, mediaID: UUID, scope: MessagingScope) async throws
     func data(mediaID: UUID, scope: MessagingScope) async throws -> Data?
@@ -40,12 +46,24 @@ protocol MessagingMediaCache: Sendable {
     func purgeAll(scope: MessagingScope) async throws
 }
 
+/// Espace Keychain nommé. La production utilise `production` ; les tests n'injectent qu'un
+/// espace temporaire qui leur est propre, pour ne jamais lire ni supprimer la clé de l'app.
+struct MessagingMediaCacheKeychain: Sendable, Equatable {
+    let service: String
+    let account: String
+
+    static let production = MessagingMediaCacheKeychain(service: "ch.drivy.messaging.media.cache.v1",
+                                                        account: "media-cache-key-v1")
+}
+
 /// Cache média local protégé, un scope complet par instance.
 ///
 /// Deux instances du même scope (deux feuilles ouvertes) partagent le même répertoire : la
-/// section critique est sérialisée par un verrou **statique** et ne contient **aucun `await`**,
-/// car l'acteur seul est réentrant aux points de suspension. Les fichiers d'un scope ne sont
-/// jamais rendus à un appel d'un autre scope : le scope attendu est vérifié avant chaque accès.
+/// section critique est sérialisée par un verrou **statique** et ne contient **aucun `await`**.
+/// `NSLock.lock`/`unlock` portent `noasync` : elles ne sont donc jamais appelées depuis un
+/// contexte async, mais depuis la section synchrone `withIOLock` (`NSLock.withLock`).
+/// Les fichiers d'un scope ne sont jamais rendus à un appel d'un autre scope : le scope attendu
+/// est vérifié avant chaque accès, et les répertoires possédés sont revérifiés avant tout effet.
 actor MessagingProtectedMediaCache: MessagingMediaCache {
     /// Genre de contenu stocké. Il entre dans le nom opaque **et** dans l'AAD : un fichier
     /// déplacé d'un genre à l'autre est refusé.
@@ -66,6 +84,29 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
     struct AccessMark: Sendable, Equatable {
         let mediaID: UUID
         let lastAccess: UInt64
+    }
+
+    /// Points de panne internes, **bornés**, réservés aux preuves : ils simulent un échec
+    /// précis (rename, synchronisation, nettoyage) sans jamais représenter une coupure
+    /// d'alimentation physique. Aucun n'est armé en production.
+    enum FaultPoint: Sendable, Equatable {
+        case payloadAfterRename
+        case indexBeforeCommit
+        case fileSync
+        case directorySync
+        case orphanCleanup
+    }
+
+    private enum WriteRole: Equatable {
+        case payload
+        case index
+
+        var faultAfterRename: FaultPoint {
+            switch self {
+            case .payload: return .payloadAfterRename
+            case .index: return .indexBeforeCommit
+            }
+        }
     }
 
     private struct Index: Codable {
@@ -104,13 +145,14 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
 
     private let expectedScope: MessagingScope
     private let fingerprint: String
+    /// Racine **canonique** : un lien intermédiaire est résolu une seule fois à la construction,
+    /// puis la forme canonique enregistrée est revérifiée avant chaque effet.
     private let root: URL
     private let folder: URL
     private let maximumScopeBytes: Int
     private let keyProvider: @Sendable (Bool) throws -> SymmetricKey
+    private var faults: (@Sendable (FaultPoint) -> Bool)?
 
-    private static let keychainService = "ch.drivy.messaging.media.cache.v1"
-    private static let keychainAccount = "media-cache-key-v1"
     private static let rootDirectoryName = "MessagingMediaCache"
     /// Sérialise toutes les instances, y compris celles du même scope. Aucun `await` dedans.
     private static let ioLock = NSLock()
@@ -124,7 +166,9 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         try self.init(scope: scope,
                       root: base.appendingPathComponent(Self.rootDirectoryName, isDirectory: true),
                       maximumScopeBytes: Self.maximumScopeByteSize,
-                      keyProvider: { mayCreate in try Self.keychainKey(mayCreate: mayCreate) })
+                      keyProvider: { mayCreate in
+                          try Self.keychainKey(mayCreate: mayCreate, namespace: .production)
+                      })
     }
 
     /// Injection **interne** de la racine, du plafond et de la clé : réservée aux preuves.
@@ -134,59 +178,82 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         guard scope.accessEpoch > 0, !scope.apiBaseURL.isEmpty else { throw MessagingFailure.contextChanged }
         guard maximumScopeBytes > Self.sealedOverhead + Self.indexGrowthReserve,
               maximumScopeBytes <= Self.maximumScopeByteSize else { throw MessagingFailure.invalidResponse }
+        let canonicalRoot = root.standardizedFileURL.resolvingSymlinksInPath()
         let fingerprint = Self.scopeFingerprint(scope)
         self.expectedScope = scope
         self.fingerprint = fingerprint
-        self.root = root
-        self.folder = root.appendingPathComponent(fingerprint, isDirectory: true)
+        self.root = canonicalRoot
+        self.folder = canonicalRoot.appendingPathComponent(fingerprint, isDirectory: true)
         self.maximumScopeBytes = maximumScopeBytes
         self.keyProvider = keyProvider
-        try Self.prepareDirectory(root)
-        try Self.prepareDirectory(folder)
+        // Le parent de confiance doit être un répertoire réel **avant** toute création.
+        try Self.requireRealDirectory(canonicalRoot.deletingLastPathComponent())
+        try Self.prepareDirectory(canonicalRoot)
+        try Self.prepareDirectory(self.folder)
+        try Self.verifyConfinement(root: canonicalRoot, folder: self.folder)
+    }
+
+    /// Arme des points de panne pour une preuve. `nil` rétablit le comportement de production.
+    func injectFaults(_ faults: (@Sendable (FaultPoint) -> Bool)?) {
+        self.faults = faults
     }
 
     // MARK: Interface
 
     func store(_ data: Data, mediaID: UUID, scope: MessagingScope) async throws {
-        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         try Task.checkCancellation()
-        try closed { try storeLocked(data, mediaID: mediaID, genre: .original) }
+        try withIOLock {
+            try verifyConfinement()
+            try storeLocked(data, mediaID: mediaID, genre: .original)
+        }
     }
 
     func storeThumbnail(_ data: Data, mediaID: UUID, scope: MessagingScope) async throws {
-        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         try Task.checkCancellation()
-        try closed { try storeLocked(data, mediaID: mediaID, genre: .thumbnail) }
+        try withIOLock {
+            try verifyConfinement()
+            try storeLocked(data, mediaID: mediaID, genre: .thumbnail)
+        }
     }
 
     func data(mediaID: UUID, scope: MessagingScope) async throws -> Data? {
-        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         try Task.checkCancellation()
-        return try closed { try readLocked(mediaID: mediaID, genre: .original) }
+        return try withIOLock {
+            try verifyConfinement()
+            return try readLocked(mediaID: mediaID, genre: .original)
+        }
     }
 
     func thumbnail(mediaID: UUID, scope: MessagingScope) async throws -> Data? {
-        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         try Task.checkCancellation()
-        return try closed { try readLocked(mediaID: mediaID, genre: .thumbnail) }
+        return try withIOLock {
+            try verifyConfinement()
+            return try readLocked(mediaID: mediaID, genre: .thumbnail)
+        }
     }
 
     func purge(mediaIDs: [UUID], scope: MessagingScope) async throws {
-        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         try Task.checkCancellation()
-        try closed { try purgeLocked(mediaIDs) }
+        try withIOLock {
+            try verifyConfinement()
+            try purgeLocked(mediaIDs)
+        }
     }
 
     func purgeAll(scope: MessagingScope) async throws {
-        Self.ioLock.lock(); defer { Self.ioLock.unlock() }
         try verify(scope)
         try Task.checkCancellation()
-        try closed { try purgeAllLocked() }
+        try withIOLock {
+            // Rien à purger si le répertoire du scope n'existe plus : idempotent, sans effet.
+            guard FileManager.default.fileExists(atPath: folder.path) else { return }
+            try verifyConfinement()
+            try purgeAllLocked()
+        }
     }
 
     // MARK: Écriture
@@ -194,26 +261,43 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
     private func storeLocked(_ clear: Data, mediaID: UUID, genre: Genre) throws {
         try Self.validate(clear, genre: genre)
         var index = try loadIndex()
+        // Tout fichier qu'aucun index valide ne référence est écarté avant d'écrire : il ne
+        // peut donc jamais devenir lisible par une écriture ultérieure.
+        try removeUnreferencedFiles(index)
         let target = fileURL(mediaID: mediaID, genre: genre)
-        if let existing = try readSealed(target, mediaID: mediaID, genre: genre) {
-            // Un identifiant média désigne un seul contenu : le remplacer par d'autres octets
-            // serait une substitution, jamais une mise à jour.
-            guard existing == clear else { throw MessagingFailure.invalidResponse }
-            try touch(&index, mediaID: mediaID, genre: genre, byteSize: clear.count)
-            try saveIndex(index)
-            return
+        let referenced = index.entries.contains { $0.mediaID == mediaID && $0.genre == genre }
+        if referenced {
+            if let existing = try readSealed(target, mediaID: mediaID, genre: genre) {
+                // Un identifiant média désigne un seul contenu : le remplacer par d'autres
+                // octets serait une substitution, jamais une mise à jour.
+                guard existing == clear else { throw MessagingFailure.invalidResponse }
+                try touch(&index, mediaID: mediaID, genre: genre, byteSize: clear.count)
+                try commit(&index, keeping: mediaID)
+                return
+            }
+            // Entrée sans fichier : l'entrée est retirée, l'écriture repart proprement.
+            index.entries.removeAll { $0.mediaID == mediaID && $0.genre == genre }
         }
         try evictIfNeeded(index: &index, incomingBytes: clear.count + Self.sealedOverhead, excluding: mediaID)
-        try sealAndWrite(clear, to: target, authentication: Self.authentication(fingerprint, genre: genre, mediaID: mediaID))
+        do {
+            try sealAndWrite(clear, to: target, role: .payload,
+                             authentication: Self.authentication(fingerprint, genre: genre, mediaID: mediaID))
+        } catch {
+            // Aucun fichier non commité ne reste derrière un échec d'écriture.
+            try? Self.removeFile(target)
+            try? Self.synchronize(folder, directory: true)
+            throw error
+        }
         do {
             try touch(&index, mediaID: mediaID, genre: genre, byteSize: clear.count)
             try saveIndex(index)
         } catch {
             // Aucun succès avant la garantie durable : sans index scellé, le fichier ne reste pas.
-            try? FileManager.default.removeItem(at: target)
+            try? Self.removeFile(target)
+            try? Self.synchronize(folder, directory: true)
             throw error
         }
-        try enforceQuotaAfterWrite(index: &index, keeping: mediaID)
+        try enforceQuota(&index, keeping: mediaID)
     }
 
     private func touch(_ index: inout Index, mediaID: UUID, genre: Genre, byteSize: Int) throws {
@@ -224,7 +308,7 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         guard index.entries.count <= Self.maximumEntryCount else { throw MessagingFailure.protectionUnavailable }
     }
 
-    private func sealAndWrite(_ clear: Data, to target: URL, authentication: Data) throws {
+    private func sealAndWrite(_ clear: Data, to target: URL, role: WriteRole, authentication: Data) throws {
         guard clear.count + Self.sealedOverhead <= maximumScopeBytes else { throw MessagingFailure.protectionUnavailable }
         // Calculé avant toute création de fichier : une clé n'est créée que si le cache est vide.
         let mayCreate = mayCreateKey()
@@ -238,16 +322,28 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         do {
             try Self.protect(temporary)
             let handle = try FileHandle(forWritingTo: temporary)
-            try handle.write(contentsOf: bytes)
-            try handle.synchronize()
-            try handle.close()
+            do {
+                try handle.write(contentsOf: bytes)
+                try handle.synchronize()
+                try handle.close()
+            } catch {
+                // Le descripteur est fermé sur **tous** les chemins, y compris l'échec.
+                try? handle.close()
+                throw MessagingFailure.protectionUnavailable
+            }
+            if role == .index, faulted(.indexBeforeCommit) {
+                throw MessagingFailure.protectionUnavailable
+            }
             if FileManager.default.fileExists(atPath: target.path) {
                 _ = try FileManager.default.replaceItemAt(target, withItemAt: temporary)
             } else {
                 try FileManager.default.moveItem(at: temporary, to: target)
             }
+            if faulted(role.faultAfterRename) { throw MessagingFailure.protectionUnavailable }
+            if faulted(.fileSync) { throw MessagingFailure.protectionUnavailable }
             try Self.protect(target)
             try Self.synchronize(target, directory: false)
+            if faulted(.directorySync) { throw MessagingFailure.protectionUnavailable }
             try Self.synchronize(folder, directory: true)
         } catch {
             try? FileManager.default.removeItem(at: temporary)
@@ -260,17 +356,21 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
     private func readLocked(mediaID: UUID, genre: Genre) throws -> Data? {
         var index = try loadIndex()
         let url = fileURL(mediaID: mediaID, genre: genre)
+        guard index.entries.contains(where: { $0.mediaID == mediaID && $0.genre == genre }) else {
+            // Aucun index valide ne référence ce chemin : le fichier n'est pas servi, il est
+            // nettoyé (l'échec du nettoyage est propagé, jamais un faux cache vide).
+            try discardUnreferenced(url)
+            return nil
+        }
         guard let clear = try readSealed(url, mediaID: mediaID, genre: genre) else {
-            // Fichier réellement absent : une entrée d'index orpheline est retirée, jamais
-            // utilisée pour fabriquer un faux cache ni pour ressusciter un fichier purgé.
-            if index.entries.contains(where: { $0.mediaID == mediaID && $0.genre == genre }) {
-                index.entries.removeAll { $0.mediaID == mediaID && $0.genre == genre }
-                try saveIndex(index)
-            }
+            // Fichier réellement absent : l'entrée orpheline est retirée, rien n'est reconstruit.
+            index.entries.removeAll { $0.mediaID == mediaID && $0.genre == genre }
+            try saveIndex(index)
             return nil
         }
         try touch(&index, mediaID: mediaID, genre: genre, byteSize: clear.count)
-        try saveIndex(index)
+        // Toute croissance de l'index (compteur LRU compris) repasse par la borne réelle.
+        try commit(&index, keeping: mediaID)
         return clear
     }
 
@@ -287,6 +387,27 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         } catch {
             throw MessagingFailure.protectionUnavailable
         }
+    }
+
+    /// Nettoie le fichier d'un chemin qu'aucun index valide ne référence.
+    private func discardUnreferenced(_ url: URL) throws {
+        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        if faulted(.orphanCleanup) { throw MessagingFailure.protectionUnavailable }
+        try Self.removeFile(url)
+        try Self.synchronize(folder, directory: true)
+    }
+
+    /// Nettoie tous les artefacts non référencés (temporaires d'un crash, fichiers sans entrée).
+    private func removeUnreferencedFiles(_ index: Index) throws {
+        let indexName = indexURL.lastPathComponent
+        let referenced = Set(index.entries.map { fileURL(mediaID: $0.mediaID, genre: $0.genre).lastPathComponent })
+        var removed = false
+        for file in try cacheFiles() where file.name != indexName && !referenced.contains(file.name) {
+            if faulted(.orphanCleanup) { throw MessagingFailure.protectionUnavailable }
+            try Self.removeFile(file.url)
+            removed = true
+        }
+        if removed { try Self.synchronize(folder, directory: true) }
     }
 
     // MARK: Index scellé
@@ -341,10 +462,25 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         guard clear.count + Self.sealedOverhead <= Self.maximumIndexByteSize else {
             throw MessagingFailure.protectionUnavailable
         }
-        try sealAndWrite(clear, to: indexURL, authentication: indexAuthentication)
+        try sealAndWrite(clear, to: indexURL, role: .index, authentication: indexAuthentication)
     }
 
     // MARK: Quota et éviction
+
+    /// Borne réelle après une écriture ou une lecture qui a fait croître l'index.
+    private func commit(_ index: inout Index, keeping mediaID: UUID) throws {
+        try saveIndex(index)
+        try enforceQuota(&index, keeping: mediaID)
+    }
+
+    private func enforceQuota(_ index: inout Index, keeping mediaID: UUID) throws {
+        guard try diskUsage() > maximumScopeBytes else { return }
+        while try diskUsage() > maximumScopeBytes {
+            // Si le média conservé et son index ne tiennent plus, l'issue est fermée.
+            try evictOne(index: &index, excluding: mediaID)
+        }
+        try saveIndex(index)
+    }
 
     private func evictIfNeeded(index: inout Index, incomingBytes: Int, excluding: UUID) throws {
         guard incomingBytes + Self.indexGrowthReserve <= maximumScopeBytes else {
@@ -356,16 +492,9 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         }
     }
 
-    private func enforceQuotaAfterWrite(index: inout Index, keeping mediaID: UUID) throws {
-        guard try diskUsage() > maximumScopeBytes else { return }
-        while try diskUsage() > maximumScopeBytes {
-            try evictOne(index: &index, excluding: mediaID)
-        }
-        try saveIndex(index)
-    }
-
     /// Évince une unité : d'abord un artefact orphelin (temporaire, fichier non indexé), puis le
-    /// média le moins récemment utilisé — original et miniature ensemble.
+    /// média le moins récemment utilisé — original et miniature ensemble. La suppression est
+    /// synchronisée avant de rendre la main.
     private func evictOne(index: inout Index, excluding: UUID) throws {
         let indexName = indexURL.lastPathComponent
         let referenced = Set(index.entries.map { fileURL(mediaID: $0.mediaID, genre: $0.genre).lastPathComponent })
@@ -374,6 +503,8 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
             .sorted { ($0.modified, $0.name) < ($1.modified, $1.name) }
         if let orphan = orphans.first {
             try Self.removeFile(orphan.url)
+            if faulted(.directorySync) { throw MessagingFailure.protectionUnavailable }
+            try Self.synchronize(folder, directory: true)
             return
         }
         let groups = Dictionary(grouping: index.entries.filter { $0.mediaID != excluding }, by: { $0.mediaID })
@@ -382,6 +513,8 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         for genre in Genre.allCases {
             try Self.removeFile(fileURL(mediaID: victim, genre: genre))
         }
+        if faulted(.directorySync) { throw MessagingFailure.protectionUnavailable }
+        try Self.synchronize(folder, directory: true)
         index.entries.removeAll { $0.mediaID == victim }
     }
 
@@ -441,11 +574,12 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
             for genre in Genre.allCases { try Self.removeFile(fileURL(mediaID: id, genre: genre)) }
             index.entries.removeAll { $0.mediaID == id }
         }
+        // L'index ne fait que rétrécir ici ; `saveIndex` synchronise aussi le répertoire.
         try saveIndex(index)
     }
 
-    /// Ne supprime que les fichiers scellés de **ce** scope. Ni la racine, ni un autre scope,
-    /// ni le Keychain ne sont touchés. Le répertoire opaque vide est conservé.
+    /// Ne supprime que les fichiers scellés de **ce** scope, puis synchronise le répertoire avant
+    /// de rendre la main. Ni la racine, ni un autre scope, ni le Keychain ne sont touchés.
     private func purgeAllLocked() throws {
         guard FileManager.default.fileExists(atPath: folder.path) else { return }
         try Self.requireRealDirectory(folder)
@@ -466,6 +600,8 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         } catch {
             throw MessagingFailure.protectionUnavailable
         }
+        if faulted(.directorySync) { throw MessagingFailure.protectionUnavailable }
+        try Self.synchronize(folder, directory: true)
     }
 
     // MARK: Chemins opaques
@@ -565,8 +701,13 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         return true
     }
 
-    private static func keychainKey(mayCreate: Bool) throws -> SymmetricKey {
-        if let existing = try keychainKeyIfPresent() { return existing }
+    /// Clé Keychain d'un espace nommé. La production utilise `.production` ; un espace
+    /// temporaire ne sert qu'aux preuves d'isolation.
+    static func keychainKey(mayCreate: Bool, namespace: MessagingMediaCacheKeychain) throws -> SymmetricKey {
+        guard !namespace.service.isEmpty, !namespace.account.isEmpty else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        if let existing = try keychainKeyIfPresent(namespace) { return existing }
         guard mayCreate else { throw MessagingFailure.protectionUnavailable }
         var bytes = Data(count: 32)
         let randomStatus = bytes.withUnsafeMutableBytes { buffer -> OSStatus in
@@ -575,21 +716,21 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         }
         guard randomStatus == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
         let insert: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                     kSecAttrService as String: keychainService,
-                                     kSecAttrAccount as String: keychainAccount,
+                                     kSecAttrService as String: namespace.service,
+                                     kSecAttrAccount as String: namespace.account,
                                      kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
                                      kSecAttrSynchronizable as String: false,
                                      kSecValueData as String: bytes]
         let status = SecItemAdd(insert as CFDictionary, nil)
-        if status == errSecDuplicateItem, let existing = try keychainKeyIfPresent() { return existing }
+        if status == errSecDuplicateItem, let existing = try keychainKeyIfPresent(namespace) { return existing }
         guard status == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
         return SymmetricKey(data: bytes)
     }
 
-    private static func keychainKeyIfPresent() throws -> SymmetricKey? {
+    private static func keychainKeyIfPresent(_ namespace: MessagingMediaCacheKeychain) throws -> SymmetricKey? {
         let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrService as String: keychainService,
-                                    kSecAttrAccount as String: keychainAccount,
+                                    kSecAttrService as String: namespace.service,
+                                    kSecAttrAccount as String: namespace.account,
                                     kSecAttrSynchronizable as String: false,
                                     kSecReturnData as String: true,
                                     kSecMatchLimit as String: kSecMatchLimitOne]
@@ -602,18 +743,58 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         return SymmetricKey(data: data)
     }
 
-    // MARK: Vérifications et erreurs fermées
+    // MARK: Vérifications, confinement et erreurs fermées
 
     private func verify(_ scope: MessagingScope) throws {
         guard scope == expectedScope else { throw MessagingFailure.contextChanged }
     }
 
-    /// Toute erreur non typée devient une erreur fermée : aucun `NSError`, domaine, chemin ni
-    /// `userInfo` ne traverse la frontière du cache.
-    private func closed<T>(_ body: () throws -> T) throws -> T {
-        do { return try body() }
-        catch let failure as MessagingFailure { throw failure }
-        catch { throw MessagingFailure.protectionUnavailable }
+    private func faulted(_ point: FaultPoint) -> Bool {
+        faults?(point) == true
+    }
+
+    /// Sérialise toutes les instances. `NSLock.lock`/`unlock` sont `noasync` : elles ne sont donc
+    /// appelées que depuis cette fonction **synchrone** (`NSLock.withLock`), jamais depuis un
+    /// contexte async, et aucun `await` ne peut s'y glisser. Toute erreur non typée devient une
+    /// erreur fermée : aucun `NSError`, domaine, chemin ni `userInfo` ne traverse la frontière.
+    private func withIOLock<T>(_ body: () throws -> T) throws -> T {
+        do {
+            return try Self.ioLock.withLock { try body() }
+        } catch let failure as MessagingFailure {
+            throw failure
+        } catch {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    /// Revérifie les répertoires **possédés** et leur parent de confiance avant tout effet.
+    private func verifyConfinement() throws {
+        try Self.verifyConfinement(root: root, folder: folder)
+    }
+
+    /// `resolvingSymlinksInPath` résout les préfixes système légitimes (`/var` → `/private/var`)
+    /// une seule fois à la construction : un remplacement ultérieur par un lien change la forme
+    /// canonique et échoue donc ici. Ce n'est pas une protection contre une course
+    /// inter-processus : elle couvre un remplacement entre deux opérations, pas un attaquant
+    /// actif pendant l'opération.
+    private static func verifyConfinement(root: URL, folder: URL) throws {
+        try requireRealDirectory(root)
+        try requireRealDirectory(folder)
+        try requireRealDirectory(root.deletingLastPathComponent())
+        guard samePath(root.resolvingSymlinksInPath(), root),
+              samePath(folder.resolvingSymlinksInPath(), folder),
+              samePath(folder.deletingLastPathComponent(), root) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    private static func samePath(_ left: URL, _ right: URL) -> Bool {
+        func normalized(_ url: URL) -> String {
+            var path = url.standardizedFileURL.path
+            while path.count > 1, path.hasSuffix("/") { path.removeLast() }
+            return path
+        }
+        return normalized(left) == normalized(right)
     }
 
     // MARK: Fichiers protégés
