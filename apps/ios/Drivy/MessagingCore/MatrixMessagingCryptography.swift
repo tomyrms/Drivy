@@ -108,6 +108,21 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         }
     }
 
+    /// Identité de l'appareil Matrix **déjà enregistré** pour ce scope (#97).
+    ///
+    /// Aucun appareil synthétique n'est créé : l'ouverture lit le coffre existant. La valeur
+    /// est l'identifiant canonique `[A-Z0-9]{10,32}` attendu par le transport binaire ; si
+    /// l'identité est absente ou non conforme, la fabrique média échoue fermé.
+    func currentDeviceID(scope: MessagingScope) async throws -> String {
+        try guardScope(scope)
+        _ = try await open()
+        guard (10...32).contains(deviceID.utf8.count),
+              deviceID.utf8.allSatisfy({ ($0 >= 65 && $0 <= 90) || ($0 >= 48 && $0 <= 57) }) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        return deviceID
+    }
+
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         try guardScope(scope)
         diagnostics.clear()

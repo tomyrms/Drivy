@@ -24,9 +24,11 @@ enum MessagingDevelopmentEntry {
         return SchoolMessagingEntry(scopeID: scopeID,
             isQualification: SchoolMessagingDevelopment.isQualificationBuild, makeView: { peerID in
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay, session: session,
+                baseURL: baseURL, tokenSource: tokenSource,
                 currentScope: currentScope, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, initialPeerID: peerID, schoolName: schoolName))
         }, makeSettingsView: {
             AnyView(MessagingDevelopmentContainer(scope: scope, http: http, relay: relay, session: session,
+                baseURL: baseURL, tokenSource: tokenSource,
                 currentScope: currentScope, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, initialPeerID: nil,
                 schoolName: schoolName, settingsOnly: true))
         })
@@ -40,11 +42,13 @@ final class MessagingDevelopmentSession {
     fileprivate weak var current: MessagingDevelopmentResources?
 
     fileprivate func resources(scope: MessagingScope, http: MessagingHTTPTransport, relay: MessagingCryptoHTTPRelay,
+        baseURL: URL, tokenSource: any AccessTokenSource,
         photoLoader: @escaping @Sendable (UUID) async -> Data?, schoolWorkspace: SchoolWorkspace?,
         currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) throws -> MessagingDevelopmentResources {
         guard currentScope() == scope else { throw MessagingFailure.contextChanged }
         if let current, current.scope == scope, current.isCurrent() { return current }
         let created = try MessagingDevelopmentResources(scope: scope, http: http, relay: relay,
+            baseURL: baseURL, tokenSource: tokenSource,
             photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
         current = created
         return created
@@ -60,16 +64,37 @@ fileprivate final class MessagingDevelopmentResources {
     func isCurrent() -> Bool { currentScope() == scope }
 
     init(scope: MessagingScope, http: MessagingHTTPTransport, relay: MessagingCryptoHTTPRelay,
+        baseURL: URL, tokenSource: any AccessTokenSource,
         photoLoader: @escaping @Sendable (UUID) async -> Data?, schoolWorkspace: SchoolWorkspace?,
         currentScope: @escaping @MainActor @Sendable () -> MessagingScope?) throws {
         self.scope = scope; self.currentScope = currentScope
         let store = try MessagingProtectedStore(scope: scope)
         let cryptography = try MatrixMessagingCryptography(scope: scope, relay: relay)
         keys = cryptography
-        workspace = MessagingWorkspace(scope: scope, service: MessagingAPIClient(transport: http),
+        let api = MessagingAPIClient(transport: http)
+        // Le média est une capacité additive : une ouverture de coffre média impossible
+        // laisse la messagerie texte et les sondages strictement inchangés.
+        let mediaRuntime: (any MessagingMediaRuntime)?
+        do {
+            let mediaOutbox = try MessagingProtectedMediaOutbox(scope: scope)
+            let mediaCache = try MessagingProtectedMediaCache(scope: scope)
+            let factory: MessagingMediaTransportFactory = {
+                let deviceID = try await cryptography.currentDeviceID(scope: scope)
+                return MessagingHTTPMediaTransport.using(baseURL: baseURL, deviceID: deviceID,
+                    tokenSource: tokenSource, currentScope: currentScope)
+            }
+            mediaRuntime = MessagingMediaCoordinator(scope: scope,
+                preparer: MessagingMediaPreparer(), cryptography: AESCTRMediaCryptography(),
+                outbox: mediaOutbox, cache: mediaCache, encryption: cryptography,
+                sending: api, transportFactory: factory, currentScope: currentScope)
+        } catch {
+            mediaRuntime = nil
+        }
+        workspace = MessagingWorkspace(scope: scope, service: api,
             cryptography: cryptography, outbox: store, drafts: store, directory: http, actions: http,
             history: (try? MessagingSealedHistory(scope: scope)) ?? UnavailableMessagingHistory(),
-            reportSealing: cryptography, reports: store, mutations: store, photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
+            reportSealing: cryptography, reports: store, mutations: store, photoLoader: photoLoader,
+            schoolWorkspace: schoolWorkspace, mediaRuntime: mediaRuntime, currentScope: currentScope)
     }
 }
 
@@ -78,6 +103,8 @@ private struct MessagingDevelopmentContainer: View {
     let http: MessagingHTTPTransport
     let relay: MessagingCryptoHTTPRelay
     let session: MessagingDevelopmentSession
+    let baseURL: URL
+    let tokenSource: any AccessTokenSource
     let currentScope: @MainActor @Sendable () -> MessagingScope?
     let photoLoader: @Sendable (UUID) async -> Data?
     let schoolWorkspace: SchoolWorkspace?
@@ -109,6 +136,7 @@ private struct MessagingDevelopmentContainer: View {
             do {
                 // Ouverture du Keychain et des fichiers uniquement après ouverture de la sheet.
                 resources = try session.resources(scope: scope, http: http, relay: relay,
+                    baseURL: baseURL, tokenSource: tokenSource,
                     photoLoader: photoLoader, schoolWorkspace: schoolWorkspace, currentScope: currentScope)
             } catch { failure = .protectionUnavailable }
         }

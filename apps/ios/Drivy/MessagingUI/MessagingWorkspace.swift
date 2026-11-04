@@ -246,14 +246,62 @@ struct MessagingInboxPreview: Equatable, Sendable {
     }
 
     /// Déchiffre via MessagingCryptography, puis recopie dans l'historique scellé pour la recherche.
+    ///
+    /// La provenance est explicite : un contenu Matrix structuré n'est jamais deviné depuis
+    /// des octets de `body` legacy. Un v3 connu mais invalide échoue fermé. Avant de servir
+    /// une pièce jointe — y compris depuis le cache d'objet — la référence média du serveur
+    /// doit correspondre au contenu authentifié, et un tombstone/contexte retiré ne laisse
+    /// jamais resurgir l'ancienne bulle en clair.
     func content(for message: MessagingWireMessage) async -> MessagingPlainContent? {
-        if let known = contents[message.id] { return known }
+        guard currentScope() == scope else { error = .contextChanged; return nil }
         guard message.schoolID == scope.schoolID else { error = .contextChanged; return nil }
-        guard message.ciphertext != nil, !message.meta.deletedForEveryone else { return nil }
+        guard message.ciphertext != nil, !message.meta.deletedForEveryone,
+              readable(message.meta.sequence, in: message.conversationID) else {
+            contents.removeValue(forKey: message.id)
+            decryptionCodes[message.id] = nil
+            return nil
+        }
+        if let known = contents[message.id] {
+            guard Self.serverMediaMatches(known, message: message) else {
+                contents.removeValue(forKey: message.id)
+                decryptionCodes[message.id] = nil
+                return nil
+            }
+            return known
+        }
         do {
-            let bytes = try await crypto.decrypt(message, scope: scope)
+            let value: MessagingPlainContent
+            if let provenance = crypto as? any MessagingContentProvenanceDecryption {
+                let decrypted = try await provenance.decryptContent(message, scope: scope)
+                guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+                switch decrypted.provenance {
+                case .matrixContent:
+                    guard let decoded = MessagingPlainContent.decodeMatrixContent(decrypted.bytes) else {
+                        throw MessagingFailure.invalidResponse
+                    }
+                    value = decoded
+                case .legacyBody:
+                    guard let decoded = MessagingPlainContent.decode(decrypted.bytes) else {
+                        throw MessagingFailure.invalidResponse
+                    }
+                    value = decoded
+                }
+            } else {
+                // Doubles existants sans provenance : le décodeur legacy reste inchangé.
+                let bytes = try await crypto.decrypt(message, scope: scope)
+                guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+                guard let decoded = MessagingPlainContent.decode(bytes) else {
+                    throw MessagingFailure.invalidResponse
+                }
+                value = decoded
+            }
             guard currentScope() == scope else { throw MessagingFailure.contextChanged }
-            guard let value = MessagingPlainContent.decode(bytes) else { throw MessagingFailure.invalidResponse }
+            if value.media != nil {
+                guard Self.serverMediaMatches(value, message: message) else {
+                    decryptionCodes[message.id] = "D-MEDIA"
+                    return nil
+                }
+            }
             contents[message.id] = value
             decryptionCodes[message.id] = nil
             try? await history.upsert([MessagingHistoryEntry(messageID: message.id, conversationID: message.conversationID,
@@ -265,8 +313,23 @@ struct MessagingInboxPreview: Equatable, Sendable {
             decryptionCodes[message.id] = MessagingDiagnostics.isSafe(failure.code) ? failure.code : "D-X"
             return nil
         }
+        catch let failure as MessagingFailure where failure == .invalidResponse {
+            // v3 connu mais invalide : échec fermé, visible sur la seule bulle concernée.
+            decryptionCodes[message.id] = "D-CONTENT"
+            return nil
+        }
         catch let failure as MessagingFailure { recordFailure(failure); return nil }
         catch { recordFailure(.protectionUnavailable); return nil }
+    }
+
+    /// Une pièce jointe n'est servie que si la référence média du serveur désigne exactement
+    /// le média authentifié et n'est pas un tombstone. Sans média dans le contenu, rien à
+    /// vérifier ; un média sans référence active est refusé.
+    private static func serverMediaMatches(_ content: MessagingPlainContent,
+                                           message: MessagingWireMessage) -> Bool {
+        guard let media = content.media else { return true }
+        guard let reference = message.meta.media else { return false }
+        return !reference.deleted && reference.mediaID == media.id && reference.byteSize == media.size
     }
 
     func loadContacts() async {
@@ -483,7 +546,10 @@ struct MessagingInboxPreview: Equatable, Sendable {
     func preview(for conversationID: UUID) -> MessagingInboxPreview? {
         if let last = visibleMessages(conversationID).last(where: { readable($0.meta.sequence, in: conversationID) }) {
             let fromMe = last.senderID == scope.accountID
-            if let content = contents[last.id] {
+            if last.meta.deletedForEveryone {
+                return MessagingInboxPreview(text: nil, date: last.acceptedAt, fromMe: fromMe, unavailable: true)
+            }
+            if let content = contents[last.id], Self.serverMediaMatches(content, message: last) {
                 return MessagingInboxPreview(text: content.summary, date: last.acceptedAt, fromMe: fromMe, unavailable: false)
             }
             if last.meta.deletedForEveryone || decryptionCodes[last.id] != nil {
