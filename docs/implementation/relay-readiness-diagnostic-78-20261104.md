@@ -4,6 +4,12 @@ Date : 4 novembre 2026. Tâche d'instrumentation, pas de correction du relais.
 Base : `883581ad321b67ae3b7efe15ef2c6b89970b1e20`, branche de travail
 `tomyrms/issues-relais-diagnostic-78`. Aucun push, aucune CI, aucun redéploiement.
 
+Correction 1/2 (candidat `412d2475`) : la preuve hôte vérifie désormais la chaîne et
+l'identité TLS par OpenSSL (`-verify_hostname localhost`, `-verify_ip 127.0.0.1`) au lieu
+d'une recherche de préfixe dans le texte du certificat ; les tests hôtes sont autonomes en
+répertoire temporaire et s'exécutent avec Node 24.22.2. Le test Swift et le relais restent
+inchangés.
+
 ## 1. Ce qui est établi et ce qui ne l'est pas
 
 Le run Apple `41861281984` (job `126683437419`, SHA `883581ad`) est réellement rouge :
@@ -71,11 +77,18 @@ transport réel n'est pas remplacé par un mock.
 Nouvelle fonction `relay_verify_chain`, appelée en tête de `relay_start_server` (donc au
 démarrage initial et lors de `relay_reset_fixture`) :
 
-1. `openssl verify -CAfile "$relay_directory/ca.crt" "$relay_directory/server.crt"` ;
-2. identité loopback configurée : lecture `openssl x509 -noout -text` du certificat de ce
-   run et recherche fermée de `DNS:localhost` et `IP Address:127.0.0.1` ;
-3. marqueurs `chain=ok|ko` et `loopback_identity=ok|ko` dans `relay-probe.txt` ;
-4. en cas d'échec : `RELAY_TLS_CHAIN_INVALID` sur `stderr`, puis `return 1`.
+1. chaîne : `openssl verify -CAfile "$relay_directory/ca.crt" "$relay_directory/server.crt"` ;
+2. nom exact : `openssl verify -CAfile … -purpose sslserver -verify_hostname localhost
+   "$relay_directory/server.crt"` ;
+3. IP exacte : `openssl verify -CAfile … -purpose sslserver -verify_ip 127.0.0.1
+   "$relay_directory/server.crt"` ;
+4. marqueurs `chain=ok|ko` et `loopback_identity=ok|ko` dans `relay-probe.txt` ;
+5. en cas d'échec : `RELAY_TLS_CHAIN_INVALID` sur `stderr`, puis `return 1`.
+
+Le nom et l'IP sont vérifiés par OpenSSL, pas par une recherche de préfixe dans le texte
+du certificat : `localhost.evil` et `127.0.0.10` ne satisfont pas l'identité. Les options
+`-verify_hostname` et `-verify_ip` sont celles d'OpenSSL 3.x, déjà employées par
+`scripts/qualification/test_relay_plan.py`.
 
 Comportement exact en cas d'échec : `relay_start_server` retourne 1 **avant** de lancer
 Node ; sous `set -euo pipefail`, la qualification s'arrête. Ce n'est pas un
@@ -88,17 +101,26 @@ TLS/ATS, aucune acceptation générale de certificat, aucun élargissement d'URL
 
 ### 2.3 Test local de l'hôte — `scripts/ios/relay-diagnostics.test.mjs`
 
-Six tests sans relais réel, sans génération de certificat et sans service :
+Neuf tests locaux, sans relais réel, sans service et sans dépendre d'un magasin de
+confiance système :
 
-- syntaxe `bash -n` du script ;
-- présence et forme de `relay_verify_chain`, `openssl verify` sur les fichiers du run,
-  marqueurs `chain`/`loopback_identity`, `return 1` et appel bloquant ;
-- vocabulaire fermé de `relay_mark` (nom ou valeur hors motif refusé, aucune sentinelle) ;
-- échec honnête sans certificat : `chain=ko`, `loopback_identity=ko`, exit 1,
-  `RELAY_TLS_CHAIN_INVALID`, aucun chemin absolu dans la sortie ;
-- absence de `NODE_TLS_REJECT_UNAUTHORIZED`, `--insecure`, `curl -k` et conservation de
-  la ligne de confiance simulateur ;
-- redirection des sorties brutes `openssl` dans la fonction.
+- disponibilité de `bash` et `openssl` ; syntaxe `bash -n` du script ;
+- absence de `NODE_TLS_REJECT_UNAUTHORIZED`, `--insecure`, `curl -k`, conservation de la
+  ligne de confiance simulateur et présence des vérifications OpenSSL exactes ;
+- chaîne valide, SAN `DNS:localhost,IP:127.0.0.1` : exit 0, `chain=ok`,
+  `loopback_identity=ok`, aucune fuite dans `stdout`/`stderr` ;
+- SAN trompeur `DNS:localhost.evil` avec IP exacte : chaîne ok, identité ko, exit 1 ;
+- SAN trompeur `IP:127.0.0.10` avec nom exact : chaîne ok, identité ko, exit 1 ;
+- certificat signé par une autre autorité : chaîne ko, identité ko, exit 1 ;
+- absence de preuve : chaîne ko, identité ko, exit 1 ;
+- vocabulaire fermé de `relay_mark` (nom ou valeur hors motif refusé, aucune sentinelle).
+
+Les certificats sont synthétiques et éphémères, générés par le test avec `openssl` dans un
+répertoire créé par Node (`mkdtempSync` sous `os.tmpdir()`). Le test ne dépend plus de
+`artifacts/relais-diagnostic-78` ni d'un artefact de session antérieure. Bash ne supprime
+rien : le nettoyage est fait par Node dans le même runtime, après vérification du chemin
+absolu résolu, de son inclusion sous `os.tmpdir()` et du préfixe de racine créé. Aucun
+chemin n'est transmis à un `rm -rf` shell.
 
 ## 3. Garanties de confidentialité des diagnostics
 
@@ -115,24 +137,30 @@ Ne sortent jamais : URL, corps, en-têtes, jeton, nom de personne, identifiant d
 valeur de champ, JSON, sujet ou SAN de certificat, chemin de certificat, clé, secret,
 description localisée ou `userInfo`. Les tests Swift injectent des sentinelles
 (`SENTINEL_TOKEN`, `SENTINEL_NAME`, `SENTINEL_CERTIFICATE`, valeurs de champs) et
-vérifient leur absence. Les artefacts locaux de cette tâche sont uniquement les journaux
-synthétiques de `artifacts/relais-diagnostic-78/`, ignorés par Git ; aucun relais réel,
-aucune donnée de personne, aucune position n'y figure.
+vérifient leur absence. Le test hôte vérifie en plus qu'aucun chemin, nom de fichier,
+sujet, SAN, marqueur `BEGIN` ou contenu de certificat n'apparaît dans `stdout`/`stderr`.
+Les certificats de test sont exclusivement synthétiques et éphémères ; aucun certificat,
+secret ou magasin de confiance réel n'est modifié. Les journaux de cette session
+restent dans `artifacts/relais-diagnostic-78/`, ignorés par Git ; le test lui-même écrit
+uniquement dans son répertoire temporaire puis le supprime.
 
 ## 4. Commandes et résultats réels
 
 | Commande | Résultat | Exit |
 |---|---|---|
-| `node --test scripts/ios/relay-diagnostics.test.mjs` (avant implémentation) | 3 échecs attendus : fonction absente, preuve absente, redirections absentes | 1 |
-| `node --test scripts/ios/relay-diagnostics.test.mjs` (après implémentation) | 6 tests passés, 0 échec, 0 ignoré | 0 |
+| Node 24 `--test scripts/ios/relay-diagnostics.test.mjs` (avant correction de la preuve) | 5 passés, 4 échecs attendus : vérifications exactes absentes, SAN `localhost.evil`, SAN `127.0.0.10`, autre autorité | 1 |
+| Node 24 `--test scripts/ios/relay-diagnostics.test.mjs` (après correction) | 9 tests passés, 0 échec, 0 ignoré | 0 |
 | `bash -n scripts/ios/relay-qualification.sh` (Git Bash 5.2.37) | aucune erreur de syntaxe | 0 |
 | `git diff --check` | aucune erreur d'espacement | 0 |
 | validation synthétique de `scripts/messaging-relay-qualification.py` avec une suite relais à un cas et une seconde suite | `RELAY_SELECTOR_SYNTHETIC_OK` | 0 |
 | `rg` sur `SUITE`/`METHOD`/nom du test | nom et sens du scénario inchangés | 0 |
 
-Node utilisé localement : `v26.8.1`. Le dépôt déclare `>=24 <25` ; aucun paquet n'a été
-ajouté et le test n'utilise que la bibliothèque standard. Les tests Swift n'ont pas été
-exécutés : aucun Xcode/Swift sur ce poste Windows.
+Node utilisé : `v24.22.2`, binaire portable
+`C:/Users/jtoma/AppData/Local/Temp/drivy-orchestration-20261104/node-v24.22.2-win-x64`,
+exécuté par son chemin absolu, sans modification globale du `PATH`. OpenSSL local : 3.6.5
+(MSYS2). Aucun paquet ajouté ; le test n'utilise que la bibliothèque standard et `openssl`
+déjà installé. Les tests Swift n'ont pas été exécutés : aucun Xcode/Swift sur ce poste
+Windows, et aucun changement Swift n'a été nécessaire pour cette correction.
 
 ## 5. Sources, skills et Codebase Memory
 
@@ -159,25 +187,33 @@ Codebase Memory, projet unique dans ce worktree :
 
 - projet `drivy-r7-relais-78-20261104`, racine
   `C:/Users/jtoma/orca/workspaces/Drivy/issues-relais-diagnostic-78`, mode `fast` ;
-- 38 992 nœuds, 165 297 arêtes, `status: ready`, `indexed_at 2026-11-04T17:31:21Z` ;
+- réindexé au HEAD `412d2475` pendant cette correction : 39 017 nœuds, 165 411 arêtes,
+  `status: ready`, `indexed_at 2026-11-04T18:25:49Z` ;
 - recherche `search_graph` sur `SchoolURLSessionTransport` : classe
   `apps/ios/Drivy/SchoolAPI/DrivyAPIClient.swift:36-75` et méthode `send:51-74` ;
-- couverture : le fichier de test est indexé puis marqué `metadata_changed` après mes
-  modifications, donc relu sur disque ; `scripts/` et `docs/` sont exclus par défaut de
-  l'index et ont été lus directement ; `DrivyAPIClient.swift` est `parse_partial`
-  (`53-57`, `319-319`), sans incidence sur la ligne 51-74 utilisée ;
+- couverture : `scripts/` et `docs/` sont exclus par défaut de l'index et ont été lus
+  directement ; le fichier Swift de test est indexé et inchangé dans cette correction ;
+  `DrivyAPIClient.swift` est `parse_partial` (`53-57`, `319-319`), sans incidence sur la
+  ligne 51-74 utilisée ;
 - aucun index d'un autre worktree n'a été utilisé ; les rapports du worktree #97 ont été
   lus comme fichiers, pas via son index.
 
 ## 6. Limites
 
 - Aucune exécution Swift, aucun simulateur, aucun `simctl keychain`, aucun test de
-  confiance réelle sur ce poste Windows. Les 8 tests Swift sont **préparés, non exécutés**.
+  confiance réelle sur ce poste Windows. Les 8 tests Swift sont **préparés, non exécutés** ;
+  aucun changement Swift n'a été nécessaire pour cette correction.
 - Aucun RED de compilation n'est forgé. Le seul échec empirique reste le run
   `41861281984` ; sa cause TLS/ATS/réseau n'est pas déterminée.
-- La preuve `openssl` de l'hôte ne s'exécutera que sur le runner Apple ; le test local
-  vérifie sa forme, ses marqueurs et son échec fermé, pas une vraie chaîne générée.
-- Node local 26.8.1 au lieu de la plage 24 déclarée ; le test est sans dépendance.
+- La preuve `openssl` de l'hôte ne s'exécutera sur le runner Apple que lors d'une
+  prochaine CI autorisée. Localement, les cas comportementaux prouvent la chaîne, le nom
+  exact et l'IP exacte avec OpenSSL 3.6.5 et des certificats synthétiques ; ils ne
+  prouvent ni le trust simulateur ni le comportement d'iOS 26.4.1.
+- OpenSSL 3.5.9 est déclaré par les artefacts du run Apple ; `-verify_hostname` et
+  `-verify_ip` sont déjà utilisés par `scripts/qualification/test_relay_plan.py`. Leur
+  disponibilité sur le runner n'est pas revérifiée ici.
+- Les répertoires temporaires du test sont supprimés par Node avec garde de racine ;
+  contrôle après exécution : 0 répertoire `drivy-relay-diag-*` résiduel.
 - Une prochaine exécution Apple autorisée est nécessaire pour lire `transport=…` et
   `champ=…`. Cette tâche n'autorise ni push, ni rerun, ni CI, ni PR, ni fusion, ni
   déploiement, ni fermeture d'issue.

@@ -69,13 +69,16 @@ relay_mark() {
 # Preuve de chaîne fermée : uniquement les certificats générés par CE run.
 # Aucun sujet, chemin ou contenu de certificat n'est publié ; seuls ok/ko sortent.
 relay_verify_chain() {
-  local chain=ko identity=ko subject_alt_name=''
+  local chain=ko identity=ko
   if [[ -n "$relay_directory" && -f "$relay_directory/ca.crt" && -f "$relay_directory/server.crt" ]]; then
     if openssl verify -CAfile "$relay_directory/ca.crt" "$relay_directory/server.crt" > /dev/null 2>&1; then
       chain=ok
     fi
-    subject_alt_name=$(openssl x509 -in "$relay_directory/server.crt" -noout -text 2>/dev/null) || subject_alt_name=''
-    if grep -Fq 'DNS:localhost' <<< "$subject_alt_name" && grep -Fq 'IP Address:127.0.0.1' <<< "$subject_alt_name"; then
+    # Identité exacte : localhost et 127.0.0.1, pas un préfixe de SAN.
+    if openssl verify -CAfile "$relay_directory/ca.crt" -purpose sslserver \
+         -verify_hostname localhost "$relay_directory/server.crt" > /dev/null 2>&1 \
+       && openssl verify -CAfile "$relay_directory/ca.crt" -purpose sslserver \
+         -verify_ip 127.0.0.1 "$relay_directory/server.crt" > /dev/null 2>&1; then
       identity=ok
     fi
   fi
