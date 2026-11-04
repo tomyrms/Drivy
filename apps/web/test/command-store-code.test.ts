@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { createCommand } from '../client/command-core.js';
+import { createCommand, parseMetadata } from '../client/command-core.js';
 import { invitationSchema, issuedCodeOf, parseInvitationResponse } from '../client/invitation-model.js';
 
 /**
@@ -13,7 +13,7 @@ type Store = {
   resend(schoolId: string, csrf: string, operationId?: string): Promise<{ status: string; code?: string; message?: string }>;
   release(schoolId: string, operationId?: string): void;
   get(schoolId: string, operationId?: string): { phase: string; notRecorded: boolean; unverifiable: boolean; message: string; command: unknown } | undefined;
-  getSnapshot(): { revision: number; confirmed: unknown };
+  getSnapshot(): { revision: number; confirmed: unknown; metadata: { durability: string; last: string } };
   scopeToPerson(personId: string): boolean;
   scopeToAccess(schoolId: string, membershipId: string, accessEpoch: number): void;
   clear(): void;
@@ -23,11 +23,20 @@ const storeModule = '../client/command-store.ts';
 
 const schoolId = randomUUID();
 const secret = 'K7Q4-MX2P';
+/** La clé de la liste v1 fait partie du contrat : une page ouverte avant ce lot doit rester relisible. */
+const storageKey = 'drivy-gestion-demandes-v1';
 const writes: string[] = [];
+type StorageCall = 'getItem' | 'setItem' | 'removeItem';
 const memory = () => {
   const items = new Map<string, string>();
-  return { getItem: (key: string) => items.get(key) ?? null, removeItem: (key: string) => { items.delete(key); },
-    setItem: (key: string, value: string) => { items.set(key, value); writes.push(value); }, snapshot: () => [...items.values()] };
+  let refused: StorageCall | null = null;
+  const attempt = (call: StorageCall) => { if (refused === call) throw new Error('stockage indisponible'); };
+  return { getItem: (key: string) => { attempt('getItem'); return items.get(key) ?? null; },
+    removeItem: (key: string) => { attempt('removeItem'); items.delete(key); },
+    setItem: (key: string, value: string) => { attempt('setItem'); items.set(key, value); writes.push(value); },
+    /** Un navigateur qui refuse une opération : quota, navigation privée, stockage désactivé. */
+    refuse: (call: StorageCall | null) => { refused = call; },
+    snapshot: () => [...items.values()] };
 };
 let session: ReturnType<typeof memory>;
 let local: ReturnType<typeof memory>;
@@ -451,5 +460,89 @@ describe('Ordonnancement par dépendances, pas par école', () => {
     expect(store.getSnapshot().revision).toBe(0);
     await store.resend(schoolId, 'new-csrf', command.operationId);
     expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Conservation des métadonnées : un résultat observé, jamais supposé', () => {
+  const create = () => createCommand({ schoolId, kind: 'createLesson', path: 'lessons', resourceVersion: 0,
+    body: { plannedStart: '2027-01-12T08:00:00.000Z', meetingPoint: 'Lieu synthétique sentinelle' } });
+  const lost = () => answer(503, { code: 'SERVICE_UNAVAILABLE' });
+
+  test('une écriture refusée par le stockage laisse la commande suivie en mémoire seulement', async () => {
+    const store = await loadStore(), command = create();
+    session.refuse('setItem');
+    vi.stubGlobal('fetch', lost());
+    expect((await store.submit(command, 'csrf')).status).toBe('pending');
+    // La commande et la saisie restent en mémoire : rien n'est détruit par l'échec d'écriture.
+    expect(store.get(schoolId, command.operationId)).toMatchObject({ phase: 'uncertain', command });
+    expect(store.getSnapshot()).toMatchObject({ revision: 0, confirmed: null, metadata: { durability: 'memoryOnly', last: 'write' } });
+    // Aucune écriture acceptée : rien à relire après fermeture de la page.
+    expect(writes).toEqual([]);
+    expect(session.snapshot()).toEqual([]);
+  });
+
+  test('une écriture réussie ensuite rétablit l’état enregistré, et rien avant', async () => {
+    const store = await loadStore(), command = create();
+    session.refuse('setItem');
+    vi.stubGlobal('fetch', lost());
+    await store.submit(command, 'csrf');
+    expect(store.getSnapshot().metadata).toMatchObject({ durability: 'memoryOnly' });
+    session.refuse(null);
+    vi.stubGlobal('fetch', answer(404, { code: 'NOT_FOUND' }));
+    await store.verify(schoolId, command.operationId);
+    expect(store.getSnapshot().metadata).toEqual({ durability: 'saved', last: 'write' });
+    expect(session.snapshot().join('')).toContain(command.operationId);
+  });
+
+  test('un effacement refusé ne prétend pas avoir purgé : les anciennes métadonnées reviennent au rechargement, sans corps', async () => {
+    const store = await loadStore(), command = create();
+    vi.stubGlobal('fetch', lost());
+    await store.submit(command, 'csrf');
+    expect(store.getSnapshot().metadata).toEqual({ durability: 'saved', last: 'write' });
+    session.refuse('removeItem');
+    store.clear();
+    expect(store.get(schoolId)).toBeUndefined();
+    expect(store.getSnapshot().metadata).toEqual({ durability: 'unknown', last: 'clear' });
+    // L'effacement n'a pas eu lieu : la valeur refusée est toujours là.
+    expect(session.snapshot().join('')).toContain(command.operationId);
+    const reloaded = await loadStore(), send = lost();
+    vi.stubGlobal('fetch', send);
+    expect(reloaded.get(schoolId, command.operationId)).toMatchObject({ phase: 'orphaned', command: null });
+    // Le contenu n'est pas revenu avec les identifiants : la demande n'est pas renvoyée d'elle-même.
+    await reloaded.resend(schoolId, 'csrf', command.operationId);
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  test('une lecture refusée au chargement ne prétend pas que le suivi est enregistré', async () => {
+    session.refuse('getItem');
+    const store = await loadStore();
+    expect(store.getSnapshot().metadata).toEqual({ durability: 'unknown', last: 'read' });
+    expect(store.get(schoolId)).toBeUndefined();
+    session.refuse(null);
+    vi.stubGlobal('fetch', lost());
+    await store.submit(create(), 'csrf');
+    expect(store.getSnapshot().metadata).toEqual({ durability: 'saved', last: 'write' });
+  });
+
+  test('une liste illisible ne prétend pas que le suivi est enregistré', async () => {
+    session.setItem(storageKey, '{"version":2}');
+    const store = await loadStore();
+    expect(store.getSnapshot().metadata).toEqual({ durability: 'unknown', last: 'read' });
+    expect(store.get(schoolId)).toBeUndefined();
+  });
+
+  test('l’état de conservation n’entre jamais dans la liste v1 : clés strictes, aucun corps', async () => {
+    const store = await loadStore(), command = create();
+    vi.stubGlobal('fetch', lost());
+    await store.submit(command, 'csrf');
+    expect(writes.length).toBeGreaterThan(0);
+    for (const value of [...writes, ...session.snapshot(), ...local.snapshot()]) expect(value).not.toContain('Lieu synthétique sentinelle');
+    expect(local.snapshot()).toEqual([]);
+    const persisted = JSON.parse(session.snapshot().at(-1)!) as Record<string, unknown>[];
+    expect(persisted).toEqual([{ operationId: command.operationId, schoolId, kind: 'createLesson', resourceVersion: 0, createdAt: command.createdAt }]);
+    // Un client antérieur relit encore cette liste : le lecteur v1 strict accepte chaque entrée.
+    expect(persisted.map(parseMetadata)).not.toContain(null);
+    const raw = session.snapshot().join('');
+    for (const state of ['saved', 'memoryOnly', 'unknown']) expect(raw).not.toContain(state);
   });
 });

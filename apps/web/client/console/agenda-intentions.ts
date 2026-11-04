@@ -1,4 +1,3 @@
-import type { CommandKind, SchoolCommand } from '../command-core.js';
 import type { LessonForm } from '../lesson-planning-model.js';
 
 /**
@@ -8,6 +7,12 @@ import type { LessonForm } from '../lesson-planning-model.js';
  *
  * Pur : ni DOM, ni réseau. Les écrans décident de ce qu'ils montrent, jamais de ce qui est réservé.
  */
+
+/**
+ * Le renvoi d'une planification suit une seule règle, celle que le magasin applique avant le transport : les écrans la
+ * relisent ici pour retirer une action, ils n'en tiennent pas une copie.
+ */
+export { desiredSlotOf, lessonResendAllowed, lessonResendReason } from '../command-recovery.js';
 
 /** Le créneau et les personnes voulus, tels que la saisie les a produits. */
 export interface PlannedLessonDraft {
@@ -69,27 +74,3 @@ export function visibleIntentions(intentions: readonly LessonIntention[], follow
 /** Demandes encore suivies (les confirmées sont faites) : ce qui ordonne la prochaine écriture de la section. */
 export const stillFollowed = (intentions: readonly LessonIntention[], followed: ReadonlySet<string>): LessonIntention[] =>
   intentions.filter(intention => intention.settledAt === undefined && followed.has(intention.operationId));
-
-/** Le créneau voulu d'une création ou d'un déplacement, en millisecondes, quand le corps de la demande le porte. */
-export function desiredSlotOf(command: SchoolCommand | null): number | null {
-  if (!command || (command.kind !== 'createLesson' && command.kind !== 'moveLesson')) return null;
-  const start = command.body.plannedStart;
-  return typeof start === 'string' && Number.isFinite(Date.parse(start)) ? Date.parse(start) : null;
-}
-
-/**
- * Renvoyer la même demande n'a de sens que tant que le créneau voulu est encore devant : une création ou un déplacement
- * dont l'horaire est passé n'est plus proposé au renvoi, il reste à vérifier le résultat ou à abandonner le suivi.
- * Une commande restaurée sans corps ne prouve pas que son créneau est encore devant : pas de renvoi non plus.
- * Tout autre type de commande garde le comportement existant (`true` ici, le magasin décide du reste).
- */
-export function lessonResendAllowed(entry: { readonly kind: CommandKind; readonly command: SchoolCommand | null }, now = Date.now()): boolean {
-  if (entry.kind !== 'createLesson' && entry.kind !== 'moveLesson') return true;
-  const slot = desiredSlotOf(entry.command);
-  return slot !== null && slot > now;
-}
-
-/** Raison courte affichée à côté d'un renvoi retiré, ou `null` quand le renvoi reste possible. */
-export function lessonResendReason(entry: { readonly kind: CommandKind; readonly command: SchoolCommand | null }, now = Date.now()): string | null {
-  return lessonResendAllowed(entry, now) ? null : 'L’horaire demandé est passé : vérifiez le résultat ou arrêtez le suivi.';
-}
