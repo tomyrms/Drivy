@@ -1,17 +1,23 @@
 import XCTest
 import CryptoKit
+import Security
 
 @testable import Drivy
 
 /// File d'intentions média durable et chiffrée (#97, T2b3).
 ///
-/// Ces tests ont été écrits **avant** l'implémentation, mais ils n'ont pas été
+/// Ces tests ont été écrits avant l'implémentation, mais ils n'ont pas été
 /// exécutés sur le poste d'implémentation (Windows, aucun Xcode ni `swift`).
 /// Aucun RED/GREEN natif n'est revendiqué : la preuve vient d'un runner Apple,
 /// au SHA du commit. Aucune clé réelle ni Keychain système n'est utilisée ici :
 /// chaque test injecte une racine temporaire et un fournisseur de clés
 /// synthétique. Les erreurs d'entrée/sortie sont injectées par un adaptateur
-/// fautif qui délègue au système de fichiers réel.
+/// fautif qui délègue au système de fichiers réel et journalise ses appels.
+///
+/// Les appels asynchrones ne sont jamais placés dans une autoclosure
+/// `XCTAssert*` : les signatures XCTest n'offrent pas d'autoclosure
+/// asynchrone. Le résultat est lié à une variable, puis la même valeur est
+/// assertée.
 final class MessagingMediaOutboxTests: XCTestCase {
 
     // MARK: - Aller-retour et absence de clair sur disque
@@ -56,6 +62,42 @@ final class MessagingMediaOutboxTests: XCTestCase {
         for (label, sentinel) in sentinels {
             XCTAssertNil(bytes.range(of: sentinel), "\(label) ne doit jamais apparaître en clair sur disque")
         }
+    }
+
+    func testFirstKeyIsCreatedOnceThenReusedOnReopening() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore(bytes: nil)
+        let pending = try makePending(try sealMedia())
+        let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
+        try await outbox.put(pending, scope: scope)
+        XCTAssertEqual(keys.creationCount, 1, "La première écriture crée la clé du scope")
+        let created = try XCTUnwrap(keys.storedBytes)
+
+        let reopened = try makeOutbox(scope: scope, root: root, keys: keys)
+        let entries = try await reopened.entries(scope: scope)
+        XCTAssertEqual(entries, [pending])
+        try await reopened.put(pending, scope: scope)
+        XCTAssertEqual(keys.creationCount, 1, "Aucune nouvelle clé face à des archives existantes")
+        XCTAssertEqual(keys.storedBytes, created)
+    }
+
+    func testInitialOwnedDirectoriesAreCreatedBeforeProtection() throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let fileSystem = FaultyFileSystem()
+        _ = try makeOutbox(scope: scope, root: root, keys: SyntheticKeyStore(), fileSystem: fileSystem)
+
+        let owned = fileSystem.calls.filter {
+            $0.operation == .createDirectory || $0.operation == .protect
+        }
+        XCTAssertEqual(owned.map(\.operation),
+                       [.createDirectory, .createDirectory, .protect, .protect],
+                       "Créer puis protéger, jamais protéger une cible non contrôlée")
+        XCTAssertEqual(owned[0].name, "MessagingMediaOutbox")
+        XCTAssertEqual(owned[1].name, try scopeFingerprint(scope))
+        XCTAssertEqual(owned[2].name, "MessagingMediaOutbox")
+        XCTAssertEqual(owned[3].name, try scopeFingerprint(scope))
     }
 
     func testFoldersAndRecordsAreExcludedFromBackup() async throws {
@@ -108,7 +150,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let pending = try makePending(sealed, sizeOverride: AESCTRMediaCryptography.maximumByteSize)
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
         await expectFailure(.invalidResponse) { try await outbox.put(pending, scope: scope) }
-        XCTAssertTrue(try await outbox.entries(scope: scope).isEmpty)
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertTrue(entries.isEmpty)
         XCTAssertEqual(try folderContents(scope: scope, root: root).count, 0)
     }
 
@@ -122,7 +165,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
         try await outbox.put(pending, scope: scope)
         let reopened = try makeOutbox(scope: scope, root: root, keys: keys)
-        XCTAssertEqual(try await reopened.entries(scope: scope), [pending])
+        let entries = try await reopened.entries(scope: scope)
+        XCTAssertEqual(entries, [pending])
     }
 
     // MARK: - Cohérence contenu / sceau
@@ -144,7 +188,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let fileMismatch = try makePending(sealed, fileOverride: otherSeal.info)
         await expectFailure(.invalidResponse) { try await outbox.put(fileMismatch, scope: scope) }
 
-        XCTAssertTrue(try await outbox.entries(scope: scope).isEmpty)
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertTrue(entries.isEmpty)
         XCTAssertEqual(try folderContents(scope: scope, root: root).count, 0)
     }
 
@@ -185,7 +230,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         XCTAssertThrowsError(try makeOutbox(
             scope: MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: ""),
             root: root, keys: SyntheticKeyStore()))
-        XCTAssertEqual(try await outbox.entries(scope: scope), [pending])
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertEqual(entries, [pending])
     }
 
     // MARK: - Clé absente, clé fausse, fichier corrompu
@@ -281,7 +327,21 @@ final class MessagingMediaOutboxTests: XCTestCase {
                                                    clientMessageID: pending.clientMessageID)
         await expectFailure(.stateConflict) { try await outbox.put(sameClientOtherMedia, scope: scope) }
 
-        XCTAssertEqual(try await outbox.entries(scope: scope), [pending], "Rien n'a été écrasé")
+        let retained = try await outbox.entries(scope: scope)
+        XCTAssertEqual(retained, [pending], "Rien n'a été écrasé")
+    }
+
+    func testIdempotentPutAtFullQuota() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let outbox = try makeOutbox(scope: scope, root: root, keys: keys,
+                                    limits: MessagingMediaOutboxLimits(maximumIntents: 1))
+        let pending = try makePending(try sealMedia())
+        try await outbox.put(pending, scope: scope)
+        try await outbox.put(pending, scope: scope)
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertEqual(entries, [pending], "L'idempotence passe avant le plafond")
     }
 
     // MARK: - Comparaison d'enveloppe
@@ -312,13 +372,15 @@ final class MessagingMediaOutboxTests: XCTestCase {
             try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: nil,
                                              replacement: stale, scope: scope)
         }
-        XCTAssertEqual(try await outbox.entries(scope: scope)[0].messageCiphertext, first)
+        let afterStale = try await outbox.entries(scope: scope)
+        XCTAssertEqual(afterStale[0].messageCiphertext, first)
 
         try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: first,
                                          replacement: first, scope: scope)
         try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: first,
                                          replacement: stale, scope: scope)
-        XCTAssertEqual(try await outbox.entries(scope: scope)[0].messageCiphertext, stale)
+        let afterSwap = try await outbox.entries(scope: scope)
+        XCTAssertEqual(afterSwap[0].messageCiphertext, stale)
 
         await expectFailure(.stateConflict) {
             try await outbox.replaceEnvelope(mediaID: UUID(), expected: nil,
@@ -330,7 +392,42 @@ final class MessagingMediaOutboxTests: XCTestCase {
             try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: stale,
                                              replacement: invalid, scope: scope)
         }
-        XCTAssertEqual(try await outbox.entries(scope: scope)[0].messageCiphertext, stale)
+        let afterInvalid = try await outbox.entries(scope: scope)
+        XCTAssertEqual(afterInvalid[0].messageCiphertext, stale)
+    }
+
+    func testEnvelopeNoOpResynchronizesBeforeSuccess() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let fileSystem = FaultyFileSystem()
+        let outbox = try makeOutbox(scope: scope, root: root, keys: keys, fileSystem: fileSystem)
+        let pending = try makePending(try sealMedia(), envelope: envelope(payloadBytes: 32, epoch: 2))
+        try await outbox.put(pending, scope: scope)
+        let file = try scopeFolder(scope, root: root)
+            .appendingPathComponent(try recordDigest(pending.mediaID, scope: scope) + ".sealed")
+        let before = try Data(contentsOf: file)
+
+        fileSystem.fail(.synchronizeDirectory)
+        fileSystem.clearCalls()
+        await expectFailure(.protectionUnavailable) {
+            try await outbox.replaceEnvelope(mediaID: pending.mediaID,
+                                             expected: pending.messageCiphertext,
+                                             replacement: pending.messageCiphertext,
+                                             scope: scope)
+        }
+        XCTAssertTrue(fileSystem.operations.contains(.protect))
+        XCTAssertTrue(fileSystem.operations.contains(.synchronizeFile))
+        XCTAssertTrue(fileSystem.operations.contains(.synchronizeDirectory))
+
+        fileSystem.heal(.synchronizeDirectory)
+        try await outbox.replaceEnvelope(mediaID: pending.mediaID,
+                                         expected: pending.messageCiphertext,
+                                         replacement: pending.messageCiphertext,
+                                         scope: scope)
+        XCTAssertEqual(try Data(contentsOf: file), before, "Un no-op ne réécrit jamais l'archive")
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertEqual(entries, [pending])
     }
 
     func testMegolmEnvelopeIsBoundedAndRequiresAValidEpoch() async throws {
@@ -341,7 +438,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
 
         let accepted = try makePending(try sealMedia(), envelope: envelope(payloadBytes: 9_000, epoch: 9))
         try await outbox.put(accepted, scope: scope)
-        XCTAssertEqual(try await outbox.entries(scope: scope), [accepted])
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertEqual(entries, [accepted])
 
         let tooLong = try makePending(try sealMedia(plaintext: Data("B".utf8), keyByte: 0x61),
                                       envelope: envelope(payloadBytes: 9_001, epoch: 9))
@@ -367,7 +465,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let eight = (0..<8).map { _ in UUID() }
         let accepted = try makePending(try sealMedia(), mentions: eight)
         try await outbox.put(accepted, scope: scope)
-        XCTAssertEqual(try await outbox.entries(scope: scope), [accepted])
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertEqual(entries, [accepted])
 
         let nine = (0..<9).map { _ in UUID() }
         await expectFailure(.invalidResponse) {
@@ -381,18 +480,34 @@ final class MessagingMediaOutboxTests: XCTestCase {
         }
     }
 
-    func testMatrixContentCeilingIncludesMentions() async throws {
+    func testMatrixContentCeilingUsesCanonicalUserIDs() async throws {
         let root = try makeRoot()
         let scope = makeScope()
         let keys = SyntheticKeyStore()
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
 
-        // 1 000 grafèmes multi-scalaires : sous la borne de caractères du contenu,
-        // mais très au-delà du plafond d'octets du contenu Matrix complet.
-        let heavy = String(repeating: "👨‍👩‍👧‍👦", count: MessagingMediaContent.maximumTextLength)
-        let pending = try makePending(try sealMedia(), text: heavy, mentions: (0..<8).map { _ in UUID() })
-        await expectFailure(.invalidResponse) { try await outbox.put(pending, scope: scope) }
-        XCTAssertTrue(try await outbox.entries(scope: scope).isEmpty)
+        let mentions = (0..<8).map { _ in UUID() }
+        let canonical = mentions.map { MatrixMessagingCryptography.userID($0) }
+        XCTAssertTrue(canonical.allSatisfy { $0.hasPrefix("@") && $0.hasSuffix(":drivy") },
+                      "La mesure doit utiliser la forme réellement émise, pas l'UUID nu")
+
+        let sealed = try sealMedia(plaintext: Data("BOUNDARY".utf8), keyByte: 0x71)
+        let boundary = try boundaryName(sealed: sealed, mentions: canonical)
+        XCTAssertEqual(boundary.measurement, MessagingPlainContent.maximumV3ByteCount,
+                       "Le nom est mesuré avec 8 mentions canoniques, à la borne exacte")
+        XCTAssertLessThanOrEqual(boundary.name.count, MessagingMediaAttachment.maximumNameLength)
+
+        let atLimit = try makePending(sealed, name: boundary.name, mentions: mentions)
+        let measured = try MessagingMediaContent.messageContent(atLimit.content, mentions: canonical).count
+        XCTAssertEqual(measured, MessagingPlainContent.maximumV3ByteCount)
+        try await outbox.put(atLimit, scope: scope)
+
+        let overSeal = try sealMedia(plaintext: Data("OVER".utf8), keyByte: 0x72)
+        let over = try makePending(overSeal, name: boundary.name + "a", mentions: mentions)
+        let overMeasured = try MessagingMediaContent.messageContent(over.content, mentions: canonical).count
+        XCTAssertEqual(overMeasured, MessagingPlainContent.maximumV3ByteCount + 1,
+                       "Un octet ASCII de plus sur le nom produit exactement un octet de contenu de plus")
+        await expectFailure(.invalidResponse) { try await outbox.put(over, scope: scope) }
     }
 
     // MARK: - Ordre déterministe
@@ -404,18 +519,19 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
         let base = Date(timeIntervalSince1970: 1_800_000_000)
         let items = [
-            try makePending(try sealMedia(plaintext: Data("1".utf8), keyByte: 0x71),
+            try makePending(try sealMedia(plaintext: Data("1".utf8), keyByte: 0x73),
                             createdAt: base.addingTimeInterval(2)),
-            try makePending(try sealMedia(plaintext: Data("2".utf8), keyByte: 0x72),
+            try makePending(try sealMedia(plaintext: Data("2".utf8), keyByte: 0x74),
                             createdAt: base),
-            try makePending(try sealMedia(plaintext: Data("3".utf8), keyByte: 0x73),
+            try makePending(try sealMedia(plaintext: Data("3".utf8), keyByte: 0x75),
                             createdAt: base.addingTimeInterval(1))
         ]
         for item in items.reversed() { try await outbox.put(item, scope: scope) }
         let ordered = try await outbox.entries(scope: scope)
         XCTAssertEqual(ordered.map(\.mediaID), [items[1].mediaID, items[2].mediaID, items[0].mediaID])
         let reopened = try makeOutbox(scope: scope, root: root, keys: keys)
-        XCTAssertEqual(try await reopened.entries(scope: scope).map(\.mediaID), ordered.map(\.mediaID))
+        let reopenedOrder = try await reopened.entries(scope: scope).map(\.mediaID)
+        XCTAssertEqual(reopenedOrder, ordered.map(\.mediaID))
     }
 
     // MARK: - Retrait
@@ -430,7 +546,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let pending = try makePending(try sealMedia())
         try await normal.put(pending, scope: scope)
         try await normal.remove(mediaID: pending.mediaID, scope: scope)
-        XCTAssertTrue(try await normal.entries(scope: scope).isEmpty)
+        let empty = try await normal.entries(scope: scope)
+        XCTAssertTrue(empty.isEmpty)
         XCTAssertEqual(try folderContents(scope: scope, root: root).count, 0)
         try await normal.remove(mediaID: pending.mediaID, scope: scope)
 
@@ -440,8 +557,36 @@ final class MessagingMediaOutboxTests: XCTestCase {
         await expectFailure(.protectionUnavailable) {
             try await broken.remove(mediaID: pending.mediaID, scope: scope)
         }
-        XCTAssertEqual(try await normal.entries(scope: scope), [pending],
+        let retained = try await normal.entries(scope: scope)
+        XCTAssertEqual(retained, [pending],
                        "Un retrait non durable n'est jamais annoncé comme un succès")
+    }
+
+    func testRemoveAbsentAfterFailedDirectorySyncIsNotASuccess() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let normal = try makeOutbox(scope: scope, root: root, keys: keys)
+        let pending = try makePending(try sealMedia())
+        try await normal.put(pending, scope: scope)
+
+        let faulty = FaultyFileSystem(failures: [.synchronizeDirectory])
+        let store = try makeOutbox(scope: scope, root: root, keys: keys, fileSystem: faulty)
+        await expectFailure(.protectionUnavailable) {
+            try await store.remove(mediaID: pending.mediaID, scope: scope)
+        }
+        XCTAssertEqual(try folderContents(scope: scope, root: root).count, 0,
+                       "L'unlink a eu lieu, mais la synchro du dossier a échoué")
+        // L'archive est absente : un retrait ne peut pas être un faux succès durable.
+        await expectFailure(.protectionUnavailable) {
+            try await store.remove(mediaID: pending.mediaID, scope: scope)
+        }
+
+        faulty.heal(.synchronizeDirectory)
+        try await store.remove(mediaID: pending.mediaID, scope: scope)
+        XCTAssertGreaterThanOrEqual(faulty.operations.filter { $0 == .synchronizeDirectory }.count, 3)
+        let entries = try await normal.entries(scope: scope)
+        XCTAssertTrue(entries.isEmpty)
     }
 
     // MARK: - Deux instances, aucun await sous verrou
@@ -468,7 +613,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let persisted = try await first.entries(scope: scope)
         XCTAssertEqual(Set(persisted.map(\.mediaID)), Set(items.map(\.mediaID)))
         XCTAssertEqual(persisted.count, items.count)
-        XCTAssertEqual(try await second.entries(scope: scope).count, items.count)
+        let fromSecond = try await second.entries(scope: scope)
+        XCTAssertEqual(fromSecond.count, items.count)
     }
 
     // MARK: - Bornes locales
@@ -507,7 +653,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
                                    limits: MessagingMediaOutboxLimits(maximumScopeBytes: used + 8))
         let second = try makePending(try sealMedia(plaintext: Data("SECOND".utf8), keyByte: 0x52))
         await expectFailure(.protectionUnavailable) { try await tight.put(second, scope: scope) }
-        XCTAssertEqual(try await tight.entries(scope: scope).map(\.mediaID), [first.mediaID])
+        let entries = try await tight.entries(scope: scope)
+        XCTAssertEqual(entries.map(\.mediaID), [first.mediaID])
     }
 
     // MARK: - Bornage avant lecture et confinement
@@ -547,8 +694,246 @@ final class MessagingMediaOutboxTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: outside)
         await expectFailure(.protectionUnavailable) { _ = try await outbox.entries(scope: scope) }
         try FileManager.default.removeItem(at: link)
-        XCTAssertTrue(try await outbox.entries(scope: scope).isEmpty)
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertTrue(entries.isEmpty)
     }
+
+    func testSymlinkedOwnedRootIsRefusedWithoutExternalEffect() throws {
+        let root = try makeRoot()
+        let external = try makeExternalRoot()
+        let sentinel = external.appendingPathComponent("sentinel.bin")
+        let sentinelBytes = Data("EXTERNAL_SENTINEL".utf8)
+        try sentinelBytes.write(to: sentinel)
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("MessagingMediaOutbox", isDirectory: true),
+            withDestinationURL: external)
+
+        let fileSystem = FaultyFileSystem()
+        do {
+            _ = try makeOutbox(scope: makeScope(), root: root, keys: SyntheticKeyStore(),
+                               fileSystem: fileSystem)
+            XCTFail("Un composant possédé lié doit être refusé")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .protectionUnavailable, "Retour fermé, sans NSError ni chemin")
+        } catch {
+            XCTFail("Erreur non fermée à l'initialisation")
+        }
+        XCTAssertEqual(try Data(contentsOf: sentinel), sentinelBytes)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: external,
+                                                                  includingPropertiesForKeys: nil).count, 1)
+        XCTAssertFalse(fileSystem.operations.contains(.createDirectory))
+        XCTAssertFalse(fileSystem.operations.contains(.protect))
+    }
+
+    func testSymlinkedRootIsRefusedWithoutExternalEffect() throws {
+        let container = try makeRoot()
+        let external = try makeExternalRoot()
+        let sentinel = external.appendingPathComponent("sentinel.bin")
+        let sentinelBytes = Data("EXTERNAL_SENTINEL".utf8)
+        try sentinelBytes.write(to: sentinel)
+        let linkedRoot = container.appendingPathComponent("linked-root", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linkedRoot, withDestinationURL: external)
+
+        let fileSystem = FaultyFileSystem()
+        do {
+            _ = try makeOutbox(scope: makeScope(), root: linkedRoot, keys: SyntheticKeyStore(),
+                               fileSystem: fileSystem)
+            XCTFail("Une racine liée doit être refusée")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .protectionUnavailable)
+        } catch {
+            XCTFail("Erreur non fermée à l'initialisation")
+        }
+        XCTAssertEqual(try Data(contentsOf: sentinel), sentinelBytes)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: external,
+                                                                  includingPropertiesForKeys: nil).count, 1)
+        XCTAssertFalse(fileSystem.operations.contains(.createDirectory))
+        XCTAssertFalse(fileSystem.operations.contains(.protect))
+    }
+
+    func testReplacedFolderIsRefusedBeforeRemovalAndWrite() async throws {
+        let root = try makeRoot()
+        let external = try makeExternalRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let store = try makeOutbox(scope: scope, root: root, keys: keys)
+        let pending = try makePending(try sealMedia())
+        try await store.put(pending, scope: scope)
+
+        let folder = try scopeFolder(scope, root: root)
+        let digestName = try recordDigest(pending.mediaID, scope: scope) + ".sealed"
+        let sentinel = Data("OUTSIDE_RECORD".utf8)
+        try sentinel.write(to: external.appendingPathComponent(digestName))
+        let backup = root.appendingPathComponent("folder-backup", isDirectory: true)
+        try FileManager.default.moveItem(at: folder, to: backup)
+        try FileManager.default.createSymbolicLink(at: folder, withDestinationURL: external)
+
+        await expectFailure(.protectionUnavailable) {
+            try await store.remove(mediaID: pending.mediaID, scope: scope)
+        }
+        XCTAssertEqual(try Data(contentsOf: external.appendingPathComponent(digestName)), sentinel,
+                       "Aucune suppression hors racine")
+
+        let replacement = try makePending(try sealMedia(plaintext: Data("REPLACED".utf8), keyByte: 0x35))
+        await expectFailure(.protectionUnavailable) {
+            try await store.put(replacement, scope: scope)
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: external,
+                                                                  includingPropertiesForKeys: nil).count, 1,
+                       "Aucun temporaire ni archive créés hors racine")
+        await expectFailure(.protectionUnavailable) { _ = try await store.entries(scope: scope) }
+    }
+
+    func testReplacedAncestorIsRefusedBeforeWrite() async throws {
+        let root = try makeRoot()
+        let external = try makeExternalRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let store = try makeOutbox(scope: scope, root: root, keys: keys)
+        let ownedRoot = root.appendingPathComponent("MessagingMediaOutbox", isDirectory: true)
+        let backup = root.appendingPathComponent("owned-backup", isDirectory: true)
+        try FileManager.default.moveItem(at: ownedRoot, to: backup)
+        try FileManager.default.createSymbolicLink(at: ownedRoot, withDestinationURL: external)
+
+        let pending = try makePending(try sealMedia())
+        await expectFailure(.protectionUnavailable) { try await store.put(pending, scope: scope) }
+        await expectFailure(.protectionUnavailable) { _ = try await store.entries(scope: scope) }
+        await expectFailure(.protectionUnavailable) {
+            try await store.remove(mediaID: pending.mediaID, scope: scope)
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: external,
+                                                                  includingPropertiesForKeys: nil).count, 0)
+    }
+
+    func testProtectAndFileSyncFailuresRefuseWithoutPartialRecord() async throws {
+        for failure in [FaultyFileSystem.Operation.protect, .synchronizeFile] {
+            let root = try makeRoot()
+            let scope = makeScope()
+            let keys = SyntheticKeyStore(bytes: nil)
+            let fileSystem = FaultyFileSystem()
+            let store = try makeOutbox(scope: scope, root: root, keys: keys, fileSystem: fileSystem)
+            let pending = try makePending(try sealMedia())
+
+            fileSystem.fail(failure)
+            await expectFailure(.protectionUnavailable) { try await store.put(pending, scope: scope) }
+            XCTAssertEqual(try folderContents(scope: scope, root: root).count, 0,
+                           "Aucun temporaire ni archive partielle après \(failure.rawValue)")
+
+            fileSystem.heal(failure)
+            let recovered = try makeOutbox(scope: scope, root: root, keys: keys)
+            try await recovered.put(pending, scope: scope)
+            let entries = try await recovered.entries(scope: scope)
+            XCTAssertEqual(entries, [pending])
+        }
+    }
+
+    func testDirectorySyncFailureAfterRenameIsResynchronizedOnRetry() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let fileSystem = FaultyFileSystem(failures: [.synchronizeDirectory])
+        let store = try makeOutbox(scope: scope, root: root, keys: keys, fileSystem: fileSystem)
+        let pending = try makePending(try sealMedia())
+
+        await expectFailure(.protectionUnavailable) { try await store.put(pending, scope: scope) }
+        let files = try folderContents(scope: scope, root: root)
+        XCTAssertEqual(files.count, 1, "Le renommage a eu lieu, la synchro du dossier a échoué")
+        let file = try XCTUnwrap(files.first)
+        let before = try Data(contentsOf: file)
+
+        // Même appel : l'idempotence ne doit pas masquer l'absence de synchro.
+        fileSystem.clearCalls()
+        await expectFailure(.protectionUnavailable) { try await store.put(pending, scope: scope) }
+        XCTAssertTrue(fileSystem.operations.contains(.protect))
+        XCTAssertTrue(fileSystem.operations.contains(.synchronizeFile))
+        XCTAssertTrue(fileSystem.operations.contains(.synchronizeDirectory))
+
+        fileSystem.heal(.synchronizeDirectory)
+        fileSystem.clearCalls()
+        try await store.put(pending, scope: scope)
+        XCTAssertTrue(fileSystem.operations.contains(.synchronizeDirectory))
+        XCTAssertEqual(try Data(contentsOf: file), before, "La reprise ne réécrit pas l'intention")
+        let entries = try await store.entries(scope: scope)
+        XCTAssertEqual(entries, [pending])
+    }
+
+    func testResidualTemporaryIsCountedAndBounded() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let store = try makeOutbox(scope: scope, root: root, keys: keys)
+        let first = try makePending(try sealMedia(plaintext: Data("FIRST".utf8), keyByte: 0x61))
+        try await store.put(first, scope: scope)
+
+        let folder = try scopeFolder(scope, root: root)
+        let record = try XCTUnwrap(try folderContents(scope: scope, root: root).first {
+            $0.lastPathComponent.hasSuffix(".sealed")
+        })
+        let attributes = try FileManager.default.attributesOfItem(atPath: record.path)
+        let recordSize = (attributes[.size] as? NSNumber)?.intValue ?? 0
+        let temporary = folder.appendingPathComponent("media-outbox-tmp-\(UUID().uuidString.lowercased()).tmp")
+        try Data(repeating: 0x6E, count: 512).write(to: temporary)
+
+        let entries = try await store.entries(scope: scope)
+        XCTAssertEqual(entries, [first], "Un temporaire résiduel est ignoré à la lecture")
+
+        let tight = try makeOutbox(scope: scope, root: root, keys: keys,
+                                   limits: MessagingMediaOutboxLimits(maximumScopeBytes: recordSize + 512 + 1))
+        let second = try makePending(try sealMedia(plaintext: Data("SECOND".utf8), keyByte: 0x62))
+        await expectFailure(.protectionUnavailable) { try await tight.put(second, scope: scope) }
+
+        for _ in 0..<8 {
+            let extra = folder.appendingPathComponent("media-outbox-tmp-\(UUID().uuidString.lowercased()).tmp")
+            try Data(repeating: 0x6F, count: 128).write(to: extra)
+        }
+        let bounded = try makeOutbox(scope: scope, root: root, keys: keys)
+        let third = try makePending(try sealMedia(plaintext: Data("THIRD".utf8), keyByte: 0x63))
+        await expectFailure(.protectionUnavailable) { try await bounded.put(third, scope: scope) }
+        let temporaries = try folderContents(scope: scope, root: root).filter {
+            $0.lastPathComponent.hasPrefix("media-outbox-tmp-")
+        }
+        XCTAssertEqual(temporaries.count, 9, "Aucun temporaire n'est effacé silencieusement")
+    }
+
+    func testOversizedTemporaryIsRefusedWithoutDeletion() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let store = try makeOutbox(scope: scope, root: root, keys: keys,
+                                   limits: MessagingMediaOutboxLimits(maximumRecordBytes: 4_096))
+        let folder = try scopeFolder(scope, root: root)
+        let temporary = folder.appendingPathComponent("media-outbox-tmp-\(UUID().uuidString.lowercased()).tmp")
+        try Data(repeating: 0x01, count: 8_192).write(to: temporary)
+
+        await expectFailure(.protectionUnavailable) { _ = try await store.entries(scope: scope) }
+        let bytes = try Data(contentsOf: temporary)
+        XCTAssertEqual(bytes.count, 8_192, "Le temporaire hors borne n'est jamais supprimé")
+    }
+
+    func testEntriesBeyondMaximumIntentsIsRefused() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let generous = try makeOutbox(scope: scope, root: root, keys: keys)
+        for index in 0..<3 {
+            try await generous.put(try makePending(try sealMedia(plaintext: Data("N\(index)".utf8),
+                                                                 keyByte: UInt8(0x90 + index))),
+                                   scope: scope)
+        }
+        let strictFileSystem = FaultyFileSystem()
+        let strict = try makeOutbox(scope: scope, root: root, keys: keys,
+                                    fileSystem: strictFileSystem,
+                                    limits: MessagingMediaOutboxLimits(maximumIntents: 2))
+        await expectFailure(.protectionUnavailable) { _ = try await strict.entries(scope: scope) }
+        XCTAssertEqual(strictFileSystem.readCount, 0,
+                       "Le dépassement est refusé avant de charger une archive")
+        let fourth = try makePending(try sealMedia(plaintext: Data("FOURTH".utf8), keyByte: 0x68))
+        await expectFailure(.protectionUnavailable) { try await strict.put(fourth, scope: scope) }
+        XCTAssertEqual(strictFileSystem.readCount, 0,
+                       "L'admission au plafond est refusée sans charger les archives existantes")
+    }
+
+    // MARK: - Fichiers d'écriture et d'enveloppe
 
     func testFailedWriteLeavesNoTemporaryAndNoCleartextBytes() async throws {
         let root = try makeRoot()
@@ -591,7 +976,8 @@ final class MessagingMediaOutboxTests: XCTestCase {
                                              replacement: envelope(payloadBytes: 48, epoch: 3),
                                              scope: scope)
         }
-        XCTAssertEqual(try await normal.entries(scope: scope), [pending])
+        let entries = try await normal.entries(scope: scope)
+        XCTAssertEqual(entries, [pending])
     }
 
     // MARK: - Déplacement entre scopes ou intentions
@@ -621,6 +1007,37 @@ final class MessagingMediaOutboxTests: XCTestCase {
         await expectFailure(.protectionUnavailable) { _ = try await a.entries(scope: scopeA) }
     }
 
+    // MARK: - Attributs de clé (sans Keychain)
+
+    func testKeychainKeyAttributesAreVerified() {
+        let expected = kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String
+        func attributes(accessible: String, synchronizable: Bool?, bytes: Data) -> [String: Any] {
+            var value: [String: Any] = [
+                kSecAttrAccessible as String: accessible,
+                kSecValueData as String: bytes
+            ]
+            if let synchronizable { value[kSecAttrSynchronizable as String] = synchronizable }
+            return value
+        }
+        let keyBytes = Data(repeating: 0x22, count: 32)
+
+        XCTAssertNotNil(KeychainMediaOutboxKeyStore.validatedKey(
+            from: attributes(accessible: expected, synchronizable: nil, bytes: keyBytes)))
+        XCTAssertNotNil(KeychainMediaOutboxKeyStore.validatedKey(
+            from: attributes(accessible: expected, synchronizable: false, bytes: keyBytes)))
+        XCTAssertNil(KeychainMediaOutboxKeyStore.validatedKey(
+            from: attributes(accessible: kSecAttrAccessibleAfterFirstUnlock as String,
+                             synchronizable: false, bytes: keyBytes)),
+            "Une autre classe d'accessibilité est refusée")
+        XCTAssertNil(KeychainMediaOutboxKeyStore.validatedKey(
+            from: attributes(accessible: expected, synchronizable: true, bytes: keyBytes)),
+            "Une clé synchronisée est refusée")
+        XCTAssertNil(KeychainMediaOutboxKeyStore.validatedKey(
+            from: attributes(accessible: expected, synchronizable: false,
+                             bytes: Data(repeating: 0x22, count: 31))),
+            "Une longueur incorrecte est refusée")
+    }
+
     // MARK: - Structures de test
 
     private func makeScope() -> MessagingScope {
@@ -631,6 +1048,14 @@ final class MessagingMediaOutboxTests: XCTestCase {
     private func makeRoot() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("drivy-media-outbox-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        return url
+    }
+
+    private func makeExternalRoot() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("drivy-media-external-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         addTeardownBlock { try? FileManager.default.removeItem(at: url) }
         return url
@@ -680,6 +1105,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
                              mediaIDOverride: UUID? = nil,
                              sizeOverride: Int? = nil,
                              fileOverride: MessagingMediaEncryptionInfo? = nil,
+                             name: String = "IMG_0421.jpg",
                              text: String? = "Légende",
                              mentions: [UUID] = [],
                              replyTo: UUID? = nil,
@@ -689,7 +1115,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
             id: mediaIDOverride ?? sealed.mediaID,
             size: sizeOverride ?? sealed.byteSize,
             mime: .jpeg,
-            name: "IMG_0421.jpg",
+            name: name,
             width: 64,
             height: 64,
             file: fileOverride ?? sealed.info)
@@ -698,6 +1124,35 @@ final class MessagingMediaOutboxTests: XCTestCase {
                                      sealed: sealed, content: content,
                                      mentionPersonIDs: mentions, replyToMessageID: replyTo,
                                      createdAt: createdAt, messageCiphertext: envelope)
+    }
+
+    /// Nom dont la mesure canonique atteint exactement la borne de 6 000 octets,
+    /// avec les 8 mentions réelles. Les grafèmes apportent le volume, puis des
+    /// `a` ASCII ajustent au byte près : l'ajout d'un seul `a` produit donc
+    /// exactement un octet de contenu supplémentaire.
+    private func boundaryName(sealed: MessagingSealedMedia,
+                              mentions: [String]) throws -> (name: String, measurement: Int) {
+        func measurement(_ name: String) throws -> Int {
+            let attachment = try MessagingMediaAttachment(id: sealed.mediaID, size: sealed.byteSize,
+                                                          mime: .jpeg, name: name, width: 64, height: 64,
+                                                          file: sealed.info)
+            let content = try MessagingMediaContentV3(text: nil, media: attachment)
+            return try MessagingMediaContent.messageContent(content, mentions: mentions).count
+        }
+        let family = "👨‍👩‍👧‍👦"
+        var name = "a"
+        while name.count < MessagingMediaAttachment.maximumNameLength {
+            let candidate = name + family
+            guard candidate.count <= MessagingMediaAttachment.maximumNameLength,
+                  try measurement(candidate) <= MessagingPlainContent.maximumV3ByteCount else { break }
+            name = candidate
+        }
+        while name.count < MessagingMediaAttachment.maximumNameLength {
+            let candidate = name + "a"
+            guard try measurement(candidate) <= MessagingPlainContent.maximumV3ByteCount else { break }
+            name = candidate
+        }
+        return (name, try measurement(name))
     }
 
     private func envelope(payloadBytes: Int = 64, epoch: Int? = 7) -> MessagingCiphertext {
@@ -748,16 +1203,23 @@ private final class SyntheticKeyStore: MessagingMediaOutboxKeyStore, @unchecked 
     }
 }
 
-/// Adaptateur fautif : délègue au système de fichiers réel et permet d'injecter
-/// une panne à chaque frontière, sans toucher aux fichiers d'un autre worker.
+/// Adaptateur fautif : délègue au système de fichiers réel, journalise l'ordre
+/// réel des appels et permet d'injecter une panne par frontière.
 private final class FaultyFileSystem: MessagingMediaOutboxFileSystem, @unchecked Sendable {
-    enum Operation: Hashable {
-        case read, write, replace, move, remove, synchronizeFile, synchronizeDirectory, contents
+    enum Operation: String, Hashable {
+        case createDirectory, protect, isSymbolicLink, fileExists, isDirectory, isRegularFile,
+             fileSize, read, write, replace, move, remove, synchronizeFile, synchronizeDirectory, contents
+    }
+
+    struct Call: Equatable {
+        let operation: Operation
+        let name: String
     }
 
     private let base = SystemMediaOutboxFileSystem()
     private let lock = NSLock()
     private var failures: Set<Operation>
+    private var log: [Call] = []
     private var readCounter = 0
     private var writes: [Data] = []
 
@@ -765,61 +1227,100 @@ private final class FaultyFileSystem: MessagingMediaOutboxFileSystem, @unchecked
         self.failures = failures
     }
 
+    var operations: [Operation] { lock.withLock { log.map(\.operation) } }
+    var calls: [Call] { lock.withLock { log } }
     var readCount: Int { lock.withLock { readCounter } }
     var capturedWrites: [Data] { lock.withLock { writes } }
 
-    private func check(_ operation: Operation) throws {
+    func fail(_ operation: Operation) { lock.withLock { _ = failures.insert(operation) } }
+    func heal(_ operation: Operation) { lock.withLock { _ = failures.remove(operation) } }
+    func clearCalls() { lock.withLock { log.removeAll() } }
+
+    private func record(_ operation: Operation, _ url: URL) {
+        lock.withLock { log.append(Call(operation: operation, name: url.lastPathComponent)) }
+    }
+
+    private func check(_ operation: Operation, _ url: URL) throws {
+        record(operation, url)
         guard !lock.withLock({ failures.contains(operation) }) else {
             throw MessagingFailure.protectionUnavailable
         }
     }
 
-    func createDirectory(at url: URL) throws { try base.createDirectory(at: url) }
-    func protect(_ url: URL) throws { try base.protect(url) }
-    func isSymbolicLink(at url: URL) -> Bool { base.isSymbolicLink(at: url) }
-    func fileExists(at url: URL) -> Bool { base.fileExists(at: url) }
-    func isRegularFile(at url: URL) -> Bool { base.isRegularFile(at: url) }
-    func fileSize(at url: URL) throws -> Int { try base.fileSize(at: url) }
+    func createDirectory(at url: URL) throws {
+        try check(.createDirectory, url)
+        try base.createDirectory(at: url)
+    }
+
+    func protect(_ url: URL) throws {
+        try check(.protect, url)
+        try base.protect(url)
+    }
+
+    func isSymbolicLink(at url: URL) -> Bool {
+        record(.isSymbolicLink, url)
+        return base.isSymbolicLink(at: url)
+    }
+
+    func fileExists(at url: URL) -> Bool {
+        record(.fileExists, url)
+        return base.fileExists(at: url)
+    }
+
+    func isDirectory(at url: URL) -> Bool {
+        record(.isDirectory, url)
+        return base.isDirectory(at: url)
+    }
+
+    func isRegularFile(at url: URL) -> Bool {
+        record(.isRegularFile, url)
+        return base.isRegularFile(at: url)
+    }
+
+    func fileSize(at url: URL) throws -> Int {
+        try check(.fileSize, url)
+        return try base.fileSize(at: url)
+    }
 
     func read(_ url: URL) throws -> Data {
         lock.withLock { readCounter += 1 }
-        try check(.read)
+        try check(.read, url)
         return try base.read(url)
     }
 
     func write(_ data: Data, to url: URL) throws {
         lock.withLock { writes.append(data) }
-        try check(.write)
+        try check(.write, url)
         try base.write(data, to: url)
     }
 
     func replaceItem(at target: URL, withItemAt source: URL) throws {
-        try check(.replace)
+        try check(.replace, target)
         try base.replaceItem(at: target, withItemAt: source)
     }
 
     func moveItem(at source: URL, to target: URL) throws {
-        try check(.move)
+        try check(.move, source)
         try base.moveItem(at: source, to: target)
     }
 
     func remove(_ url: URL) throws {
-        try check(.remove)
+        try check(.remove, url)
         try base.remove(url)
     }
 
     func synchronizeFile(_ url: URL) throws {
-        try check(.synchronizeFile)
+        try check(.synchronizeFile, url)
         try base.synchronizeFile(url)
     }
 
     func synchronizeDirectory(_ url: URL) throws {
-        try check(.synchronizeDirectory)
+        try check(.synchronizeDirectory, url)
         try base.synchronizeDirectory(url)
     }
 
-    func contents(of directory: URL) throws -> [URL] {
-        try check(.contents)
-        return try base.contents(of: directory)
+    func contents(of directory: URL, limit: Int) throws -> [URL] {
+        try check(.contents, directory)
+        return try base.contents(of: directory, limit: limit)
     }
 }

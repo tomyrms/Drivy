@@ -99,6 +99,7 @@ protocol MessagingMediaOutboxFileSystem: Sendable {
     func protect(_ url: URL) throws
     func isSymbolicLink(at url: URL) -> Bool
     func fileExists(at url: URL) -> Bool
+    func isDirectory(at url: URL) -> Bool
     func isRegularFile(at url: URL) -> Bool
     func fileSize(at url: URL) throws -> Int
     func read(_ url: URL) throws -> Data
@@ -108,11 +109,16 @@ protocol MessagingMediaOutboxFileSystem: Sendable {
     func remove(_ url: URL) throws
     func synchronizeFile(_ url: URL) throws
     func synchronizeDirectory(_ url: URL) throws
-    func contents(of directory: URL) throws -> [URL]
+    /// Énumération bornée : au-delà de `limit`, lève sans matérialiser la suite.
+    func contents(of directory: URL, limit: Int) throws -> [URL]
 }
 
 /// Keychain locale du scope : clé AES-256 dédiée, `WhenUnlockedThisDeviceOnly`,
 /// explicitement non synchronisée. Le compte est l'empreinte opaque du scope.
+///
+/// Une clé préexistante dont la classe d'accessibilité ou la synchronisation ne
+/// correspond pas à l'exigence échoue fermé : elle n'est ni utilisée, ni
+/// remplacée, ni élargie.
 struct KeychainMediaOutboxKeyStore: MessagingMediaOutboxKeyStore {
     static let service = "ch.drivy.messaging.media-outbox.v1"
     let account: String
@@ -121,19 +127,43 @@ struct KeychainMediaOutboxKeyStore: MessagingMediaOutboxKeyStore {
         self.account = account
     }
 
+    /// Contrôle des attributs réellement rendus par la Keychain. Séparé pour
+    /// être éprouvé avec des dictionnaires synthétiques, sans jamais lire une
+    /// clé de l'hôte.
+    static func validatedKey(from attributes: [String: Any]) -> SymmetricKey? {
+        guard let accessible = attributes[kSecAttrAccessible as String] as? String,
+              accessible == (kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String) else {
+            return nil
+        }
+        // Absent = non synchronisé (la requête filtre déjà sur false) ; une
+        // valeur vraie est refusée.
+        if let raw = attributes[kSecAttrSynchronizable as String] {
+            guard let synchronizable = raw as? Bool, synchronizable == false else { return nil }
+        }
+        guard let bytes = attributes[kSecValueData as String] as? Data, bytes.count == 32 else {
+            return nil
+        }
+        return SymmetricKey(data: bytes)
+    }
+
     func key(create: Bool) throws -> SymmetricKey {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: Self.service,
             kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecReturnAttributes as String: true,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        if status == errSecSuccess, let bytes = result as? Data, bytes.count == 32 {
-            return SymmetricKey(data: bytes)
+        if status == errSecSuccess {
+            guard let attributes = result as? [String: Any],
+                  let key = Self.validatedKey(from: attributes) else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            return key
         }
         guard status == errSecItemNotFound, create else {
             throw MessagingFailure.protectionUnavailable
@@ -179,12 +209,28 @@ struct SystemMediaOutboxFileSystem: MessagingMediaOutboxFileSystem {
         try item.setResourceValues(values)
     }
 
+    /// `lstat` : un lien symbolique, même pendant, est vu comme tel.
     func isSymbolicLink(at url: URL) -> Bool {
-        (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) ?? false
+        if let values = try? url.resourceValues(forKeys: [.isSymbolicLinkKey]),
+           values.isSymbolicLink == true {
+            return true
+        }
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
+            return false
+        }
+        return attributes[.type] as? FileAttributeType == .typeSymbolicLink
     }
 
     func fileExists(at url: URL) -> Bool {
         FileManager.default.fileExists(atPath: url.path)
+    }
+
+    func isDirectory(at url: URL) -> Bool {
+        var directory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &directory) else {
+            return false
+        }
+        return directory.boolValue
     }
 
     func isRegularFile(at url: URL) -> Bool {
@@ -245,9 +291,20 @@ struct SystemMediaOutboxFileSystem: MessagingMediaOutboxFileSystem {
         try Self.synchronize(url, directory: true)
     }
 
-    func contents(of directory: URL) throws -> [URL] {
-        try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
-                                                    options: [])
+    func contents(of directory: URL, limit: Int) throws -> [URL] {
+        guard limit > 0 else { return [] }
+        guard let enumerator = FileManager.default.enumerator(at: directory,
+                                                             includingPropertiesForKeys: nil,
+                                                             options: [.skipsSubdirectoryDescendants]) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        var urls: [URL] = []
+        urls.reserveCapacity(min(limit, 64))
+        for case let url as URL in enumerator {
+            urls.append(url)
+            if urls.count > limit { throw MessagingFailure.protectionUnavailable }
+        }
+        return urls
     }
 
     private static func synchronize(_ url: URL, directory: Bool) throws {
@@ -280,6 +337,10 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
     /// même section critique. La section ne contient aucun `await`.
     private static let ioLock = NSLock()
     private static let maximumMentions = 8
+    /// Nombre maximal de temporaires résiduels tolérés. Au-delà, l'admission
+    /// est refusée : un crash répété ne contourne ni le quota ni le nombre.
+    private static let maximumResidualTemporaries = 8
+    private static let ownedRootName = "MessagingMediaOutbox"
     private static let recordSuffix = ".sealed"
     private static let temporaryPrefix = "media-outbox-tmp-"
     private static let temporarySuffix = ".tmp"
@@ -288,6 +349,12 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         let url: URL
         let digest: String
         let size: Int
+    }
+
+    private struct Snapshot {
+        let records: [RecordFile]
+        let temporaryBytes: Int
+        let temporaryCount: Int
     }
 
     /// DTO privé : les types existants (`MessagingSealedMedia`) ne deviennent
@@ -349,7 +416,15 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
 
     private let expectedScope: MessagingScope
     private let fingerprint: String
+    /// Racine fournie par l'appelant, normalisée mais non résolue : un lien
+    /// symbolique à ce niveau est refusé, pas traversé.
+    private let rootURL: URL
+    /// `root/MessagingMediaOutbox`, composant possédé et contrôlé.
+    private let ownedRoot: URL
     private let folder: URL
+    /// Chemin canonique de la racine, capturé à l'ouverture : un ancêtre
+    /// remplacé ensuite ne peut plus correspondre.
+    private let canonicalRootPath: String
     private let keyStore: any MessagingMediaOutboxKeyStore
     private let fileSystem: any MessagingMediaOutboxFileSystem
     private let limits: MessagingMediaOutboxLimits
@@ -359,20 +434,25 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         guard scope.accessEpoch > 0, !scope.apiBaseURL.isEmpty else {
             throw MessagingFailure.contextChanged
         }
-        let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+        let base: URL
+        do {
+            base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                appropriateFor: nil, create: true)
-        let digest = Self.fingerprint(for: scope)
-        let directory = base.appendingPathComponent("MessagingMediaOutbox", isDirectory: true)
-            .appendingPathComponent(digest, isDirectory: true)
+        } catch {
+            throw MessagingFailure.protectionUnavailable
+        }
         let systemFileSystem = SystemMediaOutboxFileSystem()
+        let digest = Self.fingerprint(for: scope)
+        let prepared = try Self.prepare(root: base, fingerprint: digest, fileSystem: systemFileSystem)
         expectedScope = scope
         fingerprint = digest
-        folder = directory
+        rootURL = base.standardizedFileURL
+        ownedRoot = prepared.ownedRoot
+        folder = prepared.folder
+        canonicalRootPath = prepared.canonicalRootPath
         keyStore = KeychainMediaOutboxKeyStore(account: digest)
         fileSystem = systemFileSystem
         limits = .standard
-        try systemFileSystem.createDirectory(at: directory)
-        try systemFileSystem.protect(directory)
     }
 
     /// Ouverture injectable (tests, artefacts dédiés) : racine, clés, E/S et
@@ -384,21 +464,22 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         guard scope.accessEpoch > 0, !scope.apiBaseURL.isEmpty else {
             throw MessagingFailure.contextChanged
         }
-        guard limits.maximumIntents > 0, limits.maximumScopeBytes > 0,
-              limits.maximumRecordBytes > 0 else {
+        guard (1...10_000).contains(limits.maximumIntents),
+              (1...(1 << 30)).contains(limits.maximumScopeBytes),
+              (1...(64 << 20)).contains(limits.maximumRecordBytes) else {
             throw MessagingFailure.invalidResponse
         }
         let digest = Self.fingerprint(for: scope)
-        let directory = root.appendingPathComponent("MessagingMediaOutbox", isDirectory: true)
-            .appendingPathComponent(digest, isDirectory: true)
+        let prepared = try Self.prepare(root: root, fingerprint: digest, fileSystem: fileSystem)
         expectedScope = scope
         fingerprint = digest
-        folder = directory
+        rootURL = root.standardizedFileURL
+        ownedRoot = prepared.ownedRoot
+        folder = prepared.folder
+        canonicalRootPath = prepared.canonicalRootPath
         self.keyStore = keyStore
         self.fileSystem = fileSystem
         self.limits = limits
-        try fileSystem.createDirectory(at: directory)
-        try fileSystem.protect(directory)
     }
 
     // MARK: MessagingMediaOutbox
@@ -438,30 +519,41 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
 
     private func performPut(_ pending: MessagingPendingMedia) throws {
         do {
+            try verifyOwnedLocation()
             try Self.validate(pending)
             let digest = Self.fileDigest(pending.mediaID, fingerprint: fingerprint)
-            let files = try recordFiles()
-            if let existingFile = files.first(where: { $0.digest == digest }) {
+            let snapshot = try scanFiles()
+            if let existingFile = snapshot.records.first(where: { $0.digest == digest }) {
                 let existing = try loadRecord(at: existingFile.url, digest: digest)
                 guard existing.isSameIntent(as: pending) else {
                     throw MessagingFailure.stateConflict
                 }
+                // Un échec antérieur a pu laisser l'état neuf non synchronisé :
+                // aucune réussite n'est rendue sans resceller les protections et
+                // sans refaire les deux synchronisations. L'intention n'est pas
+                // réécrite et son horodatage ne change pas.
+                try reconfirm(existingFile.url)
                 return
             }
-            for file in files {
+            // Le plafond est vérifié avant toute lecture d'archive : aucune
+            // intention existante n'est chargée quand l'admission est impossible.
+            guard snapshot.records.count < limits.maximumIntents else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            for file in snapshot.records {
                 let record = try loadRecord(at: file.url, digest: file.digest)
                 guard record.clientMessageID != pending.clientMessageID else {
                     throw MessagingFailure.stateConflict
                 }
             }
-            guard files.count < limits.maximumIntents else {
-                throw MessagingFailure.protectionUnavailable
-            }
             let record = StoredRecord(pending, scopeFingerprint: fingerprint)
-            let bytes = try seal(record, digest: digest, mayCreateKey: files.isEmpty)
-            let total = files.reduce(0) { $0 + $1.size }
-            guard total <= limits.maximumScopeBytes,
-                  bytes.count <= limits.maximumScopeBytes - total else {
+            // Aucune clé nouvelle dès qu'un octet scellé (archive ou temporaire)
+            // subsiste : une clé perdue ne doit jamais être remplacée en silence.
+            let mayCreateKey = snapshot.records.isEmpty && snapshot.temporaryCount == 0
+            let bytes = try seal(record, digest: digest, mayCreateKey: mayCreateKey)
+            let used = try Self.totalBytes(snapshot.records) + snapshot.temporaryBytes
+            guard used <= limits.maximumScopeBytes,
+                  bytes.count <= limits.maximumScopeBytes - used else {
                 throw MessagingFailure.protectionUnavailable
             }
             try write(bytes, digest: digest)
@@ -475,6 +567,7 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
     private func performReplaceEnvelope(mediaID: UUID, expected: MessagingCiphertext?,
                                        replacement: MessagingCiphertext) throws {
         do {
+            try verifyOwnedLocation()
             try Self.validateEnvelope(replacement)
             let digest = Self.fileDigest(mediaID, fingerprint: fingerprint)
             let target = folder.appendingPathComponent(digest + Self.recordSuffix)
@@ -483,18 +576,23 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
                 throw MessagingFailure.stateConflict
             }
             let record = try loadRecord(at: target, digest: digest)
+            // Comparaison stricte conservée : une reprise peut relire l'état,
+            // jamais écraser une valeur concurrente.
             guard record.messageCiphertext == expected else {
                 throw MessagingFailure.stateConflict
             }
-            guard record.messageCiphertext != replacement else { return }
+            if record.messageCiphertext == replacement {
+                try reconfirm(target)
+                return
+            }
             var updated = record
             updated.messageCiphertext = replacement
-            let files = try recordFiles()
-            guard let existing = files.first(where: { $0.digest == digest }) else {
+            let snapshot = try scanFiles()
+            guard let existing = snapshot.records.first(where: { $0.digest == digest }) else {
                 throw MessagingFailure.stateConflict
             }
             let bytes = try seal(updated, digest: digest, mayCreateKey: false)
-            let others = files.reduce(0) { $0 + $1.size } - existing.size
+            let others = try Self.totalBytes(snapshot.records) - existing.size + snapshot.temporaryBytes
             guard others <= limits.maximumScopeBytes,
                   bytes.count <= limits.maximumScopeBytes - others else {
                 throw MessagingFailure.protectionUnavailable
@@ -509,13 +607,14 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
 
     private func performEntries() throws -> [MessagingPendingMedia] {
         do {
-            let files = try recordFiles()
-            guard files.count <= limits.maximumIntents else {
+            try verifyOwnedLocation()
+            let snapshot = try scanFiles()
+            guard snapshot.records.count <= limits.maximumIntents else {
                 throw MessagingFailure.protectionUnavailable
             }
             var result: [MessagingPendingMedia] = []
-            result.reserveCapacity(files.count)
-            for file in files {
+            result.reserveCapacity(snapshot.records.count)
+            for file in snapshot.records {
                 let record = try loadRecord(at: file.url, digest: file.digest)
                 result.append(record.pending)
             }
@@ -535,17 +634,43 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
 
     private func performRemove(_ mediaID: UUID) throws {
         do {
+            try verifyOwnedLocation()
             let digest = Self.fileDigest(mediaID, fingerprint: fingerprint)
             let target = folder.appendingPathComponent(digest + Self.recordSuffix)
             try confine(target)
             guard !fileSystem.isSymbolicLink(at: target) else {
                 throw MessagingFailure.protectionUnavailable
             }
-            guard fileSystem.fileExists(at: target) else { return }
+            guard fileSystem.fileExists(at: target) else {
+                // Une suppression antérieure a pu réussir sans que le dossier
+                // soit synchronisé : ne jamais annoncer un succès durable avant
+                // de refaire cette synchronisation.
+                try fileSystem.synchronizeDirectory(folder)
+                return
+            }
             guard fileSystem.isRegularFile(at: target) else {
                 throw MessagingFailure.protectionUnavailable
             }
+            try verifyOwnedLocation()
             try fileSystem.remove(target)
+            try fileSystem.synchronizeDirectory(folder)
+        } catch let failure as MessagingFailure {
+            throw failure
+        } catch {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    /// Reconfirme les protections et les deux synchronisations d'un état déjà
+    /// présent, sans réécrire l'archive ni toucher son contenu.
+    private func reconfirm(_ url: URL) throws {
+        do {
+            try verifyOwnedLocation()
+            guard !fileSystem.isSymbolicLink(at: url), fileSystem.isRegularFile(at: url) else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            try fileSystem.protect(url)
+            try fileSystem.synchronizeFile(url)
             try fileSystem.synchronizeDirectory(folder)
         } catch let failure as MessagingFailure {
             throw failure
@@ -630,34 +755,52 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         return record
     }
 
-    private func recordFiles() throws -> [RecordFile] {
+    /// Énumération bornée avant toute lecture d'archive. Les temporaires
+    /// résiduels sont vus, comptés et bornés : ni ignorés du quota, ni effacés
+    /// (une autre instance pourrait encore les publier).
+    private func scanFiles() throws -> Snapshot {
         do {
-            guard !fileSystem.isSymbolicLink(at: folder) else {
+            let (recordLimit, overflow) = limits.maximumIntents
+                .addingReportingOverflow(Self.maximumResidualTemporaries)
+            guard !overflow else { throw MessagingFailure.protectionUnavailable }
+            let (ceiling, ceilingOverflow) = recordLimit.addingReportingOverflow(1)
+            guard !ceilingOverflow else { throw MessagingFailure.protectionUnavailable }
+            let entries = try fileSystem.contents(of: folder, limit: ceiling)
+            guard entries.count <= ceiling - 1 else {
                 throw MessagingFailure.protectionUnavailable
             }
-            let entries = try fileSystem.contents(of: folder)
-            var files: [RecordFile] = []
-            files.reserveCapacity(entries.count)
+            var records: [RecordFile] = []
+            records.reserveCapacity(min(entries.count, limits.maximumIntents))
+            var temporaryBytes = 0
+            var temporaryCount = 0
             for url in entries {
                 let name = url.lastPathComponent
-                if name.hasPrefix(Self.temporaryPrefix), name.hasSuffix(Self.temporarySuffix) {
-                    continue
-                }
-                guard !fileSystem.isSymbolicLink(at: url), fileSystem.isRegularFile(at: url),
-                      name.hasSuffix(Self.recordSuffix) else {
-                    throw MessagingFailure.protectionUnavailable
-                }
-                let digest = String(name.dropLast(Self.recordSuffix.count))
-                guard Self.isDigest(digest) else {
+                guard !fileSystem.isSymbolicLink(at: url), fileSystem.isRegularFile(at: url) else {
                     throw MessagingFailure.protectionUnavailable
                 }
                 let size = try fileSystem.fileSize(at: url)
                 guard size > 0, size <= limits.maximumRecordBytes else {
                     throw MessagingFailure.protectionUnavailable
                 }
-                files.append(RecordFile(url: url, digest: digest, size: size))
+                if Self.isTemporaryName(name) {
+                    temporaryCount += 1
+                    temporaryBytes += size
+                    continue
+                }
+                guard name.hasSuffix(Self.recordSuffix) else {
+                    throw MessagingFailure.protectionUnavailable
+                }
+                let digest = String(name.dropLast(Self.recordSuffix.count))
+                guard Self.isDigest(digest) else {
+                    throw MessagingFailure.protectionUnavailable
+                }
+                records.append(RecordFile(url: url, digest: digest, size: size))
             }
-            return files
+            guard temporaryCount <= Self.maximumResidualTemporaries else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            return Snapshot(records: records, temporaryBytes: temporaryBytes,
+                            temporaryCount: temporaryCount)
         } catch let failure as MessagingFailure {
             throw failure
         } catch {
@@ -671,11 +814,15 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
                                                       Self.temporarySuffix)
         let target = folder.appendingPathComponent(digest + Self.recordSuffix)
         do {
+            try verifyOwnedLocation()
             try confine(temporary)
             try confine(target)
             try fileSystem.write(bytes, to: temporary)
             try fileSystem.protect(temporary)
             try fileSystem.synchronizeFile(temporary)
+            // Contrôle juste avant le renommage : un dossier ou un ancêtre
+            // remplacé depuis l'ouverture refuse l'opération avant tout effet.
+            try verifyOwnedLocation()
             if fileSystem.fileExists(at: target) {
                 try fileSystem.replaceItem(at: target, withItemAt: temporary)
             } else {
@@ -694,7 +841,8 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
 
     /// Valide l'intention **avant** toute conservation : taille du chiffré,
     /// cohérence contenu/sceau, intégrité par la primitive existante, mentions,
-    /// enveloppe Megolm et plafond du contenu Matrix complet.
+    /// enveloppe Megolm et plafond du contenu Matrix complet mesuré dans la
+    /// **forme canonique réellement émise** (`@uuid:drivy`), mentions comprises.
     private static func validate(_ pending: MessagingPendingMedia) throws {
         guard (1...AESCTRMediaCryptography.maximumByteSize).contains(pending.sealed.ciphertext.count) else {
             throw MessagingFailure.invalidResponse
@@ -717,14 +865,16 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         if let envelope = pending.messageCiphertext {
             try validateEnvelope(envelope)
         }
-        let mentions = pending.mentionPersonIDs.map { $0.uuidString.lowercased() }
+        // Forme exacte de `encryptMatrixContent` : sans cette conversion,
+        // l'intention pourrait être admise puis refusée à l'émission.
+        let mentions = pending.mentionPersonIDs.map { MatrixMessagingCryptography.userID($0) }
         let content: Data
         do {
             content = try MessagingMediaContent.messageContent(pending.content, mentions: mentions)
         } catch {
             throw MessagingFailure.invalidResponse
         }
-        guard content.count <= MessagingMediaContent.maximumByteCount else {
+        guard content.count <= MessagingPlainContent.maximumV3ByteCount else {
             throw MessagingFailure.invalidResponse
         }
     }
@@ -740,12 +890,90 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         }
     }
 
-    // MARK: Empreintes et chemins
+    // MARK: Empreintes, chemins et racine
 
     private func verify(_ scope: MessagingScope) throws {
         guard scope == expectedScope else {
             throw MessagingFailure.contextChanged
         }
+    }
+
+    /// Contrôle de la racine de confiance et des composants possédés, à chaque
+    /// opération et autour des renommages/suppressions. Les ancêtres système
+    /// légitimes (par exemple `/var` → `/private/var`) sont résolus pour la
+    /// comparaison, mais la racine elle-même et chaque composant possédé
+    /// doivent être des dossiers réels, jamais des liens.
+    private func verifyOwnedLocation() throws {
+        guard !fileSystem.isSymbolicLink(at: rootURL), fileSystem.isDirectory(at: rootURL) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        let canonicalRoot = rootURL.resolvingSymlinksInPath().standardizedFileURL
+        guard canonicalRoot.path == canonicalRootPath,
+              !fileSystem.isSymbolicLink(at: ownedRoot),
+              fileSystem.isDirectory(at: ownedRoot),
+              ownedRoot.resolvingSymlinksInPath().standardizedFileURL.path
+                == Self.componentPath(canonicalRoot, [Self.ownedRootName]),
+              !fileSystem.isSymbolicLink(at: folder),
+              fileSystem.isDirectory(at: folder),
+              folder.resolvingSymlinksInPath().standardizedFileURL.path
+                == Self.componentPath(canonicalRoot, [Self.ownedRootName, fingerprint]) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    private static func prepare(root: URL, fingerprint: String,
+                                fileSystem: any MessagingMediaOutboxFileSystem)
+        throws -> (ownedRoot: URL, folder: URL, canonicalRootPath: String) {
+        do {
+            let standardizedRoot = root.standardizedFileURL
+            guard !fileSystem.isSymbolicLink(at: standardizedRoot),
+                  fileSystem.isDirectory(at: standardizedRoot) else {
+                throw MessagingFailure.protectionUnavailable
+            }
+            let canonicalRoot = standardizedRoot.resolvingSymlinksInPath().standardizedFileURL
+            let owned = standardizedRoot.appendingPathComponent(ownedRootName, isDirectory: true)
+            let folder = owned.appendingPathComponent(fingerprint, isDirectory: true)
+            try ensureDirectory(owned,
+                                expectedPath: componentPath(canonicalRoot, [ownedRootName]),
+                                fileSystem: fileSystem)
+            try ensureDirectory(folder,
+                                expectedPath: componentPath(canonicalRoot, [ownedRootName, fingerprint]),
+                                fileSystem: fileSystem)
+            // Aucune protection n'est appliquée avant les contrôles ci-dessus.
+            try fileSystem.protect(owned)
+            try fileSystem.protect(folder)
+            return (owned, folder, canonicalRoot.path)
+        } catch let failure as MessagingFailure {
+            throw failure
+        } catch {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    private static func ensureDirectory(_ url: URL, expectedPath: String,
+                                        fileSystem: any MessagingMediaOutboxFileSystem) throws {
+        guard !fileSystem.isSymbolicLink(at: url) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        if fileSystem.fileExists(at: url) {
+            guard fileSystem.isDirectory(at: url) else {
+                throw MessagingFailure.protectionUnavailable
+            }
+        } else {
+            try fileSystem.createDirectory(at: url)
+            guard !fileSystem.isSymbolicLink(at: url), fileSystem.isDirectory(at: url) else {
+                throw MessagingFailure.protectionUnavailable
+            }
+        }
+        guard url.resolvingSymlinksInPath().standardizedFileURL.path == expectedPath else {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    private static func componentPath(_ root: URL, _ components: [String]) -> String {
+        components.reduce(root) { url, component in
+            url.appendingPathComponent(component, isDirectory: true)
+        }.path
     }
 
     private static func fingerprint(for scope: MessagingScope) -> String {
@@ -782,5 +1010,26 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
         value.count == 64 && value.utf8.allSatisfy { byte in
             (byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102)
         }
+    }
+
+    private static func isTemporaryName(_ name: String) -> Bool {
+        guard name.hasPrefix(temporaryPrefix), name.hasSuffix(temporarySuffix) else {
+            return false
+        }
+        let middle = name.dropFirst(temporaryPrefix.count).dropLast(temporarySuffix.count)
+        guard (1...64).contains(middle.count) else { return false }
+        return middle.utf8.allSatisfy { byte in
+            (byte >= 48 && byte <= 57) || (byte >= 97 && byte <= 102) || byte == 45
+        }
+    }
+
+    private static func totalBytes(_ records: [RecordFile]) throws -> Int {
+        var total = 0
+        for record in records {
+            let (sum, overflow) = total.addingReportingOverflow(record.size)
+            guard !overflow else { throw MessagingFailure.protectionUnavailable }
+            total = sum
+        }
+        return total
     }
 }
