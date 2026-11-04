@@ -5,9 +5,12 @@ import { ApiError, forbidden, notFound } from './errors.js';
 export interface MessageReaction { emoji: string; personIds: string[] }
 export interface MessagePoll { optionCount: number; multiple: boolean; closed: boolean; creatorId: string;
   votes: { optionIndex: number; personIds: string[] }[] }
+/** Référence serveur d'une pièce jointe : identifiant, taille, marque de suppression. Aucun nom, type ni clé. */
+export interface MessageMedia { mediaId: string; byteSize: number; deleted: boolean }
 export interface MessageView { id: string; schoolId: string; conversationId: string; sequence: number; clientMessageId: string;
   senderId: string; ciphertext: { scheme: string; keyId: string; payload: string } | null; mentionPersonIds: string[]; acceptedAt: string;
-  replyToMessageId: string | null; deletedForEveryone: boolean; pinned: boolean; reactions: MessageReaction[]; poll: MessagePoll | null }
+  replyToMessageId: string | null; deletedForEveryone: boolean; pinned: boolean; reactions: MessageReaction[]; poll: MessagePoll | null;
+  media: MessageMedia | null }
 
 /** $1 school, $2 actor. Alias de table : m. Les politiques RLS bornent déjà la lecture à la plage du lien. */
 export const messageColumns = `m.id,m.school_id AS "schoolId",m.conversation_id AS "conversationId",m.sequence,
@@ -21,7 +24,9 @@ export const messageColumns = `m.id,m.school_id AS "schoolId",m.conversation_id 
       'creatorId',p.creator_person_id,'votes',COALESCE((SELECT json_agg(json_build_object('optionIndex',v.option_index,'personIds',v.ids) ORDER BY v.option_index)
         FROM (SELECT option_index,array_agg(person_id ORDER BY person_id) AS ids FROM drivy.messaging_poll_vote
           WHERE message_id=p.message_id GROUP BY option_index) v),'[]'::json))
-    FROM drivy.messaging_poll p WHERE p.message_id=m.id) AS poll`;
+    FROM drivy.messaging_poll p WHERE p.message_id=m.id) AS poll,
+  (SELECT json_build_object('mediaId',md.id,'byteSize',md.byte_size,'deleted',md.purged_at IS NOT NULL)
+    FROM drivy.messaging_media md WHERE md.school_id=m.school_id AND md.message_id=m.id) AS media`;
 /** Filtre « supprimé pour moi ». */
 export const notHiddenForActor = `NOT EXISTS(SELECT 1 FROM drivy.messaging_hidden_message h
   WHERE h.school_id=m.school_id AND h.message_id=m.id AND h.person_id=$2)`;
@@ -38,6 +43,10 @@ export function toView(row: MessageView): MessageView {
 /** Traduit les refus levés par les fonctions SQL et la RLS. Aucune donnée de la requête n'est reprise. */
 export function mapDatabaseError(error: unknown): unknown {
   const code = typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: unknown }).code : undefined;
+  // Refus média : codes dédiés, indistinguables d'un identifiant inconnu avant tout contrôle d'accès.
+  if (code === 'DVM01') return new ApiError(404, 'MEDIA_NOT_FOUND', 'Pièce jointe introuvable.');
+  if (code === 'DVM03') return new ApiError(409, 'MEDIA_ALREADY_ATTACHED', 'Cette pièce jointe est déjà liée à un message.');
+  if (code === 'DVM04') return new ApiError(409, 'MEDIA_SIZE_MISMATCH', 'La taille déclarée ne correspond pas aux octets déposés.');
   if (code === 'DV403' || code === '42501') return forbidden();
   if (code === 'DV404') return notFound();
   if (code === '22023') return new ApiError(400, 'INVALID_REQUEST', 'Requête invalide.');

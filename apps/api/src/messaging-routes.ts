@@ -5,12 +5,14 @@ import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
 import { messagingSchoolGate, type MessagingAccessOptions } from './messaging-access.js';
 import { rollbackQuietly } from './database.js';
-import { forbidden } from './errors.js';
+import { ApiError, forbidden } from './errors.js';
 import { eligibleContacts, generalMembers, generalRemovedMembers, findOrCreateGeneral, findOrCreatePrivate, listConversations, pageEnvelopes,
   resumeEnvelopes, sendEnvelope, updateReadState, messagingUnavailable, conversationMembers, deleteMessage, setReaction, setPinned,
   setPollVotes, closePoll, setGroupAdmin, removeGeneralMember, reinstateGeneralMember, createReport, listReports, setReportStatus, reportStatuses,
   reactionPalette, type MessagingActor } from './messaging.js';
 import { mapDatabaseError } from './messaging-view.js';
+import { deviceIdPattern } from './messaging-keys.js';
+import { cancelMedia, downloadMedia, invalidMedia, mediaBodyLimit, mediaMaxBytes, mediaPayloadTooLarge, requireActiveDevice, uploadMedia } from './messaging-media.js';
 import { lockCommandOperation } from './commands.js';
 import { executeMessagingMutation, messagingMutation, type MessagingMutation } from './messaging-commands.js';
 
@@ -22,14 +24,19 @@ const envelope = z.object({ scheme: z.string().regex(/^[A-Za-z0-9._-]{1,80}$/), 
 const message = z.object({ clientMessageId: id, ciphertext: envelope, mentionPersonIds: z.array(id).max(8).default([]),
   expectedMembersEpoch: z.number().int().min(0).safe().optional(),
   replyToMessageId: id.nullable().optional(),
-  poll: z.object({ optionCount: z.number().int().min(2).max(12), multiple: z.boolean().default(false) }).strict().nullable().optional() }).strict();
+  poll: z.object({ optionCount: z.number().int().min(2).max(12), multiple: z.boolean().default(false) }).strict().nullable().optional(),
+  media: z.object({ mediaId: id, byteSize: z.number().int().min(1).max(4_194_304) }).strict().nullable().optional() }).strict()
+  .refine(value => !(value.media && value.poll), { message: 'Un message ne peut pas porter un sondage et une pièce jointe.' });
 const directoryQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), cursor: id.optional() }).strict();
 
 /** Qualification explicite par école, identité OIDC et droits serveur toujours obligatoires. */
 export function registerMessaging(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier } & MessagingAccessOptions) {
   const enabled = messagingSchoolGate(options);
-  async function execute<T>(headers: IncomingHttpHeaders, requestId: string,
-    schoolId: string, work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>, mutation?:MessagingMutation): Promise<T> {
+  interface RunContext { schoolId: string; actorPersonId: string; accessEpoch: number }
+  /** Transaction commune : porte, identité, époque, droits et enveloppe de contexte. Rend aussi les octets bruts. */
+  async function run<T>(headers: IncomingHttpHeaders, schoolId: string,
+    work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>, mutation?:MessagingMutation):
+    Promise<{ result: T; context: RunContext; mutationReceipt?: { operationId: string } }> {
     if (!enabled(schoolId)) throw messagingUnavailable();
     const expectedActor = id.parse(headers['x-drivy-expected-person-id']);
     const expectedEpoch = z.coerce.number().int().positive().safe().parse(headers['x-drivy-expected-access-epoch']);
@@ -59,13 +66,24 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
       if (!member.rows[0] || member.rows[0].accessEpoch !== expectedEpoch) throw forbidden();
       await db.query("SELECT set_config('app.membership_id',$1,true)", [member.rows[0].id]);
       const actor = { schoolId, personId, membershipId: member.rows[0].id };
-      const result = mutation ? await executeMessagingMutation(db,actor,mutation,()=>work(db,actor)) : await work(db,actor);
+      const data = mutation ? await executeMessagingMutation(db,actor,mutation,()=>work(db,actor)) : await work(db,actor);
       await db.query('COMMIT');
-      return { ...(result as object), context: { schoolId, actorPersonId: personId, accessEpoch: member.rows[0].accessEpoch },
-        ...(mutation ? {mutationReceipt:{operationId:mutation.operationId}} : {}), requestId, serverTime: new Date().toISOString() } as T;
+      return { result: data, context: { schoolId, actorPersonId: personId, accessEpoch: member.rows[0].accessEpoch },
+        ...(mutation ? {mutationReceipt:{operationId:mutation.operationId}} : {}) };
     } catch (error) { broken = !(await rollbackQuietly(db)); throw mapDatabaseError(error); }
     finally { db.release(broken); }
   }
+  async function execute<T>(headers: IncomingHttpHeaders, requestId: string,
+    schoolId: string, work: (db: import('pg').PoolClient, actor: MessagingActor) => Promise<T>, mutation?:MessagingMutation): Promise<T> {
+    const { result, ...rest } = await run(headers, schoolId, work, mutation);
+    return { ...(result as object), ...rest, requestId, serverTime: new Date().toISOString() } as T;
+  }
+  /** Appareil déclaré : un identifiant, jamais une preuve de possession ; son refus est explicite et stable. */
+  const deviceHeader = (value: string | string[] | undefined): string => {
+    const parsed = z.string().regex(deviceIdPattern).safeParse(value);
+    if (!parsed.success) throw new ApiError(403, 'MESSAGING_DEVICE_REQUIRED', 'Appareil de messagerie requis.');
+    return parsed.data;
+  };
   const path = '/v1/schools/:schoolId/messaging';
   app.get(`${path}/contacts`, request => {
     const { schoolId } = base.parse(request.params);
@@ -111,7 +129,50 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     const body = message.parse(request.body);
     return execute(request.headers, request.id, schoolId, (db, actor) => sendEnvelope(db, actor, conversationId,
       body.clientMessageId, body.ciphertext, body.mentionPersonIds, body.replyToMessageId ?? null, body.poll ?? null,
-      body.expectedMembersEpoch).then(data => ({ data })));
+      body.expectedMembersEpoch, body.media ?? null).then(data => ({ data })));
+  });
+  // Médias : octets chiffrés bruts, bornés à ces routes seulement. Le bodyLimit global de l'API reste à 16 Kio.
+  app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: mediaBodyLimit },
+    (_request, body, done) => done(null, body));
+  const mediaPath = `${path}/conversations/:conversationId/media/:mediaId`;
+  // L'identifiant média est validé par le module média (400 INVALID_MEDIA), pas par le schéma de route.
+  const mediaParams = conversation.extend({ mediaId: z.string().min(1).max(64) });
+  app.put(mediaPath, { bodyLimit: mediaBodyLimit }, request => {
+    const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
+    if (!Buffer.isBuffer(request.body))
+      throw new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Envoyez les octets chiffrés en application/octet-stream.');
+    const bytes = request.body;
+    // Longueur déclarée obligatoire et exacte : aucune troncature silencieuse, aucun octet ignoré.
+    const declared = Number(request.headers['content-length']);
+    if (!Number.isSafeInteger(declared) || declared !== bytes.length || bytes.length < 1) throw invalidMedia();
+    if (bytes.length > mediaMaxBytes) throw mediaPayloadTooLarge();
+    const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
+    return execute(request.headers, request.id, schoolId, async (db, actor) => {
+      await requireActiveDevice(db, actor, deviceId);
+      return { data: await uploadMedia(db, actor, conversationId, mediaId, bytes) };
+    });
+  });
+  app.get(mediaPath, async (request, reply) => {
+    const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
+    const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
+    const { result, context } = await run(request.headers, schoolId, async (db, actor) => {
+      await requireActiveDevice(db, actor, deviceId);
+      return downloadMedia(db, actor, conversationId, mediaId);
+    });
+    reply.header('Cache-Control', 'private, no-store')
+      .header('X-Drivy-School-Id', context.schoolId)
+      .header('X-Drivy-Access-Epoch', String(context.accessEpoch))
+      .header('X-Drivy-Media-Sha256', result.sha256)
+      .header('Content-Length', String(result.bytes.length));
+    return reply.type('application/octet-stream').send(result.bytes);
+  });
+  app.delete(mediaPath, request => {
+    const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
+    const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
+    return execute(request.headers, request.id, schoolId, async (db, actor) => {
+      await requireActiveDevice(db, actor, deviceId);
+      return { data: await cancelMedia(db, actor, conversationId, mediaId) };
+    });
   });
   app.put(`${path}/conversations/:conversationId/read-state`, request => {
     const { schoolId, conversationId } = conversation.parse(request.params);
@@ -187,5 +248,6 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
     const body = z.object({ status: z.enum(reportStatuses), expectedStatus: z.enum(reportStatuses) }).strict().parse(request.body);
     return execute(request.headers, request.id, schoolId, (db, actor) => setReportStatus(db, actor, reportId, body.status, body.expectedStatus).then(data => ({ data })));
   });
-  // Pas de temps réel, notifications ni médias avant #67/#66.
+  // Médias : dépôt et téléchargement d'octets chiffrés opaques, sans temps réel ni notification porteuse de média.
+  // La clé de fichier reste dans l'événement Megolm ; aucune route n'est ajoutée au relais crypto.
 }
