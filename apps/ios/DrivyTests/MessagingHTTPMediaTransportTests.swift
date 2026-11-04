@@ -448,6 +448,89 @@ final class MessagingHTTPMediaTransportTests: XCTestCase {
         XCTAssertEqual(token.invalidated, ["synthetic-token"])
     }
 
+    func testRefusedTokenRenewalStillChecksTheContextAfterTheWait() async throws {
+        // `invalidate` répond false ET le contexte a changé pendant l'attente : le retour du
+        // 401 ne dispense pas de la garde de sortie d'attente.
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let changed = MessagingScope(accountID: scope.accountID, schoolID: scope.schoolID,
+                                     accessEpoch: scope.accessEpoch + 1, apiBaseURL: baseURL.absoluteString)
+        let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())
+        let box = MediaScopeBox(scope)
+        let token = MediaTokenFixture(renews: false)
+        let wire = MediaWireRecorder { request, _ in
+            mediaJSONReply(request, "{\"code\":\"AUTHENTICATION_REQUIRED\"}", status: 401,
+                           contentType: "application/problem+json")
+        }
+        let transport = MessagingHTTPMediaTransport(baseURL: baseURL, deviceID: device, wire: wire,
+            token: { try await token.accessToken() },
+            invalidate: { _ in
+                box.value = changed
+                return false
+            },
+            currentScope: { box.value })
+        do {
+            _ = try await transport.upload(sealed, scope: scope, conversationID: UUID())
+            XCTFail("Un 401 après changement de contexte n'est pas une réponse exploitable")
+        } catch let failure as MessagingMediaTransportFailure {
+            XCTAssertEqual(failure, .contextChanged)
+        }
+        let attempts = await wire.count()
+        XCTAssertEqual(attempts, 1, "Un seul paquet, même quand le renouvellement est refusé")
+        XCTAssertEqual(token.requests, 1, "Aucun renouvellement demandé après un changement de contexte")
+        XCTAssertEqual(token.invalidated, ["synthetic-token"])
+    }
+
+    func testRefusedTokenRenewalWithACancelledTaskRaisesCancellation() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())
+        let token = MediaTokenFixture(renews: false)
+        let wire = MediaWireRecorder { request, _ in
+            mediaJSONReply(request, "{\"code\":\"AUTHENTICATION_REQUIRED\"}", status: 401,
+                           contentType: "application/problem+json")
+        }
+        let transport = MessagingHTTPMediaTransport(baseURL: baseURL, deviceID: device, wire: wire,
+            token: { try await token.accessToken() },
+            invalidate: { _ in
+                withUnsafeCurrentTask { $0?.cancel() }
+                return false
+            },
+            currentScope: { scope })
+        let call = Task { try await transport.upload(sealed, scope: scope, conversationID: UUID()) }
+        do {
+            _ = try await call.value
+            XCTFail("Une annulation pendant l'invalidation n'est pas un dépôt")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("L'annulation reste une CancellationError")
+        }
+        let attempts = await wire.count()
+        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual(token.requests, 1, "Aucun renouvellement demandé sur une tâche annulée")
+    }
+
+    func testRefusedTokenRenewalKeepsTheUnauthorizedVerdict() async throws {
+        // Renouvellement refusé, contexte inchangé, tâche vivante : le 401 reste un 401.
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())
+        let token = MediaTokenFixture(renews: false)
+        let wire = MediaWireRecorder { request, _ in
+            mediaJSONReply(request, "{\"code\":\"AUTHENTICATION_REQUIRED\"}", status: 401,
+                           contentType: "application/problem+json")
+        }
+        let transport = MessagingHTTPMediaTransport.using(baseURL: baseURL, deviceID: device,
+            tokenSource: token, wire: wire, currentScope: { scope })
+        do {
+            _ = try await transport.upload(sealed, scope: scope, conversationID: UUID())
+            XCTFail("Un 401 n'est pas un dépôt")
+        } catch let failure as MessagingMediaTransportFailure {
+            XCTAssertEqual(failure, .accessChanged)
+        }
+        let attempts = await wire.count()
+        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual(token.requests, 1)
+        XCTAssertEqual(token.invalidated, ["synthetic-token"])
+    }
+
     func testAnAlreadyCancelledTaskNeverReachesTheTokenSource() async throws {
         let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
         let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())

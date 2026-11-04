@@ -53,6 +53,15 @@ final class MessagingMediaNoRedirects: NSObject, URLSessionTaskDelegate, Sendabl
     }
 }
 
+/// Tâche de flux rendue capturable par un `withTaskCancellationHandler` : `URLSessionDataTask`
+/// n'est pas `Sendable`, alors que `cancel()` est documenté comme immédiat et thread-safe.
+private final class MessagingMediaStreamTask: @unchecked Sendable {
+    private let task: URLSessionDataTask
+
+    init(_ task: URLSessionDataTask) { self.task = task }
+    func cancel() { task.cancel() }
+}
+
 /// Session dédiée aux médias : éphémère, sans cache ni cookie, sans écriture disque,
 /// et lecture en flux borné AVANT toute allocation disproportionnée.
 ///
@@ -88,9 +97,9 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
         let (bytes, response) = try await session.bytes(for: request)
         // La tâche qui alimente le flux s'annule seule : toute sortie prématurée l'arrête,
         // sans annuler ni interrompre les autres requêtes du même transport.
-        let task = bytes.task
+        let stream = MessagingMediaStreamTask(bytes.task)
         guard let http = response as? HTTPURLResponse, let url = http.url else {
-            task.cancel()
+            stream.cancel()
             throw MessagingMediaTransportFailure.invalidResponse
         }
         let limit = ceiling.byteLimit
@@ -98,29 +107,35 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
         // Longueur annoncée : refus avant toute accumulation, dans les deux sources
         // (en-tête et couche réseau) car une réponse fragmentée peut n'annoncer qu'une des deux.
         if let declared, declared < 0 || declared > limit {
-            task.cancel()
+            stream.cancel()
             throw MessagingMediaTransportFailure.tooLarge
         }
         if http.expectedContentLength > Int64(limit) {
-            task.cancel()
+            stream.cancel()
             throw MessagingMediaTransportFailure.tooLarge
         }
         var body = Data()
         if let declared, declared > 0 { body.reserveCapacity(declared) }
         do {
-            for try await byte in bytes {
-                guard body.count < limit else { throw MessagingMediaTransportFailure.tooLarge }
-                body.append(byte)
+            // L'annulation ne dépend pas de la coopération de l'itérateur : le gestionnaire
+            // annule la tâche URLSession dès l'annulation de l'appelant, même sans nouvel octet.
+            try await withTaskCancellationHandler {
+                for try await byte in bytes {
+                    guard body.count < limit else { throw MessagingMediaTransportFailure.tooLarge }
+                    body.append(byte)
+                }
+            } onCancel: {
+                stream.cancel()
             }
         } catch {
             // Dépassement pendant la lecture ou annulation appelante : le flux est arrêté
             // avant que la tâche sous-jacente ne continue à consommer le réseau.
-            task.cancel()
+            stream.cancel()
             if error.isRequestCancellation { throw CancellationError() }
             throw error
         }
         if Task.isCancelled {
-            task.cancel()
+            stream.cancel()
             throw CancellationError()
         }
         return MessagingMediaHTTPResponse(status: http.statusCode, url: url,
@@ -357,7 +372,9 @@ actor MessagingHTTPMediaTransport: MessagingMediaTransport {
             do {
                 response = try await wire.send(request, ceiling: ceiling)
             } catch {
-                if error.isRequestCancellation { throw CancellationError() }
+                // Priorité : annulation de l'appelant, puis contexte quitté, puis mapping fermé.
+                if error.isRequestCancellation || Task.isCancelled { throw CancellationError() }
+                try await verifyCurrent(scope)
                 if let failure = error as? MessagingMediaTransportFailure {
                     throw fail(failure, operation: operation)
                 }
@@ -366,37 +383,40 @@ actor MessagingHTTPMediaTransport: MessagingMediaTransport {
             try Task.checkCancellation()
             try await verifyCurrent(scope)
             if response.status == 401, attempt == 0 {
-                // Une invalidation qui traverse un changement de compte, d'école ou d'époque
-                // n'ouvre aucun second essai et n'émet aucun paquet.
-                guard await invalidate(bearer) else { return response }
+                // Le booléen est conservé hors du `guard` : un refus de renouvellement ne
+                // dispense ni du contrôle d'annulation ni de celui du contexte, qui priment
+                // tous deux sur le retour du 401.
+                let renewed = await invalidate(bearer)
                 try Task.checkCancellation()
                 try await verifyCurrent(scope)
-                bearer = try await accessToken(scope: scope, operation: operation)
-                continue
+                if renewed {
+                    bearer = try await accessToken(scope: scope, operation: operation)
+                    continue
+                }
+                return response
             }
             return response
         }
         throw fail(.accessChanged, operation: operation)
     }
 
-    /// Attente du jeton, fermée. Une tâche déjà annulée n'entre pas dans la source de jeton ;
-    /// l'annulation reste une `CancellationError`, les erreurs typées sont préservées, une
-    /// réauthentification devient `accessChanged` et tout le reste `unavailable`. Aucun
-    /// `NSError`, `userInfo`, domaine ni texte libre ne traverse cette frontière.
+    /// Attente du jeton, fermée. Le scope est vérifié **juste avant** la source ; en sortie
+    /// d'attente, la priorité est : annulation, puis contexte quitté, puis mapping fermé.
+    /// Une erreur brute ou un refus ne dispense donc pas de recontrôler le contexte.
+    /// Aucun `NSError`, `userInfo`, domaine ni texte libre ne traverse cette frontière.
     private func accessToken(scope: MessagingScope, operation: String) async throws -> String {
-        if Task.isCancelled { throw CancellationError() }
+        try Task.checkCancellation()
+        try await verifyCurrent(scope)
         let value: String
         do {
             value = try await token()
-        } catch is CancellationError {
-            throw CancellationError()
-        } catch let failure as MessagingMediaTransportFailure {
-            throw failure
-        } catch IdentityFailure.reauthentication {
-            throw fail(.accessChanged, operation: operation)
-        } catch let error where error.isRequestCancellation {
-            throw CancellationError()
         } catch {
+            if Task.isCancelled || error.isRequestCancellation { throw CancellationError() }
+            try await verifyCurrent(scope)
+            if let failure = error as? MessagingMediaTransportFailure { throw failure }
+            if let identity = error as? IdentityFailure, case .reauthentication = identity {
+                throw fail(.accessChanged, operation: operation)
+            }
             throw fail(.unavailable, operation: operation)
         }
         if Task.isCancelled { throw CancellationError() }
