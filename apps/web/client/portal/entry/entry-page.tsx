@@ -58,7 +58,8 @@ export function PortalEntryPage({ invitationLink, page = entryPageFromPath(windo
     </div>}
 
     {(state.page === 'account' || showAuthPanel) && <AccountEntryPanel routes={routes} invitation={state.page === 'invitation'} pending={!state.loaded}
-      signedIn={state.authenticated} codeOpen={state.enteringCode || !state.loaded} onCancel={() => state.setEnteringCode(false)}
+      signedIn={state.authenticated} codeOpen={state.enteringCode || !state.loaded}
+      onCancel={() => state.loaded ? state.setEnteringCode(false) : state.typedCode.set('')}
       typedCode={state.typedCode} onSignedIn={state.signedIn} />}
     {state.loaded && state.authenticated && state.page === 'invitation' && <InvitationView state={state} routes={routes} />}
     {state.authenticated && state.page === 'account' && <SchoolsView state={state} routes={routes} />}

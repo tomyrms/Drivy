@@ -7,7 +7,7 @@ import type { IdentityProvider } from '../../apps/web/server/oidc.js';
 
 // Real production build, synthetic browser-boundary responses only. No identity service or database.
 const output = resolve('artifacts/entry-continuity-120');
-const label = process.argv.includes('--red') ? 'red' : 'green';
+const label = process.argv.includes('--cancel-red') ? 'cancel-red' : process.argv.includes('--red') ? 'red' : 'green';
 const checks: string[] = [];
 const session = { authenticated: true, csrfToken: 'synthetic-csrf', invitationPending: false,
   user: { displayName: 'Compte synthétique', emailVerified: true } };
@@ -69,6 +69,27 @@ async function typeInMiddle(page: Page) {
   await remember(page);
 }
 try {
+  const cancelled = await fixture();
+  await cancelled.input.fill('ABCDEFGH');
+  const field = cancelled.page.locator('input[name=code]');
+  const original = await field.elementHandle();
+  const cancel = cancelled.page.getByRole('button', { name: 'Annuler', exact: true, includeHidden: true });
+  await cancel.focus(); await cancelled.page.keyboard.press('Enter');
+  const beforeMe = { value: await field.inputValue(), visible: await field.isVisible(),
+    focusOnCancel: await cancel.evaluate(el => document.activeElement === el) };
+  await cancelled.page.screenshot({ path: `${output}/${label}-cancel-waiting.png`, fullPage: true, animations: 'disabled' });
+  cancelled.firstMe.release(); await cancelled.page.locator('main[aria-busy="false"]').waitFor();
+  const afterMe = { value: await field.inputValue(), visible: await field.isVisible(),
+    focusOnCancel: await cancel.evaluate(el => document.activeElement === el), same: await original!.evaluate(el => el === document.querySelector('input[name="code"]')) };
+  await writeFile(`${output}/${label}-cancel.json`, JSON.stringify({ beforeMe, afterMe, submissions: cancelled.submissions() }, null, 2));
+  assert.deepEqual(beforeMe, { value: '', visible: true, focusOnCancel: true }, 'cancel clears the pending draft immediately');
+  assert.deepEqual(afterMe, { value: '', visible: true, focusOnCancel: true, same: true }, 'me preserves the explicitly cleared form and focus');
+  assert.equal(cancelled.submissions(), 0);
+  await cancelled.input.fill('NEXTCODE'); await cancel.click();
+  assert.equal(await field.isVisible(), false, 'after reading, cancel closes the form');
+  await cancelled.page.getByRole('button', { name: 'J’ai un code', exact: true }).click();
+  assert.equal(await field.inputValue(), 'NEXTCODE', 'closing after reading keeps the draft as before');
+  checks.push('cancel during pending clears; after reading closes without submitting');
   const known = await fixture();
   await typeInMiddle(known.page);
   // The first real network response remains pending for 15 seconds; typing is already usable.
