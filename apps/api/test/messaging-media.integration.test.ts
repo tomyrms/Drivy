@@ -448,6 +448,11 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
     expect(ceiling.statusCode, ceiling.body).toBe(200);
     expect(ceiling.json().data.byteSize).toBe(4_194_304);
     expect((await mediaRow(mediaId)).state).toBe('UPLOADED');
+    // Borne haute valide : le plafond exact s'attache de bout en bout.
+    const upperBound = await postMessage('demo-instructor', conversationId, mediaBody(mediaId, 4_194_304));
+    expect(upperBound.statusCode, upperBound.body).toBe(200);
+    expect(upperBound.json().data.media).toEqual({ mediaId, byteSize: 4_194_304, deleted: false });
+    expect((await mediaRow(mediaId)).state).toBe('ATTACHED');
   });
 
   it('stays behind the existing messaging qualification gate without widening it', async () => {
@@ -602,16 +607,23 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
   it('répond INVALID_MEDIA à une intention média invalide du POST message, sans changer les refus ordinaires', async () => {
     const conversationId = await openPrivate();
     for (const media of [{ mediaId: 'not-a-uuid', byteSize: 10 }, { mediaId: randomUUID(), byteSize: 4_194_305 },
-      { mediaId: randomUUID(), byteSize: 1.5 }, { mediaId: randomUUID(), byteSize: 'x' }, { mediaId: 12, byteSize: 4 }]) {
+      { mediaId: randomUUID(), byteSize: 1.5 }, { mediaId: randomUUID(), byteSize: 'x' }, { mediaId: 12, byteSize: 4 },
+      { mediaId: randomUUID(), byteSize: 0 }, { mediaId: randomUUID(), byteSize: -1 }]) {
       const attempt = await postMessage('demo-instructor', conversationId,
         { clientMessageId: randomUUID(), expectedMembersEpoch: 0, ciphertext: envelope, media });
       expect(attempt.statusCode, JSON.stringify(media)).toBe(400);
       expect(attempt.json().code).toBe('INVALID_MEDIA');
     }
+    // Borne basse valide : un octet réel, attaché de bout en bout.
+    const oneByteId = randomUUID();
+    expect((await upload('demo-instructor', conversationId, oneByteId, Buffer.from([7]))).statusCode).toBe(200);
+    const lowerBound = await postMessage('demo-instructor', conversationId, mediaBody(oneByteId, 1));
+    expect(lowerBound.statusCode, lowerBound.body).toBe(200);
+    expect(lowerBound.json().data.media).toEqual({ mediaId: oneByteId, byteSize: 1, deleted: false });
     const ordinary = await postMessage('demo-instructor', conversationId, { clientMessageId: 'not-a-uuid', ciphertext: envelope });
     expect(ordinary.statusCode).toBe(400);
     expect(ordinary.json().code).toBe('INVALID_REQUEST');
-    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0]!.count).toBe(0);
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0]!.count).toBe(1);
   });
 
   it('verrouille les sources de droits avant la conversation : une fin d’éligibilité concurrente refuse le dépôt', async () => {
@@ -702,7 +714,7 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
     }
   });
 
-  it('ne laisse aucun identifiant, nom, clé ni contenu dans les vrais logs applicatifs', async () => {
+  it('ne laisse aucun identifiant, nom, clé ni octet déposé dans les vrais logs applicatifs', async () => {
     const lines: string[] = [];
     const logged = buildApp({
       pool, cursorSecret: 'messaging-media-logs-secret-32-chars!',
@@ -713,9 +725,14 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
       },
       logger: { level: 'info', stream: { write: (line: string) => { lines.push(line); } } } as unknown as FastifyServerOptions['logger']
     });
+    // Sentinelles synthétiques UNIQUES réellement soumises dans cette requête : octets, nom, clé, jeton d'authentification.
+    const byteSentinel = `SENTINEL-BYTES-${randomUUID()}-DO-NOT-LOG`;
+    const nameSentinel = `SENTINEL-NAME-${randomUUID()}.pdf`;
+    const keySentinel = `SENTINEL-KEY-${randomUUID()}`;
+    const tokenSentinel = `SENTINEL-TOKEN-${randomUUID()}`;
+    const bytes = Buffer.concat([Buffer.from(byteSentinel, 'utf8'), cipherBytes(512)]);
     let conversationId = '';
     let mediaId = '';
-    const bytes = cipherBytes(2048);
     try {
       const opened = await logged.inject({ method: 'PUT', url: `${path}/private/${id.alice}`, headers: headers('demo-instructor') });
       expect(opened.statusCode, opened.body).toBe(200);
@@ -724,9 +741,20 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
       const put = await logged.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
         headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: bytes });
       expect(put.statusCode, put.body).toBe(200);
+      // Les octets déposés contiennent bien la sentinelle (preuve qu'elle a réellement été soumise).
+      expect((await mediaRow(mediaId)).ciphertext!.includes(Buffer.from(byteSentinel))).toBe(true);
       const conflict = await logged.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
-        headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: cipherBytes(2048, 99) });
+        headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: cipherBytes(512, 99) });
       expect(conflict.statusCode).toBe(409);
+      // Nom et clé de test réellement envoyés, dans un corps refusé par le transport (415) : jamais journalisés.
+      const namedBody = await logged.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${randomUUID()}`,
+        headers: { ...headers('demo-instructor'), 'content-type': 'application/json' },
+        payload: JSON.stringify({ name: nameSentinel, key: keySentinel, caption: nameSentinel }) });
+      expect(namedBody.statusCode).toBe(415);
+      // Jeton d'authentification synthétique réellement envoyé : refus 401, jamais journalisé.
+      const badToken = await logged.inject({ method: 'GET', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
+        headers: { ...headers('demo-instructor'), authorization: `Bearer ${tokenSentinel}` } });
+      expect(badToken.statusCode).toBe(401);
       const missingDevice = await logged.inject({ method: 'GET', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
         headers: headers('demo-instructor', null) });
       expect(missingDevice.statusCode).toBe(403);
@@ -736,7 +764,18 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
     expect(text).toContain('/v1/schools/:schoolId/messaging/conversations/:conversationId/media/:mediaId');
     expect(text).toContain('statusCode');
     expect(text).toContain('MEDIA_INTENT_CONFLICT');
-    for (const secret of [mediaId, conversationId, id.instructor, deviceA, sha256(bytes), envelope.payload])
+    expect(text).toContain('UNSUPPORTED_MEDIA_TYPE');
+    expect(text).toContain('AUTHENTICATION_REQUIRED');
+    // Formes de fuite réalistes des octets et sentinelles réellement soumis : texte, base64, hex, tableau de nombres.
+    const leakForms = [byteSentinel, nameSentinel, keySentinel, tokenSentinel,
+      bytes.toString('base64'), bytes.toString('hex'), Buffer.from(byteSentinel).toString('base64'),
+      Buffer.from(byteSentinel).toString('hex'), [...bytes.subarray(0, 16)].join(','), [...bytes.subarray(0, 8)].join(' ')];
+    const leaks = (haystack: string) => leakForms.some(form => haystack.includes(form));
+    // Auto-test du détecteur : il reconnaît les formes qu'une fuite réelle prendrait (aucune modification du logger produit).
+    expect(leaks(JSON.stringify({ msg: byteSentinel, name: nameSentinel, buffer: { type: 'Buffer', data: [...bytes.subarray(0, 16)] },
+      encoded: bytes.toString('base64') }))).toBe(true);
+    expect(leaks(text), 'aucune sentinelle ni forme encodée des octets déposés ne doit apparaître dans les logs').toBe(false);
+    for (const secret of [mediaId, conversationId, id.instructor, deviceA, sha256(bytes)])
       expect(text).not.toContain(secret);
   });
 });

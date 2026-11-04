@@ -25,7 +25,9 @@ await writeFile(new URL('../contracts/messaging-media.json', import.meta.url), J
     + 'Les réponses média portent l’enveloppe { data, context, requestId, serverTime } ; un reçu de dépôt n’annonce que UPLOADED ou ATTACHED, jamais PURGED. '
     + 'GET répond application/octet-stream avec Cache-Control private, no-store et X-Drivy-Media-Sha256, ou un 404 MEDIA_NOT_FOUND uniforme. '
     + 'Le corps du PUT est binaire brut ; hors des routes média, application/octet-stream est refusé par le transport (415 UNSUPPORTED_MEDIA_TYPE). '
-    + 'Le téléchargement relit la plage de séquence du lien, le masquage, la suppression et l’appareil déclaré actif ; la révocation est une garantie de compte.',
+    + 'Le téléchargement relit la plage de séquence du lien, le masquage, la suppression et l’appareil déclaré actif ; '
+    + 'la révocation garantit le refus de l’identifiant d’appareil déclaré révoqué, sans preuve de possession cryptographique '
+    + 'et sans effacer les copies locales déjà déchiffrées.',
   $defs: {
     MediaPutBody: binaryPutBody,
     MediaMessageIntent: project(mediaMessageIntentSchema),

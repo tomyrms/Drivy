@@ -20,10 +20,10 @@ export const mediaErrorCodes = ['INVALID_MEDIA', 'INVALID_REQUEST', 'PAYLOAD_TOO
   'SERVICE_UNAVAILABLE'] as const;
 export type MediaErrorCode = typeof mediaErrorCodes[number];
 
-/** Intention média du POST message : validée à la frontière du domaine, donc refusée en INVALID_MEDIA. */
+/** Intention média du POST message : mêmes contraintes statiques que le module média (UUID, entier sûr 1…4 Mio). */
 export const mediaMessageIntentSchema = z.object({
-  mediaId: z.string().min(1).max(64),
-  byteSize: z.number()
+  mediaId: z.uuid(),
+  byteSize: z.number().int().min(1).max(mediaMaxBytes)
 }).strict();
 
 /**

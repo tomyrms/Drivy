@@ -1,12 +1,13 @@
 # Médias E2EE de la messagerie — backend (T1, #97)
 
-Date : 4 novembre 2026. Branche `tomyrms/issues-medias-97`. Commit initial `a526187f` (base `b0152a2a`), **correction 1**
-après revue indépendante (`artifacts/t1-independent-review/rapport.md`). Tâche T1 du contrat
+Date : 4 novembre 2026. Branche `tomyrms/issues-medias-97`. Commit initial `a526187f` (base `b0152a2a`),
+**correction 1** après revue indépendante (`artifacts/t1-independent-review/rapport.md`), puis **correction 2**
+(schéma d'intention média fidèle, sentinelle de journal réelle, formulation exacte de la révocation). Tâche T1 du contrat
 `docs/implementation/medias-exploitation-contrat-20261104.md` §§3–4/6/7, arbitrages du coordinateur :
 une pièce par message, plafond 4 Mio, JPEG/PNG/PDF côté appareil, miniatures locales, aucune purge automatique,
 aucune activation.
 
-## 0. Cadre de cette correction
+## 0. Cadre de ces corrections
 
 - Modèle effectif : `opencode-go/deepseek-v4.1-flash` (OpenCode), sans variante d'effort exposée.
 - Skills Superpowers réellement chargés dans ce runtime : `systematic-debugging`, `test-driven-development`,
@@ -14,9 +15,10 @@ aucune activation.
   RED/GREEN par test durable, vérification finale par commandes réelles (sorties en §9).
 - Codebase Memory : projet `drivy-issues-medias-97`, racine
   `C:/Users/jtoma/orca/workspaces/Drivy/issues-medias-97`, réindexé à HEAD avant travaux
-  (`indexed_at=2026-11-04T16:00:18Z`, `ready`). Recherches : `sendEnvelope`, `cancelMedia`, `lockRights`,
-  `addContentTypeParser`, `messaging_media`. Limite connue : `apps/api/migrations/` est exclu de l'index par
-  conception ; les fonctions SQL ont donc été relues dans le source. Aucun index d'un autre worktree n'a été utilisé.
+  (correction 1 : `indexed_at=2026-11-04T16:00:18Z` ; correction 2 : réindexation demandée à `8c043e5b`).
+  Recherches : `sendEnvelope`, `cancelMedia`, `lockRights`, `addContentTypeParser`, `messaging_media`. Limite connue :
+  `apps/api/migrations/` est exclu de l'index par conception ; les fonctions SQL ont donc été relues dans le source.
+  Aucun index d'un autre worktree n'a été utilisé.
 - Aucun secret, jeton, donnée de personne réelle ni position. Les identifiants/octets synthétiques des reproductions
   locales ne sont pas recopiés ici.
 
@@ -133,7 +135,50 @@ verrous, ni l'ancien SQL, ni les sources iOS/web, ni les scripts de développeme
   `0` purge, octets conservés, journal `0`.
 - **O02** : sentinelle sur les **vrais logs applicatifs** (instance `buildApp` avec logger actif et flux capturé) :
   méthode, modèle de route, statut et code présents ; aucun identifiant de média, de conversation ou de personne,
-  aucun appareil, aucun SHA-256, aucune charge d'enveloppe. `requestId` technique reste autorisé.
+  aucun appareil, aucun SHA-256. `requestId` technique reste autorisé. Détail exact de la couverture en §2bis.
+
+## 2bis. Corrections de la seconde passe (précision du contrat et sentinelle)
+
+### C1 — `MediaMessageIntent` publié était plus permissif que le service
+
+- Défaut : le schéma partagé/généré déclarait `mediaId` en chaîne 1…64 et `byteSize` en nombre **sans borne** ; le
+  module imposait ensuite UUID et entier 1…4 194 304. Un consommateur validant contre le JSON Schema publié acceptait
+  donc quatre intentions que le service refuse en `400 INVALID_MEDIA` : identifiant non UUID, taille `0`, taille
+  fractionnaire `1.5`, taille `4 194 305`.
+- Correctif : `mediaMessageIntentSchema` porte désormais les **mêmes contraintes statiques** que le module —
+  `z.uuid()` et `z.number().int().min(1).max(mediaMaxBytes)` — et le JSON généré publie
+  `format: "uuid"`, `type: "integer"`, `minimum: 1`, `maximum: 4194304`. Le mapping du domaine reste `INVALID_MEDIA`
+  (`parseMediaIntent`), les refus des messages ordinaires (`INVALID_REQUEST`, `INVALID_ENVELOPE`) sont inchangés, et
+  le module conserve ses contrôles (`mediaId`, `mediaSize`) en défense en profondeur. Aucun transport n'est converti en
+  base64 : le schéma binaire du PUT reste une annotation distincte du Buffer réel.
+- Preuve : test de contrat qui (a) vérifie les contraintes du JSON Schema généré, (b) refuse les cinq cas permissifs
+  avec le schéma Zod **et** avec un validateur Ajv indépendant sur le fichier généré, (c) accepte les bornes valides
+  `1` et `4 194 304` ; test HTTP qui refuse les mêmes cas en `400 INVALID_MEDIA` et attache de bout en bout un média
+  d'**un octet** (borne basse) puis un média de **4 194 304 octets** (borne haute). Mutation check : avant correctif,
+  le test de contrat échoue (`format` absent du schéma publié).
+
+### C2 — O02 n'exerçait pas les sentinelles qu'il annonçait
+
+- Défaut : le test de journal cherchait `envelope.payload = "AA=="`, jamais envoyé par ses requêtes, et ne vérifiait
+  pas les octets réellement déposés.
+- Correctif : le test soumet désormais des sentinelles synthétiques **uniques et réellement transmises** — un texte
+  sentinelle placé dans les octets chiffrés déposés (vérifié présent dans la ligne stockée), un nom et une clé de test
+  dans un corps JSON refusé par le transport (`415`), un jeton d'authentification synthétique (`401`) — puis vérifie
+  les formes de fuite réalistes de **ces** octets : texte brut, base64 du corps et de la sentinelle, hex, tableau de
+  nombres façon `Buffer` sérialisé. Un auto-test du détecteur prouve qu'il reconnaît ces formes, sans modifier le
+  logger produit. Le test conserve les contrôles d'identifiant d'objet, de hash, d'appareil et de personne, prouve que
+  le logger est actif (modèle de route, statut, codes `MEDIA_INTENT_CONFLICT`, `UNSUPPORTED_MEDIA_TYPE`,
+  `AUTHENTICATION_REQUIRED`) et laisse `requestId` technique autorisé.
+- **Couverture exacte** : journaux de requêtes de l'application réelle (hook `onResponse` et erreurs d'application) sur
+  les routes média. Ce test ne prétend **pas** auditer les vidages mémoire, les traces de crash, les journaux
+  PostgreSQL, ni les logs d'un futur worker : ces surfaces restent hors de sa portée (voir §10).
+
+### C3 — Formulation de la révocation dans le contrat généré
+
+- La description générée terminait par « la révocation est une garantie de compte », formule ambiguë. Elle dit
+  désormais exactement : « la révocation garantit le refus de l'identifiant d'appareil déclaré révoqué, sans preuve de
+  possession cryptographique et sans effacer les copies locales déjà déchiffrées. » Aucun renforcement silencieux :
+  la garantie reste celle du contrat §3.6 et de l'addendum, et le `deviceId` reste déclaratif.
 
 ## 3. Serveur opaque : ce qui est stocké
 
@@ -246,8 +291,10 @@ par des fonctions `SECURITY DEFINER`. `messaging_purge_orphan_media` est réserv
 `learner-course-facts`. Le dossier de conception 3.11.0 reste **immuable**. Le fichier contient les définitions
 `MediaPutBody` (annotée binaire), `MediaMessageIntent`, `MediaUploadResponse`, `MediaCancelResponse`, `MediaMessage`,
 `MediaUploadEnvelope`, `MediaCancelEnvelope`, `MediaError` ; les tests d'intégration valident les réponses réelles
-contre ce fichier (Ajv 2020), et le test de contrat vérifie la projection, l'annotation binaire, les états de reçu et
-l'absence de champ interdit.
+contre ce fichier (Ajv 2020), et le test de contrat vérifie la projection, l'annotation binaire, les états de reçu,
+les contraintes de `MediaMessageIntent` (`format: uuid`, entier `1…4194304`) et l'absence de champ interdit. La
+description générée porte la garantie exacte de révocation (refus de l'identifiant d'appareil déclaré révoqué, sans
+preuve de possession cryptographique ni effacement des copies locales).
 
 `apps/api/scripts/purge-messaging-media.ts` : inactif par défaut (simulation seule), `--cutoff <ISO-8601>` obligatoire,
 cible non locale refusée sauf `--allow-remote-target`, `MIGRATION_DATABASE_URL` (rôle propriétaire) exigée, sortie
@@ -260,8 +307,8 @@ Node 24.22.2 portable, PostgreSQL 17.11, conteneur jetable `drivy-t1-97-pg`
 
 | Commande | Résultat |
 |---|---|
-| `npx vitest run test/messaging-media.integration.test.ts test/messaging-media.test.ts test/messaging-media-contract.test.ts` | 3 fichiers, **27 tests réussis** (22 + 4 + 1), exit 0 |
-| `npx vitest run test/messaging` (suites `messaging*.test.ts`) | 20 fichiers, **165 tests réussis**, exit 0 |
+| `npx vitest run test/messaging-media.integration.test.ts test/messaging-media.test.ts test/messaging-media-contract.test.ts` | 3 fichiers, **28 tests réussis** (22 + 4 + 2), exit 0 |
+| `npx vitest run test/messaging` (suites `messaging*.test.ts`) | 20 fichiers, **166 tests réussis**, exit 0 |
 | `npx tsc --noEmit` | exit **0** |
 | `npm run build` | exit **0** |
 | `npx tsx artifacts/t1-independent-review/repro.ts` | exit 0 : rejeu historique `200`, annulation hors conversation `404` (`UPLOADED` conservé), `octet-stream` ordinaire `415` (20 Kio, 1 Mio, 4,2 Mio), JSON 20 Kio `413`, `byteSize` hors plafond `400 INVALID_MEDIA` |
@@ -269,6 +316,8 @@ Node 24.22.2 portable, PostgreSQL 17.11, conteneur jetable `drivy-t1-97-pg`
 | `npx tsx artifacts/t1-independent-review/repro2.ts` | exit 0 : barrières attache/purge/annulation conformes, `journal 0/1` cohérent, `ROLLBACK` sans effet, périmètre école `DV403`, `lock_media` borné, `415` à 4,3 Mio, appareil révoqué `403` |
 | `npx tsx scripts/purge-messaging-media.ts` (sans argument) | exit **2**, refus, aucune écriture |
 | `… --cutoff 2026-11-01T00:00:00Z` (boucle locale) | exit 0, simulation 0 dépôt, aucune écriture |
+| `npx vitest run test/messaging-media-contract.test.ts` (C1) | 2 tests réussis : contraintes publiées (`uuid`, entier 1…4194304), refus des cinq cas permissifs par Zod **et** Ajv, bornes valides acceptées |
+| `npx vitest run test/messaging-media.integration.test.ts -t "ne laisse aucun identifiant"` (C2) | 1 test réussi : sentinelles réellement déposées, aucune forme de fuite dans les logs réels |
 
 Mutation checks (chaque nouveau test a été vu rouge sans son correctif, puis vert) :
 
@@ -278,6 +327,8 @@ Mutation checks (chaque nouveau test a été vu rouge sans son correctif, puis v
 | S2 | contrôle de conversation retiré de `cancelMedia` | test rouge : `200` au lieu de `404` |
 | S3 | parser réenregistré au niveau racine | test rouge : `octet-stream` ordinaire accepté au lieu de `415` |
 | S5 | `lockRights` retiré du verrou de conversation | test rouge : `blocked=false` (le dépôt n'attend pas les droits) |
+| C1 | schéma d'intention revenu à `string`/`number` sans borne | test rouge : `format` absent du JSON Schema publié et cas permissifs acceptés |
+| C2 | détecteur de sentinelles (auto-test) | une ligne contenant la sentinelle, son base64 ou le tableau `Buffer` est reconnue comme fuite ; les logs réels n'en contiennent aucune |
 
 ## 10. Non exécuté / limites
 
@@ -285,6 +336,8 @@ Mutation checks (chaque nouveau test a été vu rouge sans son correctif, puis v
 - Aucune preuve de résidence, sauvegarde, restauration ou non-résurrection : MED68-01…09 restent **NON EXÉCUTÉ /
   NON FOURNI**. Le journal `messaging_media_purge` n'est pas une archive indépendante.
 - Aucun test natif, UI, VoiceOver, appareil physique : T2/T3 restent ouvertes.
+- **O02** couvre les journaux de requêtes de l'application réelle sur les routes média ; il ne prétend pas auditer les
+  vidages mémoire, les traces de crash, les journaux PostgreSQL, les files ou un futur worker (surfaces hors lot).
 - Aucun quota, aucune durée de conservation, aucun scan antivirus serveur (impossible sur du chiffré), aucun CDN.
 - La suppression pour tout le monde efface les octets **côté service** ; elle ne peut pas effacer les copies déjà
   reçues, les captures d'écran ni un export local.
