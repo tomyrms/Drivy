@@ -734,13 +734,15 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         }
     }
 
-    /// Un contenu média au-delà de 6 000 octets encodés est refusé avant tout chiffrement.
+    /// Le sérialiseur produit les octets (mesure), mais c'est `encryptMatrixContent` qui refuse un
+    /// contenu média au-delà de 6 000 octets, **avant** toute ouverture de session ou appel de relais.
     func testMatrixContentBeyondTheContentBoundIsRefusedBeforeEncryption() async throws {
         let pair = try await conversationPair()
         let heavy = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
         let value = try MessagingMediaContentV3(text: heavy, media: try mediaAttachment())
         XCTAssertGreaterThan(try MessagingMediaContent.messageContent(value, mentions: nil).count,
-                             MessagingPlainContent.maximumV3ByteCount)
+                             MessagingPlainContent.maximumV3ByteCount,
+                             "Le sérialiseur mesure, il ne borne pas : les octets dépassent le plafond")
         do {
             _ = try await pair.a.encryptMatrixContent(value, mentions: [], scope: pair.aScope, conversationID: conversation)
             XCTFail("Un contenu média au-delà du plafond ne doit pas être chiffré")
@@ -1324,10 +1326,13 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
 
     // MARK: Contenu v3 média (#97, T2b1) et signalement
 
-    /// Le signalement garde son enveloppe (`body`) et sa propre limite de corps (640 Kio), mais chaque
-    /// enveloppe reste sous le plafond serveur de 12 000 caractères base64. Un contenu de 8 500 octets
-    /// passe ; au-delà de ~8 800 octets de clair, l'item dépasserait le plafond et le transport le refuserait.
-    func testReportSealingKeepsItsEnvelopeAndStaysUnderTheItemBound() async throws {
+    /// Le scellement d'un signalement **recopie** l'enveloppe, il ne borne pas l'item. Un cas nominal
+    /// nettement sous le plafond se mesure sur la sortie réelle du SDK (payload produit, puis base64 du
+    /// transport) ; un cas trop grand se mesure aussi, et c'est la frontière `report()` du transport qui
+    /// le refuse (`MessagingHTTPTransportTests`). Le double encodage compte : le payload est le JSON
+    /// Matrix qui contient déjà le chiffré en base64, puis le transport encode ce JSON en base64 — aucune
+    /// longueur de clair n'est donc un seuil de contrat.
+    func testReportSealingMeasuresItsEnvelopeWithoutBoundingTheItem() async throws {
         let relay = InMemoryRelay()
         await relay.setReportRecipients(school, [admin])
         let reporter = try device(alice, relay: relay)
@@ -1335,18 +1340,27 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
         let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
         XCTAssertTrue(ready)
 
-        let content = Data(String(repeating: "a", count: 8_500).utf8)
-        let sealed = try await reporter.sealForSchoolAdmins(content, scope: scope(alice), conversationID: conversation)
-        XCTAssertLessThanOrEqual(sealed.payload.base64EncodedString().utf8.count, 12_000,
-                                 "Un item de signalement reste sous le plafond de 12 000 caractères")
+        // Cas nominal : la borne est vérifiée sur la sortie mesurée, jamais sur une estimation du clair.
+        let nominal = Data("Texte signalé".utf8)
+        let sealed = try await reporter.sealForSchoolAdmins(nominal, scope: scope(alice), conversationID: conversation)
+        XCTAssertLessThanOrEqual(sealed.payload.base64EncodedString().utf8.count, 12_000)
         let clear = try await administrator.decrypt(wire(sealed), scope: scope(admin))
-        XCTAssertEqual(clear, content, "Le signalement conserve son enveloppe et ses octets")
+        XCTAssertEqual(clear, nominal, "Le signalement conserve son enveloppe et ses octets")
+
+        // Cas trop grand : le scellement réussit (il ne borne pas l'item), la taille produite dépasse
+        // le plafond de 12 000 caractères, et le refus appartient à la frontière du transport.
+        let oversized = Data(String(repeating: "a", count: 8_500).utf8)
+        let big = try await reporter.sealForSchoolAdmins(oversized, scope: scope(alice), conversationID: conversation)
+        XCTAssertGreaterThan(big.payload.base64EncodedString().utf8.count, 12_000,
+                             "Double encodage : 8 500 octets de clair produisent un item au-delà de 12 000 caractères")
     }
 
-    /// Un contenu Matrix v3 mis dans un signalement garde son enveloppe octet pour octet ; le lecteur
-    /// typé (provenance explicite) en retrouve les métadonnées. Le décodeur legacy, lui, ne fabrique
-    /// jamais de média : brancher la boîte de signalement sur le lecteur typé relève du lot UI.
-    func testReportKeepsTheEnvelopeAndTheTypedReaderRecoversTheMediaMetadata() async throws {
+    /// Ce test prouve la **conservation des octets** : `sealForSchoolAdmins` recopie le contenu reçu dans
+    /// le `body`, et le lecteur typé, appelé **manuellement**, en retrouve les métadonnées. Aucun
+    /// consommateur branché (fil, boîte de signalement) n'utilise encore la provenance typée : la lecture
+    /// et le signalement d'un média restent non intégrés, et le décodeur legacy ne doit jamais interpréter
+    /// un ancien `body` qui ressemble au v3.
+    func testReportCopiesTheContentBytesAndOnlyTheTypedReaderRecoversTheMedia() async throws {
         let relay = InMemoryRelay()
         await relay.setReportRecipients(school, [admin])
         let reporter = try device(alice, relay: relay)

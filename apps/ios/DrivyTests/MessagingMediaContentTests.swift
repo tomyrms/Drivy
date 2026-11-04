@@ -117,20 +117,34 @@ final class MessagingMediaContentTests: XCTestCase {
         }
     }
 
-    /// La borne se mesure sur le contenu Matrix encodé, pas sur le nombre de caractères.
-    func testEncodedContentIsBoundedToSixThousandBytes() throws {
+    /// Le sérialiseur brut du contenu Matrix **mesure** les octets, il ne borne rien : c'est la capacité
+    /// de chiffrement (`encryptMatrixContent`) qui refuse au-delà de 6 000 octets, avant toute ouverture
+    /// de session ou appel de relais (éprouvé dans les tests crypto). Le scénario Unicode lourd reste ici
+    /// pour montrer que la mesure se fait en octets, jamais en caractères.
+    func testContentSerialiserMeasuresTheFullContentWithoutBounding() throws {
         let ordinary = String(repeating: "a", count: 1_000)
         let heaviest = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
         XCTAssertEqual(heaviest.count, 1_000, "Mille caractères, mais bien plus d'octets une fois encodé")
         let widest = try matrixContent(MessagingPlainContent(text: ordinary,
                                                              media: try attachment(name: String(repeating: "é", count: 255))))
         XCTAssertLessThanOrEqual(widest.count, MessagingPlainContent.maximumV3ByteCount)
-        XCTAssertThrowsError(try matrixContent(MessagingPlainContent(text: heaviest, media: try attachment())))
-        // Le producteur typé refuse lui aussi un contenu au-delà du plafond, avant tout chiffrement.
-        do {
-            _ = try MessagingMediaContent.messageContent(
-                try MessagingMediaContentV3(text: heaviest, media: try attachment()), mentions: nil)
-        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        let heaviestBytes = try matrixContent(MessagingPlainContent(text: heaviest, media: try attachment()))
+        XCTAssertGreaterThan(heaviestBytes.count, MessagingPlainContent.maximumV3ByteCount,
+                             "Le sérialiseur fournit les octets au-delà du plafond : c'est la mesure, pas une garde")
+    }
+
+    /// Un v3 **connu** au-delà du plafond d'octets est un échec fermé à la lecture, même quand le JSON
+    /// Matrix est valide et que la légende respecte 1 000 caractères (diacritiques nombreux).
+    func testKnownV3ContentBeyondSixThousandBytesIsUnreadable() throws {
+        let heavy = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
+        let payload = try matrixContent(MessagingPlainContent(text: heavy, media: try attachment()))
+        XCTAssertGreaterThan(payload.count, MessagingPlainContent.maximumV3ByteCount)
+        XCTAssertEqual(MessagingMediaContent.reading(payload), .invalid)
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(payload), "Aucun média au-delà du plafond d'octets")
+        // Juste sous le plafond, le même chemin reste lisible : la borne ne refuse pas un contenu valide.
+        let under = try matrixContent(MessagingPlainContent(text: "Légende", media: try attachment()))
+        XCTAssertLessThanOrEqual(under.count, MessagingPlainContent.maximumV3ByteCount)
+        XCTAssertNotNil(MessagingPlainContent.decodeMatrixContent(under))
     }
 
     func testMediaSizeIsBoundedToOneAndFourMebibytes() throws {

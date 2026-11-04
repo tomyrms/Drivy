@@ -175,7 +175,8 @@ enum MessagingMediaContent {
     static let namespacedKey = "ch.drivy.messaging"
     static let messageType = "m.text"
     static let version = 3
-    /// Plafond du contenu v3 encodé : la borne réellement contraignante est mesurée après chiffrement.
+    /// Plafond du contenu Matrix v3 complet (mentions comprises), à l'écriture comme à la lecture.
+    /// La borne réellement contraignante du transport est mesurée après chiffrement.
     static let maximumByteCount = 6_000
     static let maximumTextLength = 1_000
 
@@ -214,7 +215,11 @@ enum MessagingMediaContent {
             return .fallbackBody(body)
         }
         guard version == Self.version else { return .fallbackBody(body) }
-        // Version connue : toute anomalie est fermée, sans exposer le JSON ni décoder d'octets.
+        // Version connue : le contenu Matrix complet reçu (mentions comprises) ne peut pas dépasser le
+        // plafond d'émission. Au-delà, échec fermé : rien n'est décodé ni exposé. La borne s'applique
+        // au contenu canonique, comme la sortie de `messageContent`, jamais au seul `body`.
+        guard bytes.count <= Self.maximumByteCount else { return .invalid }
+        // Toute autre anomalie du v3 est fermée de la même façon, sans exposer le JSON ni décoder d'octets.
         guard let data = try? JSONSerialization.data(withJSONObject: fields),
               let value = try? JSONDecoder().decode(MessagingMediaContentV3.self, from: data) else {
             return .invalid

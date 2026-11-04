@@ -53,8 +53,8 @@ struct MessagingPlainContent: Codable, Sendable, Equatable {
     var media: MessagingMediaAttachment? = nil
 
     static let version = 2
-    /// Plafond du contenu Matrix v3 média encodé (contrat §4.2). La borne réellement contraignante est
-    /// mesurée après chiffrement, sur l'enveloppe transportée, et non sur le clair.
+    /// Plafond du contenu Matrix v3 média (contrat §4.2), à l'écriture comme à la lecture. La borne
+    /// réellement contraignante du transport est mesurée après chiffrement, sur l'enveloppe produite.
     static let maximumV3ByteCount = MessagingMediaContent.maximumByteCount
 
     /// Enveloppe **applicative** (texte v1, sondage v2). Une pièce jointe n'y entre pas : elle voyage

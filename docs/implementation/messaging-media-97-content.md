@@ -106,7 +106,8 @@ c'est l'API legacy, ses octets et sa sémantique ne changent pas. `content(from:
 | contenu avec `ch.drivy.messaging` | `.matrixContent` + JSON du `content` | `decodeMatrixContent(_:)` |
 
 `decodeMatrixContent` : v3 valide → contenu + pièce jointe ; version namespacée inconnue → `body` de repli (jamais
-le JSON technique) ; v3 connu mais invalide → `nil` (échec fermé) ; octets non Matrix → `nil` (mauvais décodeur).
+le JSON technique) ; v3 connu mais invalide **ou au-delà de 6 000 octets canoniques** → `nil` (échec fermé) ; octets
+non Matrix → `nil` (mauvais décodeur).
 
 Conséquences vérifiées par les tests écrits :
 
@@ -122,7 +123,7 @@ JSON technique ; un média n'est pas encore rendu (le fil lit le `body` de repli
 
 | Borne | Valeur | Où | Sur quoi |
 |---|---|---|---|
-| contenu Matrix v3 | ≤ 6 000 octets | `encryptMatrixContent` | octets du contenu, avant chiffrement |
+| contenu Matrix v3 (écriture **et** lecture) | ≤ 6 000 octets | `encryptMatrixContent` (refus avant chiffrement) ; `MessagingMediaContent.reading` (échec fermé du v3 connu) | le contenu Matrix complet canonique, mentions comprises — jamais le seul `body` ni le nombre de caractères |
 | légende | ≤ 1 000 caractères | `MessagingMediaContentV3` | `text.count` |
 | taille de pièce | 1 … 4 194 304 octets | `MessagingMediaAttachment` | `size` |
 | nom | ≤ 255 caractères, C0/DEL/C1, U+202A–202E, U+2066–2069, séparateurs retirés | `MessagingMediaName` | nom assaini à la construction |
@@ -133,29 +134,40 @@ JSON technique ; un média n'est pas encore rendu (le fil lit le `body` de repli
 | corps d'un message ordinaire | ≤ 16 384 octets | `send`, avant `request()` | `JSONEncoder().encode(SendBody(…))` |
 | corps d'un signalement | ≤ 655 360 octets | `report`, avant `request()` | le lot complet |
 
+Le sérialiseur `MessagingMediaContent.messageContent` **ne borne rien** : il fournit les octets à mesurer. La
+garde de 6 000 octets appartient à la capacité de chiffrement (avant toute ouverture de session ou appel de
+relais) et à la lecture d'un v3 connu (échec fermé, rien n'est décodé ni exposé).
+
 Les deux bornes du transport sont vérifiées **avant** tout jeton et toute requête ; le refus laisse l'intention
 dans la file existante (comportement inchangé de `retry`, aucun succès annoncé).
 
 ## 6. Signalement (#77)
 
 - Le lot garde sa limite de corps (640 Kio) : un corps de plusieurs items au-delà de 16 Kio reste valide.
-- Chaque item respecte 12 000 caractères base64, sinon le lot est refusé avant émission.
-- `sealForSchoolAdmins` ne change pas : enveloppe et octets recopiés tels quels.
-- Un contenu v3 signalé garde son enveloppe octet pour octet ; le lecteur **typé** en retrouve les métadonnées
-  (nom, type, taille, clé de fichier), le décodeur legacy n'en fabrique jamais. Brancher la boîte de signalement
-  sur le lecteur typé relève du lot UI : ce chemin n'est pas activé ici.
+- Chaque item respecte 12 000 caractères base64, sinon le lot est refusé avant émission. Cette borne est
+  mesurée sur la sortie réelle : le payload est le JSON Matrix qui contient déjà le chiffré en base64, puis le
+  transport encode ce JSON en base64 (double expansion). Aucune longueur de clair n'est un seuil de contrat.
+- `sealForSchoolAdmins` ne change pas et **ne borne pas l'item** : il recopie l'enveloppe. Un clair trop grand
+  produit donc un item hors plafond, que la frontière `report()` refuse. Le cas nominal se vérifie sur la taille
+  produite, pas sur une estimation.
+- Un contenu v3 signalé garde son enveloppe octet pour octet ; le lecteur **typé** appelé manuellement en
+  retrouve les métadonnées (nom, type, taille, clé de fichier), le décodeur legacy n'en fabrique jamais. Aucun
+  consommateur branché (fil, boîte de signalement) n'utilise encore cette provenance : la lecture et le
+  signalement d'un média restent **non intégrés**, et l'adaptation typée de la boîte de signalement reste à
+  spécifier dans le lot UI. Aucun consommateur ne doit interpréter un ancien `body` ressemblant au v3 par
+  heuristique.
 
 ## 7. Tests écrits — **NON EXÉCUTÉS**
 
-35 méthodes de test au total dans le lot après correction, toutes écrites et relues, **aucune compilée ni exécutée**
-(aucun outil Apple sur ce poste).
+36 méthodes de test au total dans le lot après la correction 2, toutes écrites et relues, **aucune compilée ni
+exécutée** (aucun outil Apple sur ce poste).
 
 | Fichier | Cas ajoutés |
 |---|---|
-| `MessagingMediaContentTests.swift` (nouveau) | 17 : forme namespacée et `body` lisible, repli par MIME, synthèse, aller-retour par le décodeur structuré, enveloppe v2 inchangée (`text`/`poll` nuls omis), refus du média par l'enveloppe applicative, légende 1 000/1 001, contenu 6 000 (unicode lourd), taille 0/1/4 Mio/4 Mio+1/−1, MIME hors liste, nom assaini, dimensions, métadonnées crypto, version future → `body`, v3 incomplet → `nil`, décodeur structuré qui refuse des octets legacy, lookalike v3/v4 complet → texte |
+| `MessagingMediaContentTests.swift` (nouveau) | 18 : forme namespacée et `body` lisible, repli par MIME, synthèse, aller-retour par le décodeur structuré, enveloppe v2 inchangée (`text`/`poll` nuls omis), refus du média par l'enveloppe applicative, légende 1 000/1 001, sérialiseur qui **mesure** sans borner (unicode lourd), **v3 connu au-delà de 6 000 octets illisible à la lecture**, taille 0/1/4 Mio/4 Mio+1/−1, MIME hors liste, nom assaini, dimensions, métadonnées crypto, version future → `body`, v3 incomplet → `nil`, décodeur structuré qui refuse des octets legacy, lookalike v3/v4 complet → texte |
 | `MessagingThreadTests.swift` | 4 : legacy seulement, contenu Matrix par le décodeur dédié, `recoveryContent` texte inchangé, enveloppe applicative qui refuse un média |
-| `MatrixMessagingCryptographyTests.swift` | 5 : média namespacé chiffré par la capacité typée (Megolm réel, deux appareils, mentions contrôlées, aucune valeur média dans le payload), legacy/lookalike octet pour octet avec provenance `.legacyBody`, bornes après chiffrement (contenu 6 000 accepté ; 9 000 et 16 000 refusés), contenu média > 6 000 refusé avant chiffrement, extraction `plaintext`/`content` avec gardes |
-| `MatrixMessagingCryptographyTests.swift` (signalement) | 2 : enveloppe conservée et item sous 12 000, signalement d'un contenu v3 relu par le lecteur typé |
+| `MatrixMessagingCryptographyTests.swift` | 5 : média namespacé chiffré par la capacité typée (Megolm réel, deux appareils, mentions contrôlées, aucune valeur média dans le payload), legacy/lookalike octet pour octet avec provenance `.legacyBody`, bornes après chiffrement (contenu 6 000 accepté ; 9 000 et 16 000 refusés), contenu média > 6 000 refusé par `encryptMatrixContent`, extraction `plaintext`/`content` avec gardes |
+| `MatrixMessagingCryptographyTests.swift` (signalement) | 2 : mesure de l'enveloppe scellée (cas nominal sous 12 000, cas trop grand **mesuré** au-delà, refus par la frontière du transport), conservation des octets d'un contenu v3 relu par le lecteur typé appelé manuellement |
 | `MessagingHTTPTransportTests.swift` | 6 : payload 12 000 accepté / 12 004 refusé (zéro requête, zéro jeton), corps 16 Kio refusé (garde défensive), signalement de 4 items > 16 Kio accepté, item > 12 000 refusé, 50 items sous 640 Kio acceptés |
 | `MessagingCoreTests.swift` | 1 : refus fermé du média par la file existante, avant chiffrement et sans écriture |
 
@@ -163,20 +175,19 @@ dans la file existante (comportement inchangé de `retry`, aucun succès annonc�
 
 | Commande | Résultat | Code |
 |---|---|---|
-| `git rev-parse HEAD` / `git status --porcelain` | `ce3c9e09…`, arbre propre avant édition | 0 |
-| `index_repository` + `index_status` + `check_index_coverage` | projet `drivy-t2b1-contenu-97-20261104`, même racine, `ready`, 39 073 nœuds | — |
-| `detect_changes` (inbound, 2 sauts) | 265 graines, 244 symboles impactés | — |
+| `git rev-parse HEAD` / `git status --porcelain` | `7120c3a4…`, arbre propre avant édition | 0 |
+| `index_repository` + `index_status` + `check_index_coverage` | projet `drivy-t2b1-contenu-97-20261104`, même racine, `ready`, 39 105 nœuds | — |
 | `Select-String` sur `apps/api/src/messaging-routes.ts` | `max(12000)` par enveloppe, `bodyLimit: 655_360`, items 1..50 | — |
-| `Get-Command swift,xcodebuild` | **absents** | — |
-| `git diff` / `git status` après édition | diff relu, seuls les chemins autorisés modifiés | 0 |
+| `Get-Command swift,xcodebuild,xcrun` | **0 outil** | — |
+| `git diff --check` / `git diff` / `git status` après édition | aucune erreur d'espace, diff relu, seuls les chemins autorisés | 0 |
 
 ### NON EXÉCUTÉ
 
 - **Swift / Xcode / simulateur** : aucun outil Apple ici. Aucune compilation, aucun RED/GREEN, aucun GREEN.
-- **Chiffrement Megolm réel des cas v3** : écrit, non exécuté. Les deux bornes finales (12 000 base64 sur le
-  payload produit, 16 384 octets de `SendBody`) restent à **démontrer** par l'exécution Apple, pas par estimation.
-- **Le contrôle arithmétique de la passe précédente (2 949 octets pour un exemple) n'est pas une preuve** du
-  plafond de 6 000 octets ni de tous les cas Unicode : il a été retiré comme argument.
+- **Chiffrement Megolm réel des cas v3** : écrit, non exécuté. Les bornes finales (12 000 base64 sur le payload
+  produit, 16 384 octets de `SendBody`) restent à **démontrer** par l'exécution Apple, pas par estimation.
+- **Aucun calcul arithmétique n'est présenté comme mesure du SDK** : la taille d'un item de signalement dépend du
+  chiffré réel et se vérifie à l'exécution (le double encodage est seulement décrit, pas simulé).
 - **CommonCrypto / CryptoKit / Keychain** : hors lot (T2a), inchangés.
 
 ## 9. Limites, risques et écarts de périmètre
@@ -187,7 +198,10 @@ dans la file existante (comportement inchangé de `retry`, aucun succès annonc�
   Le coordinateur média/coffre et l'activation du parcours restent à faire ; aucun envoi partiel n'est activé.
 - **Aucune UI, aucun champ `media` serveur, aucun transport binaire, aucun cache, aucun coffre.**
 - **Le fil et la boîte de signalement lisent encore la forme legacy** (`decrypt` + `decode`) : un média y apparaît
-  comme son `body` de repli, jamais comme une pièce jointe. Le passage au lecteur typé est le lot UI.
+  comme son `body` de repli, jamais comme une pièce jointe ; le signalement d'un média n'est pas branché sur le
+  lecteur typé. Le passage au lecteur typé et l'adaptation de la boîte de signalement restent à spécifier (lot UI).
+- **Lecture d'un v3 connu au-delà de 6 000 octets** : échec fermé (`nil`), rien n'est décodé. Le legacy, lui, affiche
+  le `body` de repli ; aucun décodeur ne fabrique de média à partir d'un `body`.
 - **Garde de corps du message (16 Kio)** : défensive, jamais atteinte par un message conforme au schéma serveur
   (payload ≤ 12 000 + champs bornés). Elle est testée avec un cas fabriqué, signalé comme tel.
 - **Garde de corps du signalement (640 Kio)** : inatteignable avec 50 items de 12 000 caractères ; conservée comme
