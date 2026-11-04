@@ -266,7 +266,8 @@ struct SchoolInvitationCodeTests {
         await model.verify()
         #expect(model.isPending && !model.isConfirmed && store.record == pending)
         #expect(model.errorMessage == SchoolJoinFailure.unknown.codeMessage)
-        #expect(await transport.recorded().filter { $0.url?.path == "/v1/me" }.isEmpty)
+        let readsAfterVerification = await transport.recorded().filter { $0.url?.path == "/v1/me" }
+        #expect(readsAfterVerification.isEmpty)
     }
 
     @Test func aJoinTheSchoolRefusesAsInvalidIsDefinitiveAndLeavesNothingPending() async throws {

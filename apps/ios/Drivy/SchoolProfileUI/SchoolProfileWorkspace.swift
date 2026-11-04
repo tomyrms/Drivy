@@ -39,20 +39,36 @@ final class SchoolProfileWorkspace: Identifiable {
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
     private(set) var accessFailure: SchoolProfileFailure?
-    var draft = SchoolProfileDraft()
+    /// Saisie de l'accueil guidé écrite dans le coffre chiffré avant l'envoi. Une étape locale s'y lit
+    /// toujours à part de l'étape confirmée par l'école.
+    private(set) var onboardingDraft: SchoolOnboardingDraft?
+    private(set) var onboardingDraftError: String?
+    var draft = SchoolProfileDraft() {
+        didSet { onboardingDraftDidChange() }
+    }
     @ObservationIgnored private let api: any SchoolProfileAPI
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
+    @ObservationIgnored private let onboardingDraftStore: (any SchoolOnboardingDraftStore)?
+    @ObservationIgnored private let onboardingDraftDelay: Duration
+    @ObservationIgnored private var onboardingDraftTask: Task<Void, Never>?
+    @ObservationIgnored private var applyingDraft = false
+    @ObservationIgnored private var restoredOnboardingDraft = false
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private var storageAccessible = false
     @ObservationIgnored private var seenCursors: Set<String> = []
     @ObservationIgnored private var reviewGeneration = UUID()
 
     init(scope: SchoolCommandScope, roles: [String], learnerID: UUID? = nil, isOwnProfile: Bool = false,
          onboardingKind: SchoolOnboardingKind? = nil, api: any SchoolProfileAPI,
-         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {
+         outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
+         onboardingDraftStore: (any SchoolOnboardingDraftStore)? = nil,
+         onboardingDraftDelay: Duration = .milliseconds(300)) {
         self.scope = scope; self.roles = roles; self.learnerID = learnerID; self.isOwnProfile = isOwnProfile
         self.onboardingKind = onboardingKind; self.api = api; self.outbox = outbox
+        self.onboardingDraftStore = onboardingKind == nil ? nil
+            : (onboardingDraftStore ?? EncryptedSchoolOnboardingDraftStore())
+        self.onboardingDraftDelay = onboardingDraftDelay
     }
     var isPolicyManagement: Bool { learnerID == nil && onboardingKind == nil }
     var applicablePolicy: SchoolProfilePolicy? {
@@ -76,6 +92,10 @@ final class SchoolProfileWorkspace: Identifiable {
     var pendingAwaitsReview: Bool { pending != nil && !(isBusy && isFirstSend) }
     /// Enregistrement du dossier en cours, de l’envoi jusqu’à la relecture qui en applique la réponse.
     var isSavingProfile: Bool { isBusy || (isLoading && isReplacingDraft) }
+    /// Une saisie protégée de l’accueil attend d’être reprise ; elle ne vaut jamais validation d’une étape.
+    var hasOnboardingDraft: Bool { onboardingDraft != nil }
+    /// Étape atteinte localement, distincte de `onboarding?.currentStep` confirmé par l’école.
+    var onboardingLocalStep: SchoolOnboardingStep? { onboardingDraft?.step }
     /// Champs écrits en accès complet (`drivy.profile_access` = FULL).
     static let fullAccessFields: Set<SchoolProfileField> = [.firstName, .lastName, .birthDate, .postalAddress, .contactEmail, .contactPhone]
     /// Champs écrits par le moniteur affecté (CONTACT) : le serveur refuse tout autre champ par un 403.
@@ -137,7 +157,8 @@ final class SchoolProfileWorkspace: Identifiable {
 
     func invalidate() {
         generation = UUID(); invalidated = true; school = nil; policies = []; notice = nil; profile = nil
-        onboarding = nil; readiness = nil; pending = nil; nextCursor = nil; draft = SchoolProfileDraft()
+        onboarding = nil; readiness = nil; pending = nil; nextCursor = nil; setDraft(SchoolProfileDraft())
+        onboardingDraftTask?.cancel(); onboardingDraft = nil; onboardingDraftError = nil
         errorMessage = nil; successMessage = nil; isLoading = false; isBusy = false; storageAccessible = false
         reviewGeneration = UUID(); publicationNotice = nil; reviewingPolicyID = nil; isLoadingPublication = false
         isFirstSend = false; isReplacingDraft = false
@@ -186,7 +207,7 @@ final class SchoolProfileWorkspace: Identifiable {
                         remoteChanges[key].map { $0 != value } ?? false
                     }
                     if !hasProfileConflict {
-                        draft = draft.rebased(on: profile, changedKeys: Set(edits.keys))
+                        setDraft(draft.rebased(on: profile, changedKeys: Set(edits.keys)))
                         self.profile = profile
                     }
                     let readiness = try await api.readiness(schoolID: scope.schoolID, learnerID: learnerID, action: "ENTER")
@@ -216,6 +237,9 @@ final class SchoolProfileWorkspace: Identifiable {
                     guard request == generation else { return }; self.notice = notice
                 }
             }
+            // Première lecture de l’accueil : le brouillon protégé, s’il est encore à la bonne version, revient.
+            // Une relecture ultérieure garde la saisie en mémoire, plus récente que le coffre.
+            restoreOnboardingDraftIfNeeded()
             isLoading = false; isReplacingDraft = false; needsReload = hasProfileConflict
             errorMessage = hasProfileConflict
                 ? "Ces informations ont changé dans l’école pendant ta saisie. Ton brouillon est conservé. Recharge les informations avant de les modifier à nouveau."
@@ -281,6 +305,8 @@ final class SchoolProfileWorkspace: Identifiable {
     @discardableResult
     func saveProfileAfterConfirmation() async -> Bool {
         guard canSaveProfile, let profile, let policy = applicablePolicy else { return false }
+        // Le geste protège d’abord la saisie courante, puis la demande exacte part dans la file.
+        persistOnboardingDraft(step: onboarding?.currentStep)
         let id = UUID()
         var payload = draft.changes(from: profile, allowed: editableFields)
         payload["operationId"] = .text(id.uuidString); payload["policyVersionId"] = .text(policy.id.uuidString)
@@ -292,6 +318,8 @@ final class SchoolProfileWorkspace: Identifiable {
     @discardableResult
     func saveOnboarding(step: SchoolOnboardingStep, skipping passed: Set<String>) async -> Bool {
         guard canMutate, let onboarding, onboarding.status != "COMPLETED" else { return false }
+        // L’étape atteinte ici est protégée avant l’émission, sans jamais valoir confirmation de l’école.
+        persistOnboardingDraft(step: step)
         let id = UUID()
         let skipped = ["PHOTO", "NOTIFICATIONS", "DEVICE"].filter {
             onboarding.skippedOptionalSteps.contains($0) || passed.contains($0)
@@ -319,6 +347,7 @@ final class SchoolProfileWorkspace: Identifiable {
             pending = nil; pendingRequiresReview = false; isBusy = false
             successMessage = "La demande a été confirmée par l’école."
             await load(preserveDraft: false)
+            reconcileOnboardingDraft(after: command)
         } catch {
             guard request == generation else { return }; isBusy = false
             if error as? SchoolProfileFailure == .operationUnknown { absentPendingID = command.id; errorMessage = nil }
@@ -333,6 +362,19 @@ final class SchoolProfileWorkspace: Identifiable {
         catch { storageAccessible = false; fail(error); return }
         pending = nil; absentPendingID = nil; pendingRequiresReview = false; errorMessage = nil
         await load()
+    }
+    /// Abandon explicite du brouillon d’accueil : les champs reviennent à ceux de l’école, rien n’est envoyé.
+    func abandonOnboardingDraft() {
+        guard onboardingKind != nil else { return }
+        clearOnboardingDraft(discardingUnreadable: true)
+        setDraft(profile.map { SchoolProfileDraft($0) } ?? SchoolProfileDraft())
+    }
+    /// Déconnexion : le brouillon quitte l’appareil avec les autres intentions du compte.
+    /// Le coffre est déjà scopé par compte, école, adhésion et époque : aucun autre compte ne peut le lire.
+    func purgeOnboardingDraft() {
+        guard onboardingKind != nil else { return }
+        clearOnboardingDraft(discardingUnreadable: true)
+        setDraft(profile.map { SchoolProfileDraft($0) } ?? SchoolProfileDraft())
     }
     private func prepare<Value: Encodable>(_ payload: Value, id: UUID, kind: SchoolCommandKind,
         resourceID: UUID?, version: Int, routeID: UUID? = nil, expectedVersion: Int? = nil) async -> Bool {
@@ -359,6 +401,7 @@ final class SchoolProfileWorkspace: Identifiable {
             pending = nil; pendingRequiresReview = false; isBusy = false
             successMessage = "Modification confirmée par l’école."
             await load(preserveDraft: command.kind != .updateProfile)
+            reconcileOnboardingDraft(after: command)
             return true
         } catch {
             if let failure = error as? SchoolProfileFailure, failure.permitsFreshCorrection {
@@ -385,6 +428,99 @@ final class SchoolProfileWorkspace: Identifiable {
         default: return false
         }
     }
+    private func setDraft(_ value: SchoolProfileDraft) {
+        applyingDraft = true
+        draft = value
+        applyingDraft = false
+    }
+    private func onboardingDraftDidChange() {
+        guard onboardingKind != nil, !applyingDraft, !isLoading, !isBusy, !invalidated,
+              let onboarding, profile != nil else { return }
+        scheduleOnboardingDraftSave(step: onboardingDraft?.step ?? onboarding.currentStep)
+    }
+    /// La frappe est groupée : la dernière valeur significative est écrite, pas chaque caractère.
+    private func scheduleOnboardingDraftSave(step: SchoolOnboardingStep?) {
+        onboardingDraftTask?.cancel()
+        let delay = onboardingDraftDelay
+        if delay == .zero { persistOnboardingDraft(step: step); return }
+        onboardingDraftTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled, let self else { return }
+            self.persistOnboardingDraft(step: step)
+        }
+    }
+    /// Écrit la saisie et l’étape atteinte localement ; sans rien à reprendre, efface le brouillon.
+    private func persistOnboardingDraft(step: SchoolOnboardingStep?) {
+        guard !invalidated, let onboardingKind, let onboarding,
+              let store = onboardingDraftStore else { return }
+        onboardingDraftTask?.cancel()
+        let confirmed = onboarding.currentStep
+        let localStep = step ?? onboardingDraft?.step ?? confirmed
+        let base = profile.map { SchoolOnboardingDraftFields(SchoolProfileDraft($0)) } ?? SchoolOnboardingDraftFields()
+        let edited = SchoolOnboardingDraftFields(draft)
+        let changes = profile.map { draft.changes(from: $0, allowed: editableFields) } ?? [:]
+        guard !changes.isEmpty || localStep != confirmed else {
+            clearOnboardingDraft(discardingUnreadable: false)
+            return
+        }
+        let value = SchoolOnboardingDraft(onboardingID: onboarding.id, version: onboarding.version,
+            base: base, edited: edited, step: localStep, savedAt: Date())
+        do {
+            try store.save(value, scope: scope, kind: onboardingKind)
+            onboardingDraft = value; onboardingDraftError = nil
+        } catch {
+            // Aucun repli en clair : la saisie n’est pas protégée, on le dit sans bloquer l’école.
+            onboardingDraftError = SchoolConfigurationFailure.storage.localizedDescription
+        }
+    }
+    private func clearOnboardingDraft(discardingUnreadable: Bool) {
+        onboardingDraftTask?.cancel()
+        onboardingDraft = nil
+        guard let onboardingKind, let store = onboardingDraftStore else { return }
+        do {
+            try store.remove(scope: scope, kind: onboardingKind, discardingUnreadable: discardingUnreadable)
+            onboardingDraftError = nil
+        }
+        catch { onboardingDraftError = SchoolConfigurationFailure.storage.localizedDescription }
+    }
+    /// Première lecture de l’accueil : le brouillon revient s’il porte encore la version confirmée.
+    /// Une version différente signifie que l’école a avancé : rien ne se réapplique, rien n’est inventé.
+    private func restoreOnboardingDraftIfNeeded() {
+        guard !restoredOnboardingDraft, let onboardingKind, let onboarding,
+              let store = onboardingDraftStore else { return }
+        do {
+            guard let value = try store.read(scope: scope, kind: onboardingKind) else {
+                restoredOnboardingDraft = true
+                return
+            }
+            restoredOnboardingDraft = true
+            guard value.onboardingID == onboarding.id, value.version == onboarding.version else {
+                clearOnboardingDraft(discardingUnreadable: false)
+                return
+            }
+            if let profile {
+                setDraft(value.edited.applying(to: SchoolProfileDraft(profile), base: value.base, allowed: editableFields))
+            }
+            onboardingDraft = value; onboardingDraftError = nil
+        } catch {
+            // Coffre momentanément illisible : la prochaine lecture réessaie, rien n'est inventé.
+            onboardingDraftError = SchoolConfigurationFailure.storage.localizedDescription
+        }
+    }
+    /// Réponse de l’école : ce qui vient d’être confirmé quitte le brouillon ; une saisie encore non
+    /// envoyée reste, portée par l’étape désormais confirmée.
+    private func reconcileOnboardingDraft(after command: PendingSchoolCommand) {
+        guard onboardingKind != nil else { return }
+        switch command.kind {
+        case .completeOnboarding:
+            clearOnboardingDraft(discardingUnreadable: true)
+        case .updateProfile, .saveOnboarding:
+            if onboarding?.status == "COMPLETED" { clearOnboardingDraft(discardingUnreadable: true) }
+            else { persistOnboardingDraft(step: onboarding?.currentStep) }
+        default:
+            break
+        }
+    }
     private func validate(_ page: SchoolPage<SchoolProfilePolicy>) throws {
         guard page.items.allSatisfy({ SchoolProfileClient.valid($0, schoolID: scope.schoolID) }),
               Set(page.items.map(\.id)).count == page.items.count else { throw SchoolProfileFailure.invalidResponse }
@@ -394,7 +530,7 @@ final class SchoolProfileWorkspace: Identifiable {
         errorMessage = error is SchoolConfigurationFailure ? error.localizedDescription : (failure ?? .unavailable).localizedDescription
         if failure == .unauthorized || failure == .forbidden || failure == .notFound {
             generation = UUID(); school = nil; policies = []; profile = nil; notice = nil; readiness = nil; onboarding = nil
-            draft = SchoolProfileDraft(); storageAccessible = false; isLoading = false; isBusy = false; nextCursor = nil
+            setDraft(SchoolProfileDraft()); storageAccessible = false; isLoading = false; isBusy = false; nextCursor = nil
             hasProfileConflict = false
             isReplacingDraft = false
             accessFailure = failure

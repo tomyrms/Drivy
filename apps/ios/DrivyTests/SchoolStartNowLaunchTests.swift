@@ -50,7 +50,8 @@ import Testing
         launch.launch()
         #expect(launch.launches == 0)
         #expect(await transport.readCount() == 1)
-        #expect(await server.requests().filter { $0.httpMethod == "POST" }.isEmpty)
+        let postedRequests = await server.requests().filter { $0.httpMethod == "POST" }
+        #expect(postedRequests.isEmpty)
     }
 
     @Test func anUnknownPolicyNeverFallsBackToLegacy() async throws {

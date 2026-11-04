@@ -652,3 +652,87 @@ bloqué par le début d’une leçon d’un autre écran).
 
 **Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Ces tests doivent être lancés sur un
 runner Apple (et l’IPA construite) avant de considérer la tâche qualifiée.
+
+## Blocages levés (tâche 5) : deux séries de cours ensemble, la même série ordonnée
+
+Réalisation de la proposition 5 de la section 5, avec la méthode des tâches 1 à 4 : **la barrière de la fiche est la
+règle d’admission du coffre**, et un agrégat que le coffre ne peut pas nommer garde la paire séquentielle. Aucune route,
+aucun envoi, aucune idempotence, aucun droit, aucun format persisté et aucun texte ne change ; l’écran des cours n’est
+pas modifié.
+
+### Mécanisme
+
+`SchoolAgendaAPI/SchoolCourseIntentStore.swift` : `SchoolCourseLearnerLane` décrit ce qu’un geste de l’élève **lit ou
+écrit réellement** côté API. Deux gestes conservés du même compte ne cohabitent que si :
+
+- ils ne visent pas la **même série** — c’est l’agrégat « place, file d’attente, version d’inscription » ;
+- ils ne lisent ni ne changent pas l’**obligation de formation de l’élève**. Cette clé vaut `unknown` : le coffre ne
+  porte pas le type du cours, donc aucune disjonction n’est prouvée et la paire attend, comme une empreinte inconnue de
+  la tâche 4.
+
+La règle est appliquée par les deux implémentations de `SchoolCourseIntentStoring.replace` (coffre chiffré et coffre en
+mémoire) : le second geste reçoit `SchoolConfigurationFailure.pendingCommand` et **rien n’est retiré du coffre** avant ce
+contrôle. `SchoolCourseLearnerWorkspace.keep` rend le message déjà utilisé pour ce refus (« Une demande attend encore sa
+confirmation. Vérifie son résultat avant une autre modification. ») au lieu de « Cet appareil ne peut pas conserver ce
+geste », qui aurait été faux : l’appareil conserve très bien l’autre geste. Le message d’une panne de stockage reste
+`SchoolCourseIntentPersistence.unkeptMessage`.
+
+Le coffre ne change pas de format : `SchoolCourseLearnerRecord` garde ses champs, `hasValidTarget` est inchangé, et une
+file valide reste valide (`blocksQueueEntry` n’est pas modifié). Les gestes de la **feuille** d’un cours
+(`courseSheetIntent`, une voie par inscription) et de l’**éditeur** (`courseEditorIntent`) restent hors de cette règle :
+ils ne sont jamais retenus par un geste de l’élève.
+
+### Paires desserrées, avec preuve côté API
+
+| Paire | Preuve (fichier:ligne) | Version, verrou ou agrégat |
+|---|---|---|
+| Un **geste d’inscription** de l’élève sur une série et le **retrait de la file** ou le **refus d’une place** d’une autre série | `apps/api/src/course-enrollments.ts:160-168`, `:199-208` (inscription, acceptation) contre `migrations/043_course_enrollment_waitlist_cancellation.sql:165-176` (`course_leave_waitlist`) et `:189-201` (`course_decline_offer`) | Les deux derniers ne lisent pas `drivy.course_learner_admissible` (`:21-32`), n’écrivent que les lignes de **leur** série (`course_seat_offer`, `course_waitlist_entry`) et avancent **leur** file ; aucune version, aucune place, aucune occupation commune |
+| Deux **retraits de file** ou deux **refus de place** de deux séries distinctes | `043:165-176`, `:189-201` | Chacun verrouille sa série (`:168`, `:195`) et ne touche que ses propres lignes ; deux séries distinctes n’ont ni ligne, ni compteur, ni version commune |
+| Un geste d’une série et un geste d’une **autre école, compte ou API** | `SchoolCommandScope.belongsToWorkspace` (portée) | Le coffre ne compare que les gestes de la même portée |
+
+### Ce qui reste séquentiel, avec preuve
+
+| Paire gardée | Preuve (fichier:ligne) | Pourquoi la paire attend |
+|---|---|---|
+| Deux gestes sur la **même série** (place, file d’attente, désinscription) | Verrou `FOR UPDATE` de la série : `043:47` (`course_queue_advance`), `:149` (`course_join_waitlist`), `:168` (`course_leave_waitlist`), `:183` (`course_accept_offer`), `:195` (`course_decline_offer`), `:212` (`course_cancel_enrollment`) ; version d’inscription : `course-enrollments.ts:220-223` (`If-Match` puis `checkVersion(row.version)`) | Toutes les routes de la série se disputent la même ligne de série et les mêmes places (`course_seats_taken`, `043:129`, `:159`), la même file et les mêmes propositions (`:135-138`, `:197-199`) ; la désinscription vérifie en plus la version de l’**inscription** (`:216-224`) — c’est la paire « même série, même version d’inscription » du registre |
+| Deux gestes d’**inscription, file ou acceptation** de deux séries distinctes, et une **désinscription** de n’importe quelle série | `043:21-32` (`drivy.course_learner_admissible` : inscription active dans une autre série **publiée du même type**, cours du même type déjà effectué) lu par `:122` (inscription), `:157` (file), `:187` (acceptation), changé par `:223-224` (désinscription) | L’obligation de formation de l’élève est un seul agrégat. Le coffre ne porte pas `type_id` : deux gestes qui la lisent ou la changent peuvent viser le même type, donc la paire attend. Sans ce desserrement-là, l’inscription aux deux séries du même type partait deux fois et la seconde était refusée `409 COURSE_EQUIVALENT_ENROLLED` (`course-enrollments.ts:29`) |
+| Deux gestes qui prennent une **occupation d’agenda** de l’élève (inscription, acceptation) sur deux séries distinctes | `043:90-95` (`course_occupy_learner`), exclusion `migrations/006_lessons.sql:50` (`EXCLUDE USING gist(school_id WITH =, resource_id WITH =, during WITH &&) WHERE(active)`) | Les séances de deux séries peuvent se recouvrir ; le coffre ne porte pas les horaires. La paire est déjà séquentielle par l’obligation de formation (les deux gestes la lisent) : aucune clé supplémentaire n’est donc nécessaire |
+
+### Ce que le desserrement ne couvre pas
+
+- **Une désinscription en attente face à une inscription d’une autre série** : la désinscription libère des occupations
+  (`043:225`, `:97-98`), et l’inscription peut être refusée `409` si la libération n’a pas encore eu lieu. C’est un refus
+  métier affiché, jamais une saisie perdue — même limite assumée qu’à la tâche 4 pour une prise d’occupation.
+- **Deux inscriptions de deux types différents** restent séquentielles : le coffre ne stocke pas le type du cours. Les
+  desserrer demanderait d’écrire `type_id` dans `SchoolCourseLearnerRecord`, donc de changer le format persisté — hors de
+  cette tâche, et à faire avec une migration de `pending-v1.bin`.
+- Le **refus de la place proposée** est précédé de sa confirmation dans la fiche (`SchoolCourseRelease.isCurrent`) ; rien
+  ne change de ce côté.
+
+### Fiche par fiche
+
+| Fichier:ligne | Barrière | Levé | Gardé |
+|---|---|---|---|
+| `SchoolAgendaUI/SchoolCourseEnrollmentWorkspace.swift:242-260` (`submit`, source unique : une fiche par série, `details[seriesID]`) et `:324-334` (`restoreKeptRequest`, un geste par série) | `pending == nil` pour **cette** série, puis la règle du coffre (`SchoolCourseLearnerLane`) | inscription / file / acceptation / désinscription d’une **autre** série : retrait de file et refus de place | même série, obligation de formation du même type, panne de stockage (rien ne part), geste d’une autre époque |
+
+Deux séries envoient donc ensemble **dès maintenant sans changement d’écran** : chaque série a sa fiche et son
+`pending`, et le coffre accepte les deux gestes tant que leurs agrégats sont disjoints.
+
+### Vérification
+
+`apps/ios/DrivyTests/SchoolCourseIntentPersistenceTests.swift`, ajouts de la tâche 5 :
+
+- `theVaultAdmitsOneLearnerGesturePerCourse` : le coffre garde un geste par série, accepte un retrait de file d’une
+  autre série, refuse un second geste de la même série ;
+- `twoCoursesTakeTheirGesturesTogether` : deux fiches de deux séries, inscription + retrait de file, les deux opérations
+  sont conservées et parties ;
+- `theSameCourseKeepsOneGestureAtATime` : deuxième fiche de la même série refusée avec le message d’attente, double
+  appui dans la même fiche sans second geste ;
+- `twoEnrolmentsWaitForTheLearnerTrainingObligation` : deux inscriptions de deux séries, la seconde attend (type inconnu) ;
+- `aStoppedGestureStillHoldsItsCourse` : un geste laissé par une session précédente revient « non confirmé », garde sa
+  série, n’est jamais renvoyé seul, et une autre série part sans l’attendre ;
+- `theEncryptedVaultKeepsTheSameCourseRule` : la même règle dans le coffre chiffré (deux séries ensemble, même série
+  refusée).
+
+**Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Ces tests doivent être lancés sur un
+runner Apple (et l’IPA construite) avant de considérer la tâche qualifiée.

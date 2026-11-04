@@ -189,7 +189,7 @@ import UIKit
     /// Fin du geste, une seule fois : l’écran d’origine se relit.
     @ObservationIgnored var onFinished: @MainActor () -> Void = {}
     @ObservationIgnored private var preparation: SchoolCapturePreparationWorkspace?
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private var completed = false
     @ObservationIgnored private var policyRequest = UUID()
 

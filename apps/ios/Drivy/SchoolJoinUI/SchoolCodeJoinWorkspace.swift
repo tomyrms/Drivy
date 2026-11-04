@@ -22,7 +22,7 @@ import Observation
     @ObservationIgnored private var principal: SchoolJoinPrincipal?
     @ObservationIgnored private var previewedCode: String?
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(client: SchoolJoinClient, store: (any SchoolCodeJoinStore)? = nil, accessClient: SchoolAccountClient? = nil) {
         self.client = client

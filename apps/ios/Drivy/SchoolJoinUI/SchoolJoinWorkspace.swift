@@ -18,7 +18,7 @@ import Observation
     @ObservationIgnored private var principal: SchoolJoinPrincipal?
     @ObservationIgnored private var previewToken: String?
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(client: SchoolJoinClient, link: String? = nil, journal: (any SchoolJoinStore)? = nil) {
         self.client = client; self.link = link ?? ""

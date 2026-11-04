@@ -100,7 +100,7 @@ struct SchoolReplayRetryBudget {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private let now: @Sendable () -> TimeInterval
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private let cache: SchoolReplayCache?
     var isInvalidated: Bool { invalidated }
 
