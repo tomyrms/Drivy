@@ -6,6 +6,8 @@ import { seedFixtures, fixtureIds } from '../apps/api/scripts/fixtures.js';
 import { registerMessaging } from '../apps/api/src/messaging-routes.js';
 import { registerMessagingKeys } from '../apps/api/src/messaging-keys-routes.js';
 import { ApiError } from '../apps/api/src/errors.js';
+import { mediaFixtureIds, mediaFixtureSubjects, mediaReadinessFixture, seedMessagingMediaFixtures }
+  from './qualification/messaging-media-fixtures.mjs';
 
 /** Test-only bootstrap. Never import into the deployed API composition. */
 export function qualificationConfig(env: Record<string, string | undefined>) {
@@ -23,7 +25,30 @@ export function qualificationConfig(env: Record<string, string | undefined>) {
 }
 
 export async function startQualificationRelay() {
-  const config = qualificationConfig(process.env);
+  const { app, pool, config, close: closeResources } = await buildQualificationRelay(process.env);
+  try {
+    await app.listen({ host: '127.0.0.1', port: config.port });
+  } catch {
+    await closeResources();
+    throw new Error('RELAY_QUALIFICATION_START_FAILED');
+  }
+  let closed = false;
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    await app.close();
+    await pool.end();
+  };
+  return { close };
+}
+
+/**
+ * Construction seule, sans écoute : même configuration, mêmes gardes, mêmes fixtures et
+ * mêmes routes que le serveur TLS. Réservée à la qualification Node, qui injecte des
+ * requêtes dans l'instance Fastify (le serveur HTTPS jetable reste lancé par le harnais iOS).
+ */
+export async function buildQualificationRelay(env: Record<string, string | undefined>) {
+  const config = qualificationConfig(env);
   // Read TLS inputs BEFORE the destructive, explicitly opted-in fixture reset.
   const cert = await readFile(config.certificate);
   const key = await readFile(config.key);
@@ -33,7 +58,10 @@ export async function startQualificationRelay() {
   try {
     // Canonical fixture IDs and relationships. Adds this synthetic issuer only.
     await seedFixtures(pool, issuer);
-    const accepted = new Set(['demo-instructor', 'demo-alice', 'demo-admin']);
+    // École et comptes média strictement distincts : jamais les identités du harnais texte.
+    await seedMessagingMediaFixtures(pool, issuer);
+    const accepted = new Set(['demo-instructor', 'demo-alice', 'demo-admin',
+      mediaFixtureSubjects.instructor, mediaFixtureSubjects.learner, mediaFixtureSubjects.foreign]);
     const verifyToken = async (authorization?: string) => {
       const subject = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
       if (!accepted.has(subject)) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Connexion requise.');
@@ -48,9 +76,17 @@ export async function startQualificationRelay() {
     registerMessagingKeys(app, { pool, verifyToken, mode: 'test-synthetic' });
     app.get('/qualification/ready', async () => ({
       ready: true, fixture: 'drivy-messaging-relay-v1',
-      schoolId: fixtureIds.schoolA, adminId: fixtureIds.admin, instructorId: fixtureIds.instructor, learnerId: fixtureIds.alice
+      schoolId: fixtureIds.schoolA, adminId: fixtureIds.admin, instructorId: fixtureIds.instructor, learnerId: fixtureIds.alice,
+      // Champs additionnels média : les consommateurs historiques lisent les précédents sans changement.
+      media: {
+        fixture: mediaReadinessFixture,
+        schoolId: mediaFixtureIds.school,
+        instructorId: mediaFixtureIds.instructor,
+        learnerId: mediaFixtureIds.learner,
+        foreignSchoolId: mediaFixtureIds.foreignSchool,
+        foreignId: mediaFixtureIds.foreign
+      }
     }));
-    await app.listen({ host: '127.0.0.1', port: config.port });
   } catch {
     await app.close();
     await pool.end();
@@ -63,7 +99,7 @@ export async function startQualificationRelay() {
     await app.close();
     await pool.end();
   };
-  return { close };
+  return { app, pool, config, close };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
