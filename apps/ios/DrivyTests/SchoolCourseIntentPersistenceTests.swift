@@ -197,6 +197,145 @@ import Testing
         #expect(broken.action == nil)
     }
 
+    // MARK: Gestes de l'élève : deux séries ensemble, la même série à la fois (#106, tâche 5)
+
+    /// Le coffre décide, comme la fiche : un geste d'élève par série, deux séries distinctes ensemble (#106, tâche 5).
+    @Test func theVaultAdmitsOneLearnerGesturePerCourse() throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let other = UUID(uuidString: "44444444-4444-4444-8444-444444444444")!
+        let enroll = try SchoolCourseLearnerRecord(action: .enroll, operation: UUID())
+            .command(scope: scope(), seriesID: seriesID, createdAt: Date())
+        try store.replace(nil, with: enroll)
+        // Le retrait de la file ne lit ni ne change l'obligation de formation de l'élève : il part avec l'inscription
+        // d'une autre série (043_course_enrollment_waitlist_cancellation.sql:174).
+        let leaving = try SchoolCourseLearnerRecord(action: .leaveWaitlist, operation: UUID())
+            .command(scope: scope(), seriesID: other, createdAt: Date())
+        try store.replace(nil, with: leaving)
+        #expect(try store.commands(scope: scope()).count == 2)
+        // Même série : la place, la file et la version d'inscription se suivent, le second geste n'entre pas.
+        let waiting = try SchoolCourseLearnerRecord(action: .joinWaitlist, operation: UUID())
+            .command(scope: scope(), seriesID: seriesID, createdAt: Date())
+        #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.replace(nil, with: waiting) }
+        #expect(try store.commands(scope: scope(), seriesID: seriesID).map(\.id) == [enroll.id])
+    }
+
+    /// Deux séries de deux fiches différentes : la première ne retient pas la seconde.
+    @Test func twoCoursesTakeTheirGesturesTogether() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let persistence = SchoolCourseIntentPersistence(store: store, scope: scope())
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseOfflineTransport())
+        let other = UUID(uuidString: "44444444-4444-4444-8444-444444444444")!
+        let first = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        let second = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: other, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        first.submit(.enroll)
+        second.submit(.leaveWaitlist)
+        let left = try #require(try store.commands(scope: scope(), seriesID: seriesID).first)
+        let right = try #require(try store.commands(scope: scope(), seriesID: other).first)
+        #expect(left.id == first.pending?.operation && right.id == second.pending?.operation)
+        #expect(left.id != right.id && left.routeResourceID == seriesID && right.routeResourceID == other)
+    }
+
+    /// Même série : rouvrir la fiche ne double pas le geste, et un second appui n'en ajoute pas.
+    @Test func theSameCourseKeepsOneGestureAtATime() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let persistence = SchoolCourseIntentPersistence(store: store, scope: scope())
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseOfflineTransport())
+        let first = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        first.submit(.enroll)
+        let operation = try #require(first.pending?.operation)
+        #expect(try store.commands(scope: scope(), seriesID: seriesID).map(\.id) == [operation])
+
+        // Une autre fiche de la même série : le coffre refuse, la première demande attend encore sa réponse.
+        let reopened = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        reopened.submit(.joinWaitlist)
+        #expect(reopened.pending == nil && !reopened.isBusy)
+        #expect(reopened.errorMessage == SchoolConfigurationFailure.pendingCommand.errorDescription)
+        // Double appui dans la même fiche : une seule demande.
+        first.submit(.joinWaitlist)
+        #expect(first.pending?.operation == operation)
+        #expect(try store.commands(scope: scope(), seriesID: seriesID).map(\.id) == [operation])
+    }
+
+    /// Deux séries du même type de cours : l'obligation de formation de l'élève est un seul agrégat
+    /// (`course_learner_admissible`, 043:21-32), et le type du cours n'est pas dans le coffre ; le second geste attend.
+    @Test func twoEnrolmentsWaitForTheLearnerTrainingObligation() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let persistence = SchoolCourseIntentPersistence(store: store, scope: scope())
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseOfflineTransport())
+        let other = UUID(uuidString: "44444444-4444-4444-8444-444444444444")!
+        let first = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        let second = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: other, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        first.submit(.enroll)
+        let operation = try #require(first.pending?.operation)
+        second.submit(.enroll)
+        #expect(second.pending == nil)
+        #expect(second.errorMessage == SchoolConfigurationFailure.pendingCommand.errorDescription)
+        #expect(try store.commands(scope: scope(), seriesID: other).isEmpty)
+        #expect(try store.commands(scope: scope()).map(\.id) == [operation])
+    }
+
+    /// Un geste laissé par une session précédente garde son cours : la même série l'attend, l'autre série part.
+    @Test func aStoppedGestureStillHoldsItsCourse() async throws {
+        let store = SchoolCourseIntentMemoryStore()
+        let persistence = SchoolCourseIntentPersistence(store: store, scope: scope())
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(),
+            transport: CourseOfflineTransport())
+        let offer = UUID(uuidString: "66666666-6666-4666-8666-666666666666")!
+        let stopped = try SchoolCourseLearnerRecord(action: .accept(offerID: offer), operation: UUID())
+            .command(scope: scope(), seriesID: seriesID, createdAt: Date())
+        try store.replace(nil, with: stopped)
+
+        let reopened = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        reopened.restoreKeptRequest()
+        #expect(reopened.pending?.operation == stopped.id)
+        #expect(reopened.pending?.state == SchoolCourseLearnerPending.State.uncertain(SchoolCourseIntentPersistence.restoredMessage))
+
+        // La même série attend la reprise de ce geste, sans en ajouter un second.
+        let duplicate = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: seriesID, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        duplicate.submit(.leaveWaitlist)
+        #expect(duplicate.pending == nil)
+        #expect(try store.commands(scope: scope(), seriesID: seriesID).map(\.id) == [stopped.id])
+
+        // Une autre série part sans attendre.
+        let other = UUID(uuidString: "44444444-4444-4444-8444-444444444444")!
+        let elsewhere = SchoolCourseLearnerWorkspace(schoolID: schoolID, seriesID: other, timeZone: "Europe/Zurich",
+            client: client, persistence: persistence)
+        elsewhere.submit(.leaveWaitlist)
+        #expect(elsewhere.pending != nil)
+        // Rien n'est renvoyé de soi-même : la reprise reste au geste de la personne.
+        #expect(try store.commands(scope: scope(), seriesID: seriesID).count == 1)
+    }
+
+    /// Le coffre chiffré applique la même règle que le coffre en mémoire.
+    @Test func theEncryptedVaultKeepsTheSameCourseRule() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("course-lanes-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = EncryptedSchoolCourseIntentStore(directory: directory, keyData: Data(repeating: 9, count: 32))
+        let other = UUID(uuidString: "44444444-4444-4444-8444-444444444444")!
+        let enroll = try SchoolCourseLearnerRecord(action: .enroll, operation: UUID())
+            .command(scope: scope(epoch: 1), seriesID: seriesID, createdAt: Date())
+        try store.replace(nil, with: enroll)
+        let leaving = try SchoolCourseLearnerRecord(action: .leaveWaitlist, operation: UUID())
+            .command(scope: scope(epoch: 1), seriesID: other, createdAt: Date())
+        try store.replace(nil, with: leaving)
+        #expect(try store.commands(scope: scope(epoch: 1)).count == 2)
+        let waiting = try SchoolCourseLearnerRecord(action: .joinWaitlist, operation: UUID())
+            .command(scope: scope(epoch: 1), seriesID: seriesID, createdAt: Date())
+        #expect(throws: SchoolConfigurationFailure.pendingCommand) { try store.replace(nil, with: waiting) }
+        #expect(try store.commands(scope: scope(epoch: 1), seriesID: seriesID).map(\.id) == [enroll.id])
+    }
+
     // MARK: Éditeur de cours (#127)
 
     private func editor(_ transport: any SchoolHTTPTransport, store: SchoolCourseIntentMemoryStore) -> SchoolCourseEditorWorkspace {
