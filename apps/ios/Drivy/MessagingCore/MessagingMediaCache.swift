@@ -19,10 +19,22 @@ import UniformTypeIdentifiers
 /// AES-GCM et de l'AAD qui lie version, scope, identité média et genre.
 ///
 /// Règle de cohérence de cette première livraison : **un fichier qu'aucun index valide ne
-/// référence n'est jamais servi**. Il est nettoyé de façon contrôlée (l'échec du nettoyage est
-/// propagé). Un index manquant alors que des fichiers scellés existent n'est donc **pas** un
-/// cache vide : les fichiers non référencés sont écartés, jamais adoptés. L'index n'est pas une
-/// source de vérité et ne reconstruit aucun contenu : un fichier purgé n'est jamais ressuscité.
+/// référence n'est jamais servi**. Deux situations distinctes :
+///
+/// - index valide présent : un fichier sans entrée est un orphelin, nettoyé de façon contrôlée
+///   (échec propagé) — la clé a déjà été validée par la lecture de l'index ;
+/// - index **absent** alors que des fichiers scellés existent : état incohérent, **erreur
+///   fermée**. Aucun fichier n'est servi, adopté ni nettoyé, et aucune clé n'est recréée. La
+///   seule sortie est `purgeAll`, explicite ; il n'y a aucun rétablissement implicite du cache.
+///
+/// L'index n'est pas une source de vérité et ne reconstruit aucun contenu : un fichier purgé
+/// n'est jamais ressuscité.
+///
+/// Confinement : l'**ancre de confiance** (Application Support, ou répertoire fourni par la
+/// factory de test) peut voir ses préfixes système légitimes canonisés une fois (`/var` →
+/// `/private/var`). Les composants **possédés** sous cette ancre — la racine du cache puis le
+/// répertoire du scope — ne sont jamais canonisés : s'ils existent comme lien ou comme fichier,
+/// la construction échoue avant toute création, protection ou écriture.
 ///
 /// Aucune politique de conservation, aucune TTL, aucune purge automatique : le plafond de
 /// 50 Mio par scope est une **garde de ressources réversible**, pas une règle d'exploitation.
@@ -145,52 +157,73 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
 
     private let expectedScope: MessagingScope
     private let fingerprint: String
-    /// Racine **canonique** : un lien intermédiaire est résolu une seule fois à la construction,
-    /// puis la forme canonique enregistrée est revérifiée avant chaque effet.
+    /// Ancre **de confiance** fournie par l'OS ou la factory (Application Support, répertoire
+    /// temporaire de test) : ses préfixes système légitimes (`/var` → `/private/var`) peuvent être
+    /// canonisés **une fois**. L'ancre n'appartient pas au cache et n'est jamais créée ici.
+    private let anchor: URL
+    /// Composant **possédé** (racine du cache) sous l'ancre. Jamais canonisé : s'il existe comme
+    /// lien ou comme fichier, la construction échoue **avant** tout effet.
     private let root: URL
+    /// Deuxième composant possédé (répertoire du scope), même règle.
     private let folder: URL
     private let maximumScopeBytes: Int
     private let keyProvider: @Sendable (Bool) throws -> SymmetricKey
     private var faults: (@Sendable (FaultPoint) -> Bool)?
 
-    private static let rootDirectoryName = "MessagingMediaCache"
+    /// Nom du composant possédé sous l'ancre de production (aussi valeur par défaut de l'injection).
+    static let rootDirectoryName = "MessagingMediaCache"
     /// Sérialise toutes les instances, y compris celles du même scope. Aucun `await` dedans.
     private static let ioLock = NSLock()
 
     // MARK: Initialisation
 
-    /// Initialiseur de production : racine Application Support dédiée, clé Keychain dédiée.
+    /// Initialiseur de production : ancre Application Support fournie par l'OS, composant possédé
+    /// `MessagingMediaCache`, clé Keychain dédiée.
     init(scope: MessagingScope) throws {
         let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                appropriateFor: nil, create: true)
-        try self.init(scope: scope,
-                      root: base.appendingPathComponent(Self.rootDirectoryName, isDirectory: true),
+        try self.init(scope: scope, anchor: base, rootName: Self.rootDirectoryName,
                       maximumScopeBytes: Self.maximumScopeByteSize,
                       keyProvider: { mayCreate in
                           try Self.keychainKey(mayCreate: mayCreate, namespace: .production)
                       })
     }
 
-    /// Injection **interne** de la racine, du plafond et de la clé : réservée aux preuves.
-    /// La production n'utilise que `init(scope:)` ; aucun repli mémoire n'existe.
-    init(scope: MessagingScope, root: URL, maximumScopeBytes: Int,
+    /// Injection **interne** : l'appelant désigne l'**ancre de confiance** et le **nom du composant
+    /// possédé** sous cette ancre. La production n'utilise que `init(scope:)` ; aucun repli mémoire
+    /// n'existe. Un composant possédé qui est déjà un lien est refusé à la construction.
+    init(scope: MessagingScope, anchor: URL, rootName: String = MessagingProtectedMediaCache.rootDirectoryName,
+         maximumScopeBytes: Int,
          keyProvider: @escaping @Sendable (Bool) throws -> SymmetricKey) throws {
         guard scope.accessEpoch > 0, !scope.apiBaseURL.isEmpty else { throw MessagingFailure.contextChanged }
         guard maximumScopeBytes > Self.sealedOverhead + Self.indexGrowthReserve,
               maximumScopeBytes <= Self.maximumScopeByteSize else { throw MessagingFailure.invalidResponse }
-        let canonicalRoot = root.standardizedFileURL.resolvingSymlinksInPath()
-        let fingerprint = Self.scopeFingerprint(scope)
+        try Self.validateComponentName(rootName)
+        // Seule l'ancre est canonisée (préfixes système légitimes). Les composants possédés sont
+        // construits **sous** elle et ne sont jamais résolus vers une cible arbitraire.
+        let canonicalAnchor = anchor.standardizedFileURL.resolvingSymlinksInPath()
+        let ownedRoot = canonicalAnchor.appendingPathComponent(rootName, isDirectory: true)
+        let folder = ownedRoot.appendingPathComponent(Self.scopeFingerprint(scope), isDirectory: true)
         self.expectedScope = scope
-        self.fingerprint = fingerprint
-        self.root = canonicalRoot
-        self.folder = canonicalRoot.appendingPathComponent(fingerprint, isDirectory: true)
+        self.fingerprint = Self.scopeFingerprint(scope)
+        self.anchor = canonicalAnchor
+        self.root = ownedRoot
+        self.folder = folder
         self.maximumScopeBytes = maximumScopeBytes
         self.keyProvider = keyProvider
-        // Le parent de confiance doit être un répertoire réel **avant** toute création.
-        try Self.requireRealDirectory(canonicalRoot.deletingLastPathComponent())
-        try Self.prepareDirectory(canonicalRoot)
-        try Self.prepareDirectory(self.folder)
-        try Self.verifyConfinement(root: canonicalRoot, folder: self.folder)
+        // L'ancre est fournie : elle doit exister comme répertoire réel, jamais être créée ici.
+        try Self.requireRealDirectory(canonicalAnchor)
+        try Self.prepareOwnedDirectory(ownedRoot, inside: canonicalAnchor)
+        try Self.prepareOwnedDirectory(folder, inside: ownedRoot)
+        try Self.verifyConfinement(anchor: canonicalAnchor, root: ownedRoot, folder: folder)
+    }
+
+    /// Forme historique conservée pour les appels qui désignent la racine possédée : l'ancre est
+    /// alors son parent, et le nom possédé son dernier composant. Aucune autre sémantique.
+    init(scope: MessagingScope, root: URL, maximumScopeBytes: Int,
+         keyProvider: @escaping @Sendable (Bool) throws -> SymmetricKey) throws {
+        try self.init(scope: scope, anchor: root.deletingLastPathComponent(), rootName: root.lastPathComponent,
+                      maximumScopeBytes: maximumScopeBytes, keyProvider: keyProvider)
     }
 
     /// Arme des points de panne pour une preuve. `nil` rétablit le comportement de production.
@@ -420,6 +453,11 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
 
     private func loadIndex() throws -> Index {
         guard FileManager.default.fileExists(atPath: indexURL.path) else {
+            // Index absent : cache vide **seulement** si aucun artefact scellé n'existe. Des
+            // fichiers scellés sans index sont un état incohérent : erreur fermée, aucune
+            // adoption, aucun nettoyage silencieux, et donc aucune recréation de clé possible.
+            // La sortie explicite est `purgeAll`.
+            guard try !hasSealedArtifacts() else { throw MessagingFailure.protectionUnavailable }
             return Index(version: 1, scopeFingerprint: fingerprint, counter: 0, entries: [])
         }
         do {
@@ -538,6 +576,18 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
                 total += size
             }
             return total
+        } catch {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    /// Vrai si le répertoire du scope contient au moins un artefact scellé. Sert uniquement à
+    /// distinguer un cache réellement vide d'un état incohérent (index absent + données).
+    private func hasSealedArtifacts() throws -> Bool {
+        do {
+            let items = try FileManager.default.contentsOfDirectory(at: folder,
+                                                                    includingPropertiesForKeys: nil, options: [])
+            return items.contains { $0.pathExtension == "sealed" }
         } catch {
             throw MessagingFailure.protectionUnavailable
         }
@@ -767,23 +817,26 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
         }
     }
 
-    /// Revérifie les répertoires **possédés** et leur parent de confiance avant tout effet.
+    /// Revérifie l'ancre de confiance et les composants **possédés** avant tout effet.
     private func verifyConfinement() throws {
-        try Self.verifyConfinement(root: root, folder: folder)
+        try Self.verifyConfinement(anchor: anchor, root: root, folder: folder)
     }
 
-    /// `resolvingSymlinksInPath` résout les préfixes système légitimes (`/var` → `/private/var`)
-    /// une seule fois à la construction : un remplacement ultérieur par un lien change la forme
-    /// canonique et échoue donc ici. Ce n'est pas une protection contre une course
-    /// inter-processus : elle couvre un remplacement entre deux opérations, pas un attaquant
-    /// actif pendant l'opération.
-    private static func verifyConfinement(root: URL, folder: URL) throws {
+    /// L'ancre est celle enregistrée à la construction (déjà canonisée, préfixes système
+    /// légitimes compris). Les composants possédés doivent être des répertoires réels, non
+    /// résolus, et rester les bons enfants : un remplacement par un lien après l'initialisation
+    /// change la forme canonique ou le type et échoue ici. Ce n'est pas une protection contre une
+    /// course inter-processus : elle couvre un remplacement entre deux opérations, pas un
+    /// attaquant actif pendant l'opération.
+    private static func verifyConfinement(anchor: URL, root: URL, folder: URL) throws {
+        try requireRealDirectory(anchor)
         try requireRealDirectory(root)
         try requireRealDirectory(folder)
-        try requireRealDirectory(root.deletingLastPathComponent())
-        guard samePath(root.resolvingSymlinksInPath(), root),
-              samePath(folder.resolvingSymlinksInPath(), folder),
-              samePath(folder.deletingLastPathComponent(), root) else {
+        guard samePath(anchor.resolvingSymlinksInPath(), anchor),
+              samePath(root.deletingLastPathComponent(), anchor),
+              samePath(folder.deletingLastPathComponent(), root),
+              samePath(root.resolvingSymlinksInPath(), root),
+              samePath(folder.resolvingSymlinksInPath(), folder) else {
             throw MessagingFailure.protectionUnavailable
         }
     }
@@ -799,7 +852,19 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
 
     // MARK: Fichiers protégés
 
-    private static func prepareDirectory(_ url: URL) throws {
+    /// Nom de composant possédé : un seul segment, jamais un chemin fourni tel quel.
+    private static func validateComponentName(_ name: String) throws {
+        guard !name.isEmpty, name != ".", name != "..", !name.contains("/") else {
+            throw MessagingFailure.protectionUnavailable
+        }
+    }
+
+    /// Prépare un composant **possédé** sous son parent déjà vérifié. Un lien, un fichier ou un
+    /// parent inattendu est refusé **avant** toute création, protection ou écriture.
+    private static func prepareOwnedDirectory(_ url: URL, inside parent: URL) throws {
+        guard samePath(url.deletingLastPathComponent(), parent) else {
+            throw MessagingFailure.protectionUnavailable
+        }
         let manager = FileManager.default
         var isDirectory: ObjCBool = false
         if manager.fileExists(atPath: url.path, isDirectory: &isDirectory) {
@@ -807,11 +872,13 @@ actor MessagingProtectedMediaCache: MessagingMediaCache {
             try requireRealDirectory(url)
         } else {
             do {
-                try manager.createDirectory(at: url, withIntermediateDirectories: true,
+                // Aucun composant intermédiaire n'est créé : un parent inattendu échouerait ici.
+                try manager.createDirectory(at: url, withIntermediateDirectories: false,
                                             attributes: [.protectionKey: FileProtectionType.complete])
             } catch {
                 throw MessagingFailure.protectionUnavailable
             }
+            try requireRealDirectory(url)
         }
         do { try protect(url) } catch { throw MessagingFailure.protectionUnavailable }
     }
