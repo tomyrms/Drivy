@@ -87,6 +87,17 @@ final class MessagingMediaUITests: XCTestCase {
         capture("media-caption-keyboard")
     }
 
+    func testReceivedPieceOpensInExistingThread() {
+        let app = launch()
+        let received = app.buttons["messaging.media.received.open"].firstMatch
+        XCTAssertTrue(received.waitForExistence(timeout: 10))
+        received.tap()
+        XCTAssertTrue(app.buttons["Fermer"].waitForExistence(timeout: 5))
+        capture("media-received-preview")
+        app.buttons["Fermer"].tap()
+        XCTAssertTrue(app.buttons["messaging.compose.more"].exists)
+    }
+
     private func capture(_ name: String) {
         let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         attachment.name = name
