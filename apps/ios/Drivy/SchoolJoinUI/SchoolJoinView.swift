@@ -136,10 +136,16 @@ struct SchoolJoinView: View {
     private var pending: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             if let preview = model.preview { schoolSummary(preview) }
-            DrivyPanel {
-                DrivyPendingRequest(
-                    message: "La réponse de l’école n’est pas arrivée. Ta demande est conservée sur cet appareil.",
-                    retry: { wait.run { await model.retry() } }, canRetry: !model.isBusy)
+            if SchoolJoinPendingPresentation.showsMissingReply(isPending: model.isPending, isBusy: model.isBusy) {
+                DrivyPanel {
+                    DrivyPendingRequest(
+                        message: "La réponse de l’école n’est pas arrivée. Ta demande est conservée sur cet appareil.",
+                        retry: { wait.run { await model.retry() } }, canRetry: !model.isBusy)
+                }
+            } else {
+                // Envoi en cours : l’annonce vocale vient du moniteur d’attente, elle n’est pas répétée ici.
+                DrivyLoadingState(title: busyTitle)
+                    .accessibilityHidden(true)
             }
         }
     }
@@ -223,6 +229,12 @@ struct SchoolJoinView: View {
         .frame(maxWidth: .infinity)
         .background(DrivyTheme.surface)
     }
+}
+
+/// Le panneau « réponse pas arrivée » n'annonce un échec qu'une fois l'envoi terminé sans réponse :
+/// pendant l'envoi (premier envoi, relance ou vérification), la feuille montre l'état en cours.
+enum SchoolJoinPendingPresentation {
+    static func showsMissingReply(isPending: Bool, isBusy: Bool) -> Bool { isPending && !isBusy }
 }
 
 // MARK: - Éléments communs aux parcours « code » et « lien »

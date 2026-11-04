@@ -25,6 +25,7 @@ struct SchoolOnboardingView: View {
     @State private var includesInformationStep = true
     @State private var confirmsDiscard = false
     @State private var returnsToReviewAfterDiscard = false
+    @State private var confirmsAbandon = false
     @State private var location = SchoolOnboardingLocationPermission()
     @State private var recordingChoice: SchoolRecordingChoiceWorkspace?
     @Environment(SchoolCaptureSessionController.self) private var capture: SchoolCaptureSessionController?
@@ -59,6 +60,12 @@ struct SchoolOnboardingView: View {
                 } message: {
                     Text(returnsToReviewAfterDiscard ? "Tes modifications ne seront pas enregistrées."
                          : "Les étapes déjà confirmées par l’école restent enregistrées. Tu pourras reprendre plus tard.")
+                }
+                .confirmationDialog("Abandonner la saisie reprise ?", isPresented: $confirmsAbandon, titleVisibility: .visible) {
+                    Button("Abandonner", role: .destructive) { model.abandonOnboardingDraft() }
+                    Button("Continuer à modifier", role: .cancel) {}
+                } message: {
+                    Text("Les informations reviennent à celles de l’école.")
                 }
         }
         .tint(DrivyTheme.accent)
@@ -154,6 +161,9 @@ struct SchoolOnboardingView: View {
         } else if let error = model.errorMessage, !isWorking {
             SchoolErrorNotice(message: error, retry: { Task { await model.load() } })
         }
+        if let storageError = model.onboardingDraftError {
+            SchoolErrorNotice(message: storageError)
+        }
         if let pending = model.pending {
             DrivyPanel {
                 DrivyPendingRequest(
@@ -208,6 +218,9 @@ struct SchoolOnboardingView: View {
     private var information: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.l) {
             stepTitle("Tes informations")
+            if model.hasOnboardingDraft, model.profile != nil {
+                SchoolOnboardingDraftNotice(isBusy: isWorking) { confirmsAbandon = true }
+            }
             if let profile = model.profile {
                 VStack(alignment: .leading, spacing: DrivySpacing.l) {
                     nameField(.firstName, text: $model.draft.firstName, value: profile.firstName, identifier: "profile-first-name")
@@ -692,6 +705,26 @@ private final class SchoolOnboardingLocationPermission: NSObject, @preconcurrenc
     override init() { super.init(); status = manager.authorizationStatus; manager.delegate = self }
     func request() { status = manager.authorizationStatus; if status == .notDetermined { manager.requestWhenInUseAuthorization() } }
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { status = manager.authorizationStatus }
+}
+
+/// Ligne discrète en haut du formulaire quand une saisie protégée a été reprise sur cet appareil.
+/// Elle ne valide rien : l’étape confirmée reste celle de l’école.
+private struct SchoolOnboardingDraftNotice: View {
+    let isBusy: Bool
+    let abandon: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label("Saisie reprise sur cet appareil.", systemImage: "arrow.uturn.backward.circle")
+                .font(.footnote)
+                .foregroundStyle(DrivyTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            SchoolJoinTextLink(title: "Abandonner", isBusy: isBusy, action: abandon)
+                .accessibilityIdentifier("onboarding-draft-abandon")
+        }
+        .accessibilityIdentifier("onboarding-draft-notice")
+    }
 }
 
 /// Tête des écrans d’ouverture et de fin de l’accueil : petit symbole et titre sur une même ligne.
