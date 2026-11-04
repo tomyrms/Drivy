@@ -59,6 +59,9 @@ import Observation
     func removeSelection() {
         guard !sending else { return }
         generation = UUID(); selection = nil; caption = ""; preparing = false; preview = nil; error = nil
+        // This generation also invalidates any pending open; its stale defer must not
+        // clear a newer operation, so release the presentation lock here instead.
+        opening = false
         // Durable intentions belong to runtime; removing a local selection never deletes one.
     }
 

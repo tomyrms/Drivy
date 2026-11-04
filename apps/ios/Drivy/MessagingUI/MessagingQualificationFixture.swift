@@ -25,7 +25,8 @@ struct MessagingQualificationFixture: View {
             ? MessagingMediaQualificationCrypto(fallback: MessagingQualificationCrypto()) : MessagingQualificationCrypto()
         let mediaRuntime: (any MessagingMediaRuntime)? = mediaScenario
             ? MessagingMediaQualificationRuntime(scope: scope, arguments: arguments) : nil
-        // Decrypt-only: encrypt always throws, so the UI can never report a false successful send.
+        // Text crypto remains decrypt-only. The opt-in media runtime can inject synthetic
+        // UI confirmations; these never qualify a real encrypted or server-accepted send.
         _workspace = State(initialValue: MessagingWorkspace(scope: scope,
             service: MessagingAPIClient(transport: http), cryptography: crypto,
             outbox: memory, drafts: memory, directory: http, actions: http,
