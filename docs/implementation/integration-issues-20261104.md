@@ -254,3 +254,135 @@ initial. Aucune purge globale, aucun volume nommé créé, aucune base réelle t
 - Zéro retour correctif consommé pour cette tâche ; les plafonds des tâches sources ne sont pas remis à zéro.
 - Les preuves brutes (journaux, JSON vitest, captures) sont sous `artifacts/`, répertoire ignoré par
   Git : aucun secret réel, aucune donnée de personne réelle, identifiants de fixtures synthétiques seulement.
+
+---
+
+# Phase 2 — reprise du correctif U2b1 et dernier passage web (4 novembre 2026)
+
+Suite de la tâche I1 (`task_4c3ea44e6648` / dispatch `ctx_363394946121`), même worker, même modèle
+`opencode-go/deepseek-v4.1-flash` (configuration relue, inchangée ; révision/effort non exposés), même
+worktree et même branche. Objet : reprendre dans l'intégration locale le correctif de la branche
+`tomyrms/issues-suivi-web-106` livré après les deux défauts signalés par la phase 1, sans nouvelle
+implémentation.
+
+- Point de départ vérifié : `cc4ffd3ef2a969f0566c1c59b788ccf28581e8b8`, arbre propre.
+- Tête source exigée et confirmée : `10a95ddca44fbeb5130975c98d610b1b373224d3` (= tête de
+  `tomyrms/issues-suivi-web-106` ; code `5cdb3bcacbf60ed588b9b9c0af07a4dedd45fe7a`).
+- Merge `--no-ff` local, **aucun conflit** : `e4900279b3a9a9018504f00d47e99372aace4c6c`
+  (parents `cc4ffd3e` + `10a95ddc`), 4 fichiers, +45 / −7. Aucun passé réécrit, aucun squash,
+  aucune des neuf fusions initiales rejouée.
+
+## Delta du correctif et équivalence des sources
+
+| Chemin | Blob identique à `10a95ddc` |
+|---|---|
+| `.github/workflows/qualification-checks.yml` | oui (`367ef900336d`) |
+| `apps/web/test/pending-recovery-106.test.tsx` | oui (`154ad6eb60ce`) |
+| `docs/implementation/pending-recovery-web-106-20261104.md` | oui (`8f58d9330a19`) |
+| `scripts/dev/check-pending-recovery-106.ts` | oui (`56792b8a010f`) |
+
+Contenu du correctif lu avant exécution : tuple de méthodes `as const` dans l'initialisation de page,
+`origin` calculée depuis le port réel du serveur Vite, lancement du **Chromium verrouillé** au lieu du
+canal Edge, capture et `results.json` renommés `correction-2-chromium-*` avec `engine {name, version}`,
+commentaire du wrapper aligné, et job web de `qualification-checks.yml` complété par le cache
+`infra/dev/package-lock.json`, `npm ci --prefix infra/dev --ignore-scripts` puis
+`node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium`. Aucun produit,
+aucun lock, aucune version, aucun `project.yml` touché dans ce delta.
+
+Contrôles d'intégrité refaits après fusion :
+
+- les **neuf** SHA sources restent ancêtres de `e4900279` (`git merge-base --is-ancestor`, exit 0 ×9) ;
+- `apps/api`, `apps/web/client`, `apps/web/server` et `apps/ios` sont **identiques** au SHA produit
+  `38980506d438c32fdc3bc9bf720b83dec7be84c8` (`git diff --name-only 38980506..HEAD -- …` vide) ;
+- seuls cinq chemins diffèrent du SHA produit : les quatre du delta corrigé et ce rapport.
+
+**Conséquence assumée** : la campagne API complète (93 fichiers, 1042 tests, exit 0) et la recette R3
+(`--extended=recovery`, 151 contrôles, exit 0) de la phase 1 restent valides **par identité de source**,
+et non comme exécutions de cette phase. Elles n'ont pas été relancées ; aucun résultat ancien n'est
+présenté comme nouveau.
+
+## Vérifications exécutées en phase 2
+
+Node 24.22.2 portable, dépendances verrouillées déjà installées (aucune installation nouvelle),
+preuves écrites sous `artifacts/integration-issues-20261104/phase2/` sans écraser celles de la phase 1.
+
+| Commande | Résultat réel |
+|---|---|
+| `npm --prefix apps/web run typecheck` | **exit 0** |
+| `npm --prefix apps/web run build` | **exit 0** (3,1 s ; même avertissement Vite antérieur sur `theme-init.js`, hors diff) |
+| `npm --prefix apps/web test -- --reporter=default --reporter=json --outputFile=…/phase2/web-results.json` | **exit 0** — 80 fichiers, 843 tests ; console « **842 réussis + 1 échec attendu** », JSON 843 réussis / 0 échec / 0 en attente ; 43,4 s |
+| `node --import …/tsx/dist/loader.mjs scripts/dev/check-pending-recovery-106.ts all` | **exit 0** — `result:"PASS"`, moteur **`{"name":"Chromium","version":"153.0.8010.12"}`** ; 39 captures `correction-2-chromium-*` ; `all-results.json`, `metadata-results.json`, `race-results.json` portent désormais `engine` |
+| `npx tsc -p infra/dev/tsconfig.json` | **exit 2 — 3 diagnostics seulement** (voir ci-dessous) |
+
+L'échec attendu de la suite web est **préexistant et explicitement conservé** :
+`apps/web/test/course-model-fuseaux-limites.test.ts:131`, `it.fails('une séance dans la première
+occurrence de l'heure doublée garde son instant après relecture du formulaire')`. Ce fichier est
+identique à la base (`git diff --quiet 0bdaf324..HEAD` → inchangé) ; il n'est ni retiré ni contourné.
+
+Le harnais de pending web tourne maintenant sur le Chromium déjà mis en cache par
+`playwright-core`, version effective relevée `153.0.8010.12` — conforme à l'attendu. Les 39 captures
+`correction-1-*` de la phase 1 sont conservées (39 + 39 = 78 PNG dans
+`artifacts/pending-recovery-106/`) ; je n'ai porté **aucun jugement visuel**, l'inspection revient au
+coordinateur.
+
+## Typage `infra/dev` : les quatre diagnostics du harnais ont disparu
+
+`npx tsc -p infra/dev/tsconfig.json` reste **rouge (exit 2)**, sans amélioration simulée ni exclusion.
+Il ne reste que les **trois** diagnostics des fichiers inchangés depuis la base :
+
+1. `scripts/dev/check-v3-agenda-acceptance.ts(10,17)` TS6133 `schoolPath` déclaré mais jamais lu ;
+2. `scripts/dev/check-v3-entry.ts(13,41)` TS2741 `password` manquant dans le faux `IdentityProvider` ;
+3. `scripts/dev/measure-web-entry.ts(13,7)` TS2741 même cause.
+
+Les quatre diagnostics introduits par le harnais en phase 1
+(`scripts/dev/check-pending-recovery-106.ts` lignes 66, 67, 74 : index `undefined`, `address`
+possiblement nul, `port` absent de `string | AddressInfo`) **ne se reproduisent plus** ; le fichier
+n'apparaît pas dans la sortie. Ce résultat est déclaré rouge globalement, pas comme un vert.
+
+## Workflow web : YAML et prérequis vérifiés, aucun runner
+
+`qualification-checks.yml` relu et **analysé** (parseur `yaml`, 0 erreur ; 4 jobs `changes`, `server`,
+`web`, `documentation`). Les trois prérequis du job web sont présents, dans cet ordre :
+
+1. `cache-dependency-path` contient `infra/dev/package-lock.json` en plus des deux lockfiles existants ;
+2. `npm ci --prefix infra/dev --ignore-scripts` ;
+3. `node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium`.
+
+Les quatre workflows du dépôt s'analysent sans erreur. Les workflows Apple (`refonte-ios.yml`,
+`ipa-essai.yml`, `school-opening-e2e.yml`) et leurs sélections de tests ne sont **pas** modifiés par
+ce merge (seul `qualification-checks.yml` change). **Aucun workflow n'a été lancé**, aucune
+préparation ni exécution sur un runner Linux : cette vérification est statique et locale.
+
+## Ressources, processus et hygiène
+
+Aucun Docker n'était nécessaire à cette phase : aucun conteneur créé, arrêté ou touché, aucun service
+externe sollicité, aucune base modifiée. Contrôle final : aucun conteneur en cours, aucune ressource
+`drivy-i1-20261104*` ni `drivy-opening-e2e*`, aucun processus de test résiduel (les navigateurs et
+`node` observés appartiennent au poste et aux runtimes Codex/REA, pas à mes campagnes).
+`git diff --check` (phase 2 et plage complète) exit 0, arbre propre, aucun fichier non suivi hors
+`artifacts/` ignoré.
+
+## Codebase Memory
+
+Projet unique `drivy-integration-issues-20261104` réindexé après ce merge : racine exacte du worktree,
+état `ready`, `indexed_at` `2026-11-04T19:35:54Z`, **53 036 nœuds / 202 268 arêtes**. Recherche de
+contrôle sur le harnais corrigé : `fixture`, `action`, `state`, `text`, `capture` résolus dans
+`scripts/dev/check-pending-recovery-106.ts` (fixture lignes 62-79). Limites de couverture inchangées
+et déjà consignées plus haut (lecture partielle de fichiers SQL, exclusions par conception) ; aucun
+index voisin utilisé.
+
+## Limites de la phase 2
+
+- **Qualification Apple : NON EXÉCUTÉE** (aucun Swift/Xcode local) ; aucun run, rerun ou workflow
+  déclenché. Le run 41861281984 ne couvre que `883581ad` et reste globalement rouge.
+- **Préparation/exécution CI Linux : NON EXÉCUTÉE** ; seuls le YAML et ses prérequis ont été vérifiés.
+- La suite web et le harnais restent des preuves de **Chromium de bureau** : aucune conclusion
+  Safari, appareil, lecteur d'écran ni zoom natif ; aucun verdict visuel de ma part.
+- Aucun push, PR, CI distante, merge `master`, déploiement, clôture d'issue ; `STATUS.md` et le
+  registre restent au coordinateur. Aucune correction supplémentaire inventée : les deux retours U2b1
+  restent consommés, sans remise à zéro des plafonds.
+- Tous les médias natifs restent **non branchés au parcours complet**, comme en phase 1 ; aucun succès
+  global des issues n'est revendiqué.
+- Commit de code de cette phase : `e4900279b3a9a9018504f00d47e99372aace4c6c`. Le commit de ce rapport
+  est indiqué dans la livraison Orca et dans `git log` (un fichier ne peut pas citer son propre SHA
+  avant d'être créé).
