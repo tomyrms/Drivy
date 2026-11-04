@@ -258,4 +258,26 @@ Complément demandé : la configuration injectée ne peut plus réactiver cache 
 | 3 | les bornes acceptées (`mediaLimit`, `4 194 305`) utilisaient `Content-Length` ~4 Mio avec 3 octets de corps | réponse HTTP incohérente | bornes acceptées servies avec un **corps synthétique de la taille annoncée** ; les refus sur en-tête restent des flux ouverts à petit prélude (refus avant consommation). Borne wire (`4 202 496`) et borne métier (`4 194 304`) restent deux tests et deux assertions distinctes. |
 | 4 | l'arrêt sur annulation dépendait de la coopération de l'itérateur | `task.cancel()` n'était appelé qu'après la sortie de la boucle | `withTaskCancellationHandler` autour de la lecture : l'annulation de l'appelant annule la tâche URLSession **immédiatement**, même sans nouvel octet. `URLSessionDataTask` n'étant pas `Sendable`, elle est portée par une enveloppe `@unchecked Sendable` dont `cancel()` est documenté thread-safe. L'issue native reste à vérifier sur Apple. |
 
-Budget de corrections : **2 sur 2** consommées. Aucune troisième correction automatique demandée : ce qui reste à faire est la qualification Apple (§8), pas une reprise de code connue.
+Budget de corrections : **2 sur 2** consommées pour les retours ordinaires. La correction du §15 est l'exception explicitement autorisée par le porteur (« Oui, corriger uniquement cette fixture ») ; elle ne touche aucun code produit.
+
+## 15. Correction exceptionnelle autorisée (fixture seule)
+
+Constat du coordinateur, vérifié en source : dans `testRefusedTokenRenewalStillChecksTheContextAfterTheWait`, la closure `invalidate` injectée changeait le scope puis retournait `false` **sans appeler** `token.invalidateAccessToken`. L'assertion `token.invalidated == ["synthetic-token"]` était donc impossible : la seule écriture de ce tableau est dans `MediaTokenFixture.invalidateAccessToken`, jamais atteinte par ce scénario. Ce n'était pas un défaut de comportement mais une fixture incohérente avec sa propre attente.
+
+| Aspect | Détail |
+|---|---|
+| Cause racine | la closure du test court-circuitait la source de jeton au lieu de l'exercer |
+| Correctif | la closure appelle `token.invalidateAccessToken(bearer)` avec le porteur reçu, conserve son résultat (`false`, fixture `renews: false`), effectue le changement de scope, puis retourne ce résultat |
+| Assertions préservées | `contextChanged` ; **1** paquet ; **1** entrée dans la source de jeton ; **exactement une** invalidation (`["synthetic-token"]`) — aucune assertion supprimée ni affaiblie |
+| Hors périmètre | aucun changement de code produit, de protocole, d'authentification partagée ni d'un autre test de comportement |
+
+Commandes réellement exécutées pour cette correction (Windows, sans Swift) :
+
+| # | Commande | Résultat | Code |
+|---|---|---|---|
+| 1 | `index_status` + `index_repository` (MCP, chemin absolu) | racine du worktree, `ready`, `indexed_at 2026-11-04T18:48:29Z`, 39 225 nœuds | 0 |
+| 2 | `Select-String 'invalidateAccessToken'` dans le fichier de test | 4 occurrences : définition de la fixture, deux appels par `using`, et l'appel ajouté dans la closure | 0 |
+| 3 | Python jetable : équilibre des délimiteurs du fichier de test | `balanced` | 0 |
+| 4 | `git diff --stat` + `git status --porcelain` | 2 fichiers (test + ce rapport), aucun autre | 0 |
+
+Les 45 tests restent **NON EXÉCUTÉS** Apple (§8) : cette correction est une revue statique et une mise en cohérence de fixture, pas un RED/GREEN natif.

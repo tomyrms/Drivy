@@ -463,9 +463,12 @@ final class MessagingHTTPMediaTransportTests: XCTestCase {
         }
         let transport = MessagingHTTPMediaTransport(baseURL: baseURL, deviceID: device, wire: wire,
             token: { try await token.accessToken() },
-            invalidate: { _ in
+            invalidate: { bearer in
+                // La source existante est réellement consultée : c'est elle qui enregistre le
+                // jeton invalidé. La fixture `renews: false` répond false, résultat conservé.
+                let renewed = await token.invalidateAccessToken(bearer)
                 box.value = changed
-                return false
+                return renewed
             },
             currentScope: { box.value })
         do {
