@@ -3,6 +3,7 @@ import {
   classifyFailure, commandHeaders, commandMessage, commandSpecs, parseMetadata, receiptMatches, toMetadata,
   type CommandKind, type CommandMetadata, type SchoolCommand,
 } from './command-core';
+import { lessonResendReason } from './command-recovery';
 import { revisionOf } from './command-families';
 import { confirmedData, readSchool, receiptSchema, schoolFetch } from './school-api';
 import { RequestFailure } from './protocol';
@@ -47,6 +48,21 @@ export function pendingActions(entry: Pick<PendingEntry, 'command' | 'phase' | '
 }
 
 const storageKey = 'drivy-gestion-demandes-v1';
+/**
+ * Ce que cette page peut prouver du sort des identifiants suivis dans le stockage de l'onglet. Jamais le contenu : un corps,
+ * un chemin ou un code n'y entrent pas.
+ * `saved` : la dernière écriture d'identifiants a été acceptée sans exception par le stockage — ce n'est pas une preuve de
+ * survie à la fermeture (quota, navigation privée, purge du navigateur restent possibles).
+ * `memoryOnly` : la dernière écriture a été refusée ; le suivi et la saisie vivent en mémoire pour cette page seulement.
+ * `unknown` : aucun résultat concluant — lecture ou effacement refusé, contenu du stockage inconnu. De vieilles
+ * métadonnées peuvent encore exister et revenir au prochain chargement, sans corps et sans renvoi automatique.
+ */
+export type MetadataDurability = 'saved' | 'memoryOnly' | 'unknown';
+export interface MetadataStorageState {
+  readonly durability: MetadataDurability;
+  /** Dernière opération tentée sur les métadonnées : distingue une écriture d'un effacement refusé. */
+  readonly last: 'read' | 'write' | 'clear';
+}
 /** `startedAt` is when the command left the page: confirmations are kept in that order, not in the order answers arrive. */
 type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number; startedAt: number };
 /**
@@ -55,10 +71,12 @@ type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId
  * confirmation of the school. `revision` still changes with every one of them.
  */
 type Snapshot = { entries: ReadonlyMap<string, PendingEntry>; revision: number; confirmed: Confirmation | null; confirmations: readonly Confirmation[];
-  byKind: Readonly<Record<string, number>>; rereads: number };
+  byKind: Readonly<Record<string, number>>; rereads: number; metadata: MetadataStorageState };
 
 class CommandStore {
-  private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null, confirmations: [], byKind: {}, rereads: 0 };
+  private snapshot: Snapshot = { entries: new Map(), revision: 0, confirmed: null, confirmations: [], byKind: {}, rereads: 0,
+    metadata: { durability: 'unknown', last: 'read' } };
+  private metadata: MetadataStorageState = { durability: 'unknown', last: 'read' };
   private readonly listeners = new Set<() => void>();
   private personId: string | null = null;
   /** The school the console currently shows: the last one scoped by `scopeToAccess`. */
@@ -69,14 +87,17 @@ class CommandStore {
   constructor() {
     try {
       const stored = JSON.parse(window.sessionStorage.getItem(storageKey) ?? '[]') as unknown;
+      // Une valeur illisible ne prouve pas que ce qui est suivi ici est enregistré : elle n'est pas reprise et l'état le dit.
+      if (!Array.isArray(stored)) return;
       const entries = new Map<string, PendingEntry>();
-      if (Array.isArray(stored)) for (const value of stored.slice(0, 50)) {
+      for (const value of stored.slice(0, 50)) {
         const meta = parseMetadata(value);
         if (meta && !entries.has(meta.operationId)) entries.set(meta.operationId, { meta, command: null, phase: 'orphaned', needsLogin: false,
           notRecorded: false, maybeReceived: true, unverifiable: false, attempts: 1, message: 'Le résultat de cette demande reste à vérifier. Son contenu n’est plus disponible dans cette page.' });
       }
-      this.snapshot = { ...this.snapshot, entries };
-    } catch { /* Storage unavailable: pending requests stay in memory for this page only. */ }
+      this.metadata = { durability: 'saved', last: 'read' };
+      this.snapshot = { ...this.snapshot, entries, metadata: this.metadata };
+    } catch { /* Storage unavailable: pending requests stay in memory for this page only, and nothing claims they are stored. */ }
   }
 
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
@@ -93,15 +114,35 @@ class CommandStore {
     const confirmations = confirmation
       ? [...this.snapshot.confirmations, confirmation].sort((left, right) => left.startedAt - right.startedAt).slice(-50)
       : this.snapshot.confirmations;
+    this.metadata = this.writeMetadata(entries);
     this.snapshot = { entries, revision: this.snapshot.revision + (confirmed || reread ? 1 : 0),
       // `confirmed` reste la confirmation qui vient d’arriver : un éditeur reconnaît sa propre écriture à son opération
       // (access-controller, setup), même si une commande partie après elle a été confirmée avant.
       confirmed: confirmation ?? this.snapshot.confirmed,
       confirmations,
       byKind: confirmed ? { ...this.snapshot.byKind, [confirmed.kind]: (this.snapshot.byKind[confirmed.kind] ?? 0) + 1 } : this.snapshot.byKind,
-      rereads: this.snapshot.rereads + (reread ? 1 : 0) };
-    try { window.sessionStorage.setItem(storageKey, JSON.stringify([...entries.values()].map(item => item.meta))); } catch { /* memory only */ }
+      rereads: this.snapshot.rereads + (reread ? 1 : 0), metadata: this.metadata };
     for (const listener of this.listeners) listener();
+  }
+
+  /**
+   * One attempt, one observed outcome. A refused write keeps the command and the typed input in memory; it only means the
+   * tracking will not survive the page, which the state says instead of pretending the identifiers are stored.
+   */
+  private writeMetadata(entries: ReadonlyMap<string, PendingEntry>): MetadataStorageState {
+    try {
+      window.sessionStorage.setItem(storageKey, JSON.stringify([...entries.values()].map(item => item.meta)));
+      return { durability: 'saved', last: 'write' };
+    } catch { return { durability: 'memoryOnly', last: 'write' }; }
+  }
+
+  /**
+   * Un effacement refusé n'est pas une purge : de vieilles métadonnées peuvent rester dans le stockage et revenir au prochain
+   * chargement — sans corps, donc sans renvoi. L'état le dit au lieu de fabriquer un succès de purge.
+   */
+  private eraseMetadata(): MetadataStorageState {
+    try { window.sessionStorage.removeItem(storageKey); return { durability: 'saved', last: 'clear' }; }
+    catch { return { durability: 'unknown', last: 'clear' }; }
   }
 
   get(schoolId: string, operationId?: string): PendingEntry | undefined {
@@ -150,9 +191,17 @@ class CommandStore {
     return this.emit(command, csrf);
   }
 
-  async resend(schoolId: string, csrf: string, operationId?: string): Promise<SubmitResult> {
+  /**
+   * Renvoyer la même demande, avec la même clé, le même corps et la même précondition. `now` rend l'horloge explicite :
+   * une création ou un déplacement se juge à l'instant du renvoi, pas à celui de la saisie.
+   */
+  async resend(schoolId: string, csrf: string, operationId?: string, now = Date.now()): Promise<SubmitResult> {
     const entry = this.get(schoolId, operationId);
     if (!entry?.command || !pendingActions(entry).resend) return { status: 'pending', message: entry?.message ?? '' };
+    // Barrière finale, avant le transport : un créneau demandé passé, absent ou illisible ne repart pas. Le résultat reste à
+    // vérifier (vérification AP72 possible), l'opération garde sa clé, son corps et sa version — rien n'est annulé.
+    const refusal = lessonResendReason({ kind: entry.meta.kind, command: entry.command }, now);
+    if (refusal !== null) return { status: 'pending', message: refusal };
     return this.emit(entry.command, csrf);
   }
 
@@ -243,8 +292,9 @@ class CommandStore {
     this.generation++;
     this.accessScopes.clear();
     this.currentSchoolId = null;
-    this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null, confirmations: [], byKind: this.snapshot.byKind, rereads: this.snapshot.rereads };
-    try { window.sessionStorage.removeItem(storageKey); } catch { /* nothing stored */ }
+    this.metadata = this.eraseMetadata();
+    this.snapshot = { entries: new Map(), revision: this.snapshot.revision, confirmed: null, confirmations: [], byKind: this.snapshot.byKind,
+      rereads: this.snapshot.rereads, metadata: this.metadata };
     for (const listener of this.listeners) listener();
   }
 }
