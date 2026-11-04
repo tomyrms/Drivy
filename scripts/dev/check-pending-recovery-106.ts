@@ -55,7 +55,7 @@ const server = await createServer({ configFile: false, root: resolve('.'), plugi
 await server.listen();
 const address = server.httpServer!.address();
 assert(address && typeof address !== 'string');
-const browser = await chromium.launch({ channel: 'msedge', headless: true });
+const browser = await chromium.launch({ channel: 'msedge', headless: true, args: ['--disable-gpu'] });
 const checks: string[] = [];
 async function fixture(failure = '') {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -86,6 +86,7 @@ async function capture(page: Page, name: string) {
     await new Promise<void>(done => requestAnimationFrame(() => done()));
     await Promise.all(document.getAnimations().filter(animation =>
       animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+    await new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done())));
   });
   const separation = await page.evaluate(() => {
     const control = document.querySelector('#independent')!.getBoundingClientRect();
@@ -93,7 +94,7 @@ async function capture(page: Page, name: string) {
     return notice.top - control.bottom;
   });
   assert(separation >= 4, `fixture control and focus ring need their own space: ${separation}`);
-  await page.screenshot({ path: `${output}/${name}.png`, fullPage: true });
+  await page.screenshot({ path: `${output}/correction-1-${name}.png`, fullPage: true });
 }
 try {
   if (mode !== 'race') {
