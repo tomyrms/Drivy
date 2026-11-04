@@ -58,21 +58,6 @@ protocol MessagingAPITransport: Sendable {
     func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPageDTO<MessagingConversationDTO>
     func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPageDTO<MessagingMessageDTO>
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO
-    /// Capacité additive (#97) : un double sans implémentation dédiée reste valide et refuse
-    /// localement un sondage porteur d'un média avant tout appel.
-    func sendMedia(scope: MessagingScope, pending: MessagingPending,
-                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgementDTO
-}
-
-extension MessagingAPITransport {
-    func sendMedia(scope: MessagingScope, pending: MessagingPending,
-                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgementDTO {
-        guard pending.poll == nil else { throw MessagingMediaTransportFailure.invalidIntent }
-        return try await send(scope: scope, conversationID: pending.conversationID,
-            body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
-                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
-                replyToMessageId: pending.replyToMessageID, poll: pending.poll, media: media))
-    }
 }
 
 /// Les routes, l'authentification, les limites et le format de date sont délégués à l'adaptateur
@@ -120,19 +105,24 @@ struct MessagingAPIClient: MessagingService, MessagingMediaMessageSending {
             body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
                 ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
                 replyToMessageId: pending.replyToMessageID, poll: pending.poll))
+        // Symétrie : une intention sans média n'accepte pas un accusé qui en porte un.
+        guard ack.media == nil else { throw MessagingFailure.invalidResponse }
         return try acknowledgement(ack, scope: scope, pending: pending)
     }
 
     /// Capacité additive (#97) : le reçu doit désigner le même média et la même taille, y compris
-    /// quand le transport est un double injecté. Aucun rendu, stockage ou déchiffrement n'est activé.
+    /// quand le transport est un double injecté. Le POST est le même que `send`, le mode média est
+    /// déduit du DTO émis. Aucun rendu, stockage ou déchiffrement n'est activé.
     func sendMedia(scope: MessagingScope, pending: MessagingPending,
                    media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgement {
         guard pending.poll == nil else { throw MessagingMediaTransportFailure.invalidIntent }
-        let ack = try await transport.sendMedia(scope: scope, pending: pending, media: media)
-        let result = try acknowledgement(ack, scope: scope, pending: pending)
+        let ack = try await transport.send(scope: scope, conversationID: pending.conversationID,
+            body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
+                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
+                replyToMessageId: pending.replyToMessageID, poll: pending.poll, media: media))
         guard let reference = ack.media, reference.mediaID == media.mediaID,
               reference.byteSize == media.byteSize else { throw MessagingFailure.invalidResponse }
-        return result
+        return try acknowledgement(ack, scope: scope, pending: pending)
     }
 
     private func acknowledgement(_ ack: MessagingAcknowledgementDTO, scope: MessagingScope,

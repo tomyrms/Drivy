@@ -3,8 +3,9 @@ import XCTest
 
 /// #97 — raccord du média au POST message, côté transport HTTP.
 ///
-/// Ces tests sont ecrits avant l'implementation. Ils ne compilent pas sur Windows :
-/// aucune preuve RED/GREEN native n'est revendiquee par ce fichier.
+/// Correction 1/2 : le mode média est déduit du contenu émis (`body.media != nil`), le mapping
+/// des refus exige la paire exacte (statut, code) du contrat T1, et un reçu média est symétrique
+/// de l'intention. Tests écrits avant le code ; non compilés sous Windows, aucun RED/GREEN inventé.
 @MainActor
 final class MessagingMediaMessageTransportTests: XCTestCase {
     private let baseURL = MediaMessageFixture.baseURL
@@ -13,12 +14,15 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         MessagingScope(accountID: account, schoolID: school, accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
     }
 
-    private func makePending(intent: UUID, conversation: UUID, payload: Data = Data([1, 2, 3]),
-                             mentions: [UUID] = [], poll: MessagingPollDraftMeta? = nil) -> MessagingPending {
-        MessagingPending(clientMessageID: intent, conversationID: conversation,
-            ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture", payload: payload,
-                                            expectedMembersEpoch: 3),
-            mentionPersonIDs: mentions, poll: poll)
+    private func ciphertext(payload: Data = Data([1, 2, 3])) -> MessagingCiphertext {
+        MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture", payload: payload, expectedMembersEpoch: 3)
+    }
+
+    private func mediaSend(intent: UUID, payload: Data = Data([1, 2, 3]), mentions: [UUID] = [],
+                           poll: MessagingPollDraftMeta? = nil,
+                           media: MessagingMediaMessageIntent) -> MessagingSendDTO {
+        MessagingSendDTO(clientMessageId: intent, ciphertext: ciphertext(payload: payload),
+                         mentionPersonIds: mentions, replyToMessageId: nil, poll: poll, media: media)
     }
 
     // MARK: Contrats de valeur
@@ -118,14 +122,11 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!,
                                       contentType: "application/json")
         }
-        let transport = MessagingHTTPTransport(baseURL: baseURL,
-            transport: wire,
-            token: { "synthetic-token" },
-            invalidate: { _ in false },
-            currentScope: { scope })
+        let transport = MessagingHTTPTransport(baseURL: baseURL, transport: wire,
+            token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
         let media = try MessagingMediaMessageIntent(mediaID: mediaID, byteSize: 1_234)
-        let ack = try await transport.sendMedia(scope: scope,
-            pending: makePending(intent: intent, conversation: conversation), media: media)
+        let ack = try await transport.send(scope: scope, conversationID: conversation,
+            body: mediaSend(intent: intent, media: media))
         XCTAssertEqual(ack.media?.mediaID, mediaID)
         XCTAssertEqual(ack.media?.byteSize, 1_234)
         let requests = await wire.requests()
@@ -146,18 +147,17 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         let transport = MessagingHTTPTransport(baseURL: baseURL,
             transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
         let ack = try await transport.send(scope: scope, conversationID: conversation,
-            body: MessagingSendDTO(clientMessageId: intent,
-                ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture",
-                    payload: Data([1, 2, 3]), expectedMembersEpoch: 3),
-                mentionPersonIds: []))
+            body: MessagingSendDTO(clientMessageId: intent, ciphertext: ciphertext(), mentionPersonIds: []))
         XCTAssertNil(ack.media)
     }
 
-    func testPollAndMediaAreRefusedBeforeTokenAndRequest() async throws {
+    /// Le chemin direct `send` refuse un sondage + média avant jeton et requête, sans dépendre
+    /// de l'entrée `sendMedia` du client.
+    func testDirectSendWithPollAndMediaIsRefusedBeforeTokenAndRequest() async throws {
         let account = UUID(), school = UUID(), conversation = UUID()
         let scope = makeScope(account: account, school: school)
         let wire = RecordingMediaMessageHTTP { request in
-            XCTFail("Aucune requete ne doit partir pour un sondage porte par un media")
+            XCTFail("Aucune requête ne doit partir pour un sondage porté par un média")
             return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
         }
         let token = CountingMediaMessageToken()
@@ -166,20 +166,19 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             currentScope: { scope })
         let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 10)
         do {
-            _ = try await transport.sendMedia(scope: scope,
-                pending: makePending(intent: UUID(), conversation: conversation,
-                    poll: MessagingPollDraftMeta(allowsMultiple: false, optionIDs: ["o1", "o2"])),
-                media: media)
-            XCTFail("Un message ne peut pas porter un sondage et un media")
-        } catch let failure as MessagingMediaTransportFailure {
-            XCTAssertEqual(failure, .invalidIntent)
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(),
+                    poll: MessagingPollDraftMeta(allowsMultiple: false, optionIDs: ["o1", "o2"]), media: media))
+            XCTFail("Un message ne peut pas porter un sondage et un média")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .invalidResponse)
         }
         let requests = await wire.requests()
         XCTAssertEqual(requests.count, 0)
         XCTAssertEqual(token.requests, 0)
     }
 
-    // MARK: Recu du POST media
+    // MARK: Reçu du POST média
 
     func testMediaReceiptMustCarryTheSameMediaAndSize() async throws {
         let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID(), mediaID = UUID()
@@ -202,12 +201,34 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             let transport = MessagingHTTPTransport(baseURL: baseURL,
                 transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
             do {
-                _ = try await transport.sendMedia(scope: scope,
-                    pending: makePending(intent: intent, conversation: conversation), media: media)
-                XCTFail("Un recu sans le meme media ne peut pas acquitter l'envoi")
+                _ = try await transport.send(scope: scope, conversationID: conversation,
+                    body: mediaSend(intent: intent, media: media))
+                XCTFail("Un reçu sans le même média ne peut pas acquitter l'envoi")
             } catch let failure as MessagingFailure {
-                XCTAssertEqual(failure, .invalidResponse, variant ?? "media absent")
+                XCTAssertEqual(failure, .invalidResponse, variant ?? "média absent")
             }
+        }
+    }
+
+    /// Symétrie : une intention SANS média ne peut pas recevoir un reçu qui en porte un.
+    func testOrdinarySendRejectsAnUnexpectedMediaReceipt() async throws {
+        let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID(), mediaID = UUID()
+        let scope = makeScope(account: account, school: school)
+        let wire = RecordingMediaMessageHTTP { request in
+            let response = MediaMessageFixture.receiptJSON(intent: intent, message: UUID(),
+                conversation: conversation, account: account, school: school, payload: Data([1, 2, 3]),
+                media: "{\"mediaId\":\"\(mediaID)\",\"byteSize\":12,\"deleted\":false}")
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!,
+                                      contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport(baseURL: baseURL,
+            transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
+        do {
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: MessagingSendDTO(clientMessageId: intent, ciphertext: ciphertext(), mentionPersonIds: []))
+            XCTFail("Un reçu média ne correspond pas à une intention sans média")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .invalidResponse)
         }
     }
 
@@ -224,8 +245,8 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         }
         let transport = MessagingHTTPTransport(baseURL: baseURL,
             transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
-        let ack = try await transport.sendMedia(scope: scope,
-            pending: makePending(intent: intent, conversation: conversation), media: media)
+        let ack = try await transport.send(scope: scope, conversationID: conversation,
+            body: mediaSend(intent: intent, media: media))
         XCTAssertEqual(ack.clientMessageId, intent)
         let reference = try MessagingMessageMediaReference(mediaID: mediaID, byteSize: 1_234, deleted: false)
         XCTAssertEqual(ack.media, reference)
@@ -261,7 +282,7 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         XCTAssertEqual(page.items[1].meta.media, activeReference)
         XCTAssertEqual(page.items[2].meta.media, purgedReference)
         XCTAssertEqual(page.items[3].meta.media, removedReference)
-        XCTAssertNil(page.items[3].ciphertext, "Un message supprime pour tous ne garde aucun ciphertext")
+        XCTAssertNil(page.items[3].ciphertext, "Un message supprimé pour tous ne garde aucun ciphertext")
         XCTAssertTrue(page.items[3].meta.deletedForEveryone)
     }
 
@@ -300,14 +321,14 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
                 transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
             do {
                 _ = try await transport.messages(scope: scope, conversationID: conversation, before: nil)
-                XCTFail("Un media present invalide doit echouer ferme, pas devenir nil")
+                XCTFail("Un média présent invalide doit échouer fermé, pas devenir nil")
             } catch let failure as MessagingFailure {
                 XCTAssertEqual(failure, .invalidResponse, media)
             }
         }
     }
 
-    // MARK: Bornes reelles du corps avec media
+    // MARK: Bornes réelles du corps avec média
 
     func testMediaSendAtTheEnvelopeBoundStaysUnderTheSixteenKilobyteBody() async throws {
         let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID(), mediaID = UUID()
@@ -326,8 +347,8 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         let transport = MessagingHTTPTransport(baseURL: baseURL,
             transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
         let media = try MessagingMediaMessageIntent(mediaID: mediaID, byteSize: 9_000)
-        _ = try await transport.sendMedia(scope: scope,
-            pending: makePending(intent: intent, conversation: conversation, payload: payload), media: media)
+        _ = try await transport.send(scope: scope, conversationID: conversation,
+            body: mediaSend(intent: intent, payload: payload, media: media))
         let requests = await wire.requests()
         XCTAssertEqual(requests.count, 1)
     }
@@ -337,7 +358,7 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         let scope = makeScope(account: account, school: school)
         let payload = Data(repeating: 0x41, count: 9_001)
         let wire = RecordingMediaMessageHTTP { request in
-            XCTFail("Aucune requete ne doit partir au-dela de 12 000 caracteres base64")
+            XCTFail("Aucune requête ne doit partir au-delà de 12 000 caractères base64")
             return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
         }
         let token = CountingMediaMessageToken()
@@ -346,9 +367,9 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             currentScope: { scope })
         let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 9_001)
         do {
-            _ = try await transport.sendMedia(scope: scope,
-                pending: makePending(intent: UUID(), conversation: conversation, payload: payload), media: media)
-            XCTFail("Un payload au-dela de 12 000 caracteres base64 doit etre refuse")
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(), payload: payload, media: media))
+            XCTFail("Un payload au-delà de 12 000 caractères base64 doit être refusé")
         } catch let failure as MessagingFailure {
             XCTAssertEqual(failure, .invalidResponse)
         }
@@ -361,7 +382,7 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         let account = UUID(), school = UUID(), conversation = UUID()
         let scope = makeScope(account: account, school: school)
         let wire = RecordingMediaMessageHTTP { request in
-            XCTFail("Aucune requete ne doit partir pour un corps au-dela de 16 Kio")
+            XCTFail("Aucune requête ne doit partir pour un corps au-delà de 16 Kio")
             return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
         }
         let token = CountingMediaMessageToken()
@@ -371,10 +392,10 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 9_000)
         let mentions = (0..<400).map { _ in UUID() }
         do {
-            _ = try await transport.sendMedia(scope: scope,
-                pending: makePending(intent: UUID(), conversation: conversation,
-                    payload: Data(repeating: 0x41, count: 9_000), mentions: mentions), media: media)
-            XCTFail("Un corps au-dela de 16 Kio doit etre refuse")
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(), payload: Data(repeating: 0x41, count: 9_000),
+                                mentions: mentions, media: media))
+            XCTFail("Un corps au-delà de 16 Kio doit être refusé")
         } catch let failure as MessagingFailure {
             XCTAssertEqual(failure, .invalidResponse)
         }
@@ -383,9 +404,9 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         XCTAssertEqual(token.requests, 0)
     }
 
-    // MARK: Refus serveur et preservation des chemins existants
+    // MARK: Refus serveur, paires exactes et chemins existants
 
-    func testMediaRefusalsMapToTheExistingMediaFailures() async throws {
+    func testMediaRefusalsMapToTheExistingMediaFailuresThroughDirectSend() async throws {
         let account = UUID(), school = UUID(), conversation = UUID()
         let scope = makeScope(account: account, school: school)
         let cases: [(Int, String, MessagingMediaTransportFailure)] = [
@@ -395,7 +416,9 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             (409, "MEDIA_ALREADY_ATTACHED", .alreadyAttached),
             (409, "MEDIA_SIZE_MISMATCH", .sizeConflict),
             (409, "MEDIA_PURGED", .purged),
-            (403, "MESSAGING_DEVICE_REQUIRED", .deviceRequired)
+            (403, "MESSAGING_DEVICE_REQUIRED", .deviceRequired),
+            (503, "MESSAGING_NOT_ENABLED", .unavailable),
+            (503, "SERVICE_UNAVAILABLE", .unavailable)
         ]
         for (status, code, expected) in cases {
             let wire = RecordingMediaMessageHTTP { request in
@@ -405,13 +428,89 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
                 transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
             let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 10)
             do {
-                _ = try await transport.sendMedia(scope: scope,
-                    pending: makePending(intent: UUID(), conversation: conversation), media: media)
-                XCTFail("Un refus media n'est pas un succes : \(code)")
+                _ = try await transport.send(scope: scope, conversationID: conversation,
+                    body: mediaSend(intent: UUID(), media: media))
+                XCTFail("Un refus média n'est pas un succès : \(status) \(code)")
             } catch let failure as MessagingMediaTransportFailure {
-                XCTAssertEqual(failure, expected, code)
+                XCTAssertEqual(failure, expected, "\(status) \(code)")
             }
         }
+    }
+
+    /// Une paire (statut, code) hors contrat ne devient jamais un fait média final : le refus
+    /// reste celui du statut HTTP.
+    func testMediaMappingRequiresAnExactStatusAndCodePair() async throws {
+        let account = UUID(), school = UUID(), conversation = UUID()
+        let scope = makeScope(account: account, school: school)
+        let cases: [(Int, String, MessagingFailure)] = [
+            (400, "MEDIA_NOT_FOUND", .unavailable),
+            (404, "NOT_FOUND", .conversationUnavailable),
+            (409, "MEDIA_NOT_FOUND", .stateConflict),
+            (403, "MEDIA_PURGED", .accessChanged),
+            (500, "MEDIA_PURGED", .unavailable),
+            (503, "MEDIA_PURGED", .unavailable)
+        ]
+        for (status, code, expected) in cases {
+            let wire = RecordingMediaMessageHTTP { request in
+                MediaMessageFixture.errorResponse(status, code: code, url: request.url!)
+            }
+            let transport = MessagingHTTPTransport(baseURL: baseURL,
+                transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
+            let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 10)
+            do {
+                _ = try await transport.send(scope: scope, conversationID: conversation,
+                    body: mediaSend(intent: UUID(), media: media))
+                XCTFail("Une paire incohérente doit rester un refus : \(status) \(code)")
+            } catch let failure as MessagingFailure {
+                XCTAssertEqual(failure, expected, "\(status) \(code)")
+            }
+        }
+    }
+
+    /// Un statut 2xx ne déclenche aucun mapping média : le corps doit être un reçu valide.
+    func testErrorCodeOnASuccessStatusIsNotAReceiptAndIsNotMapped() async throws {
+        let account = UUID(), school = UUID(), conversation = UUID()
+        let scope = makeScope(account: account, school: school)
+        let wire = RecordingMediaMessageHTTP { request in
+            SchoolHTTPResponse(data: Data("{\"code\":\"MEDIA_PURGED\"}".utf8), status: 200,
+                               url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport(baseURL: baseURL,
+            transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
+        let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 10)
+        do {
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(), media: media))
+            XCTFail("Un corps 200 sans reçu n'est pas un succès média")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .invalidResponse)
+        } catch let failure as MessagingMediaTransportFailure {
+            XCTFail("Aucun mapping média ne doit s'appliquer sur 2xx : \(failure)")
+        }
+    }
+
+    /// 401 garde sa priorité : un renouvellement refusé n'est jamais converti en refus média.
+    func testMediaCodeOn401AfterRefusedRenewalKeepsAccessChanged() async throws {
+        let account = UUID(), school = UUID(), conversation = UUID()
+        let scope = makeScope(account: account, school: school)
+        let token = CountingMediaMessageToken()
+        let wire = RecordingMediaMessageHTTP { request in
+            MediaMessageFixture.errorResponse(401, code: "MEDIA_PURGED", url: request.url!)
+        }
+        let transport = MessagingHTTPTransport(baseURL: baseURL,
+            transport: wire, token: { try await token.accessToken() }, invalidate: { _ in false },
+            currentScope: { scope })
+        let media = try MessagingMediaMessageIntent(mediaID: UUID(), byteSize: 10)
+        do {
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(), media: media))
+            XCTFail("Un 401 n'est pas un reçu média")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .accessChanged)
+        }
+        let requests = await wire.requests()
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(token.requests, 1)
     }
 
     func testMembersChangedAndOrdinaryMessageErrorsKeepTheirExistingMeaning() async throws {
@@ -426,9 +525,9 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             transport: membersWire, token: { "synthetic-token" }, invalidate: { _ in false },
             currentScope: { scope })
         do {
-            _ = try await membersTransport.sendMedia(scope: scope,
-                pending: makePending(intent: UUID(), conversation: conversation), media: media)
-            XCTFail("Le changement de membres doit rester un refus specifique")
+            _ = try await membersTransport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(), media: media))
+            XCTFail("Le changement de membres doit rester un refus spécifique")
         } catch let failure as MessagingFailure {
             XCTAssertEqual(failure, .membersChanged)
         }
@@ -443,10 +542,8 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
                 currentScope: { scope })
             do {
                 _ = try await transport.send(scope: scope, conversationID: conversation,
-                    body: MessagingSendDTO(clientMessageId: UUID(),
-                        ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture",
-                            payload: Data([1, 2, 3]), expectedMembersEpoch: 3),
-                        mentionPersonIds: []))
+                    body: MessagingSendDTO(clientMessageId: UUID(), ciphertext: ciphertext(),
+                                           mentionPersonIds: []))
                 XCTFail("Un refus ordinaire doit rester un MessagingFailure")
             } catch let failure as MessagingFailure {
                 XCTAssertEqual(failure, expected, code)
@@ -454,7 +551,7 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         }
     }
 
-    // MARK: Origine, scope, 401 et en-tetes
+    // MARK: Origine, scope, 401 et en-têtes
 
     func testMediaSendRetriesOnceAfter401WithTheSameIntentAndWithoutDeviceHeader() async throws {
         let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID(), mediaID = UUID()
@@ -462,7 +559,7 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
         let token = MediaSequenceToken(["token-one", "token-two"])
         let wire = RecordingMediaMessageHTTP { request in
             XCTAssertNil(request.value(forHTTPHeaderField: "X-Drivy-Device-Id"),
-                         "Le POST message reel n'exige aucun header d'appareil")
+                         "Le POST message réel n'exige aucun header d'appareil")
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Drivy-Expected-Person-Id"),
                            account.uuidString.lowercased())
             XCTAssertEqual(request.value(forHTTPHeaderField: "X-Drivy-Expected-Access-Epoch"), "3")
@@ -481,12 +578,12 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             invalidate: { _ in true },
             currentScope: { scope })
         let media = try MessagingMediaMessageIntent(mediaID: mediaID, byteSize: 1_234)
-        _ = try await transport.sendMedia(scope: scope,
-            pending: makePending(intent: intent, conversation: conversation), media: media)
+        _ = try await transport.send(scope: scope, conversationID: conversation,
+            body: mediaSend(intent: intent, media: media))
         let requests = await wire.requests()
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(requests[0].httpBody, requests[1].httpBody,
-                       "Le meme clientMessageID, le meme ciphertext et le meme media partent au retry")
+                       "Le même clientMessageID, le même ciphertext et le même média partent au retry")
         XCTAssertEqual(requests[0].value(forHTTPHeaderField: "Authorization"), "Bearer token-one")
         XCTAssertEqual(requests[1].value(forHTTPHeaderField: "Authorization"), "Bearer token-two")
         XCTAssertEqual(token.requests, 2)
@@ -507,9 +604,9 @@ final class MessagingMediaMessageTransportTests: XCTestCase {
             transport: wire, token: { "synthetic-token" }, invalidate: { _ in false }, currentScope: { scope })
         let media = try MessagingMediaMessageIntent(mediaID: mediaID, byteSize: 10)
         do {
-            _ = try await transport.sendMedia(scope: scope,
-                pending: makePending(intent: UUID(), conversation: conversation), media: media)
-            XCTFail("Un contexte d'une autre ecole ne peut pas acquitter l'envoi")
+            _ = try await transport.send(scope: scope, conversationID: conversation,
+                body: mediaSend(intent: UUID(), media: media))
+            XCTFail("Un contexte d'une autre école ne peut pas acquitter l'envoi")
         } catch let failure as MessagingFailure {
             XCTAssertEqual(failure, .contextChanged)
         }

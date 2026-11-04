@@ -130,25 +130,15 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO {
-        try await sendMessage(scope: scope, conversationID: conversationID, body: body, mediaFailures: false)
+        try await sendMessage(scope: scope, conversationID: conversationID, body: body)
     }
 
-    /// Capacité additive (#97) : même POST que `send`, avec l'intention média et le mapping fermé
-    /// des refus média. Le serveur relit seul les droits ; aucun header d'appareil n'est ajouté ici.
-    func sendMedia(scope: MessagingScope, pending: MessagingPending,
-                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgementDTO {
-        guard pending.poll == nil else { throw MessagingMediaTransportFailure.invalidIntent }
-        return try await sendMessage(scope: scope, conversationID: pending.conversationID,
-            body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
-                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
-                replyToMessageId: pending.replyToMessageID, poll: pending.poll, media: media),
-            mediaFailures: true)
-    }
-
-    private func sendMessage(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO,
-                             mediaFailures: Bool) async throws -> MessagingAcknowledgementDTO {
+    private func sendMessage(scope: MessagingScope, conversationID: UUID,
+                             body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO {
         // Exclusivité média/sondage : refus local, avant tout jeton ou requête.
         guard body.poll == nil || body.media == nil else { throw MessagingFailure.invalidResponse }
+        // Le mode média est déduit du contenu réellement émis, jamais de l'entrée appelée.
+        let mediaFailures = body.media != nil
         let payload = try JSONEncoder().encode(SendBody(clientMessageId: body.clientMessageId,
             ciphertext: WireCiphertext(body.ciphertext), expectedMembersEpoch: body.ciphertext.expectedMembersEpoch,
             mentionPersonIds: body.mentionPersonIds,
@@ -178,6 +168,9 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         if let media = body.media {
             guard let mediaReference, mediaReference.mediaID == media.mediaID,
                   mediaReference.byteSize == media.byteSize else { throw MessagingFailure.invalidResponse }
+        } else {
+            // Symétrie : une intention sans média n'accepte pas un reçu qui en porte un.
+            guard mediaReference == nil else { throw MessagingFailure.invalidResponse }
         }
         return MessagingAcknowledgementDTO(clientMessageId: receipt.clientMessageId, serverMessageId: receipt.id,
             conversationId: receipt.conversationId, schoolId: receipt.schoolId, acceptedAt: try date(receipt.acceptedAt),
@@ -204,18 +197,19 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     /// Plafond du corps JSON d'un lot de signalement : 640 Kio (`bodyLimit` du serveur).
     private static let maximumReportBodyByteCount = 655_360
 
-    /// Refus média du POST message, traduits uniquement dans le chemin média (#97 §3.12).
-    /// Aucun identifiant, aucune URL et aucun texte libre ne traversent cette traduction.
-    private static func mediaFailure(_ code: String) -> MessagingMediaTransportFailure? {
-        switch code {
-        case "INVALID_MEDIA": return .invalidIntent
-        case "MEDIA_NOT_FOUND": return .notFound
-        case "MEDIA_INTENT_CONFLICT": return .intentConflict
-        case "MEDIA_ALREADY_ATTACHED": return .alreadyAttached
-        case "MEDIA_SIZE_MISMATCH": return .sizeConflict
-        case "MEDIA_PURGED": return .purged
-        case "MESSAGING_DEVICE_REQUIRED": return .deviceRequired
-        case "MESSAGING_NOT_ENABLED", "SERVICE_UNAVAILABLE": return .unavailable
+    /// Refus média du POST message, traduits uniquement dans le chemin média (#97 §3.12) et
+    /// seulement pour les paires (statut, code) que T1 émet réellement. Aucun identifiant, aucune
+    /// URL et aucun texte libre ne traversent cette traduction.
+    private static func mediaFailure(status: Int, code: String) -> MessagingMediaTransportFailure? {
+        switch (status, code) {
+        case (400, "INVALID_MEDIA"): return .invalidIntent
+        case (404, "MEDIA_NOT_FOUND"): return .notFound
+        case (409, "MEDIA_INTENT_CONFLICT"): return .intentConflict
+        case (409, "MEDIA_ALREADY_ATTACHED"): return .alreadyAttached
+        case (409, "MEDIA_SIZE_MISMATCH"): return .sizeConflict
+        case (409, "MEDIA_PURGED"): return .purged
+        case (403, "MESSAGING_DEVICE_REQUIRED"): return .deviceRequired
+        case (503, "MESSAGING_NOT_ENABLED"), (503, "SERVICE_UNAVAILABLE"): return .unavailable
         default: return nil
         }
     }
@@ -349,9 +343,13 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             // qa84 : sans ce code, un refus du message après chiffrement réussi restait muet sous la saisie.
             if !(200...299).contains(response.status) { diagnostics.recordIfEmpty(MessagingDiagnostics.http(path, response.status)) }
             let failureCode = (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code
-            // Chemin média seulement : les codes média fermés prennent le type de refus média existant.
-            // MESSAGING_MEMBERS_CHANGED n'en fait pas partie et garde son refus spécifique ci-dessous.
-            if mediaFailures, let failureCode, let failure = Self.mediaFailure(failureCode) { throw failure }
+            // Chemin média seulement, et seulement pour une paire (statut, code) du contrat T1 :
+            // un 2xx garde le décodage du reçu, un 401/403 garde son refus d'accès, une combinaison
+            // incohérente garde le refus de son statut. MESSAGING_MEMBERS_CHANGED reste ci-dessous.
+            if mediaFailures, !(200...299).contains(response.status), let failureCode,
+               let failure = Self.mediaFailure(status: response.status, code: failureCode) {
+                throw failure
+            }
             if response.status == 409 {
                 if failureCode == "MESSAGING_MEMBERS_CHANGED" {
                     throw MessagingFailure.membersChanged

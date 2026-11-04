@@ -1,10 +1,11 @@
 import XCTest
 @testable import Drivy
 
-/// #97 — capacite additive `MessagingMediaMessageSending` du client, avec transport injecte.
+/// #97 — capacité additive `MessagingMediaMessageSending` du client, avec transport injecté.
 ///
-/// Ces tests sont ecrits avant l'implementation et ne compilent pas sur Windows.
-/// Aucune preuve d'execution Swift n'est revendiquee ici.
+/// Correction 1/2 : l'envoi média passe par le même `send` que le chemin ordinaire (le mode est
+/// déduit du DTO), et un accusé média est symétrique de l'intention. Tests écrits avant le code,
+/// non compilés sous Windows.
 @MainActor
 final class MessagingMediaMessageClientTests: XCTestCase {
     private let baseURL = URL(string: "https://api.example.invalid/")!
@@ -48,7 +49,7 @@ final class MessagingMediaMessageClientTests: XCTestCase {
         XCTAssertEqual(result.conversationID, pending.conversationID)
         XCTAssertEqual(result.schoolID, scope.schoolID)
         XCTAssertEqual(result.senderID, scope.accountID)
-        let calls = await transport.mediaCallCount()
+        let calls = await transport.sendCallCount()
         XCTAssertEqual(calls, 1)
     }
 
@@ -61,7 +62,7 @@ final class MessagingMediaMessageClientTests: XCTestCase {
 
         do {
             _ = try await client.sendMedia(scope: scope, pending: pending, media: media)
-            XCTFail("Un recu sans media ne peut pas acquitter un envoi media")
+            XCTFail("Un reçu sans média ne peut pas acquitter un envoi média")
         } catch let failure as MessagingFailure {
             XCTAssertEqual(failure, .invalidResponse)
         }
@@ -80,7 +81,7 @@ final class MessagingMediaMessageClientTests: XCTestCase {
             let client = MessagingAPIClient(transport: transport)
             do {
                 _ = try await client.sendMedia(scope: scope, pending: pending, media: media)
-                XCTFail("Un media ou une taille differents ne peuvent pas acquitter l'envoi")
+                XCTFail("Un média ou une taille différents ne peuvent pas acquitter l'envoi")
             } catch let failure as MessagingFailure {
                 XCTAssertEqual(failure, .invalidResponse)
             }
@@ -110,7 +111,7 @@ final class MessagingMediaMessageClientTests: XCTestCase {
             let client = MessagingAPIClient(transport: InjectedMediaMessageTransport(ack: ack))
             do {
                 _ = try await client.sendMedia(scope: scope, pending: pending, media: media)
-                XCTFail("Un accusé hors contexte ne peut pas etre accepte par le client")
+                XCTFail("Un accusé hors contexte ne peut pas être accepté par le client")
             } catch let failure as MessagingFailure {
                 XCTAssertEqual(failure, .invalidResponse)
             }
@@ -127,11 +128,11 @@ final class MessagingMediaMessageClientTests: XCTestCase {
 
         do {
             _ = try await client.sendMedia(scope: scope, pending: pending, media: media)
-            XCTFail("Un sondage et un media ne peuvent pas coexister")
+            XCTFail("Un sondage et un média ne peuvent pas coexister")
         } catch let failure as MessagingMediaTransportFailure {
             XCTAssertEqual(failure, .invalidIntent)
         }
-        let calls = await transport.mediaCallCount()
+        let calls = await transport.sendCallCount()
         XCTAssertEqual(calls, 0)
     }
 
@@ -147,13 +148,14 @@ final class MessagingMediaMessageClientTests: XCTestCase {
 
         let calls = await transport.capturedCalls()
         XCTAssertEqual(calls.count, 1)
-        XCTAssertEqual(calls[0].0.clientMessageID, pending.clientMessageID)
-        XCTAssertEqual(calls[0].0.conversationID, pending.conversationID)
-        XCTAssertEqual(calls[0].0.ciphertext, pending.ciphertext)
-        XCTAssertEqual(calls[0].0.mentionPersonIDs, pending.mentionPersonIDs)
-        XCTAssertEqual(calls[0].0.replyToMessageID, pending.replyToMessageID)
-        XCTAssertEqual(calls[0].0.poll, pending.poll)
-        XCTAssertEqual(calls[0].1, media)
+        XCTAssertEqual(calls[0].0, pending.conversationID)
+        let body = calls[0].1
+        XCTAssertEqual(body.clientMessageId, pending.clientMessageID)
+        XCTAssertEqual(body.ciphertext, pending.ciphertext)
+        XCTAssertEqual(body.mentionPersonIds, pending.mentionPersonIDs)
+        XCTAssertEqual(body.replyToMessageId, pending.replyToMessageID)
+        XCTAssertEqual(body.poll, pending.poll)
+        XCTAssertEqual(body.media, media)
     }
 
     func testClientKeepsTheServerDeletedFactWithoutRefusingTheAcknowledgement() async throws {
@@ -179,14 +181,32 @@ final class MessagingMediaMessageClientTests: XCTestCase {
 
         let result = try await client.send(scope: scope, pending: pending)
         XCTAssertEqual(result.clientMessageID, pending.clientMessageID)
-        let calls = await transport.mediaCallCount()
-        XCTAssertEqual(calls, 0, "L'envoi ordinaire n'emprunte pas la capacite media")
+        let calls = await transport.capturedCalls()
+        XCTAssertEqual(calls.count, 1)
+        XCTAssertNil(calls[0].1.media, "L'envoi ordinaire n'émet aucun média")
+    }
+
+    /// Symétrie côté client : un accusé portant un média ne correspond pas à une intention ordinaire.
+    func testOrdinarySendRejectsAnUnexpectedMediaAcknowledgement() async throws {
+        let scope = makeScope()
+        let pending = makePending()
+        let unexpected = try MessagingMessageMediaReference(mediaID: UUID(), byteSize: 12, deleted: false)
+        let transport = InjectedMediaMessageTransport(
+            ack: acknowledgement(scope: scope, pending: pending, media: unexpected))
+        let client = MessagingAPIClient(transport: transport)
+
+        do {
+            _ = try await client.send(scope: scope, pending: pending)
+            XCTFail("Un accusé média ne correspond pas à une intention sans média")
+        } catch let failure as MessagingFailure {
+            XCTAssertEqual(failure, .invalidResponse)
+        }
     }
 }
 
 private actor InjectedMediaMessageTransport: MessagingAPITransport {
     private let ack: MessagingAcknowledgementDTO
-    private var captured: [(MessagingPending, MessagingMediaMessageIntent)] = []
+    private var captured: [(UUID, MessagingSendDTO)] = []
 
     init(ack: MessagingAcknowledgementDTO) { self.ack = ack }
 
@@ -202,15 +222,10 @@ private actor InjectedMediaMessageTransport: MessagingAPITransport {
 
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws
         -> MessagingAcknowledgementDTO {
-        ack
-    }
-
-    func sendMedia(scope: MessagingScope, pending: MessagingPending, media: MessagingMediaMessageIntent) async throws
-        -> MessagingAcknowledgementDTO {
-        captured.append((pending, media))
+        captured.append((conversationID, body))
         return ack
     }
 
-    func mediaCallCount() -> Int { captured.count }
-    func capturedCalls() -> [(MessagingPending, MessagingMediaMessageIntent)] { captured }
+    func sendCallCount() -> Int { captured.count }
+    func capturedCalls() -> [(UUID, MessagingSendDTO)] { captured }
 }
