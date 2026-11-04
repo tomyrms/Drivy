@@ -23,7 +23,7 @@ import { verifySchoolFirstLesson } from './check-school-first-lesson.js';
 import { verifyAuditV2 } from './check-audit-v2-acceptance.js';
 import { verifySchoolFormations } from './check-school-formations.js';
 import { verifyPersonalWelcome } from './check-personal-welcome.js';
-import { verifyAccountRecovery } from './check-school-account-recovery.js';
+import { verifyAccountRecovery,type RecoveryAccount } from './check-school-account-recovery.js';
 import { verifySchoolCodeEntry } from './check-school-code-entry.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
@@ -135,7 +135,7 @@ async function main() {
     assert(!runtimeRole.rolsuper&&!runtimeRole.rolbypassrls,'Le service métier utilise drivy_app sans BYPASSRLS');
 
     stage='serveur OIDC éphémère';temporary=await mkdtemp(resolve(tmpdir(),'drivy-opening-e2e-'));
-    const adminPassword=syntheticSecret(),operatorPassword=syntheticSecret(),consumerPassword=syntheticSecret(),clientSecret=syntheticSecret(),accountsSecret=syntheticSecret();
+    const adminPassword=syntheticSecret(),operatorPassword=syntheticSecret(),consumerPassword=syntheticSecret(),clientSecret=syntheticSecret(),accountsSecret=syntheticSecret(),instructorPassword=syntheticSecret();
     const envPath=resolve(temporary,'keycloak.env');
     stage='compilation du fournisseur d’identité contre la distribution verrouillée';
     const identityProviderJar=await buildIdentityProvider(temporary);
@@ -541,7 +541,7 @@ async function main() {
     await staffPage.getByRole('heading',{name:'Créer votre compte',exact:true}).waitFor();
     const otherAddress=await submitRegistration(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'someone-else@example.invalid',password:syntheticSecret()});
     assert(otherAddress.includes('l’adresse à laquelle'),'Le lien d’invitation ne crée pas de compte à une autre adresse');
-    await register(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'instructor@example.invalid',password:syntheticSecret()});
+    await register(staffPage,{firstName:'Moniteur',lastName:'Synthétique',email:'instructor@example.invalid',password:instructorPassword});
     await staffPage.getByRole('heading',{name:'Auto-école Recette · synthétique',exact:true}).waitFor();
     const staffSession=await staffContext.request.get(`${origin}/app/bff/session`);
     assert(z.object({authenticated:z.literal(true),user:z.object({emailVerified:z.literal(true)})}).safeParse(await staffSession.json()).success,'Le moniteur vérifie son adresse avant de rejoindre l’école');
@@ -628,7 +628,14 @@ async function main() {
       'Le réglage GPS est accepté et durable après confirmation explicite avec la preuve récente');
     await page.screenshot({path:resolve(artifactDirectory,'13-gps-enabled-synthetic.png'),fullPage:true});
     if(extendedSuites.has('recovery')) {
-      await verifyAccountRecovery({browser,origin,apiOrigin,issuer,keycloakOrigin,realmName,adminPassword,clientId:'drivy-web-e2e',clientSecret,ownMail,mailLink,assert,setStage:value=>{stage=value;}});
+      // Les trois rôles récupèrent leur propre compte déjà rattaché : administrateur (école, leçon donnée),
+      // moniteur (rattachement et disponibilités) et élève (dossier, formation, leçon suivie).
+      const recoveryAccounts:RecoveryAccount[]=[
+        {role:'ADMIN',email:'school@example.invalid',password:consumerPassword,revokeOtherSessions:true},
+        {role:'INSTRUCTOR',email:'instructor@example.invalid',password:instructorPassword,revokeOtherSessions:false},
+        {role:'LEARNER',email:'first-learner@example.invalid',revokeOtherSessions:true}];
+      await verifyAccountRecovery({browser,origin,apiOrigin,issuer,keycloakOrigin,realmName,adminPassword,clientId:'drivy-web-e2e',clientSecret,
+        administration,accounts:recoveryAccounts,ownMail,mailLink,assert,setStage:value=>{stage=value;}});
     } else {
       console.log('Recette étendue récupération de compte non exécutée : harnais à réaligner sur le portail reconstruit.');
     }
