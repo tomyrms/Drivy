@@ -43,6 +43,99 @@ import Testing
         }
     }
 
+    /// Même preuve, dans l'ordre inverse : l'accueil guidé écrit `drivy.onboarding_progress` (`profiles.ts:266`,
+    /// `:277-278`), le dossier administratif `drivy.learner_profile` puis `drivy.person` (`profiles.ts:127`, `:148`,
+    /// `:152`). Aucune version n'est partagée : la paire n'attend pas, et l'archive chiffrée se relit avec ses entrées.
+    @Test func aProfileRecordAndAnOnboardingSaveCoexistInEitherOrder() throws {
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.saveOnboarding, resourceID: UUID(), version: 1))
+            try store.save(command(.updateProfile, resourceID: UUID(),
+                routeResourceID: ProfileFixture.learnerID, version: 1))
+            #expect(try store.pendingCommands(for: scope).count == 2)
+            // Relecture du coffre : la règle desserrée vaut aussi pour la validation de l'archive.
+            let reopened = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            #expect(try reopened.pendingCommands(for: scope).count == 2)
+        }
+    }
+
+    /// Ce que la preuve ne couvre pas reste séquentiel : la finalisation de l'accueil relit le dossier et ses champs
+    /// manquants (`profiles.ts:167-173`, `:268`), deux enregistrements d'accueil partagent
+    /// `onboarding_progress.version`, deux dossiers partagent `learner_profile.version`, et une politique de champ
+    /// avance la version de l'école (`profiles.ts:208`, `:221`).
+    @Test func theProfileAndOnboardingExceptionStopsAtCompletionAndAtTheSameRecord() throws {
+        // Dossier puis finalisation : la finalisation dépend du dossier, elle attend.
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.updateProfile, resourceID: UUID(),
+                routeResourceID: ProfileFixture.learnerID, version: 1))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.completeOnboarding, resourceID: UUID(), version: 1))
+            }
+        }
+        // Finalisation puis dossier : même dépendance, l'exception ne nomme que `saveOnboarding`.
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.completeOnboarding, resourceID: UUID(), version: 1))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.updateProfile, resourceID: UUID(),
+                    routeResourceID: ProfileFixture.learnerID, version: 1))
+            }
+        }
+        // Deux enregistrements d'accueil : une seule ligne de progression, une seule version.
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.saveOnboarding, resourceID: UUID(), version: 1))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.saveOnboarding, resourceID: UUID(), version: 2))
+            }
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.completeOnboarding, resourceID: UUID(), version: 1))
+            }
+        }
+        // Deux dossiers : une seule ligne `learner_profile`, une seule version, même pour deux élèves.
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.updateProfile, resourceID: UUID(),
+                routeResourceID: ProfileFixture.learnerID, version: 1))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.updateProfile, resourceID: UUID(),
+                    routeResourceID: UUID(), version: 1))
+            }
+        }
+        // Politique de champ : elle avance la version de l'école, elle reste une barrière.
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.createProfilePolicy, version: 0, expectedVersion: 8))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.saveOnboarding, resourceID: UUID(), version: 1))
+            }
+        }
+    }
+
+    /// L'exception ne franchit ni une autre époque d'accès ni une autre adhésion : la barrière de portée reste intacte.
+    @Test func theProfileAndOnboardingExceptionKeepsTheAccessBarrier() throws {
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            try store.save(command(.saveOnboarding, resourceID: UUID(), version: 1))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.updateProfile, scope: ConfigurationFixture.scope(epoch: 2),
+                    resourceID: UUID(), routeResourceID: ProfileFixture.learnerID, version: 1))
+            }
+        }
+        try inDirectory { directory in
+            let store = EncryptedSchoolCommandOutbox(directory: directory, keyData: key)
+            let otherMembership = SchoolCommandScope(personID: ConfigurationFixture.personID,
+                schoolID: ConfigurationFixture.schoolID, membershipID: UUID(), accessEpoch: 1,
+                apiBaseURL: ConfigurationFixture.scope().apiBaseURL)
+            try store.save(command(.saveOnboarding, scope: otherMembership, resourceID: UUID(), version: 1))
+            #expect(throws: SchoolConfigurationFailure.pendingCommand) {
+                try store.save(command(.updateProfile, resourceID: UUID(),
+                    routeResourceID: ProfileFixture.learnerID, version: 1))
+            }
+        }
+    }
+
     /// Une politique de champ avance la version de l'école (`profiles.ts:69`, `:208`, `:221`) : elle reste une
     /// barrière pour tout le reste, invitation comprise.
     @Test func aProfilePolicyStillBlocksAnInvitation() throws {

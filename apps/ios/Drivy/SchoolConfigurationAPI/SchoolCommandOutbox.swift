@@ -345,6 +345,14 @@ extension PendingSchoolCommand {
         // vérifie que la version du dossier et de la personne (profiles.ts:122-161). Aucune des deux ne relit l'autre.
         if kind.isInvitation != other.kind.isInvitation,
            kind.isProfileRecord || other.kind.isProfileRecord { return false }
+        // Dossier administratif et enregistrement d'accueil guidé, dans les deux ordres : deux lignes distinctes, sans
+        // version commune. `UPDATE_ADMINISTRATIVE_PROFILE` vérifie et avance `drivy.learner_profile` puis
+        // `drivy.person` (profiles.ts:127, :148, :152) ; `SAVE_ONBOARDING` vérifie et avance `drivy.onboarding_progress`
+        // de l'adhésion (profiles.ts:266, :277-278). Aucune des deux ne relit l'autre.
+        // `COMPLETE_ONBOARDING` reste exclu : sa finalisation passe par `progressDTO`, qui relit le dossier et ses
+        // champs manquants (profiles.ts:167-173, :268) ; des tables distinctes ne prouvent pas l'indépendance.
+        if (kind == .updateProfile && other.kind == .saveOnboarding)
+            || (kind == .saveOnboarding && other.kind == .updateProfile) { return false }
         // Signalements de leçons différentes : la création ne vérifie aucune version et n'écrit que la leçon, son
         // brouillon et ses captures (capture-observations.ts:143-165).
         if kind == .createObservation, other.kind == .createObservation,

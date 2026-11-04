@@ -1223,6 +1223,10 @@ import Observation
                 }
                 guard request == generation, !invalidated else { return false }
                 pending = nil; absentPendingID = nil; needsReload = failure == .conflict || refused
+                // La commande refusée a quitté la file : la barrière de la fiche se relit sur ce qui reste, comme après
+                // une confirmation. Une autre commande réellement bloquante garde la fiche fermée ; le verrou n'est
+                // jamais effacé à l'aveugle (un refus définitif ne laisse pas la barrière de cet écran fermée).
+                rereadBlockingCommand()
                 if failure == .notFound {
                     // L’accès à la leçon se juge à sa relecture, pas au refus d’une commande.
                     isBusy = false; pendingReviewed = false
