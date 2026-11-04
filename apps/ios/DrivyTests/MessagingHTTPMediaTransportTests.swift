@@ -443,7 +443,89 @@ final class MessagingHTTPMediaTransportTests: XCTestCase {
             XCTAssertEqual(failure, .contextChanged)
         }
         let attempts = await wire.count()
-        XCTAssertEqual(attempts, 1)
+        XCTAssertEqual(attempts, 1, "Aucun second paquet après un changement pendant l'invalidation")
+        XCTAssertEqual(token.requests, 1, "Aucun renouvellement demandé après un changement pendant l'invalidation")
+        XCTAssertEqual(token.invalidated, ["synthetic-token"])
+    }
+
+    func testAnAlreadyCancelledTaskNeverReachesTheTokenSource() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())
+        let token = MediaTokenFixture()
+        let wire = MediaWireRecorder { request, _ in mediaJSONReply(request, "{}") }
+        let transport = MessagingHTTPMediaTransport.using(baseURL: baseURL, deviceID: device,
+            tokenSource: token, wire: wire, currentScope: { scope })
+        // Annulation posée avant le premier `await` de la tâche : la source de jeton n'est
+        // pas consultée et aucun paquet ne part.
+        let call = Task { () -> Void in
+            withUnsafeCurrentTask { $0?.cancel() }
+            _ = try await transport.upload(sealed, scope: scope, conversationID: UUID())
+        }
+        do {
+            try await call.value
+            XCTFail("Une tâche annulée ne dépose rien")
+        } catch is CancellationError {
+        } catch {
+            XCTFail("L'annulation reste une CancellationError")
+        }
+        XCTAssertEqual(token.requests, 0)
+        let sent = await wire.count()
+        XCTAssertEqual(sent, 0)
+    }
+
+    func testTokenFailuresAreMappedClosedWithoutTransportingTheirPayload() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())
+        let sentinel = "SENTINEL-TOKEN-LEAK-42"
+        let cases: [(String, @MainActor @Sendable () async throws -> String, MessagingMediaTransportFailure, String)] = [
+            ("panne",
+             { throw NSError(domain: "sentinel-domain", code: 7,
+                             userInfo: [NSLocalizedDescriptionKey: sentinel]) },
+             .unavailable, "MEDIA-PUT"),
+            ("réauthentification", { throw IdentityFailure.reauthentication }, .accessChanged, "MEDIA-PUT"),
+        ]
+        for (label, source, expected, code) in cases {
+            let wire = MediaWireRecorder { request, _ in mediaJSONReply(request, "{}") }
+            let diagnostics = MessagingDiagnostics()
+            let transport = MessagingHTTPMediaTransport(baseURL: baseURL, deviceID: device, wire: wire,
+                diagnostics: diagnostics, token: source, invalidate: { _ in false }, currentScope: { scope })
+            do {
+                _ = try await transport.upload(sealed, scope: scope, conversationID: UUID())
+                XCTFail("Une source de jeton en échec n'est pas un dépôt : \(label)")
+            } catch let failure as MessagingMediaTransportFailure {
+                XCTAssertEqual(failure, expected, label)
+                XCTAssertFalse(String(describing: failure).contains(sentinel), label)
+                XCTAssertFalse(String(reflecting: failure).contains(sentinel), label)
+            }
+            let sent = await wire.count()
+            XCTAssertEqual(sent, 0, label)
+            XCTAssertEqual(diagnostics.last, code, label)
+            assertFixedCode(diagnostics.last, scope: scope, sealed: sealed)
+        }
+    }
+
+    func testCancellationFromTheTokenSourceStaysACancellation() async throws {
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 4, apiBaseURL: baseURL.absoluteString)
+        let sealed = mediaSealed(Data([1, 2]), mediaID: UUID())
+        let cases: [(String, @MainActor @Sendable () async throws -> String)] = [
+            ("CancellationError", { throw CancellationError() }),
+            ("URLError.cancelled", { throw URLError(.cancelled) }),
+        ]
+        for (label, source) in cases {
+            let wire = MediaWireRecorder { request, _ in mediaJSONReply(request, "{}") }
+            let transport = MessagingHTTPMediaTransport(baseURL: baseURL, deviceID: device, wire: wire,
+                diagnostics: MessagingDiagnostics(), token: source, invalidate: { _ in false },
+                currentScope: { scope })
+            do {
+                _ = try await transport.upload(sealed, scope: scope, conversationID: UUID())
+                XCTFail("Une annulation de la source de jeton n'est pas un dépôt : \(label)")
+            } catch is CancellationError {
+            } catch {
+                XCTFail("L'annulation reste une CancellationError : \(label)")
+            }
+            let sent = await wire.count()
+            XCTAssertEqual(sent, 0, label)
+        }
     }
 
     // MARK: Téléchargement
@@ -842,6 +924,8 @@ private final class MediaTokenFixture: AccessTokenSource {
     private let renews: Bool
     private weak var box: MediaScopeBox?
     private(set) var invalidated: [String] = []
+    /// Nombre d'entrées réellement effectuées dans la source : sert de barrière aux tests.
+    private(set) var requests = 0
 
     init(_ value: String = "synthetic-token", renews: Bool = true, box: MediaScopeBox? = nil) {
         current = value
@@ -849,7 +933,10 @@ private final class MediaTokenFixture: AccessTokenSource {
         self.box = box
     }
 
-    func accessToken() async throws -> String { current }
+    func accessToken() async throws -> String {
+        requests += 1
+        return current
+    }
 
     func invalidateAccessToken(_ token: String) async -> Bool {
         invalidated.append(token)

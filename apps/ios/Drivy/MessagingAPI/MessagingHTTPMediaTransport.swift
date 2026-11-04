@@ -62,25 +62,35 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
     private let session: URLSession
 
     /// Configuration par défaut : mêmes délais que le transport existant, aucune trace locale.
-    /// L'initialiseur reste borné pour les tests de wire sur `URLSessionConfiguration`.
     init(configuration: URLSessionConfiguration = MessagingMediaURLSessionTransport.makeConfiguration()) {
+        // Les garanties sont appliquées ici, quelle que soit la configuration reçue : un
+        // appelant (tests sur `URLProtocol`) ne peut pas réactiver cache ou cookies par erreur.
+        Self.harden(configuration)
         session = URLSession(configuration: configuration, delegate: MessagingMediaNoRedirects(), delegateQueue: nil)
     }
 
     static func makeConfiguration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
-        configuration.urlCache = nil
-        configuration.httpCookieStorage = nil
-        configuration.httpShouldSetCookies = false
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = 20
         configuration.timeoutIntervalForResource = 30
         return configuration
     }
 
+    /// Aucun cache, aucun cookie, aucune réponse locale réutilisée.
+    static func harden(_ configuration: URLSessionConfiguration) {
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+    }
+
     func send(_ request: URLRequest, ceiling: MessagingMediaResponseCeiling) async throws -> MessagingMediaHTTPResponse {
         let (bytes, response) = try await session.bytes(for: request)
+        // La tâche qui alimente le flux s'annule seule : toute sortie prématurée l'arrête,
+        // sans annuler ni interrompre les autres requêtes du même transport.
+        let task = bytes.task
         guard let http = response as? HTTPURLResponse, let url = http.url else {
+            task.cancel()
             throw MessagingMediaTransportFailure.invalidResponse
         }
         let limit = ceiling.byteLimit
@@ -88,18 +98,31 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
         // Longueur annoncée : refus avant toute accumulation, dans les deux sources
         // (en-tête et couche réseau) car une réponse fragmentée peut n'annoncer qu'une des deux.
         if let declared, declared < 0 || declared > limit {
+            task.cancel()
             throw MessagingMediaTransportFailure.tooLarge
         }
         if http.expectedContentLength > Int64(limit) {
+            task.cancel()
             throw MessagingMediaTransportFailure.tooLarge
         }
         var body = Data()
         if let declared, declared > 0 { body.reserveCapacity(declared) }
-        for try await byte in bytes {
-            guard body.count < limit else { throw MessagingMediaTransportFailure.tooLarge }
-            body.append(byte)
+        do {
+            for try await byte in bytes {
+                guard body.count < limit else { throw MessagingMediaTransportFailure.tooLarge }
+                body.append(byte)
+            }
+        } catch {
+            // Dépassement pendant la lecture ou annulation appelante : le flux est arrêté
+            // avant que la tâche sous-jacente ne continue à consommer le réseau.
+            task.cancel()
+            if error.isRequestCancellation { throw CancellationError() }
+            throw error
         }
-        try Task.checkCancellation()
+        if Task.isCancelled {
+            task.cancel()
+            throw CancellationError()
+        }
         return MessagingMediaHTTPResponse(status: http.statusCode, url: url,
             contentType: http.value(forHTTPHeaderField: "Content-Type"),
             declaredByteSize: declared,
@@ -321,12 +344,12 @@ actor MessagingHTTPMediaTransport: MessagingMediaTransport {
     private func exchange(method: String, target: URL, scope: MessagingScope, body: Data?, accept: String,
                           ceiling: MessagingMediaResponseCeiling,
                           operation: String) async throws -> MessagingMediaHTTPResponse {
-        var bearer = try await token()
-        try await verifyCurrent(scope)
+        var bearer = try await accessToken(scope: scope, operation: operation)
         for attempt in 0...1 {
             guard Self.isValidBearer(bearer) else {
                 throw fail(.accessChanged, operation: operation)
             }
+            try Task.checkCancellation()
             try await verifyCurrent(scope)
             let request = self.request(target, method: method, scope: scope, bearer: bearer,
                                        body: body, accept: accept)
@@ -342,8 +365,13 @@ actor MessagingHTTPMediaTransport: MessagingMediaTransport {
             }
             try Task.checkCancellation()
             try await verifyCurrent(scope)
-            if response.status == 401, attempt == 0, await invalidate(bearer) {
-                bearer = try await token()
+            if response.status == 401, attempt == 0 {
+                // Une invalidation qui traverse un changement de compte, d'école ou d'époque
+                // n'ouvre aucun second essai et n'émet aucun paquet.
+                guard await invalidate(bearer) else { return response }
+                try Task.checkCancellation()
+                try await verifyCurrent(scope)
+                bearer = try await accessToken(scope: scope, operation: operation)
                 continue
             }
             return response
@@ -351,10 +379,36 @@ actor MessagingHTTPMediaTransport: MessagingMediaTransport {
         throw fail(.accessChanged, operation: operation)
     }
 
+    /// Attente du jeton, fermée. Une tâche déjà annulée n'entre pas dans la source de jeton ;
+    /// l'annulation reste une `CancellationError`, les erreurs typées sont préservées, une
+    /// réauthentification devient `accessChanged` et tout le reste `unavailable`. Aucun
+    /// `NSError`, `userInfo`, domaine ni texte libre ne traverse cette frontière.
+    private func accessToken(scope: MessagingScope, operation: String) async throws -> String {
+        if Task.isCancelled { throw CancellationError() }
+        let value: String
+        do {
+            value = try await token()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let failure as MessagingMediaTransportFailure {
+            throw failure
+        } catch IdentityFailure.reauthentication {
+            throw fail(.accessChanged, operation: operation)
+        } catch let error where error.isRequestCancellation {
+            throw CancellationError()
+        } catch {
+            throw fail(.unavailable, operation: operation)
+        }
+        if Task.isCancelled { throw CancellationError() }
+        try await verifyCurrent(scope)
+        return value
+    }
+
     /// Construit l'URL média uniquement avec la base contrôlée et des UUID, puis vérifie
     /// l'origine, le scope et le contexte courant.
     private func start(scope: MessagingScope, conversationID: UUID, mediaID: UUID,
                        operation: String) async throws -> URL {
+        try Task.checkCancellation()
         try await verifyCurrent(scope)
         guard let target = await Self.target(baseURL: baseURL, scope: scope,
                                              conversationID: conversationID, mediaID: mediaID) else {

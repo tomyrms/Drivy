@@ -34,9 +34,9 @@ protocol MessagingMediaTransport: Sendable {
 /// Refus utiles au futur coordinateur média (#97 §3.12, §3.11).
 ///
 /// Chaque cas reste une erreur fermée : aucun texte libre, aucune URL, aucun identifiant,
-/// aucun hash ni contenu n'est transporté par l'erreur. Le mapping d'affichage se fera
-/// dans la couche UI, pas ici.
-enum MessagingMediaTransportFailure: Error, Equatable, Sendable, LocalizedError {
+/// aucun hash ni contenu n'est transporté par l'erreur. Cette primitive ne définit **aucun**
+/// texte d'affichage : le mapping de présentation appartient au futur worker UI.
+enum MessagingMediaTransportFailure: Error, Equatable, Sendable {
     /// Refusé avant réseau : taille hors 1…4 Mio, sceau incohérent, appareil invalide, origine refusée.
     case invalidIntent
     /// Le compte, l'école, l'époque ou l'origine ont changé : la réponse n'est jamais rendue.
@@ -65,23 +65,4 @@ enum MessagingMediaTransportFailure: Error, Equatable, Sendable, LocalizedError 
     case integrityMismatch
     /// Réponse ou flux au-delà du plafond borné : jamais tronquée puis acceptée.
     case tooLarge
-
-    var errorDescription: String? {
-        switch self {
-        case .invalidIntent: "Cette pièce jointe ne peut pas être déposée telle quelle."
-        case .contextChanged: "Le compte ou l'école a changé. Recharge Messages."
-        case .accessChanged: "L'accès à cette conversation a changé."
-        case .deviceRequired: "Cet appareil n'est plus autorisé pour les messages de cette école."
-        case .notFound: "Cette pièce jointe n'est pas accessible."
-        case .purged: "Cette pièce jointe a été supprimée et ne peut pas être réutilisée."
-        case .alreadyAttached: "Cette pièce jointe est déjà envoyée : elle ne peut plus être annulée."
-        case .intentConflict: "Cet identifiant de pièce jointe a déjà servi pour d'autres octets."
-        case .sizeConflict: "La taille de cette pièce jointe ne correspond pas à celle déposée."
-        case .stateConflict: "Cette pièce jointe a changé sur un autre appareil."
-        case .unavailable: "Les pièces jointes sont momentanément indisponibles. Réessaie plus tard."
-        case .invalidResponse: "La réponse du service pour cette pièce jointe est invalide."
-        case .integrityMismatch: "Ce fichier est illisible : son intégrité n'a pas pu être vérifiée."
-        case .tooLarge: "Ce fichier dépasse la taille autorisée pour une pièce jointe."
-        }
-    }
 }
