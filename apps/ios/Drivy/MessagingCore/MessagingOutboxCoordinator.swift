@@ -53,6 +53,10 @@ actor MessagingOutboxCoordinator {
     func enqueue(content: MessagingPlainContent, conversationID: UUID, mentions: [UUID] = [],
                  replyTo: UUID? = nil, pollAllowsMultiple: Bool = false, currentScope: MessagingScope) async throws -> MessagingPending {
         guard currentScope == scope, await self.currentScope() == scope else { throw MessagingFailure.contextChanged }
+        // #97 : cette file ne porte pas encore de pièce jointe. Refus fermé explicite, avant toute
+        // vérification de chiffrement et avant toute écriture : rien n'est scellé, rien n'est mis en
+        // file, aucun envoi partiel. Le coordinateur média/coffre arrivera dans un lot dédié.
+        guard content.media == nil else { throw MessagingFailure.invalidResponse }
         if let failure = await cryptography.availabilityFailure(scope: scope, conversationID: conversationID) { throw failure }
         let hasText = !(content.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         guard hasText != (content.poll != nil), mentions.count <= 8, Set(mentions).count == mentions.count else {

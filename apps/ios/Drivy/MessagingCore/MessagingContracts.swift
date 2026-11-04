@@ -98,6 +98,36 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
     }
 }
 
+/// Contenu rendu après déchiffrement, avec sa **provenance explicite** (#97).
+///
+/// La provenance vient de la structure authentifiée de l'événement Matrix, jamais d'une
+/// heuristique sur des octets applicatifs : un `body` legacy qui ressemble à un contenu
+/// Matrix reste du texte utilisateur.
+struct MessagingDecryptedContent: Sendable, Equatable {
+    enum Provenance: Sendable, Equatable {
+        /// Octets du `body` : texte v1, enveloppe applicative v2, contenu de récupération local.
+        case legacyBody
+        /// JSON du `content` Matrix complet, porteur de la namespace `ch.drivy.messaging`.
+        case matrixContent
+    }
+
+    let bytes: Data
+    let provenance: Provenance
+
+    init(bytes: Data, provenance: Provenance) {
+        self.bytes = bytes
+        self.provenance = provenance
+    }
+
+    static func legacyBody(_ bytes: Data) -> MessagingDecryptedContent {
+        MessagingDecryptedContent(bytes: bytes, provenance: .legacyBody)
+    }
+
+    static func matrixContent(_ bytes: Data) -> MessagingDecryptedContent {
+        MessagingDecryptedContent(bytes: bytes, provenance: .matrixContent)
+    }
+}
+
 /// Fourni par #67 : ne jamais substituer une implémentation qui renvoie les octets en clair.
 protocol MessagingCryptography: Sendable {
     func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool
