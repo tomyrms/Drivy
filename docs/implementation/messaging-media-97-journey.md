@@ -3,9 +3,10 @@
 Date : 5 novembre 2026. Branche locale : `tomyrms/issues-medias-parcours-97`.
 Base qualifiée : `e2edc85ed092237016620079d52d11eb7a2d02b5`.
 Point d'interface annoncé au coordinateur : `3297c84f7103e330dfd675c30f80cc8b2505dd2b`.
-Commit de réalisation : `211c949475ca550d38018cd0098b9c395a318066`.
-Le commit qui ajoute ce rapport suit le commit de réalisation ; son SHA exact est transmis
-avec le `worker_done`, sans réécrire l'historique.
+Commit de réalisation : `211c949475ca550d38018cd0098b9c395a318066`, suivi du correctif de
+garde de recomposition dans l'historique local. Le commit qui ajoute ce rapport suit le
+commit de réalisation ; le SHA final exact est transmis avec le `worker_done`, sans réécrire
+l'historique.
 
 Ce lot ferme le **raccord produit local** entre les primitives média déjà livrées et la
 messagerie de qualification. Il ne prouve ni l'exploitation suisse, ni la résidence, ni la
@@ -63,7 +64,9 @@ sondage existantes restent compatibles et ne changent pas de comportement.
    `media: { mediaId, byteSize }`.
 5. Un `MEMBERS_CHANGED` avéré laisse l'intention et ne déclenche **aucune** relance
    automatique. `recomposeAfterMembersChanged` est le seul chemin qui remplace l'enveloppe,
-   par CAS, et **ne re-dépose pas** les octets média.
+   par CAS, et **ne re-dépose pas** les octets média. Ce chemin n'est ouvert qu'après un
+   refus `MEMBERS_CHANGED` réellement observé dans l'instance ; une réponse perdue ne
+   l'autorise pas.
 6. Une réponse perdue ou un POST illisible rend `resultUnknown` ; l'intention reste pour un
    renvoi explicite.
 7. Un reçu serveur valide suivi d'un échec d'effacement local rend
@@ -127,7 +130,8 @@ Deux fichiers neufs, 26 méthodes, écrites avant le coordinateur :
   - préparation hors MainActor et mapping fermé ;
   - ordre `put` du sceau → chiffrement → CAS de l'enveloppe, avant tout dépôt ;
   - panne à la persistance, légende/mentions/nom bornés ;
-  - dépôt → POST → retrait, reçu sans nettoyage local, réponse perdue ;
+  - dépôt → POST → retrait, reçu sans nettoyage local, réponse perdue, refus de
+    recomposition après une réponse perdue ;
   - double geste concurrent avec suspension contrôlée (`Gate`, aucun sommeil) ;
   - réouverture avec le même enregistrement et la même enveloppe ;
   - `MEMBERS_CHANGED` : recomposition d'enveloppe seule, sans nouveau dépôt ;
@@ -171,15 +175,15 @@ lancée ici et aucun workflow n'a été modifié.
 |---|---|
 | `git status --porcelain` avant fusion | propre, base `e2edc85e` |
 | `git cat-file -t` sur les quatre têtes | quatre commits présents |
-| `git merge --no-ff` ×4 | aucune conflit |
+| `git merge --no-ff` ×4 | aucun conflit |
 | `git diff --check` | aucune erreur d'espacement |
 | Script Python d'équilibre des délimiteurs (chaînes/commentaires ignorés) | équilibré sur les 7 fichiers touchés/neufs |
 | `Select-String 'XCTAssert\w+\([^)]*await'` | 0 occurrence dans les deux fichiers de tests |
 | `Select-String 'Task\.sleep|sleep\('` | 0 occurrence : suspensions par `Gate` |
 | Comptage des méthodes de test | 17 + 9 = 26 |
-| Codebase Memory `drivy-medias-parcours-97` | réindexé, 40 309 nœuds, deux fichiers de tests et le coordinateur absents de `parse_partial` |
+| Codebase Memory `drivy-medias-parcours-97` | réindexé avant remise, `status: ready` ; les deux fichiers de tests et le coordinateur sont absents de `parse_partial` |
 | `Get-Command swift, swiftc, xcodebuild, xcrun, xcodegen` | 0 outil |
-| `git status --porcelain` final | uniquement les 6 fichiers de réalisation, puis ce rapport |
+| `git status --porcelain` final | uniquement les fichiers de réalisation, puis ce rapport |
 
 Le signal Codebase Memory est structurel, pas une compilation. Aucun port Python ne
 remplace un test Swift.
@@ -223,9 +227,9 @@ remplace un test Swift.
   - `verification-before-completion` (même base) : chargé avant les contrôles et la remise ;
     il interdit de présenter le lot comme compilé ou testé.
 - **Codebase Memory** : projet `drivy-medias-parcours-97`, racine
-  `C:/Users/jtoma/orca/workspaces/Drivy/issues-medias-parcours-97`, `status: ready`,
-  `indexed_at 2026-11-04T23:28:56Z`, 40 310 nœuds / 176 291 arêtes. Recherches et lectures
-  directes : `MessagingMediaRuntimeContracts`, `MessagingMediaCoordinator`,
+  `C:/Users/jtoma/orca/workspaces/Drivy/issues-medias-parcours-97`, `status: ready` après
+  réindexation avant remise. Recherches et lectures directes :
+  `MessagingMediaRuntimeContracts`, `MessagingMediaCoordinator`,
   `MessagingWorkspace`, `MessagingDevelopmentEntry`, `MatrixMessagingCryptography`,
   `MessagingProtectedMediaOutbox`, `MessagingProtectedMediaCache`, `MessagingMediaPreparer`,
   `MessagingMediaContent`, `MessagingHTTPMediaTransport`, `MessagingAPIClient`. Les

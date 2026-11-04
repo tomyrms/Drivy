@@ -255,6 +255,14 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         XCTAssertEqual(remaining.count, 1, "L'intention reste pour un renvoi explicite.")
         let encryptCount = await encryption.encryptionCount
         XCTAssertEqual(encryptCount, 1, "Aucun nouveau chiffrement après une réponse perdue.")
+
+        let premature = await coordinator.recomposeAfterMembersChanged(clientMessageID: snapshot.clientMessageID)
+        guard case .pending(let rejected) = premature else {
+            XCTFail("Une réponse perdue n'ouvre pas la recomposition d'enveloppe."); return
+        }
+        XCTAssertEqual(rejected, .membersChanged)
+        let encryptAfterRecompose = await encryption.encryptionCount
+        XCTAssertEqual(encryptAfterRecompose, 1, "Aucune recomposition n'est tentée sans refus avéré.")
     }
 
     func testConfirmedServerReceiptWithCleanupFailureIsNotAFalseSendFailure() async throws {

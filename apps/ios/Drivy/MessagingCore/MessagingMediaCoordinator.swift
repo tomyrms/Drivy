@@ -36,6 +36,10 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime {
     private var transport: (any MessagingMediaTransport)?
     /// Gestes en vol, pour ne pas doubler un dépôt ou un POST dans le même processus.
     private var active: Set<UUID> = []
+    /// Refus `MEMBERS_CHANGED` réellement observés dans cette instance : seule une
+    /// recomposition explicite consécutive à ce refus est admise, jamais après une
+    /// réponse perdue.
+    private var membersChanged: Set<UUID> = []
     private var invalidated = false
 
     init(scope: MessagingScope,
@@ -196,8 +200,11 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime {
             guard let entry = try await storedEntry(clientMessageID: clientMessageID) else {
                 return .pending(.removed)
             }
-            return try await deliver(entry, upload: true)
+            let delivery = try await deliver(entry, upload: true)
+            if case .confirmed = delivery { membersChanged.remove(clientMessageID) }
+            return delivery
         } catch let failure as MessagingMediaRuntimeFailure {
+            if failure == .membersChanged { membersChanged.insert(clientMessageID) }
             return .pending(failure)
         } catch {
             return .pending(.resultUnknown)
@@ -207,14 +214,17 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime {
     func recomposeAfterMembersChanged(clientMessageID: UUID) async -> MessagingMediaDelivery {
         guard await isActive() else { return .pending(.contextChanged) }
         guard !active.contains(clientMessageID) else { return .pending(.alreadyInFlight) }
+        // Une recomposition n'a de sens qu'après un refus MEMBERS_CHANGED réellement
+        // observé. Une réponse perdue n'ouvre pas ce chemin.
+        guard membersChanged.contains(clientMessageID) else {
+            return .pending(.membersChanged)
+        }
         active.insert(clientMessageID)
         defer { active.remove(clientMessageID) }
         do {
             guard let entry = try await storedEntry(clientMessageID: clientMessageID) else {
                 return .pending(.removed)
             }
-            // Une recomposition n'a de sens qu'après une enveloppe réellement émise puis
-            // refusée pour changement de membres. Une réponse perdue n'ouvre pas ce chemin.
             guard let previous = entry.messageCiphertext else { return .pending(.membersChanged) }
             let replacement = try await encryptEnvelope(for: entry)
             do {
@@ -228,7 +238,9 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime {
                 throw MessagingMediaRuntimeFailure.protectionUnavailable
             }
             let updated = try await reload(mediaID: entry.mediaID) ?? entry
-            return try await deliver(updated, upload: false)
+            let delivery = try await deliver(updated, upload: false)
+            if case .confirmed = delivery { membersChanged.remove(clientMessageID) }
+            return delivery
         } catch let failure as MessagingMediaRuntimeFailure {
             return .pending(failure)
         } catch {
