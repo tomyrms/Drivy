@@ -23,7 +23,10 @@ export interface AccountEntryOptions {
  * it is cleared after each attempt that leaves the form and at every change of step.
  */
 export function useAccountEntry({ initialCode, invitation = false, signedIn = false, typedCode, onSignedIn }: AccountEntryOptions) {
-  const [step, setStep] = useState<EntryStep>(() => initialEntryStep({ signedIn, invitation, ...(initialCode ? { initialCode } : {}) }));
+  const [chosenStep, setStep] = useState<EntryStep>(() => initialEntryStep({ signedIn, invitation, ...(initialCode ? { initialCode } : {}) }));
+  // Presentation follows a proven session without recreating the form or its single flight.
+  const step = signedIn ? 'code' : chosenStep;
+  const previousSignedIn = useRef(signedIn);
   const [ownCode, setOwnCode] = useState(initialCode ?? '');
   const code = typedCode ? typedCode.value : ownCode;
   const setCode = typedCode ? typedCode.set : setOwnCode;
@@ -44,9 +47,10 @@ export function useAccountEntry({ initialCode, invitation = false, signedIn = fa
 
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => {
-    if (started.current) (step === 'code' ? codeInput : heading).current?.focus({ preventScroll: true });
+    if (started.current && previousSignedIn.current === signedIn) (step === 'code' ? codeInput : heading).current?.focus({ preventScroll: true });
+    previousSignedIn.current = signedIn;
     started.current = true;
-  }, [step]);
+  }, [step, signedIn]);
   useEffect(() => {
     // An opening link already names its code: read what it opens, so that an expired link says so before the form.
     if (initialCode) void run(session => inspect(initialCode, session));

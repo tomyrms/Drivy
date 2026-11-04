@@ -50,6 +50,6 @@ describe('Message de déconnexion non confirmée', () => {
   });
 
   test('le texte dit que la personne est déconnectée ici, jamais l’inverse', () => {
-    expect(logoutNoticeText).toBe('Déconnecté de cet appareil. La fermeture des autres sessions n’a pas pu être confirmée.');
+    expect(logoutNoticeText).toBe('Déconnecté de cet appareil. La révocation de la session n’a pas pu être confirmée.');
   });
 });
