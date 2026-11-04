@@ -26,6 +26,10 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private let photoLoader: @Sendable (UUID) async -> Data?
     private let schoolWorkspace: SchoolWorkspace?
     let outbox: MessagingOutboxCoordinator
+    /// Point d'injection optionnel du parcours média (#97). Nul pour les compositions
+    /// texte existantes : le décodage et l'envoi média restent alors indisponibles,
+    /// sans modifier le comportement des messages texte ou sondage.
+    let mediaRuntime: (any MessagingMediaRuntime)?
     private(set) var members: [MessagingMember] = []
     /// Retirés pendant la session, en mémoire seulement.
     private(set) var removedMembers: [MessagingMember] = []
@@ -103,7 +107,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
          schoolWorkspace: SchoolWorkspace? = nil,
          notifications: any MessagingNotificationCleaning = SystemMessagingNotifications(),
          mutationLatency: MessagingMutationLatency = MessagingMutationLatency(),
+         mediaRuntime: (any MessagingMediaRuntime)? = nil,
          currentScope: @escaping @MainActor @Sendable () -> MessagingScope? = { nil }) {
+        self.mediaRuntime = mediaRuntime
         self.actions = actions
         self.mutationLatency = mutationLatency
         self.notifications = notifications
