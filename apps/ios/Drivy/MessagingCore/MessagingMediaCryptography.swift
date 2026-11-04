@@ -7,9 +7,14 @@ import Security
 ///
 /// Forme exacte du contrat `medias-exploitation-contrat-20261104.md` §4.2/§4.3 :
 /// `k` en base64url, `iv` et `hashes.sha256` en base64 standard, tous **sans
-/// remplissage**. Le décodage JSON n'accepte rien d'autre que cette forme ; la
-/// validation des alphabets, des longueurs et des en-têtes JWK se fait dans
-/// `validatedMaterial()`, avant tout déchiffrement.
+/// remplissage**.
+///
+/// Invariant du type : un objet décodé est **toujours canonique**. Le décodage
+/// tolère le remplissage partiel que la bibliothèque amont accepte, valide
+/// version, en-tête JWK, alphabets et longueurs, puis reconstruit les chaînes
+/// sans remplissage. Un alphabet incorrect ou une longueur fausse échoue fermé ;
+/// rien n'est normalisé en silence, et `encode(to:)` ne peut donc pas réémettre
+/// de remplissage.
 struct MessagingMediaEncryptionInfo: Codable, Sendable, Equatable {
     struct Key: Codable, Sendable, Equatable {
         let kty: String
@@ -36,6 +41,10 @@ struct MessagingMediaEncryptionInfo: Codable, Sendable, Equatable {
         init(sha256: String) { self.sha256 = sha256 }
     }
 
+    enum CodingKeys: String, CodingKey {
+        case v, key, iv, hashes
+    }
+
     let v: String
     let key: Key
     let iv: String
@@ -57,12 +66,38 @@ struct MessagingMediaEncryptionInfo: Codable, Sendable, Equatable {
             hashes: Hashes(sha256: MessagingMediaBase64.encode(sha256, alphabet: .standard)))
     }
 
+    /// Lecture tolérante puis réécriture canonique : c'est le chemin réel
+    /// `JSONDecoder` → `JSONEncoder`. Toute valeur invalide lève une
+    /// `DecodingError` sans reprendre la valeur reçue dans son message.
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let rawVersion = try container.decode(String.self, forKey: .v)
+        let rawKey = try container.decode(Key.self, forKey: .key)
+        let rawIV = try container.decode(String.self, forKey: .iv)
+        let rawHashes = try container.decode(Hashes.self, forKey: .hashes)
+
+        let material: MessagingMediaMaterial
+        do {
+            material = try Self.material(v: rawVersion, key: rawKey, iv: rawIV, hashes: rawHashes)
+        } catch {
+            throw DecodingError.dataCorruptedError(
+                forKey: .hashes, in: container, debugDescription: "invalid encryption info")
+        }
+        self.init(key: material.key, iv: material.iv, sha256: material.sha256)
+    }
+
     static let version = "v2"
 
     /// Valide strictement l'objet, puis rend les octets à utiliser. Toute
     /// divergence est refusée avant déchiffrement, sans exposer de valeur.
     func validatedMaterial() throws -> MessagingMediaMaterial {
-        guard v == Self.version, key.kty == "oct", key.alg == "A256CTR", key.ext else {
+        try Self.material(v: v, key: key, iv: iv, hashes: hashes)
+    }
+
+    static func material(
+        v: String, key: Key, iv: String, hashes: Hashes
+    ) throws -> MessagingMediaMaterial {
+        guard v == version, key.kty == "oct", key.alg == "A256CTR", key.ext else {
             throw MessagingMediaCryptographyFailure.invalidEncryptionInfo
         }
         guard key.keyOps.contains("encrypt"), key.keyOps.contains("decrypt") else {
@@ -133,8 +168,10 @@ enum MessagingMediaCryptographyFailure: Error, Equatable, Sendable, LocalizedErr
 ///
 /// AES-256-CTR (CommonCrypto, compteur 64 bits big-endian) + SHA-256 du chiffré
 /// (CryptoKit). La voie est une implémentation du format publié, pas un appel au
-/// module amont : la fidélité est prouvée par les vecteurs croisés produits par
-/// `matrix-sdk-crypto` 0.19.1 (`prototypes/messaging-crypto/tests/media_vectors.rs`).
+/// module amont : la fidélité **doit être démontrée** en exécutant sur Apple les
+/// vecteurs croisés produits par `matrix-sdk-crypto` 0.19.1
+/// (`prototypes/messaging-crypto/tests/media_vectors.rs`) ; l'écriture de ce
+/// fichier ne la prouve pas.
 struct AESCTRMediaCryptography: MessagingMediaCryptography {
     /// Plafond produit : 4 Mio de clair, donc 4 Mio de chiffré (CTR sans remplissage).
     static let maximumByteSize = 4_194_304
@@ -264,16 +301,40 @@ struct AESCTRMediaCryptography: MessagingMediaCryptography {
     }
 }
 
-/// Encodage/décodage base64 du format média, volontairement autonome : la
-/// bibliothèque amont accepte un remplissage en lecture (`Indifferent`), ignore
-/// les bits de queue et n'émet aucun remplissage. `Data(base64Encoded:)` ne
-/// garantit pas ces règles, donc les trois alphabets sont traités ici.
+/// Encodage/décodage base64 du format média, volontairement autonome :
+/// la bibliothèque amont (`ruma` sur `base64` 0.23.1, `DecodePaddingMode::Indifferent`)
+/// accepte un remplissage partiel en lecture, ignore les bits de queue et n'émet
+/// aucun remplissage. `Data(base64Encoded:)` ne garantit pas ces règles, donc les
+/// deux alphabets et ces verdicts sont reproduits ici.
 enum MessagingMediaBase64 {
     enum Alphabet {
         /// `A–Z a–z 0–9 + /`
         case standard
         /// `A–Z a–z 0–9 - _`
         case urlSafe
+    }
+
+    /// Plafond de décodage, aligné sur la primitive média : les champs
+    /// (32/16/32 octets) et un chiffré (≤ 4 Mio) y tiennent, une entrée forgée
+    /// plus grande est refusée avant toute copie.
+    static let maximumDecodedCount = AESCTRMediaCryptography.maximumByteSize
+
+    /// Seul symbole admis hors alphabet, et seulement en fin de chaîne.
+    private static let paddingByte = UInt8(ascii: "=")
+
+    /// Valeur sentinelle : aucun symbole base64 ne porte l'indice 255.
+    private static let invalidSymbol: UInt8 = 0xFF
+
+    /// Longueur base64 maximale pour `count` octets, remplissage compris :
+    /// `(count * 4 + 2) / 3` arrondit au-dessus `count * 8 / 6`, plus deux `=`.
+    /// Calcul sans débordement, utilisable même pour une valeur forgée.
+    static func maximumEncodedLength(for count: Int) -> Int {
+        guard count > 0 else { return 2 }
+        let scaled = count.multipliedReportingOverflow(by: 4)
+        guard !scaled.overflow else { return Int.max }
+        let shifted = scaled.partialValue.addingReportingOverflow(2)
+        guard !shifted.overflow else { return Int.max }
+        return shifted.partialValue / 3 + 2
     }
 
     static func encode(_ data: Data, alphabet: Alphabet) -> String {
@@ -296,34 +357,47 @@ enum MessagingMediaBase64 {
         return out
     }
 
-    /// Décode en refusant tout ce que la bibliothèque refuse : caractère hors
-    /// alphabet, remplissage mal placé ou non canonique, longueur impossible.
-    /// Les bits de queue non nuls sont tolérés, comme dans `ruma`.
+    /// Décode en refusant ce que la bibliothèque refuse : caractère hors
+    /// alphabet, remplissage interne ou trop long, longueur impossible. Le
+    /// remplissage partiel admis par `ruma` est accepté (voir la matrice de la
+    /// fixture) ; les bits de queue non nuls sont tolérés comme dans `ruma`.
+    ///
+    /// La borne `maximumEncodedLength(for: count)` est vérifiée **avant**
+    /// toute copie ou itération des octets reçus : une clé ou un IV géant est
+    /// refusé sans allocation proportionnelle à son encodage.
     static func decode(_ text: String, alphabet: Alphabet, count: Int) throws -> Data {
-        var symbols = Array(text.utf8)
-        var padding = 0
-        while symbols.last == UInt8(ascii: "=") {
-            padding += 1
-            symbols.removeLast()
+        guard count >= 0, count <= maximumDecodedCount else {
+            throw MessagingMediaCryptographyFailure.invalidEncryptionInfo
         }
-        guard padding <= 2 else { throw MessagingMediaCryptographyFailure.invalidEncryptionInfo }
-        if padding > 0 {
-            guard (symbols.count + padding) % 4 == 0 else {
+        guard text.utf8.count <= maximumEncodedLength(for: count) else {
+            throw MessagingMediaCryptographyFailure.invalidEncryptionInfo
+        }
+
+        let symbols = Array(text.utf8)
+        let total = symbols.count
+
+        var dataEnd = total
+        while dataEnd > 0, symbols[dataEnd - 1] == paddingByte {
+            dataEnd -= 1
+        }
+        if total > 0 {
+            let remainder = total % 4
+            let chunkStart = total - (remainder == 0 ? 4 : remainder)
+            // Au moins deux symboles décodables, et le premier `=` seulement
+            // après deux symboles du dernier groupe : ni « = », ni « A= », ni
+            // « ==== », ni trois `=` de suite.
+            guard dataEnd >= 2, dataEnd >= chunkStart + 2 else {
                 throw MessagingMediaCryptographyFailure.invalidEncryptionInfo
             }
-            let remainder = symbols.count % 4
-            guard remainder != 0, padding == 4 - remainder else {
-                throw MessagingMediaCryptographyFailure.invalidEncryptionInfo
-            }
         }
-        guard symbols.count % 4 != 1 else { throw MessagingMediaCryptographyFailure.invalidEncryptionInfo }
 
         let lookup = values(alphabet)
         var bytes = Data()
-        bytes.reserveCapacity(count)
+        bytes.reserveCapacity(min(count, dataEnd))
         var accumulator: UInt32 = 0
         var bits = 0
-        for symbol in symbols {
+        for index in 0..<dataEnd {
+            let symbol = symbols[index]
             guard symbol < 128 else { throw MessagingMediaCryptographyFailure.invalidEncryptionInfo }
             let value = lookup[Int(symbol)]
             guard value != Self.invalidSymbol else {
@@ -341,9 +415,6 @@ enum MessagingMediaBase64 {
         guard bytes.count == count else { throw MessagingMediaCryptographyFailure.invalidEncryptionInfo }
         return bytes
     }
-
-    /// Valeur sentinelle : aucun symbole base64 ne porte l'indice 255.
-    private static let invalidSymbol: UInt8 = 0xFF
 
     private static func table(_ alphabet: Alphabet) -> [Character] {
         let standard = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")

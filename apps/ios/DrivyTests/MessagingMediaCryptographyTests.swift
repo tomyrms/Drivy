@@ -157,34 +157,97 @@ final class MessagingMediaCryptographyTests: XCTestCase {
         let cases = try XCTUnwrap(raw["rejections"] as? [[String: Any]])
         XCTAssertGreaterThanOrEqual(cases.count, 15)
 
-        let cryptography = AESCTRMediaCryptography()
         for entry in cases {
             let id = try XCTUnwrap(entry["id"] as? String)
-            let byteSize = try XCTUnwrap(entry["byteSize"] as? Int)
-            let ciphertext = try MessagingMediaBase64.decode(
-                try XCTUnwrap(entry["ciphertext"] as? String), alphabet: .standard, count: byteSize)
             let infoData = try JSONSerialization.data(
                 withJSONObject: try XCTUnwrap(entry["info"]), options: [.sortedKeys])
-            let decoded = try? JSONDecoder().decode(MessagingMediaEncryptionInfo.self, from: infoData)
 
-            // Refus à l'entrée : structure illisible, ou objet lisible mais invalide
-            // (version, en-tête JWK, alphabet, longueur, remplissage) avant tout
-            // déchiffrement. Drivy refuse aussi tôt `v` inconnu et l'absence de
-            // sha256, que ruma ne rejette qu'à la création du déchiffreur.
-            let refusedBeforeDecryption = decoded.map { (try? $0.validatedMaterial()) == nil } ?? true
-            XCTAssertTrue(refusedBeforeDecryption, "\(id) : refusé avant tout déchiffrement")
+            // Le décodage valide à l'entrée : version, en-tête JWK, alphabets,
+            // longueurs et remplissage. Aucun objet invalide n'est construit,
+            // donc aucun clair n'est possible. `refusedAt` rappelle seulement que
+            // ruma refuse `v` inconnu et l'absence de sha256 plus tard, au
+            // déchiffreur : Drivy refuse plus tôt, avec le même verdict final.
+            XCTAssertNil(try? JSONDecoder().decode(MessagingMediaEncryptionInfo.self, from: infoData),
+                         "\(id) : refusé avant tout déchiffrement")
+        }
+    }
 
-            if let decoded {
-                XCTAssertFalse(cryptography.verify(ciphertext, info: decoded), id)
-                XCTAssertThrowsError(try cryptography.open(ciphertext, info: decoded), id)
+    func testPaddingMatrixMatchesTheLibrary() throws {
+        let raw = try rawFixture()
+        let cases = try XCTUnwrap(raw["paddingMatrix"] as? [[String: Any]])
+        XCTAssertGreaterThanOrEqual(cases.count, 12)
+
+        for entry in cases {
+            let id = try XCTUnwrap(entry["id"] as? String)
+            let alphabet: MessagingMediaBase64.Alphabet =
+                try XCTUnwrap(entry["alphabet"] as? String) == "urlSafe" ? .urlSafe : .standard
+            let count = try XCTUnwrap(entry["count"] as? Int)
+            let encoded = try XCTUnwrap(entry["encoded"] as? String)
+            let accepted = try XCTUnwrap(entry["accepted"] as? Bool)
+
+            if accepted {
+                let decoded = try MessagingMediaBase64.decode(encoded, alphabet: alphabet, count: count)
+                XCTAssertEqual(decoded.count, try XCTUnwrap(entry["decodedLength"] as? Int), id)
+                let canonical = try MessagingMediaBase64.decode(
+                    try XCTUnwrap(entry["decodedBase64Standard"] as? String),
+                    alphabet: .standard, count: count)
+                XCTAssertEqual(decoded, canonical, "\(id) : mêmes octets que l'oracle")
+            } else {
+                XCTAssertThrowsError(
+                    try MessagingMediaBase64.decode(encoded, alphabet: alphabet, count: count),
+                    "\(id) : refusé comme par la bibliothèque")
             }
         }
+    }
+
+    func testEncodedLengthLimitMatchesTheFixtureAndBoundsInputs() throws {
+        let raw = try rawFixture()
+        let limits = try XCTUnwrap(raw["limits"] as? [String: Any])
+        XCTAssertEqual(try XCTUnwrap(limits["maximumByteSize"] as? Int),
+                       AESCTRMediaCryptography.maximumByteSize)
+        let entries = try XCTUnwrap(limits["perSize"] as? [[String: Any]])
+        let vectors = try XCTUnwrap(raw["vectors"] as? [[String: Any]])
+        XCTAssertEqual(entries.count, vectors.count)
+
+        for entry in entries {
+            let byteSize = try XCTUnwrap(entry["byteSize"] as? Int)
+            let limit = try XCTUnwrap(entry["encodedLengthLimit"] as? Int)
+            XCTAssertEqual(MessagingMediaBase64.maximumEncodedLength(for: byteSize), limit, "\(byteSize)")
+            let vector = try XCTUnwrap(vectors.first { $0["byteSize"] as? Int == byteSize })
+            let encoded = try XCTUnwrap(vector["ciphertext"] as? String)
+            XCTAssertLessThanOrEqual(encoded.utf8.count, limit, "\(byteSize) : encodage réel dans la borne")
+            XCTAssertLessThanOrEqual(encoded.utf8.count + 2, limit, "\(byteSize) : deux « = » tiendraient")
+        }
+    }
+
+    func testOversizedAndMalformedInputsAreRefusedBeforeAllocation() throws {
+        let vector = try referenceVector()
+        let oversized = String(repeating: "A", count: 4_096)
+
+        // Borne dérivée de la taille attendue, vérifiée avant toute copie : une
+        // clé de 32 octets (45 caractères au plus) ne peut pas faire 4 096 octets.
+        XCTAssertThrowsError(try MessagingMediaBase64.decode(oversized, alphabet: .urlSafe, count: 32))
+        XCTAssertThrowsError(try MessagingMediaBase64.decode(oversized, alphabet: .standard, count: 16))
+        XCTAssertEqual(MessagingMediaBase64.maximumEncodedLength(for: 32), 45)
+        XCTAssertEqual(MessagingMediaBase64.maximumEncodedLength(for: 16), 24)
+        XCTAssertEqual(MessagingMediaBase64.maximumEncodedLength(for: 0), 2)
+
+        // `count` hors plafond, non-ASCII, blanc, remplissage excessif ou interne.
+        XCTAssertThrowsError(try MessagingMediaBase64.decode("", alphabet: .standard, count: -1))
+        XCTAssertThrowsError(try MessagingMediaBase64.decode(
+            "", alphabet: .standard, count: AESCTRMediaCryptography.maximumByteSize + 1))
+        XCTAssertThrowsError(try MessagingMediaBase64.decode(
+            String(vector.info.iv.dropLast()) + "é", alphabet: .standard, count: 16))
+        XCTAssertThrowsError(try MessagingMediaBase64.decode(vector.info.iv + "===", alphabet: .standard, count: 16))
+        XCTAssertThrowsError(try MessagingMediaBase64.decode(
+            String(vector.info.iv.prefix(18)) + "====", alphabet: .standard, count: 16))
+        XCTAssertThrowsError(try MessagingMediaBase64.decode("A=", alphabet: .standard, count: 1))
     }
 
     func testPaddedInputIsToleratedAndNeverReemitted() throws {
         let raw = try rawFixture()
         let cases = try XCTUnwrap(raw["padding"] as? [[String: Any]])
-        XCTAssertFalse(cases.isEmpty)
+        XCTAssertGreaterThanOrEqual(cases.count, 2)
 
         let cryptography = AESCTRMediaCryptography()
         for entry in cases {
@@ -194,21 +257,22 @@ final class MessagingMediaCryptographyTests: XCTestCase {
                 try XCTUnwrap(entry["ciphertext"] as? String), alphabet: .standard, count: byteSize)
             let paddedData = try JSONSerialization.data(
                 withJSONObject: try XCTUnwrap(entry["paddedInfo"]), options: [.sortedKeys])
+
+            // Chemin réel : l'objet décodé est déjà canonique, sans reconstruire
+            // un second objet comme le faisait la version précédente du test.
             let padded = try JSONDecoder().decode(MessagingMediaEncryptionInfo.self, from: paddedData)
             XCTAssertEqual(try cryptography.open(ciphertext, info: padded),
                            mediaPlaintext(byteSize), id)
             XCTAssertTrue(cryptography.verify(ciphertext, info: padded), id)
+            for text in [padded.key.k, padded.iv, padded.hashes.sha256] {
+                XCTAssertFalse(text.contains("="), "\(id) : aucun remplissage conservé à la lecture")
+            }
 
             let canonicalData = try JSONSerialization.data(
                 withJSONObject: try XCTUnwrap(entry["canonicalInfo"]), options: [.sortedKeys])
             let canonical = try JSONDecoder().decode(MessagingMediaEncryptionInfo.self, from: canonicalData)
-            let material = try padded.validatedMaterial()
-            let reemitted = MessagingMediaEncryptionInfo(
-                key: material.key, iv: material.iv, sha256: material.sha256)
-            XCTAssertEqual(try canonicalJSON(reemitted), try canonicalJSON(canonical), id)
-            for text in [reemitted.key.k, reemitted.iv, reemitted.hashes.sha256] {
-                XCTAssertFalse(text.contains("="), "\(id) : aucun remplissage réémis")
-            }
+            XCTAssertEqual(try canonicalJSON(padded), try canonicalJSON(canonical),
+                           "\(id) : aller-retour JSONDecoder → JSONEncoder canonique")
         }
     }
 

@@ -19,6 +19,7 @@
 //! secret réel, aucune valeur issue d'un compte Drivy.
 
 use std::env;
+use std::ffi::OsStr;
 use std::fs;
 use std::io::{Cursor, Read};
 use std::path::Path;
@@ -145,6 +146,10 @@ fn generate_vector(len: usize) -> (Vec<u8>, Value) {
     panic!("aucun tirage officiel ne couvre les deux alphabets après 4096 tentatives");
 }
 
+fn set_text(base: &Value, pointer: &str, value: &str) -> Value {
+    with_value(base, pointer, Value::String(value.to_owned()))
+}
+
 fn with_string(base: &Value, pointer: &str, transform: impl FnOnce(&str) -> String) -> Value {
     let mut copy = base.clone();
     let current = field(base, pointer).to_owned();
@@ -172,12 +177,25 @@ fn swap_first_symbol(value: &str, from: &str, to: char) -> String {
     symbols.into_iter().collect()
 }
 
+/// Remplissage : le nombre de `=` toléré dépend de la longueur du dernier
+/// groupe de 4 (voir `padding_matrix`). Deux `=` est le maximum canonique.
 fn padded(value: &str) -> String {
     let mut padded = value.to_owned();
     while padded.len() % 4 != 0 {
         padded.push('=');
     }
     padded
+}
+
+/// Borne d'encodage communiquée au décodeur Swift : longueur base64 maximale
+/// pour `count` octets, remplissage compris. `((count * 4) + 2) / 3` est
+/// l'arrondi supérieur de `count * 8 / 6`, plus deux `=` au plus.
+fn encoded_length_limit(count: usize) -> usize {
+    count
+        .checked_mul(4)
+        .and_then(|value| value.checked_add(2))
+        .map(|value| value / 3 + 2)
+        .expect("borne calculable pour des tailles de média bornées")
 }
 
 fn rejection(
@@ -365,27 +383,138 @@ fn rejections(ciphertext: &[u8], base: &Value) -> Vec<Value> {
     cases
 }
 
-/// Le remplissage est toléré en lecture (bibliothèque : `Indifferent`) mais
-/// jamais réémis.
+/// Le remplissage est toléré en lecture (bibliothèque : `DecodePaddingMode::Indifferent`),
+/// jamais réémis. Deux cas : canonique complet, et **partiel** — un seul `=`
+/// sur un groupe de 22 caractères qui en tolère deux.
 fn padding_cases(ciphertext: &[u8], base: &Value) -> Vec<Value> {
     let encoded = encode_standard(ciphertext);
-    let padded_info = with_value(
+    let key = key_text(base);
+    let iv = iv_text(base);
+
+    let canonical = with_value(
         &with_value(
-            &with_string(base, "/key/k", padded),
+            &set_text(base, "/key/k", &padded(key)),
             "/iv",
-            Value::String(padded(iv_text(base))),
+            Value::String(padded(iv)),
         ),
         "/hashes/sha256",
         Value::String(padded(hash_text(base))),
     );
+    let partial = with_value(
+        &set_text(base, "/key/k", &format!("{key}=")),
+        "/iv",
+        Value::String(format!("{iv}=")),
+    );
 
-    vec![json!({
-        "id": "padded-key-iv-hash-accepted",
-        "byteSize": ciphertext.len(),
-        "ciphertext": encoded,
-        "paddedInfo": padded_info,
-        "canonicalInfo": base,
-    })]
+    vec![
+        json!({
+            "id": "padded-key-iv-hash-accepted",
+            "byteSize": ciphertext.len(),
+            "ciphertext": encoded,
+            "paddedInfo": canonical,
+            "canonicalInfo": base,
+        }),
+        json!({
+            "id": "partially-padded-iv-accepted",
+            "byteSize": ciphertext.len(),
+            "ciphertext": encoded,
+            "paddedInfo": partial,
+            "canonicalInfo": base,
+        }),
+    ]
+}
+
+/// Verdicts du module officiel sur le remplissage et les caractères refusés.
+/// Les chaînes sont en base64 pur (ASCII), donc les découpes par octet sont sûres.
+fn padding_matrix(base: &Value) -> Vec<Value> {
+    let iv = iv_text(base).to_owned();
+    let key = key_text(base).to_owned();
+    let mut cases = Vec::new();
+
+    let iv_cases = [
+        ("iv-none", iv.clone()),
+        ("iv-one-pad", format!("{iv}=")),
+        ("iv-two-pads", format!("{iv}==")),
+        ("iv-three-pads", format!("{iv}===")),
+        ("iv-four-pads", format!("{}====", &iv[..18])),
+        ("iv-pad-in-place-of-last-symbol", format!("{}=", &iv[..21])),
+        ("iv-pad-in-middle", format!("{}={}", &iv[..10], &iv[11..])),
+        ("iv-pad-then-symbol", format!("{iv}=A")),
+        ("iv-whitespace", format!("{iv}\n")),
+        ("iv-non-ascii", format!("{}é", &iv[..21])),
+    ];
+    for (id, encoded) in iv_cases {
+        cases.push(matrix_case(id, "standard", 16, &encoded));
+    }
+
+    let key_cases = [
+        ("key-none", key.clone()),
+        ("key-one-pad", format!("{key}=")),
+        ("key-two-pads", format!("{key}==")),
+        (
+            "key-pad-in-middle",
+            format!("{}={}", &key[..10], &key[11..]),
+        ),
+    ];
+    for (id, encoded) in key_cases {
+        cases.push(matrix_case(id, "urlSafe", 32, &encoded));
+    }
+
+    cases
+}
+
+/// Interroge la bibliothèque exactement comme le fait le désérialiseur de `ruma`
+/// (`Base64<Alphabet, [u8; N]>::parse`) et enregistre son verdict.
+fn matrix_case(id: &str, alphabet: &str, count: usize, encoded: &str) -> Value {
+    let decoded: Result<Vec<u8>, String> = match (alphabet, count) {
+        ("urlSafe", 32) => Base64::<UrlSafe, [u8; 32]>::parse(encoded)
+            .map(|value| value.into_inner().to_vec())
+            .map_err(|error| error.to_string()),
+        ("standard", 16) => Base64::<Standard, [u8; 16]>::parse(encoded)
+            .map(|value| value.into_inner().to_vec())
+            .map_err(|error| error.to_string()),
+        _ => panic!("cas de matrice non couvert: {alphabet}/{count}"),
+    };
+
+    match decoded {
+        Ok(bytes) => json!({
+            "id": id,
+            "alphabet": alphabet,
+            "count": count,
+            "encoded": encoded,
+            "accepted": true,
+            "decodedLength": bytes.len(),
+            "decodedBase64Standard": encode_standard(&bytes),
+        }),
+        Err(reason) => json!({
+            "id": id,
+            "alphabet": alphabet,
+            "count": count,
+            "encoded": encoded,
+            "accepted": false,
+            "reason": reason,
+        }),
+    }
+}
+
+/// Borne d'encodage publiée pour que le décodeur Swift refuse une entrée
+/// surdimensionnée avant toute copie.
+fn encoding_limits() -> Value {
+    let per_size: Vec<Value> = STORED_SIZES
+        .iter()
+        .map(|&size| {
+            json!({
+                "byteSize": size,
+                "encodedLengthLimit": encoded_length_limit(size),
+            })
+        })
+        .collect();
+
+    json!({
+        "maximumByteSize": MAX_MEDIA_BYTES,
+        "encodedLengthLimitRule": "(count * 4 + 2) / 3 + 2 en division entière, contrôle avant allocation",
+        "perSize": per_size,
+    })
 }
 
 /// Vecteur publié par le module amont (identifiants `EXAMPLE_DATA` /
@@ -455,6 +584,8 @@ fn build_fixture() -> Value {
         "vectors": vectors,
         "rejections": rejections(reference_ciphertext, reference_info),
         "padding": padding_cases(reference_ciphertext, reference_info),
+        "paddingMatrix": padding_matrix(reference_info),
+        "limits": encoding_limits(),
     })
 }
 
@@ -473,7 +604,9 @@ fn regenerate_when_requested() {
     let Some(enabled) = env::var_os("DRIVY_MEDIA_VECTORS_WRITE") else {
         return;
     };
-    if enabled.is_empty() {
+    // Activation explicite seulement : ni « 0 », ni « false », ni une valeur vide
+    // ne doivent réécrire la fixture pendant une simple campagne de validation.
+    if enabled != OsStr::new("1") {
         return;
     }
     let fixture = build_fixture();
@@ -678,5 +811,121 @@ fn large_sizes_are_exercised_with_the_official_oracle() {
         assert_eq!(ciphertext.len(), len, "{len}: taille du chiffré");
         let opened = open(&ciphertext, &info).expect("le module officiel relit son chiffré");
         assert_eq!(opened, plain, "{len}: clair identique");
+    }
+}
+
+#[test]
+fn padding_matrix_matches_the_library() {
+    let fixture = read_fixture();
+    let cases = fixture["paddingMatrix"]
+        .as_array()
+        .expect("tableau paddingMatrix");
+    assert!(cases.len() >= 12, "couverture de la matrice de remplissage");
+    for case in cases {
+        let id = case["id"].as_str().expect("id");
+        let alphabet = case["alphabet"].as_str().expect("alphabet");
+        let count = case["count"].as_u64().expect("count") as usize;
+        let encoded = case["encoded"].as_str().expect("encoded");
+        let parsed: Result<Vec<u8>, String> = match (alphabet, count) {
+            ("urlSafe", 32) => Base64::<UrlSafe, [u8; 32]>::parse(encoded)
+                .map(|value| value.into_inner().to_vec())
+                .map_err(|error| error.to_string()),
+            ("standard", 16) => Base64::<Standard, [u8; 16]>::parse(encoded)
+                .map(|value| value.into_inner().to_vec())
+                .map_err(|error| error.to_string()),
+            _ => panic!("{id}: cas non couvert"),
+        };
+        assert_eq!(
+            parsed.is_ok(),
+            case["accepted"].as_bool().expect("accepted"),
+            "{id}: verdict du module officiel"
+        );
+        if let Ok(bytes) = parsed {
+            assert_eq!(
+                Some(bytes.len()),
+                case["decodedLength"].as_u64().map(|value| value as usize),
+                "{id}: longueur décodée"
+            );
+            assert_eq!(
+                encode_standard(&bytes),
+                case["decodedBase64Standard"]
+                    .as_str()
+                    .expect("decodedBase64Standard"),
+                "{id}: octets décodés"
+            );
+        }
+    }
+}
+
+#[test]
+fn partial_padding_is_accepted_and_longer_padding_refused() {
+    let fixture = read_fixture();
+    let cases = fixture["paddingMatrix"]
+        .as_array()
+        .expect("tableau paddingMatrix");
+    let verdict = |id: &str| -> bool {
+        cases
+            .iter()
+            .find(|case| case["id"] == id)
+            .unwrap_or_else(|| panic!("cas absent: {id}"))["accepted"]
+            .as_bool()
+            .expect("accepted")
+    };
+    for accepted in [
+        "iv-none",
+        "iv-one-pad",
+        "iv-two-pads",
+        "key-none",
+        "key-one-pad",
+    ] {
+        assert!(verdict(accepted), "{accepted}: accepté par la bibliothèque");
+    }
+    for refused in [
+        "iv-three-pads",
+        "iv-four-pads",
+        "iv-pad-in-place-of-last-symbol",
+        "iv-pad-in-middle",
+        "iv-pad-then-symbol",
+        "iv-whitespace",
+        "iv-non-ascii",
+        "key-two-pads",
+        "key-pad-in-middle",
+    ] {
+        assert!(!verdict(refused), "{refused}: refusé par la bibliothèque");
+    }
+}
+
+#[test]
+fn encoded_length_limit_covers_every_stored_vector() {
+    let fixture = read_fixture();
+    let limits = &fixture["limits"];
+    assert_eq!(limits["maximumByteSize"], MAX_MEDIA_BYTES);
+    let per_size = limits["perSize"].as_array().expect("tableau perSize");
+    assert_eq!(per_size.len(), STORED_SIZES.len());
+    let vectors = fixture["vectors"].as_array().expect("tableau vectors");
+
+    for entry in per_size {
+        let size = entry["byteSize"].as_u64().expect("byteSize") as usize;
+        let limit = entry["encodedLengthLimit"]
+            .as_u64()
+            .expect("encodedLengthLimit") as usize;
+        assert_eq!(
+            limit,
+            encoded_length_limit(size),
+            "{size}: formule identique"
+        );
+        let vector = vectors
+            .iter()
+            .find(|vector| vector["byteSize"].as_u64() == Some(size as u64))
+            .expect("vecteur de la taille");
+        let encoded = vector["ciphertext"].as_str().expect("ciphertext");
+        assert!(
+            encoded.len() <= limit,
+            "{size}: l'encodage réel tient dans la borne"
+        );
+        assert!(
+            encoded.len() + 2 <= limit,
+            "{size}: deux « = » tiendraient aussi"
+        );
     }
 }
