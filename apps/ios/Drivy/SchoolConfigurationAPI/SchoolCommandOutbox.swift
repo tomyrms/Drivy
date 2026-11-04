@@ -345,12 +345,14 @@ extension PendingSchoolCommand {
         // vérifie que la version du dossier et de la personne (profiles.ts:122-161). Aucune des deux ne relit l'autre.
         if kind.isInvitation != other.kind.isInvitation,
            kind.isProfileRecord || other.kind.isProfileRecord { return false }
-        // Dossier administratif et enregistrement d'accueil guidé, dans les deux ordres : deux lignes distinctes, sans
-        // version commune. `UPDATE_ADMINISTRATIVE_PROFILE` vérifie et avance `drivy.learner_profile` puis
-        // `drivy.person` (profiles.ts:127, :148, :152) ; `SAVE_ONBOARDING` vérifie et avance `drivy.onboarding_progress`
-        // de l'adhésion (profiles.ts:266, :277-278). Aucune des deux ne relit l'autre.
-        // `COMPLETE_ONBOARDING` reste exclu : sa finalisation passe par `progressDTO`, qui relit le dossier et ses
-        // champs manquants (profiles.ts:167-173, :268) ; des tables distinctes ne prouvent pas l'indépendance.
+        // Dossier administratif et enregistrement d'accueil guidé, dans les deux ordres : deux écritures et deux
+        // versions distinctes, sans validation finale. `UPDATE_ADMINISTRATIVE_PROFILE` vérifie et avance
+        // `drivy.learner_profile` puis `drivy.person` (profiles.ts:127, :148, :152) ; `SAVE_ONBOARDING` vérifie et
+        // avance `drivy.onboarding_progress` de l'adhésion (profiles.ts:266, :277-278). Sa réponse relit le dossier par
+        // `progressDTO` (profiles.ts:280 → :167-173) pour projeter les champs manquants : aucune version du dossier
+        // n'est vérifiée ni avancée, et rien n'est refusé pour ce motif.
+        // `COMPLETE_ONBOARDING` reste exclu : sa finalisation appelle `progressDTO` avant d'écrire (profiles.ts:268) et
+        // refuse sur `pendingActions` (profil incomplet, revue non faite) — la dépendance peut faire échouer la commande.
         if (kind == .updateProfile && other.kind == .saveOnboarding)
             || (kind == .saveOnboarding && other.kind == .updateProfile) { return false }
         // Signalements de leçons différentes : la création ne vérifie aucune version et n'écrit que la leçon, son

@@ -154,6 +154,47 @@ import Testing
         #expect(recorder.confirmed == 1)
     }
 
+    /// #131, R6 : la porte stricte de `canAdd` couvre aussi le chemin de production `save` (ajout par la feuille).
+    /// Avec une commande LIVE de cette leçon encore en vol et `pending` renseigné, l'ajout est refusé **avant** toute
+    /// écriture : la commande conservée n'est ni remplacée ni perdue, aucun second POST ne part, et la tolérance de
+    /// présentation (`acceptsAdd`) reste ouverte. Le coffre est le vrai coffre chiffré, pas un double permissif.
+    @Test func aStrictAddDuringTheLiveSendWritesNothingAndKeepsTheStoredCommand() async throws {
+        try await inOutbox { outbox in
+            let transport = DelayedLiveObservationTransport()
+            let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
+                tokenSource: HubToken(), transport: transport)
+            let workspace = SchoolObservationWorkspace(scope: ConfigurationFixture.scope(), lessonID: HubFixture.lessonID,
+                client: client, outbox: outbox)
+            await workspace.load()
+            let recorder = try #require(workspace.liveRecorder())
+            #expect(recorder.markMoment(at: HubFixture.date("2026-09-28T12:11:00Z")))
+            let command = try #require(try outbox.pending(for: ConfigurationFixture.scope()))
+            // Le POST du geste est réellement en vol (réponse retenue par le transport) avant la relecture.
+            try await HubFixture.wait { await transport.operations() == [command.id] }
+            // Relecture pendant l'envoi : la commande est la demande de l'écran, l'écriture est fermée.
+            await workspace.load()
+            #expect(workspace.pending == command && !workspace.canAdd)
+            // La présentation garde la saisie disponible pendant l'envoi bref.
+            #expect(workspace.acceptsAdd)
+            let editor = try #require(workspace.begin(marker: false))
+            #expect(!(await workspace.save(editor, text: "Ajout pendant l'envoi", marker: false,
+                competencyID: nil, status: nil)))
+            // Refus avant toute écriture : la file garde exactement la commande du geste, un seul POST est parti.
+            #expect(try outbox.pendingCommands(for: ConfigurationFixture.scope()) == [command])
+            #expect(await transport.operations() == [command.id])
+            #expect(workspace.pending == command)
+            // L'intention existante n'est pas perdue : sa confirmation aboutit normalement.
+            await transport.releasePost()
+            let deadline = ContinuousClock.now.advanced(by: .seconds(3))
+            while (workspace.pending != nil || workspace.isLoading || workspace.observations.isEmpty), ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            #expect(workspace.pending == nil && workspace.canAdd && workspace.observations.count == 1)
+            #expect(try outbox.pendingCommands(for: ConfigurationFixture.scope()).isEmpty)
+            #expect(recorder.confirmed == 1)
+        }
+    }
+
     @Test func lateConfirmationCannotReopenAnInvalidatedObservationWorkspace() async throws {
         let transport = DelayedLiveObservationTransport(), outbox = ConfigurationOutboxStub()
         let client = SchoolObservationClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!,
