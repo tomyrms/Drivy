@@ -19,7 +19,7 @@ import Observation
     private(set) var loadedAt: Date?
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private var seenCursors: Set<String> = []
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, client: SchoolCaptureClient, pageSize: Int = 50) {
         self.scope = scope; self.client = client; self.pageSize = pageSize

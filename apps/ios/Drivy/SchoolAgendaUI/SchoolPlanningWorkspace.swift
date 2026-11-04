@@ -109,7 +109,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     @ObservationIgnored private var selectionGeneration = UUID()
     @ObservationIgnored private var availabilityGeneration = UUID()
     @ObservationIgnored private var slotGeneration = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private var storageAvailable = false
     @ObservationIgnored private var confirmedLessonReference: (id: UUID, version: Int)?
     var learnerID: UUID?

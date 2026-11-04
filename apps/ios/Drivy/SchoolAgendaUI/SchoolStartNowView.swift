@@ -45,7 +45,7 @@ struct SchoolStartNowBody: Encodable, Sendable {
     @ObservationIgnored private let outbox: any SchoolCommandOutbox
     @ObservationIgnored private var generation = UUID()
     @ObservationIgnored private(set) var storageAvailable = false
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, client: SchoolPlanningClient, learnerID: UUID? = nil,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox()) {

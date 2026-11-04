@@ -79,7 +79,7 @@ struct SchoolLessonHistoryMonth: Identifiable, Equatable {
     @ObservationIgnored private var moreTask: Task<Void, Never>?
     @ObservationIgnored private var allRun: UUID?
     @ObservationIgnored private var wantsAll = false
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, reach: SchoolLessonHistoryScope, readPage: @escaping PageReader,
          now: @escaping @MainActor () -> Date = { Date() }) {

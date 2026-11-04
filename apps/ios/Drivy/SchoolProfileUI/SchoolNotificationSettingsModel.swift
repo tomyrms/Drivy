@@ -101,7 +101,7 @@ enum SchoolNotificationSyncStatus: Equatable {
     @ObservationIgnored private let contextIsCurrent: @MainActor () -> Bool
     @ObservationIgnored private var work: Task<Void, Never>?
     @ObservationIgnored private var warning: Task<Void, Never>?
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private var restored = false
     @ObservationIgnored private var durable = true
     @ObservationIgnored private var generation = UUID()

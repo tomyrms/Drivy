@@ -65,7 +65,7 @@ struct SchoolCaptureStartReview: Identifiable {
     @ObservationIgnored private var source: (any SchoolCaptureLocationProviding)?
     @ObservationIgnored private var sourceTransferred = false
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     /// Change à chaque fermeture (suspend / invalidate) : une exécution de `begin()` lancée avant
     /// n’est plus « vivante » et laisse sa place à la suivante au lieu de la faire échouer.
     @ObservationIgnored private var lifecycle = UUID()

@@ -43,7 +43,7 @@ struct SchoolRecordingChoiceReview: Identifiable, Sendable {
     @ObservationIgnored private var store: SQLCipherSchoolCaptureStore?
     @ObservationIgnored private let journalProvider: (@MainActor () async throws -> SQLCipherSchoolCaptureStore)?
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, lessonID: UUID?, learnerID: UUID? = nil, client: SchoolCaptureClient,
          reader: any SchoolAPI, agenda: SchoolAgendaClient,

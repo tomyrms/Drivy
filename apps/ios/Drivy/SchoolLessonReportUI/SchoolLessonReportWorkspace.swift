@@ -89,7 +89,7 @@ import Observation
     /// rien n’est mémorisé ni annoncé dans l’ancienne portée.
     @ObservationIgnored private var leftWhileClosureIsSent = false
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private var storageAccessible = false
     @ObservationIgnored private var localDraftRemovalFailed = false
     @ObservationIgnored private var localDraftDiscardRequested = false

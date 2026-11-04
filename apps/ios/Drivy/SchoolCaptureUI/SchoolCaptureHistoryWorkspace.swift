@@ -22,7 +22,7 @@ import Observation
     @ObservationIgnored private let owner: SchoolCaptureSessionController
     @ObservationIgnored private var store: SQLCipherSchoolCaptureStore?
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
 
     init(scope: SchoolCommandScope, client: SchoolCaptureClient, owner: SchoolCaptureSessionController) {
         self.scope = scope; self.client = client; self.owner = owner

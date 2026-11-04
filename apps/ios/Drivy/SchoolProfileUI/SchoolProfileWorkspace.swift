@@ -54,7 +54,7 @@ final class SchoolProfileWorkspace: Identifiable {
     @ObservationIgnored private var applyingDraft = false
     @ObservationIgnored private var restoredOnboardingDraft = false
     @ObservationIgnored private var generation = UUID()
-    @ObservationIgnored private var invalidated = false
+    @ObservationIgnored private(set) var invalidated = false
     @ObservationIgnored private var storageAccessible = false
     @ObservationIgnored private var seenCursors: Set<String> = []
     @ObservationIgnored private var reviewGeneration = UUID()
