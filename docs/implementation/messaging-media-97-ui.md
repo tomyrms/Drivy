@@ -26,4 +26,6 @@ Sept tests d'import écrits avant l'implémentation : original inchangé, vide, 
 
 `git diff --check` : sortie vide ; les nouveaux fichiers sont encore non suivis à ce stade. Aucun commit de livraison et aucun succès produit revendiqué. À compléter : modèle injecté, raccordement au vrai runtime, sélection Photos/documents dans le composeur existant, reçus/reprise, ouverture des messages reçus et invalidation, tests du modèle et scénario UI synthétique.
 
-Point d'injection : `MessagingThreadFixtureView.swift` absent ; la fixture existante repérée est `MessagingQualificationFixture.swift`, hors périmètre autorisé. Demande au coordinateur nécessaire avant modification de cette fixture.
+Point d'injection : `MessagingThreadFixtureView.swift` absent ; extension autorisée par le coordinateur (réponse msg_d109fececc1e) à `MessagingQualificationFixture.swift` et au nouveau `MessagingMediaQualificationFixture.swift`, exclusivement sous DEBUG/simulateur, via `-messaging-ui-fixture` et `-messaging-ui-media`. Générateurs PNG/PDF en mémoire préparés ; runtime synthétique et branchement encore en attente du checkpoint contrat.
+
+Checkpoint indépendant sauvegardé dans `b778eddd` ; socle M97 `40110735998fc8614737bfc98326baf7a380aaaf` fusionné localement sans conflit. Ce socle n'est pas le checkpoint de contrat. Quatre tests UI préparés avant raccordement (sélection/aperçu/retrait photo, PDF sombre/grand texte, reprise explicite sans légende, préparation/clavier), tous NON EXÉCUTÉS et dépendants du raccordement à venir. Aucun workflow modifié.
