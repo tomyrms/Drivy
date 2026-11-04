@@ -4,17 +4,15 @@ import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Button, buttonVariants } from '../../components/ui/button';
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { Skeleton } from '../../components/ui/skeleton';
-import { managesSchool, rolesLabel, schoolsHeading, type EntryRoutes } from './entry-model';
-import { SignedInCodePanel } from './account-entry-panel';
+import { entryRoutes, managesSchool, rolesLabel, schoolsHeading, type EntryRoutes } from './entry-model';
+import { AccountEntryPanel } from './account-entry-panel';
 import type { EntrySessionState } from './use-entry-session';
 
-/**
- * The session is known to be signed in but /me and the schools are still being read: the code form is usable at once,
- * with what was already typed. It grants nothing; the server answers when the code is sent.
- */
+/** Standalone pending presentation; the live entry page keeps its AccountEntryPanel mounted across readings. */
 export function SchoolsPending({ state }: { state: EntrySessionState }) {
   return <section className="entry-section" aria-label="Vos écoles">
-    <SignedInCodePanel typedCode={state.typedCode} onSignedIn={state.signedIn} onCancel={() => state.typedCode.set('')} />
+    <AccountEntryPanel routes={entryRoutes} signedIn typedCode={state.typedCode} onSignedIn={state.signedIn}
+      onCancel={() => state.typedCode.set('')} />
     <div className="entry-school-skeleton" aria-hidden="true"><Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" /></div>
   </section>;
 }
@@ -46,7 +44,6 @@ export function SchoolsView({ state, routes }: { state: EntrySessionState; route
           <Button variant="ghost" disabled={busy} onClick={() => state.refresh('Actualisation de vos écoles…')}><RefreshCw aria-hidden="true" />Actualiser</Button>
         </div>}
       </div>
-      {state.enteringCode && <SignedInCodePanel typedCode={state.typedCode} onSignedIn={state.signedIn} onCancel={() => state.setEnteringCode(false)} />}
       {memberships.length > 0
         ? <ul className="entry-school-list">{memberships.map(member => <li key={member.membershipId}>
             <span className="entry-icon-tile"><Building2 aria-hidden="true" /></span>

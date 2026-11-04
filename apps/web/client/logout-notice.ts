@@ -2,7 +2,7 @@ import type { SessionClosure } from './protocol.js';
 
 const storageKey = 'drivy.logout-unconfirmed';
 
-export const logoutNoticeText = 'Déconnecté de cet appareil. La fermeture des autres sessions n’a pas pu être confirmée.';
+export const logoutNoticeText = 'Déconnecté de cet appareil. La révocation de la session n’a pas pu être confirmée.';
 
 /**
  * A sign-out that closed this device but could not confirm the identity provider revocation leaves one flag for the

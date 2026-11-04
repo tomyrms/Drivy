@@ -8,7 +8,7 @@ import { entryPageFromPath, entryRoutes, type EntryPageKind, type EntryRoutes } 
 import { useEntrySession } from './use-entry-session';
 import { EntryFrame } from './entry-frame';
 import { AccountEntryPanel } from './account-entry-panel';
-import { SchoolsPending, SchoolsView } from './schools-view';
+import { SchoolsView } from './schools-view';
 import { InvitationView } from './invitation-view';
 
 /**
@@ -57,9 +57,11 @@ export function PortalEntryPage({ invitationLink, page = entryPageFromPath(windo
       <Skeleton className="h-9 w-2/3" /><Skeleton className="h-48 w-full" /><Skeleton className="h-12 w-full" />
     </div>}
 
-    {showAuthPanel && <AccountEntryPanel routes={routes} invitation={state.page === 'invitation'} pending={!state.loaded} typedCode={state.typedCode} onSignedIn={state.signedIn} />}
-    {!state.loaded && state.authenticated && state.page === 'account' && <SchoolsPending state={state} />}
+    {(state.page === 'account' || showAuthPanel) && <AccountEntryPanel routes={routes} invitation={state.page === 'invitation'} pending={!state.loaded}
+      signedIn={state.authenticated} codeOpen={state.enteringCode || !state.loaded}
+      onCancel={() => state.loaded ? state.setEnteringCode(false) : state.typedCode.set('')}
+      typedCode={state.typedCode} onSignedIn={state.signedIn} />}
     {state.loaded && state.authenticated && state.page === 'invitation' && <InvitationView state={state} routes={routes} />}
-    {state.loaded && state.authenticated && state.page === 'account' && <SchoolsView state={state} routes={routes} />}
+    {state.authenticated && state.page === 'account' && <SchoolsView state={state} routes={routes} />}
   </EntryFrame>;
 }

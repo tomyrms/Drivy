@@ -40,8 +40,10 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
   const acceptedSession = useRef<string | null>(null);
   const checkedSession = useRef<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
+  const focusNavigation = useRef(false);
 
   function navigate(next: EntryPageKind) {
+    focusNavigation.current = true;
     pageRef.current = next;
     setPage(next);
     window.history.replaceState(null, '', next === 'invitation' ? routes.invitation : routes.account);
@@ -161,12 +163,15 @@ export function useEntrySession({ invitationLink, initialPage, routes }: { invit
 
   useEffect(() => {
     document.title = page === 'invitation' ? 'Rejoindre votre école · Drivy' : 'Votre espace · Drivy';
-    if (loaded) heading.current?.focus({ preventScroll: true });
+    if (focusNavigation.current && heading.current) {
+      focusNavigation.current = false;
+      heading.current.focus({ preventScroll: true });
+    }
   }, [page, loaded]);
 
   useEffect(() => {
-    // The person turned out to be signed in while a code was being typed: the code form follows them, with its text.
-    if (loaded && session?.authenticated && typedCode.trim()) setEnteringCode(true);
+    // Keep the already visible code form open when the school reading finishes.
+    if (!loaded && session?.authenticated) setEnteringCode(true);
   }, [loaded, session?.authenticated]);
 
   /** An opening code continues to the school form; otherwise the account page is read again. */

@@ -49,41 +49,44 @@ function EntryError({ message }: { message: string | null }) {
  * Sign-in, code and account creation of a signed-out person (#319). Each action is distinct: sign in, type a code,
  * recover the password in another tab. Only a valid code or link creates an account.
  */
-export function AccountEntryPanel({ routes, invitation = false, initialCode, pending = false, typedCode, onSignedIn }: {
+export function AccountEntryPanel({ routes, invitation = false, initialCode, pending = false, signedIn = false, codeOpen = true, onCancel, typedCode, onSignedIn }: {
   routes: EntryRoutes; invitation?: boolean; initialCode?: string;
   /** The session is not known yet: the sign-in form waits for it, the code form does not (it grants nothing by itself). */
   pending?: boolean;
+  signedIn?: boolean; codeOpen?: boolean; onCancel?: () => void;
   typedCode?: { value: string; set: (value: string) => void };
   onSignedIn: (kind: AccessKind | null) => void;
 }) {
-  const state = useAccountEntry({ invitation, onSignedIn, ...(initialCode ? { initialCode } : {}), ...(typedCode ? { typedCode } : {}) });
+  const state = useAccountEntry({ invitation, signedIn, onSignedIn, ...(initialCode ? { initialCode } : {}), ...(typedCode ? { typedCode } : {}) });
   const uid = useId();
   const titleId = `${uid}-title`;
   const context = state.step === 'register' && (state.schoolName || state.canChangeCode);
-  return <section className="entry-auth" aria-labelledby={titleId}>
-    <header className="entry-auth-header">
+  return <section className={signedIn ? "entry-inline-code" : "entry-auth"} aria-labelledby={titleId}
+    hidden={signedIn && !codeOpen} style={signedIn && !codeOpen ? { display: 'none' } : undefined}>
+    <header className={signedIn ? undefined : "entry-auth-header"}>
       {context && <p className="entry-context">
         {state.schoolName && <><Building2 aria-hidden="true" /><span>{state.schoolName}</span></>}
         {state.canChangeCode && <Button variant="link" size="sm" className="entry-context-action" disabled={state.busy} onClick={() => state.go('code')}>Changer de code</Button>}
       </p>}
-      <h1 id={titleId} ref={state.heading} tabIndex={-1}>{titles[state.step]}</h1>
+      {signedIn ? <h2 id={titleId} ref={state.heading} tabIndex={-1}>J’ai un code</h2>
+        : <h1 id={titleId} ref={state.heading} tabIndex={-1}>{titles[state.step]}</h1>}
     </header>
-    <div className="entry-card">
+    <div className={signedIn ? undefined : "entry-card"}>
       {state.step !== 'code' && <EntryError message={state.error} />}
       {state.step === 'login' && pending && <div className="entry-loading" aria-busy="true" role="status" aria-label="Chargement">
         <Skeleton className="h-9 w-full" /><Skeleton className="h-9 w-full" /><Skeleton className="h-12 w-full" />
       </div>}
       {state.step === 'login' && !pending && <SignInForm uid={uid} state={state} routes={routes} />}
-      {state.step === 'code' && <CodeForm uid={uid} state={state} />}
+      {state.step === 'code' && <CodeForm uid={uid} state={state} {...(signedIn && onCancel ? { onCancel } : {})} />}
       {state.step === 'register' && <RegisterForm uid={uid} state={state} />}
     </div>
-    <div className="entry-alternatives">
+    {!signedIn && <div className="entry-alternatives">
       <FieldSeparator>ou</FieldSeparator>
       {state.step === 'login' && state.kind === null && <Button variant="outline" size="lg" disabled={state.busy} onClick={() => state.go('code')}>J’ai un code</Button>}
       {state.step === 'login' && state.kind !== null && <Button variant="outline" size="lg" disabled={state.busy} onClick={() => state.go('register')}>Créer un compte</Button>}
       {state.step === 'code' && <Button variant="outline" size="lg" disabled={state.busy} onClick={state.existingAccount}>J’ai déjà un compte</Button>}
       {state.step === 'register' && <Button variant="outline" size="lg" disabled={state.busy} onClick={() => state.go('login')}>J’ai déjà un compte</Button>}
-    </div>
+    </div>}
   </section>;
 }
 
@@ -102,14 +105,17 @@ function SignInForm({ uid, state, routes }: { uid: string; state: AccountEntrySt
 }
 
 function CodeField({ uid, state }: { uid: string; state: AccountEntryState }) {
-  return <TextField id={`${uid}-code`} ref={state.codeInput} autoFocus name="code" label="Code ou lien reçu" placeholder="XXXX-XXXX" autoComplete="one-time-code" autoCapitalize="off" autoCorrect="off"
+  return <TextField id={`${uid}-code`} ref={state.codeInput} name="code" label="Code ou lien reçu" placeholder="XXXX-XXXX" autoComplete="one-time-code" autoCapitalize="off" autoCorrect="off"
     spellCheck={false} maxLength={300} value={state.code} onChange={event => state.setCode(event.target.value)} readOnly={state.busy} error={codeFieldError(state.codeProblem, state.error)} />;
 }
 
-function CodeForm({ uid, state }: { uid: string; state: AccountEntryState }) {
+function CodeForm({ uid, state, onCancel }: { uid: string; state: AccountEntryState; onCancel?: () => void }) {
   return <form className="entry-form" method="post" noValidate onSubmit={submitWith(state.submitCode)}>
     <CodeField uid={uid} state={state} />
-    <Submit busy={state.busy} label="Continuer" busyLabel="Vérification…" />
+    <div className="entry-actions">
+      <Submit busy={state.busy} label="Continuer" busyLabel="Vérification…" />
+      {onCancel && <Button variant="ghost" size="lg" disabled={state.busy} onClick={onCancel}>Annuler</Button>}
+    </div>
     <span className="sr-only" role="status">{state.busy ? 'Vérification du code…' : ''}</span>
   </form>;
 }
@@ -131,23 +137,4 @@ function RegisterForm({ uid, state }: { uid: string; state: AccountEntryState })
     </FieldGroup>
     <Submit busy={state.busy} label="Créer mon compte" busyLabel="Création…" />
   </form>;
-}
-
-/** « J’ai un code » of a signed-in person, inside the list of schools. */
-export function SignedInCodePanel({ typedCode, onSignedIn, onCancel }: {
-  typedCode?: { value: string; set: (value: string) => void }; onSignedIn: (kind: AccessKind | null) => void; onCancel: () => void;
-}) {
-  const state = useAccountEntry({ signedIn: true, onSignedIn, ...(typedCode ? { typedCode } : {}) });
-  const uid = useId();
-  return <section className="entry-inline-code" aria-labelledby={`${uid}-title`}>
-    <h2 id={`${uid}-title`} ref={state.heading} tabIndex={-1}>J’ai un code</h2>
-    <form className="entry-form" method="post" noValidate onSubmit={submitWith(state.submitCode)}>
-      <CodeField uid={uid} state={state} />
-      <div className="entry-actions">
-        <Submit busy={state.busy} label="Continuer" busyLabel="Vérification…" />
-        <Button variant="ghost" size="lg" disabled={state.busy} onClick={onCancel}>Annuler</Button>
-      </div>
-      <span className="sr-only" role="status">{state.busy ? 'Vérification du code…' : ''}</span>
-    </form>
-  </section>;
 }
