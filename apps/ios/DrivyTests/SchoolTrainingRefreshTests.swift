@@ -193,16 +193,21 @@ import Testing
         defer { notifications.removeObserver(observer) }
         let operation = UUID(), resource = UUID(), outbox = ConfigurationOutboxStub()
         let body = SchoolSaveReport(operationId: operation, workedOn: "", observationText: "", nextStep: "", observations: [])
-        try outbox.save(PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .saveReportDraft,
-            resourceVersion: 1, createdAt: Date(), body: try JSONEncoder().encode(body), resourceID: resource))
+        let foreign = PendingSchoolCommand(id: operation, scope: ConfigurationFixture.scope(), kind: .saveReportDraft,
+            resourceVersion: 1, createdAt: Date(), body: try JSONEncoder().encode(body), resourceID: resource)
+        try outbox.save(foreign)
         await server.setConfirmedOperation(operation, resourceID: resource)
         let client = SchoolLessonReportClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: server)
         let model = SchoolLessonReportWorkspace(scope: ConfigurationFixture.scope(), membership: membership,
             lessonID: HubFixture.lessonID, client: client, outbox: outbox, notifications: notifications)
         await model.load()
         await model.verifyPending()
-        #expect(changes.count == 1 && changes.values.isEmpty)
+        // Contrat actuel (#106) : la commande d'une autre leçon n'est pas celle de cet écran. Aucun reçu n'est consommé,
+        // aucune notification n'est diffusée — pas même une notification vide — et la commande étrangère reste intacte
+        // dans la file, pour l'écran qui la porte.
+        #expect(changes.count == 0 && changes.values.isEmpty)
         #expect(!model.reportSaveConfirmed && model.pending == nil)
+        #expect(outbox.removals.isEmpty && outbox.value == foreign)
     }
 
     // MARK: Dossier à plusieurs permis

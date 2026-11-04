@@ -79,7 +79,10 @@ struct SchoolObservationEditor: Identifiable {
             && ["PLANNED", "COMPLETED"].contains(lesson?.status ?? "")
     }
     var canAdd: Bool {
-        guard canMutate, let lesson, observations.count < 100 else { return false }
+        // Porte stricte d'écriture : aucune commande de cette leçon ne doit être en cours, y compris l'envoi bref d'un
+        // signalement posé ici. `acceptsAdd` garde sa tolérance de présentation pendant cet envoi (`liveSendInFlight`),
+        // mais un ajout n'est jamais offert comme possible alors que sa demande n'est pas encore résolue.
+        guard canMutate, pending == nil, let lesson, observations.count < 100 else { return false }
         return lesson.status == "PLANNED" || (lesson.status == "COMPLETED" && draft?.basePublicationVersion == lesson.publicationVersion)
     }
     /// Signalements posés depuis cet écran dont la file est en cours d’envoi : ils ne se présentent pas comme une
