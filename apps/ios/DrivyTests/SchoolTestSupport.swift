@@ -28,6 +28,20 @@ final class ConfigurationOutboxStub: SchoolCommandOutbox {
     }
 }
 
+/// Brouillon d'accueil en mémoire pour les tests qui ne portent pas sur le coffre : aucun accès disque.
+@MainActor
+final class OnboardingDraftStoreStub: SchoolOnboardingDraftStore {
+    var value: SchoolOnboardingDraft?
+    var removals = 0
+    func read(scope: SchoolCommandScope, kind: SchoolOnboardingKind) throws -> SchoolOnboardingDraft? { value }
+    func save(_ value: SchoolOnboardingDraft, scope: SchoolCommandScope, kind: SchoolOnboardingKind) throws {
+        self.value = value
+    }
+    func remove(scope: SchoolCommandScope, kind: SchoolOnboardingKind, discardingUnreadable: Bool) throws {
+        removals += 1; value = nil
+    }
+}
+
 enum ConfigurationFixture {
     static let schoolID = UUID(uuidString: "30000000-0000-4000-8000-000000000001")!
     static let personID = UUID(uuidString: "30000000-0000-4000-8000-000000000002")!

@@ -16,7 +16,8 @@ struct SchoolProfileWorkspaceTests {
         let api = ProfileAPIStub()
         api.profileValue = ProfileFixture.profile(firstName: "Anne-Marie", lastName: "de la Côte", email: nil, phone: nil)
         let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
-            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub())
+            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub(),
+            onboardingDraftStore: OnboardingDraftStoreStub())
         #expect(!model.canSkipOnboardingInformation)
         await model.load()
         #expect(model.canSkipOnboardingInformation && !model.hasEdits)
@@ -32,7 +33,8 @@ struct SchoolProfileWorkspaceTests {
     @Test func missingNamesOrAnUnresolvedJoinRequirementKeepTheInformationStep() async {
         let api = ProfileAPIStub()
         let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
-            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub())
+            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub(),
+            onboardingDraftStore: OnboardingDraftStoreStub())
         api.profileValue = ProfileFixture.profile(firstName: nil, lastName: nil)
         await model.load()
         #expect(!model.canSkipOnboardingInformation && api.commands.isEmpty)
@@ -364,7 +366,8 @@ struct SchoolProfileWorkspaceTests {
     @Test func optionalDeviceStepsAndCompletionAreSeparateExplicitCommands() async throws {
         let api = ProfileAPIStub()
         let model = SchoolProfileWorkspace(scope: ConfigurationFixture.scope(), roles: ["LEARNER"], learnerID: ProfileFixture.learnerID,
-            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub())
+            isOwnProfile: true, onboardingKind: .student, api: api, outbox: ConfigurationOutboxStub(),
+            onboardingDraftStore: OnboardingDraftStoreStub())
         await model.load(); #expect(api.commands.isEmpty)
         #expect(await model.saveOnboarding(step: .review, skipping: ["PHOTO", "NOTIFICATIONS", "DEVICE"]))
         let body = try JSONSerialization.jsonObject(with: api.commands[0].body) as? [String: Any]
