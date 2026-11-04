@@ -142,7 +142,7 @@ import Testing
         let model = makeWorkspace(api: api, store: store)
         await model.load()
         api.sendFailure = .unavailable
-        #expect(await model.saveOnboarding(step: .formations) == false)
+        #expect(await model.saveOnboarding(step: .formations, skipping: []) == false)
         // Rien n'est confirmé par l'école, mais l'étape atteinte ici est conservée à part.
         #expect(model.onboarding?.currentStep == .identity)
         #expect(model.onboardingLocalStep == .formations)
@@ -161,7 +161,7 @@ import Testing
         let api = ProfileAPIStub()
         let model = makeWorkspace(api: api, store: store)
         await model.load()
-        #expect(await model.saveOnboarding(step: .formations))
+        #expect(await model.saveOnboarding(step: .formations, skipping: []))
         #expect(model.onboarding?.currentStep == .formations)
         #expect(!model.hasOnboardingDraft && model.onboardingLocalStep == nil)
     }
