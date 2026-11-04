@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import type { FastifyServerOptions } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Pool } from 'pg';
+import { Client, Pool } from 'pg';
+import { Ajv2020 } from 'ajv/dist/2020.js';
+import { fullFormats } from 'ajv-formats/dist/formats.js';
 import { freshDatabase, issuer } from './support/harness.js';
 import { seedFixtures, fixtureIds as id } from '../scripts/fixtures.js';
 import { buildApp } from '../src/app.js';
@@ -215,6 +219,33 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
     const tooBigJson = await call('demo-instructor', 'POST', `/conversations/${conversationId}/messages`,
       { clientMessageId: randomUUID(), ciphertext: { ...envelope, payload: 'A'.repeat(20_000) } });
     expect(tooBigJson.statusCode).toBe(413);
+    // Hors média, aucun parser `application/octet-stream` n'existe : le transport refuse le type (415) au lieu
+    // d'accepter 20 Kio ou 1 Mio puis de laisser le schéma répondre 400.
+    for (const size of [20_000, 1_000_000]) {
+      const ordinary = await app.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/read-state`,
+        headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: Buffer.alloc(size, 1) });
+      expect(ordinary.statusCode, ordinary.body).toBe(415);
+      expect(ordinary.json().code).toBe('UNSUPPORTED_MEDIA_TYPE');
+    }
+    const messagesOctet = await app.inject({ method: 'POST', url: `${path}/conversations/${conversationId}/messages`,
+      headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: Buffer.alloc(20_000, 1) });
+    expect(messagesOctet.statusCode, messagesOctet.body).toBe(415);
+    await pool.query(`UPDATE drivy.messaging_device SET revoked_at=NULL WHERE person_id=$1 AND device_id=$2`, [id.instructor, deviceA]);
+    // Le corps média est binaire brut : un corps JSON est refusé par le transport, et une chaîne qui ressemble à
+    // du base64 n'est jamais décodée (elle reste quatre octets opaques tels quels).
+    const jsonBody = await app.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${randomUUID()}`,
+      headers: { ...headers('demo-instructor'), 'content-type': 'application/json' }, payload: JSON.stringify({ bytes: 'AAAA' }) });
+    expect(jsonBody.statusCode, jsonBody.body).toBe(415);
+    const rawLookingId = randomUUID();
+    const rawLooking = await app.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${rawLookingId}`,
+      headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: 'QUJD' });
+    expect(rawLooking.statusCode, rawLooking.body).toBe(200);
+    expect(rawLooking.json().data.byteSize).toBe(4);
+    expect(rawLooking.json().data.sha256).toBe(sha256(Buffer.from('QUJD')));
+    // Les limites dédiées des autres routes restent effectives (rapports : 640 Kio).
+    const reportsTooBig = await app.inject({ method: 'POST', url: `${path}/reports`,
+      headers: { ...headers('demo-instructor'), 'content-type': 'application/json' }, payload: Buffer.alloc(700_000, 1) });
+    expect(reportsTooBig.statusCode).toBe(413);
   });
 
   it('serves no byte before attachment, after deletion for everyone, outside the range or when masked', async () => {
@@ -427,6 +458,285 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
       headers: { ...headers('demo-foreign', deviceForeign), 'content-type': 'application/octet-stream' }, payload: cipherBytes(8) });
     expect(closed.statusCode, closed.body).toBe(503);
     expect(closed.json().code).toBe('MESSAGING_NOT_ENABLED');
+    // La porte précède la validation métier de l'appareil : école fermée + appareil invalide reste 503, pas 403.
+    const closedInvalidDevice = await app.inject({ method: 'PUT',
+      url: `/v1/schools/${id.schoolB}/messaging/conversations/${conversationId}/media/${mediaId}`,
+      headers: { authorization: 'Bearer demo-foreign', 'x-drivy-expected-person-id': id.foreign,
+        'x-drivy-expected-access-epoch': '1', 'x-drivy-device-id': 'bad', 'content-type': 'application/octet-stream' },
+      payload: cipherBytes(8) });
+    expect(closedInvalidDevice.statusCode, closedInvalidDevice.body).toBe(503);
+    expect(closedInvalidDevice.json().code).toBe('MESSAGING_NOT_ENABLED');
     expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_media')).rows[0]!.count).toBe(0);
+  });
+
+  it('keeps the historical four-part fingerprint so a pre-media message replays with the same receipt', async () => {
+    const conversationId = await openPrivate();
+    // Forme historique exacte : [enveloppe, mentions, réponse, sondage], sans cinquième élément.
+    const historical = (envelopeValue: unknown, mentions: string[], reply: string | null, poll: unknown) =>
+      createHash('sha256').update(JSON.stringify([envelopeValue, mentions, reply, poll])).digest('hex');
+    const textIntent = randomUUID();
+    const textBody = { clientMessageId: textIntent, expectedMembersEpoch: 0, ciphertext: envelope };
+    const textFirst = await postMessage('demo-instructor', conversationId, textBody);
+    expect(textFirst.statusCode, textFirst.body).toBe(200);
+    const storedText = (await pool.query<{ fingerprint: string }>('SELECT fingerprint FROM drivy.messaging_message WHERE id=$1',
+      [textFirst.json().data.id])).rows[0]!.fingerprint;
+    expect(storedText).toBe(historical(envelope, [], null, null));
+    // Message enregistré avant l'ajout des médias : même empreinte, même rejeu, même reçu, aucun doublon.
+    await pool.query('UPDATE drivy.messaging_message SET fingerprint=$2 WHERE id=$1', [textFirst.json().data.id, historical(envelope, [], null, null)]);
+    const textReplay = await postMessage('demo-instructor', conversationId, textBody);
+    expect(textReplay.statusCode, textReplay.body).toBe(200);
+    expect(textReplay.json().data.id).toBe(textFirst.json().data.id);
+    expect(textReplay.json().data.sequence).toBe(textFirst.json().data.sequence);
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0]!.count).toBe(1);
+    // Forme historique avec sondage : elle reste exactement celle d'avant le lot.
+    const pollIntent = randomUUID();
+    const pollBody = { clientMessageId: pollIntent, expectedMembersEpoch: 0, ciphertext: envelope, poll: { optionCount: 2, multiple: false } };
+    const pollFirst = await postMessage('demo-instructor', conversationId, pollBody);
+    expect(pollFirst.statusCode, pollFirst.body).toBe(200);
+    expect((await pool.query<{ fingerprint: string }>('SELECT fingerprint FROM drivy.messaging_message WHERE id=$1',
+      [pollFirst.json().data.id])).rows[0]!.fingerprint).toBe(historical(envelope, [], null, [2, false]));
+    expect((await postMessage('demo-instructor', conversationId, pollBody)).json().data.id).toBe(pollFirst.json().data.id);
+    // Un message média garde le couple média dans l'empreinte : changer l'identifiant ou la taille reste un conflit.
+    const mediaId = randomUUID();
+    const bytes = cipherBytes(96);
+    expect((await upload('demo-instructor', conversationId, mediaId, bytes)).statusCode).toBe(200);
+    const mediaIntentBody = mediaBody(mediaId, bytes.length);
+    const mediaFirst = await postMessage('demo-instructor', conversationId, mediaIntentBody);
+    expect(mediaFirst.statusCode, mediaFirst.body).toBe(200);
+    expect((await pool.query<{ fingerprint: string }>('SELECT fingerprint FROM drivy.messaging_message WHERE id=$1',
+      [mediaFirst.json().data.id])).rows[0]!.fingerprint)
+      .toBe(createHash('sha256').update(JSON.stringify([envelope, [], null, null, [mediaId, bytes.length]])).digest('hex'));
+    expect((await postMessage('demo-instructor', conversationId, mediaIntentBody)).json().data.id).toBe(mediaFirst.json().data.id);
+    const changedMedia = await postMessage('demo-instructor', conversationId, { ...mediaIntentBody, media: { mediaId: randomUUID(), byteSize: bytes.length } });
+    expect(changedMedia.statusCode, changedMedia.body).toBe(409);
+    expect(changedMedia.json().code).toBe('INTENT_CONFLICT');
+  });
+
+  it('answers a uniform 404 for a cancel aimed at another conversation, in every media state', async () => {
+    const conversationA = await openPrivate();
+    const conversationB = await openGeneral('demo-instructor');
+    const assertUntouched = async (mediaId: string, state: string, journalEntries: number, sequence: string) => {
+      const row = await mediaRow(mediaId);
+      expect(row.state).toBe(state);
+      expect((await journal(mediaId)).length).toBe(journalEntries);
+      expect((await pool.query<{ last_sequence: string }>('SELECT last_sequence FROM drivy.messaging_conversation WHERE id=$1',
+        [conversationA])).rows[0]!.last_sequence).toBe(sequence);
+    };
+    // UPLOADED dans A, annulation via B : 404 uniforme, aucun effet.
+    const uploadedId = randomUUID();
+    const bytes = cipherBytes(80);
+    expect((await upload('demo-instructor', conversationA, uploadedId, bytes)).statusCode).toBe(200);
+    const wrongUploaded = await cancel('demo-instructor', conversationB, uploadedId);
+    expect(wrongUploaded.statusCode, wrongUploaded.body).toBe(404);
+    expect(wrongUploaded.json().code).toBe('MEDIA_NOT_FOUND');
+    await assertUntouched(uploadedId, 'UPLOADED', 0, '0');
+    // ATTACHED dans A, annulation via B : 404 uniforme, jamais 409 (aucun état révélé hors conversation).
+    const attachedId = randomUUID();
+    expect((await upload('demo-instructor', conversationA, attachedId, bytes)).statusCode).toBe(200);
+    expect((await postMessage('demo-instructor', conversationA, mediaBody(attachedId, bytes.length))).statusCode).toBe(200);
+    const sequenceAfterAttach = (await pool.query<{ last_sequence: string }>('SELECT last_sequence FROM drivy.messaging_conversation WHERE id=$1',
+      [conversationA])).rows[0]!.last_sequence;
+    const wrongAttached = await cancel('demo-instructor', conversationB, attachedId);
+    expect(wrongAttached.statusCode, wrongAttached.body).toBe(404);
+    expect(wrongAttached.json().code).toBe('MEDIA_NOT_FOUND');
+    await assertUntouched(attachedId, 'ATTACHED', 0, sequenceAfterAttach);
+    // PURGED dans A, annulation via B : 404 uniforme, pas 200 idempotent.
+    const purgedId = randomUUID();
+    expect((await upload('demo-instructor', conversationA, purgedId, bytes)).statusCode).toBe(200);
+    expect((await cancel('demo-instructor', conversationA, purgedId)).statusCode).toBe(200);
+    const wrongPurged = await cancel('demo-instructor', conversationB, purgedId);
+    expect(wrongPurged.statusCode, wrongPurged.body).toBe(404);
+    expect(wrongPurged.json().code).toBe('MEDIA_NOT_FOUND');
+    await assertUntouched(purgedId, 'PURGED', 1, sequenceAfterAttach);
+    // À la bonne URL, l'annulation reste idempotente et le tiers reste refusé uniformément.
+    expect((await cancel('demo-instructor', conversationA, uploadedId)).statusCode).toBe(200);
+    expect((await cancel('demo-instructor', conversationA, uploadedId)).statusCode).toBe(200);
+    const thirdParty = await cancel('demo-alice', conversationA, attachedId, deviceB);
+    expect(thirdParty.statusCode, thirdParty.body).toBe(404);
+    expect(thirdParty.json().code).toBe('MEDIA_NOT_FOUND');
+    expect((await mediaRow(attachedId)).state).toBe('ATTACHED');
+  });
+
+  it('valide les réponses réelles des routes média contre le contrat exécutable', async () => {
+    const contract = JSON.parse(await readFile(new URL('../contracts/messaging-media.json', import.meta.url), 'utf8')) as { $id: string };
+    const ajv = new Ajv2020({ strict: false, allErrors: true, formats: fullFormats });
+    ajv.addSchema(contract);
+    const check = (definition: string, value: unknown) => {
+      const validate = ajv.getSchema(`${contract.$id}#/$defs/${definition}`);
+      expect(validate, definition).toBeTypeOf('function');
+      expect(validate!(value), `${definition}: ${JSON.stringify(validate!.errors)}`).toBe(true);
+    };
+    const conversationId = await openPrivate();
+    const mediaId = randomUUID();
+    const bytes = cipherBytes(320);
+    const created = await upload('demo-instructor', conversationId, mediaId, bytes);
+    expect(created.statusCode, created.body).toBe(200);
+    check('MediaUploadEnvelope', created.json());
+    expect(created.json().data.state).toBe('UPLOADED');
+    check('MediaUploadEnvelope', (await upload('demo-instructor', conversationId, mediaId, bytes)).json());
+    const conflict = await upload('demo-instructor', conversationId, mediaId, cipherBytes(320, 9));
+    expect(conflict.statusCode).toBe(409);
+    check('MediaError', conflict.json());
+    const posted = await postMessage('demo-instructor', conversationId, mediaBody(mediaId, bytes.length));
+    expect(posted.statusCode, posted.body).toBe(200);
+    check('MediaMessage', posted.json().data.media);
+    const afterAttach = await upload('demo-instructor', conversationId, mediaId, bytes);
+    expect(afterAttach.statusCode).toBe(200);
+    check('MediaUploadEnvelope', afterAttach.json());
+    expect(afterAttach.json().data.state).toBe('ATTACHED');
+    const attachedCancel = await cancel('demo-instructor', conversationId, mediaId);
+    expect(attachedCancel.statusCode).toBe(409);
+    check('MediaError', attachedCancel.json());
+    const removableId = randomUUID();
+    expect((await upload('demo-instructor', conversationId, removableId, bytes)).statusCode).toBe(200);
+    const removed = await cancel('demo-instructor', conversationId, removableId);
+    expect(removed.statusCode, removed.body).toBe(200);
+    check('MediaCancelEnvelope', removed.json());
+    // Le refus de transport fait partie des codes réellement émis et modélisés.
+    const unsupported = await app.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${randomUUID()}`,
+      headers: { ...headers('demo-instructor'), 'content-type': 'application/json' }, payload: '{}' });
+    expect(unsupported.statusCode).toBe(415);
+    check('MediaError', unsupported.json());
+  });
+
+  it('répond INVALID_MEDIA à une intention média invalide du POST message, sans changer les refus ordinaires', async () => {
+    const conversationId = await openPrivate();
+    for (const media of [{ mediaId: 'not-a-uuid', byteSize: 10 }, { mediaId: randomUUID(), byteSize: 4_194_305 },
+      { mediaId: randomUUID(), byteSize: 1.5 }, { mediaId: randomUUID(), byteSize: 'x' }, { mediaId: 12, byteSize: 4 }]) {
+      const attempt = await postMessage('demo-instructor', conversationId,
+        { clientMessageId: randomUUID(), expectedMembersEpoch: 0, ciphertext: envelope, media });
+      expect(attempt.statusCode, JSON.stringify(media)).toBe(400);
+      expect(attempt.json().code).toBe('INVALID_MEDIA');
+    }
+    const ordinary = await postMessage('demo-instructor', conversationId, { clientMessageId: 'not-a-uuid', ciphertext: envelope });
+    expect(ordinary.statusCode).toBe(400);
+    expect(ordinary.json().code).toBe('INVALID_REQUEST');
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0]!.count).toBe(0);
+  });
+
+  it('verrouille les sources de droits avant la conversation : une fin d’éligibilité concurrente refuse le dépôt', async () => {
+    const conversationId = await openPrivate();
+    const mediaId = randomUUID();
+    const updater = await pool.connect();
+    let pending: ReturnType<typeof upload> | undefined;
+    try {
+      const updaterPid = (await updater.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+      await updater.query('BEGIN');
+      await updater.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
+      pending = upload('demo-instructor', conversationId, mediaId, cipherBytes(64));
+      let blocked = false;
+      for (let attempt = 0; attempt < 150; attempt++) {
+        const observed = await pool.query<{ blocked: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity a
+          WHERE a.datname=current_database() AND a.wait_event_type='Lock' AND a.query LIKE '%messaging_lock_rights%'
+            AND $1::int=ANY(pg_blocking_pids(a.pid))) AS blocked`, [updaterPid]);
+        if (observed.rows[0]?.blocked) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, 'le dépôt doit attendre le verrou des sources de droits avant la conversation').toBe(true);
+      await updater.query('COMMIT');
+      const response = await pending;
+      expect(response.statusCode, response.body).toBe(403);
+      expect(response.json().code).toBe('ACCESS_DENIED');
+      expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_media WHERE id=$1', [mediaId])).rows[0]!.count).toBe(0);
+    } finally {
+      await updater.query('ROLLBACK');
+      updater.release();
+      if (pending) await pending.catch(() => undefined);
+    }
+  });
+
+  it('refuse le message après une fin de lien entre dépôt et message, le média reste UPLOADED', async () => {
+    const conversationId = await openPrivate();
+    const mediaId = randomUUID();
+    const bytes = cipherBytes(48);
+    expect((await upload('demo-instructor', conversationId, mediaId, bytes)).statusCode).toBe(200);
+    await pool.query('UPDATE drivy.instructor_assignment SET valid_until=now() WHERE id=$1', [id.assignment]);
+    const refused = await postMessage('demo-instructor', conversationId, mediaBody(mediaId, bytes.length));
+    expect(refused.statusCode, refused.body).toBe(403);
+    expect(refused.json().code).toBe('ACCESS_DENIED');
+    expect((await mediaRow(mediaId)).state).toBe('UPLOADED');
+    expect((await pool.query('SELECT count(*)::int AS count FROM drivy.messaging_message WHERE conversation_id=$1', [conversationId])).rows[0]!.count).toBe(0);
+  });
+
+  it('ne purge jamais les octets d’un média qu’une attache concurrente a verrouillé puis rattaché', async () => {
+    const conversationId = await openPrivate();
+    const posted = await postMessage('demo-instructor', conversationId, { clientMessageId: randomUUID(), expectedMembersEpoch: 0, ciphertext: envelope });
+    expect(posted.statusCode, posted.body).toBe(200);
+    const messageId = posted.json().data.id as string;
+    const mediaId = randomUUID();
+    expect((await upload('demo-instructor', conversationId, mediaId, cipherBytes(56))).statusCode).toBe(200);
+    await pool.query(`UPDATE drivy.messaging_media SET created_at=now()-interval '3 days' WHERE id=$1`, [mediaId]);
+    const holder = new Client({ connectionString: url });
+    await holder.connect();
+    const purger = new Client({ connectionString: url });
+    await purger.connect();
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SET LOCAL ROLE drivy_app');
+      await holder.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)", [id.schoolA, id.instructor]);
+      await holder.query('SELECT drivy.messaging_attach_media($1,$2,$3,$4,$5)', [id.schoolA, conversationId, mediaId, messageId, 56]);
+      const holderPid = (await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
+      await purger.query('BEGIN');
+      const purge = purger.query<{ purged: number }>('SELECT drivy.messaging_purge_orphan_media(now()+interval \'1 day\') AS purged');
+      let blocked = false;
+      for (let attempt = 0; attempt < 150; attempt++) {
+        const observed = await pool.query<{ blocked: boolean }>(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity a
+          WHERE a.datname=current_database() AND a.wait_event_type='Lock' AND $1::int=ANY(pg_blocking_pids(a.pid))) AS blocked`, [holderPid]);
+        if (observed.rows[0]?.blocked) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      expect(blocked, 'la purge orpheline doit attendre le verrou de la ligne média').toBe(true);
+      await holder.query('COMMIT');
+      const purged = await purge;
+      await purger.query('COMMIT');
+      expect(purged.rows[0]!.purged).toBe(0);
+      const row = await mediaRow(mediaId);
+      expect(row.state).toBe('ATTACHED');
+      expect(row.ciphertext).not.toBeNull();
+      expect((await journal(mediaId)).length).toBe(0);
+    } finally {
+      await holder.query('ROLLBACK').catch(() => undefined);
+      await holder.end();
+      await purger.query('ROLLBACK').catch(() => undefined);
+      await purger.end();
+    }
+  });
+
+  it('ne laisse aucun identifiant, nom, clé ni contenu dans les vrais logs applicatifs', async () => {
+    const lines: string[] = [];
+    const logged = buildApp({
+      pool, cursorSecret: 'messaging-media-logs-secret-32-chars!',
+      messaging: { mode: 'qualification', schoolIds: [id.schoolA] },
+      verifyToken: async authorization => {
+        if (!authorization?.startsWith('Bearer demo-')) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Connexion requise.');
+        return { issuer, subject: authorization.slice(7) };
+      },
+      logger: { level: 'info', stream: { write: (line: string) => { lines.push(line); } } } as unknown as FastifyServerOptions['logger']
+    });
+    let conversationId = '';
+    let mediaId = '';
+    const bytes = cipherBytes(2048);
+    try {
+      const opened = await logged.inject({ method: 'PUT', url: `${path}/private/${id.alice}`, headers: headers('demo-instructor') });
+      expect(opened.statusCode, opened.body).toBe(200);
+      conversationId = opened.json().data.conversationId as string;
+      mediaId = randomUUID();
+      const put = await logged.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
+        headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: bytes });
+      expect(put.statusCode, put.body).toBe(200);
+      const conflict = await logged.inject({ method: 'PUT', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
+        headers: { ...headers('demo-instructor'), 'content-type': 'application/octet-stream' }, payload: cipherBytes(2048, 99) });
+      expect(conflict.statusCode).toBe(409);
+      const missingDevice = await logged.inject({ method: 'GET', url: `${path}/conversations/${conversationId}/media/${mediaId}`,
+        headers: headers('demo-instructor', null) });
+      expect(missingDevice.statusCode).toBe(403);
+    } finally { await logged.close(); }
+    const text = lines.join('');
+    // Les vrais logs applicatifs sont bien capturés (méthode, modèle de route, statut, code), pas un logger désactivé.
+    expect(text).toContain('/v1/schools/:schoolId/messaging/conversations/:conversationId/media/:mediaId');
+    expect(text).toContain('statusCode');
+    expect(text).toContain('MEDIA_INTENT_CONFLICT');
+    for (const secret of [mediaId, conversationId, id.instructor, deviceA, sha256(bytes), envelope.payload])
+      expect(text).not.toContain(secret);
   });
 });

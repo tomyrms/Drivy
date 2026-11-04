@@ -2,13 +2,33 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:messaging-media:1",
   "title": "Médias chiffrés de bout en bout de la messagerie (#97)",
-  "description": "PUT/GET/DELETE /v1/schools/{schoolId}/messaging/conversations/{conversationId}/media/{mediaId} et champ media du POST messages. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Les octets sont chiffrés par l’appareil et opaques pour le serveur : le serveur ne stocke ni nom, ni type MIME, ni légende, ni clé, ni IV, ni miniature, seulement identifiant, école, conversation, déposant, taille, SHA-256 du chiffré, octets, horodatages, état et message porteur. Un média est UPLOADED (octets sans message), ATTACHED (octets et message) ou PURGED (sans octets, marque de suppression conservée) ; PURGED est terminal. GET répond application/octet-stream avec Cache-Control private, no-store et X-Drivy-Media-Sha256, ou un 404 MEDIA_NOT_FOUND uniforme. Le téléchargement relit la plage de séquence du lien, le masquage, la suppression et l’appareil déclaré actif ; la révocation est une garantie de compte.",
+  "description": "PUT/GET/DELETE /v1/schools/{schoolId}/messaging/conversations/{conversationId}/media/{mediaId} et champ media du POST messages. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Les octets sont chiffrés par l’appareil et opaques pour le serveur : le serveur ne stocke ni nom, ni type MIME, ni légende, ni clé, ni IV, ni miniature, seulement identifiant, école, conversation, déposant, taille, SHA-256 du chiffré, octets, horodatages, état et message porteur. Un média est UPLOADED (octets sans message), ATTACHED (octets et message) ou PURGED (sans octets, marque de suppression conservée) ; PURGED est terminal. Les réponses média portent l’enveloppe { data, context, requestId, serverTime } ; un reçu de dépôt n’annonce que UPLOADED ou ATTACHED, jamais PURGED. GET répond application/octet-stream avec Cache-Control private, no-store et X-Drivy-Media-Sha256, ou un 404 MEDIA_NOT_FOUND uniforme. Le corps du PUT est binaire brut ; hors des routes média, application/octet-stream est refusé par le transport (415 UNSUPPORTED_MEDIA_TYPE). Le téléchargement relit la plage de séquence du lien, le masquage, la suppression et l’appareil déclaré actif ; la révocation est une garantie de compte.",
   "$defs": {
     "MediaPutBody": {
       "type": "string",
       "minLength": 1,
       "maxLength": 4194304,
-      "description": "Octets chiffrés bruts, Content-Type application/octet-stream, Content-Length obligatoire et égal à la taille reçue."
+      "description": "Octets chiffrés bruts, Content-Type application/octet-stream, Content-Length obligatoire et égal à la taille reçue.",
+      "contentMediaType": "application/octet-stream",
+      "$comment": "Corps BINAIRE BRUT (application/octet-stream) : les octets chiffrés sont le corps HTTP lui-même. Le type \"string\" et maxLength sont l’annotation JSON Schema de cette limite ; aucune chaîne JSON, aucun base64 et aucun objet descripteur n’est accepté par le service. Content-Length obligatoire et égal à la taille reçue."
+    },
+    "MediaMessageIntent": {
+      "type": "object",
+      "properties": {
+        "mediaId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "byteSize": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mediaId",
+        "byteSize"
+      ],
+      "additionalProperties": false
     },
     "MediaUploadResponse": {
       "type": "object",
@@ -31,8 +51,7 @@
           "type": "string",
           "enum": [
             "UPLOADED",
-            "ATTACHED",
-            "PURGED"
+            "ATTACHED"
           ]
         }
       },
@@ -87,6 +106,154 @@
       ],
       "additionalProperties": false
     },
+    "MediaUploadEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "mediaId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "byteSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4194304
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "state": {
+              "type": "string",
+              "enum": [
+                "UPLOADED",
+                "ATTACHED"
+              ]
+            }
+          },
+          "required": [
+            "mediaId",
+            "byteSize",
+            "sha256",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "schoolId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "actorPersonId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "accessEpoch": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "schoolId",
+            "actorPersonId",
+            "accessEpoch"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "context",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "MediaCancelEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "mediaId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "deleted": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "mediaId",
+            "deleted"
+          ],
+          "additionalProperties": false
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "schoolId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "actorPersonId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            "accessEpoch": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "schoolId",
+            "actorPersonId",
+            "accessEpoch"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "context",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
     "MediaError": {
       "type": "object",
       "properties": {
@@ -105,14 +272,20 @@
           "type": "string",
           "enum": [
             "INVALID_MEDIA",
+            "INVALID_REQUEST",
             "PAYLOAD_TOO_LARGE",
+            "UNSUPPORTED_MEDIA_TYPE",
+            "AUTHENTICATION_REQUIRED",
+            "ACCESS_DENIED",
             "MESSAGING_DEVICE_REQUIRED",
             "MEDIA_NOT_FOUND",
             "MEDIA_INTENT_CONFLICT",
             "MEDIA_ALREADY_ATTACHED",
             "MEDIA_SIZE_MISMATCH",
             "MEDIA_PURGED",
-            "MESSAGING_NOT_ENABLED"
+            "CONCURRENT_REQUEST",
+            "MESSAGING_NOT_ENABLED",
+            "SERVICE_UNAVAILABLE"
           ]
         },
         "requestId": {

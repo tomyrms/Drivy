@@ -3,13 +3,16 @@ import { createHash } from 'node:crypto';
 import { ApiError, forbidden } from './errors.js';
 import { deviceIdPattern } from './messaging-keys.js';
 import { syncLinks } from './messaging-view.js';
-import type { MessagingActor } from './messaging.js';
+import { lockRights, type MessagingActor } from './messaging.js';
+import { mediaMaxBytes, mediaReceiptStates, type MediaReceiptState } from './messaging-media-contract.js';
 
 /**
  * Médias de la messagerie : le serveur ne voit que des octets chiffrés opaques, une taille et un SHA-256 du chiffré.
  * Aucun nom, type MIME, légende, clé, IV ni miniature n'est stocké, journalisé ou renvoyé ici.
+ * La limite et les états de reçu viennent du contrat exécutable, réexportés pour les appelants historiques.
  */
-export const mediaMaxBytes = 4_194_304;
+export { mediaMaxBytes, mediaReceiptStates };
+export type { MediaReceiptState };
 /** Limite de corps de la route média : plafond + marge d'en-têtes, sans toucher au bodyLimit global de l'API. */
 export const mediaBodyLimit = mediaMaxBytes + 8_192;
 export const mediaStates = ['UPLOADED', 'ATTACHED', 'PURGED'] as const;
@@ -17,7 +20,7 @@ export type MediaState = typeof mediaStates[number];
 
 /** Intention média portée par le message : l'identifiant et la taille déclarée entrent dans l'empreinte d'idempotence. */
 export interface MediaIntent { mediaId: string; byteSize: number }
-export interface MediaReceipt { mediaId: string; byteSize: number; sha256: string; state: MediaState }
+export interface MediaReceipt { mediaId: string; byteSize: number; sha256: string; state: MediaReceiptState }
 export interface MediaDownload { bytes: Buffer; byteSize: number; sha256: string }
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -51,18 +54,31 @@ export async function requireActiveDevice(db: PoolClient, actor: MessagingActor,
   if (!active.rows[0]) throw mediaDeviceRequired();
 }
 
-/** Lecture de la conversation (404 hors périmètre), puis verrou de conversation : ordre conversation → média. */
+/** Lecture de la conversation (404 hors périmètre), sources de droits verrouillées, puis verrou de conversation.
+ *  Ordre de la fondation : droits → conversation → message → média. */
 async function lockConversationForWrite(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
   const visible = await db.query<{ allowed: boolean }>(
     'SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
   if (visible.rows[0]?.allowed !== true) throw mediaNotFound();
+  // Les sources d'autorisation sont tenues jusqu'au COMMIT, comme pour l'envoi d'un message : une fin
+  // d'éligibilité ne peut pas se committer entre le contrôle de droit et l'écriture durable du média.
+  await lockRights(db, actor, conversationId);
+  // Le droit d'écriture est relu APRÈS le verrou des sources, et avant le verrou de conversation : une fin
+  // d'éligibilité déjà commitée répond 403 (jamais un 404 de conversation), et le verrou `FOR UPDATE` ne peut
+  // pas être filtré par la politique RLS UPDATE de `messaging_conversation`, qui exige `messaging_can_write`.
+  if (!(await canWrite(db, actor, conversationId))) throw forbidden();
   const locked = await db.query('SELECT 1 FROM drivy.messaging_conversation WHERE school_id=$1 AND id=$2 FOR UPDATE',
     [actor.schoolId, conversationId]);
   if (!locked.rows[0]) throw mediaNotFound();
   await syncLinks(db, actor.schoolId, conversationId);
+  // Les liens ont pu être coupés par la synchronisation : le droit est recontrôlé avant toute écriture.
+  if (!(await canWrite(db, actor, conversationId))) throw forbidden();
+}
+
+async function canWrite(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<boolean> {
   const write = await db.query<{ allowed: boolean }>(
     'SELECT drivy.messaging_can_write($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
-  if (write.rows[0]?.allowed !== true) throw forbidden();
+  return write.rows[0]?.allowed === true;
 }
 
 async function assertConversationVisible(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
@@ -126,10 +142,16 @@ export async function downloadMedia(db: PoolClient, actor: MessagingActor, conve
   return { bytes: row.bytes, byteSize: Number(row.byteSize), sha256: row.sha256 };
 }
 
-/** Annulation avant attache : transition terminale vers PURGED, idempotente sur une marque de suppression déjà purgée. */
+/** Annulation avant attache : la conversation de l'URL fait partie du périmètre nommé. La ligne média est verrouillée
+ *  et sa conversation comparée sous verrou avant toute purge : un média d'une autre conversation répond le même
+ *  404 uniforme, quel que soit son état (UPLOADED, ATTACHED ou PURGED), sans effet ni entrée de journal. */
 export async function cancelMedia(db: PoolClient, actor: MessagingActor, conversationId: string, mediaIdValue: string) {
   const target = mediaId(mediaIdValue);
   await lockConversationForWrite(db, actor, conversationId);
+  const stored = await db.query<{ conversation_id: string }>(
+    'SELECT conversation_id FROM drivy.messaging_lock_media($1,$2)', [actor.schoolId, target]);
+  const row = stored.rows[0];
+  if (!row || row.conversation_id.toLowerCase() !== conversationId.toLowerCase()) throw mediaNotFound();
   await db.query('SELECT drivy.messaging_purge_media($1,$2,$3)', [actor.schoolId, target, 'CANCELLED']);
   return { mediaId: target, deleted: true };
 }

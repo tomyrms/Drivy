@@ -25,8 +25,9 @@ const message = z.object({ clientMessageId: id, ciphertext: envelope, mentionPer
   expectedMembersEpoch: z.number().int().min(0).safe().optional(),
   replyToMessageId: id.nullable().optional(),
   poll: z.object({ optionCount: z.number().int().min(2).max(12), multiple: z.boolean().default(false) }).strict().nullable().optional(),
-  media: z.object({ mediaId: id, byteSize: z.number().int().min(1).max(4_194_304) }).strict().nullable().optional() }).strict()
-  .refine(value => !(value.media && value.poll), { message: 'Un message ne peut pas porter un sondage et une pièce jointe.' });
+  // Forme validée par le schéma partagé à la frontière du domaine (400 INVALID_MEDIA), pas par le schéma de route.
+  media: z.unknown().nullable().optional() }).strict()
+  .refine(value => !(value.media != null && value.poll != null), { message: 'Un message ne peut pas porter un sondage et une pièce jointe.' });
 const directoryQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), cursor: id.optional() }).strict();
 
 /** Qualification explicite par école, identité OIDC et droits serveur toujours obligatoires. */
@@ -131,47 +132,54 @@ export function registerMessaging(app: FastifyInstance, options: { pool: Pool; v
       body.clientMessageId, body.ciphertext, body.mentionPersonIds, body.replyToMessageId ?? null, body.poll ?? null,
       body.expectedMembersEpoch, body.media ?? null).then(data => ({ data })));
   });
-  // Médias : octets chiffrés bruts, bornés à ces routes seulement. Le bodyLimit global de l'API reste à 16 Kio.
-  app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: mediaBodyLimit },
-    (_request, body, done) => done(null, body));
+  // Médias : octets chiffrés bruts. Parser et routes sont encapsulés dans un scope Fastify : hors média, aucun
+  // parser `application/octet-stream` n'existe (Fastify refuse le type en 415) et le bodyLimit global reste à 16 Kio.
   const mediaPath = `${path}/conversations/:conversationId/media/:mediaId`;
   // L'identifiant média est validé par le module média (400 INVALID_MEDIA), pas par le schéma de route.
   const mediaParams = conversation.extend({ mediaId: z.string().min(1).max(64) });
-  app.put(mediaPath, { bodyLimit: mediaBodyLimit }, request => {
-    const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
-    if (!Buffer.isBuffer(request.body))
-      throw new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Envoyez les octets chiffrés en application/octet-stream.');
-    const bytes = request.body;
-    // Longueur déclarée obligatoire et exacte : aucune troncature silencieuse, aucun octet ignoré.
-    const declared = Number(request.headers['content-length']);
-    if (!Number.isSafeInteger(declared) || declared !== bytes.length || bytes.length < 1) throw invalidMedia();
-    if (bytes.length > mediaMaxBytes) throw mediaPayloadTooLarge();
-    const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
-    return execute(request.headers, request.id, schoolId, async (db, actor) => {
-      await requireActiveDevice(db, actor, deviceId);
-      return { data: await uploadMedia(db, actor, conversationId, mediaId, bytes) };
+  app.register(async function messagingMediaRoutes(scope) {
+    scope.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: mediaBodyLimit },
+      (_request, body, done) => done(null, body));
+    scope.put(mediaPath, { bodyLimit: mediaBodyLimit }, request => {
+      const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
+      // La porte de qualification précède toute validation métier (appareil, média) : école fermée = 503.
+      if (!enabled(schoolId)) throw messagingUnavailable();
+      if (!Buffer.isBuffer(request.body))
+        throw new ApiError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Envoyez les octets chiffrés en application/octet-stream.');
+      const bytes = request.body;
+      // Longueur déclarée obligatoire et exacte : aucune troncature silencieuse, aucun octet ignoré.
+      const declared = Number(request.headers['content-length']);
+      if (!Number.isSafeInteger(declared) || declared !== bytes.length || bytes.length < 1) throw invalidMedia();
+      if (bytes.length > mediaMaxBytes) throw mediaPayloadTooLarge();
+      const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
+      return execute(request.headers, request.id, schoolId, async (db, actor) => {
+        await requireActiveDevice(db, actor, deviceId);
+        return { data: await uploadMedia(db, actor, conversationId, mediaId, bytes) };
+      });
     });
-  });
-  app.get(mediaPath, async (request, reply) => {
-    const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
-    const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
-    const { result, context } = await run(request.headers, schoolId, async (db, actor) => {
-      await requireActiveDevice(db, actor, deviceId);
-      return downloadMedia(db, actor, conversationId, mediaId);
+    scope.get(mediaPath, async (request, reply) => {
+      const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
+      if (!enabled(schoolId)) throw messagingUnavailable();
+      const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
+      const { result, context } = await run(request.headers, schoolId, async (db, actor) => {
+        await requireActiveDevice(db, actor, deviceId);
+        return downloadMedia(db, actor, conversationId, mediaId);
+      });
+      reply.header('Cache-Control', 'private, no-store')
+        .header('X-Drivy-School-Id', context.schoolId)
+        .header('X-Drivy-Access-Epoch', String(context.accessEpoch))
+        .header('X-Drivy-Media-Sha256', result.sha256)
+        .header('Content-Length', String(result.bytes.length));
+      return reply.type('application/octet-stream').send(result.bytes);
     });
-    reply.header('Cache-Control', 'private, no-store')
-      .header('X-Drivy-School-Id', context.schoolId)
-      .header('X-Drivy-Access-Epoch', String(context.accessEpoch))
-      .header('X-Drivy-Media-Sha256', result.sha256)
-      .header('Content-Length', String(result.bytes.length));
-    return reply.type('application/octet-stream').send(result.bytes);
-  });
-  app.delete(mediaPath, request => {
-    const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
-    const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
-    return execute(request.headers, request.id, schoolId, async (db, actor) => {
-      await requireActiveDevice(db, actor, deviceId);
-      return { data: await cancelMedia(db, actor, conversationId, mediaId) };
+    scope.delete(mediaPath, request => {
+      const { schoolId, conversationId, mediaId } = mediaParams.parse(request.params);
+      if (!enabled(schoolId)) throw messagingUnavailable();
+      const deviceId = deviceHeader(request.headers['x-drivy-device-id']);
+      return execute(request.headers, request.id, schoolId, async (db, actor) => {
+        await requireActiveDevice(db, actor, deviceId);
+        return { data: await cancelMedia(db, actor, conversationId, mediaId) };
+      });
     });
   });
   app.put(`${path}/conversations/:conversationId/read-state`, request => {
