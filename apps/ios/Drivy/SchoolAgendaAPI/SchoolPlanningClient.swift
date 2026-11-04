@@ -155,13 +155,19 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
     let baseURL: URL
     private let tokenSource: any AccessTokenSource
     private let transport: any SchoolHTTPTransport
+    /// Horloge de la barrière de créneau, injectable pour que les tests ne dépendent pas du jour réel.
+    private let now: @Sendable () -> Date
     let catalog: SchoolCatalogClient
     let reader: DrivyAPIClient
-    init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport()) {
-        self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport
+    init(baseURL: URL, tokenSource: any AccessTokenSource, transport: any SchoolHTTPTransport = SchoolURLSessionTransport(),
+         now: @escaping @Sendable () -> Date = { Date() }) {
+        self.baseURL = baseURL; self.tokenSource = tokenSource; self.transport = transport; self.now = now
         catalog = SchoolCatalogClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
         reader = DrivyAPIClient(baseURL: baseURL, tokenSource: tokenSource, transport: transport)
     }
+
+    /// Même instant que la barrière : la feuille n’offre pas un renvoi que le client refusera.
+    var currentDate: Date { now() }
 
     func records<Value: SchoolCatalogRecord>(_ schoolID: UUID, path: [String], query: [URLQueryItem] = []) async throws -> [Value] {
         var records: [Value] = [], cursor: String?, seen = Set<String>()
@@ -231,6 +237,8 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
+        // Déjà inadmissible : aucun jeton n’est demandé, aucun paquet ne part.
+        try requireAdmissibleLessonStart(command)
         if command.kind == .startLessonNow { _ = try await startNow(command); return nil }
         var path: [String]
         switch command.kind {
@@ -314,6 +322,12 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         guard !token.isEmpty, token.utf8.allSatisfy({ $0 > 32 && $0 < 127 }) else { throw SchoolPlanningFailure.unauthorized }
         return token
     }
+    /// Le créneau est relu à l’instant exact de l’écriture, après le jeton, `/me` et un éventuel renouvellement 401.
+    private func requireAdmissibleLessonStart(_ command: PendingSchoolCommand) throws {
+        guard SchoolPlanningRecoveryPolicy.permitsWrite(command, at: now()) else {
+            throw SchoolPlanningWriteRefusal.lessonStartNotAdmissible
+        }
+    }
     private func perform<Value: Decodable>(_ target: URL, command: PendingSchoolCommand?, statuses: Set<Int>?, token: String) async throws -> Value {
         if let command {
             let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
@@ -323,6 +337,8 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             }) else { throw SchoolPlanningFailure.forbidden }
         }
         try Task.checkCancellation()
+        // Dernière barrière avant le transport : elle couvre le jeton, `/me` et le second essai après 401.
+        if let command { try requireAdmissibleLessonStart(command) }
         var request = URLRequest(url: target)
         if let command { request.httpMethod = [.updateAvailabilityRule, .savePlanningDefaults].contains(command.kind) ? "PUT" : "POST" }
         else { request.httpMethod = "GET" }
