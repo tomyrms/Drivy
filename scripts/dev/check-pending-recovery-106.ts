@@ -24,22 +24,25 @@ const schoolId = '10000000-0000-4000-8000-000000000001';
 const otherSchool = '10000000-0000-4000-8000-000000000002';
 let school = schoolId, now = Date.parse('2030-01-01T10:00:00Z'), releaseCsrf, csrfStarted = false;
 Date.now = () => now;
-let posts = 0, reads = 0, receipt = false, command;
+let posts = 0, reads = 0, receipt = false, missing = false, command;
 window.fetch = async (url, init) => {
   if (init?.method === 'POST') posts++; else reads++;
   const data = receipt ? { requestId: '10000000-0000-4000-8000-000000000004', serverTime: '2030-01-01T10:02:00Z', data: { operationId: command.operationId, commandType: 'CREATE_LESSON', resourceType: 'Lesson', resourceId: '10000000-0000-4000-8000-000000000003', resourceVersion: 1, committedAt: '2030-01-01T10:01:00Z' } } : { code: 'API_UNAVAILABLE' };
-  const response = new Response(JSON.stringify(data), { status: receipt ? 200 : 503, headers: { 'content-type': 'application/json' } });
+  const response = new Response(JSON.stringify(data), { status: receipt ? 200 : missing ? 404 : 503, headers: { 'content-type': 'application/json' } });
   Object.defineProperty(response, 'url', { value: String(url) });
   return response;
 };
 const root = createRoot(document.getElementById('root'));
-function render() { flushSync(() => root.render(<ConsoleContext.Provider value={{ schoolId: school, csrf: () => 'synthetic', refreshCsrf: () => { csrfStarted = true; return new Promise(done => releaseCsrf = done); }, reloadSchool: async () => {}, login: () => {} } as any}><main className="p-4 max-w-3xl mx-auto"><button id="independent">Action indépendante</button><PortalPendingRequests /></main></ConsoleContext.Provider>)); }
+function render() { flushSync(() => root.render(<ConsoleContext.Provider value={{ schoolId: school, csrf: () => 'synthetic', refreshCsrf: () => { csrfStarted = true; return new Promise(done => releaseCsrf = done); }, reloadSchool: async () => {}, login: () => {} } as any}><main className="p-4 max-w-3xl mx-auto"><div className="mb-4"><button id="independent">Action indépendante</button></div><PortalPendingRequests /></main></ConsoleContext.Provider>)); }
 window.fixture = {
   render,
   submit: async () => { command = createCommand({ schoolId: school, kind: 'createLesson', path: 'lessons', resourceVersion: 0, body: { plannedStart: '2030-01-01T10:01:00Z', meetingPoint: 'Lieu synthétique' } }); await commandStore.submit(command, 'synthetic'); },
   expire: () => { now += 120000; },
   finishCsrf: () => releaseCsrf('synthetic'),
   confirm: () => { receipt = true; },
+  missing: () => { missing = true; },
+  resetClock: () => { now = Date.parse('2030-01-01T10:00:00Z'); receipt = false; missing = false; csrfStarted = false; },
+  restore: () => commandStore.submit(command, 'synthetic'),
   clear: () => commandStore.clear(),
   school: () => { school = school === schoolId ? otherSchool : schoolId; commandStore.scopeToAccess(school, 'synthetic-member', 1); render(); },
   state: () => ({ posts, reads, csrfStarted, operationId: command?.operationId, entries: [...commandStore.getSnapshot().entries.values()], metadata: commandStore.getSnapshot().metadata }),
@@ -75,6 +78,23 @@ async function fixture(failure = '') {
 async function action(page: Page, name: string) { await page.evaluate(name => (window as any).fixture[name](), name); }
 async function state(page: Page) { return page.evaluate(() => (window as any).fixture.state()); }
 async function text(page: Page) { return page.locator('main').innerText(); }
+async function capture(page: Page, name: string) {
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    // Keyboard focus may have scrolled the page; capture from a stable origin without moving focus.
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    await new Promise<void>(done => requestAnimationFrame(() => done()));
+    await Promise.all(document.getAnimations().filter(animation =>
+      animation.effect?.getComputedTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+  });
+  const separation = await page.evaluate(() => {
+    const control = document.querySelector('#independent')!.getBoundingClientRect();
+    const notice = document.querySelector('[data-slot=alert]')!.getBoundingClientRect();
+    return notice.top - control.bottom;
+  });
+  assert(separation >= 4, `fixture control and focus ring need their own space: ${separation}`);
+  await page.screenshot({ path: `${output}/${name}.png`, fullPage: true });
+}
 try {
   if (mode !== 'race') {
     for (const [failure, expected] of [['read', /suivi précédent.*pu être relu/i], ['write', /suivi local.*pu être enregistré|suivi local.*pu être mis à jour/i], ['clear', /suivi local.*pu être effacé/i]] as const) {
@@ -91,7 +111,7 @@ try {
         await page.evaluate(({ theme, zoom }) => { document.documentElement.dataset.theme = theme; document.body.style.zoom = String(zoom); }, { theme, zoom });
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'horizontal overflow');
         assert(await page.locator('[data-slot=alert]').evaluateAll(elements => elements.every(el => el.scrollWidth <= el.clientWidth + 1)), 'alert content fits');
-        await page.screenshot({ path: `${output}/${failure}-${width}-${theme}-${zoom}.png`, fullPage: true, animations: 'disabled' });
+        await capture(page, `${failure}-${width}-${theme}-${zoom}`);
       }
       await page.evaluate(() => { (window as any).storageFailure = ''; });
       await action(page, 'clear');
@@ -111,7 +131,7 @@ try {
     assert.equal(await focused.getByRole('button', { name: 'Renvoyer la même demande' }).evaluate(el => document.activeElement === el), true);
     await focused.keyboard.press('Shift+Tab');
     assert.equal(await focused.getByRole('button', { name: 'Vérifier le résultat' }).evaluate(el => document.activeElement === el), true);
-    await focused.screenshot({ path: `${output}/keyboard-focus.png` });
+    await capture(focused, 'keyboard-focus');
     await focused.evaluate(() => {
       (window as any).liveMutations = 0;
       const observer = new MutationObserver(records => { (window as any).liveMutations += records.length; });
@@ -124,7 +144,7 @@ try {
     await focused.getByText('Le résultat de la demande est confirmé.', { exact: true }).waitFor();
     assert.equal((await state(focused)).entries.length, 0);
     assert.match(await text(focused), /suivi local.*pu être enregistré/i, 'failed removal write still visible without entries');
-    await focused.screenshot({ path: `${output}/confirmed-storage-refused.png`, fullPage: true });
+    await capture(focused, 'confirmed-storage-refused');
     await action(focused, 'school');
     assert.doesNotMatch(await text(focused), /résultat de la demande est confirmé/i, 'old school feedback hidden');
     await focused.close();
@@ -163,13 +183,33 @@ try {
     assert.deepEqual(after.entries, before.entries, 'same operation and intention');
     assert.equal(await page.getByRole('button', { name: 'Vérifier le résultat' }).isEnabled(), true);
     assert.equal(await page.getByText('L’horaire demandé est passé : vérifiez le résultat ou arrêtez le suivi.', { exact: true }).count(), 1);
-    await page.screenshot({ path: `${output}/expired.png`, fullPage: true });
+    await capture(page, 'expired');
     await action(page, 'confirm');
     await page.getByRole('button', { name: 'Vérifier le résultat' }).click();
     await page.getByText('Le résultat de la demande est confirmé.', { exact: true }).waitFor();
     assert.equal((await state(page)).entries.length, 0);
     assert.equal((await state(page)).posts, before.posts);
+    assert.doesNotMatch(await text(page), /horaire demandé est passé/);
+    await action(page, 'resetClock'); await action(page, 'submit');
+    assert.doesNotMatch(await text(page), /horaire demandé est passé/, 'new request never inherits local feedback');
+    await page.getByRole('button', { name: 'Vérifier le résultat' }).click();
+    await page.getByText('Le résultat n’a pas pu être établi. La demande reste suivie : réessayez la vérification.', { exact: true }).waitFor();
+    assert.doesNotMatch(await text(page), /L’école est momentanément inaccessible/, 'replacement shows only current message');
+    await action(page, 'clear'); await action(page, 'render');
+    assert.equal(await page.getByRole('region', { name: 'Demandes en cours' }).count(), 0);
+    await action(page, 'restore');
+    assert.doesNotMatch(await text(page), /Le résultat n’a pas pu être établi/, 'same operation restored has no old UI feedback');
+    await action(page, 'missing');
+    await page.getByRole('button', { name: 'Vérifier le résultat' }).click();
+    await page.getByRole('button', { name: 'Arrêter le suivi', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Arrêter le suivi', exact: true }).click();
+    assert.equal((await state(page)).entries.length, 0);
+    await action(page, 'resetClock'); await action(page, 'restore');
+    assert.doesNotMatch(await text(page), /L’école ne retrouve pas/, 'released operation restored has no old UI feedback');
+    await action(page, 'school'); await action(page, 'school');
+    assert.doesNotMatch(await text(page), /Suivi arrêté|horaire demandé est passé/);
     await page.close(); checks.push('deadline race, unchanged intention, late receipt');
+    checks.push('replacement, confirmation, clear, release, same operation restored, context switch without stale feedback');
   }
   await writeFile(`${output}/${mode}-results.json`, JSON.stringify({ synthetic: true, engine: 'Edge', cssZoom: true, checks }, null, 2));
   console.log(JSON.stringify({ checks, result: 'PASS' }));

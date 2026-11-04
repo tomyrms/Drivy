@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react';
+import { useReducer, useRef, useState } from 'react';
 import { commandSpecs } from '../../command-core';
-import { commandStore, pendingActions, useCommandSnapshot, type PendingEntry } from '../../command-store';
+import { commandStore, pendingActions, useCommandSnapshot } from '../../command-store';
 import { commandRefreshesSchool } from '../../command-conflicts';
 import { lessonResendAllowed, lessonResendReason } from '../../console/agenda-intentions';
 import { useConsole } from '../../console/context';
@@ -19,7 +19,7 @@ function PendingRequests() {
   const entries = [...snapshot.entries.values()].filter(item => item.meta.schoolId === context.schoolId);
   const [releaseId, setReleaseId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Record<string, { entry: PendingEntry; message: string }>>({});
+  const [, refreshRecovery] = useReducer((value: boolean) => !value, false);
   const storageNotice = snapshot.metadata.durability === 'saved' ? null
     : snapshot.metadata.last === 'write'
       ? 'Le suivi local n’a pas pu être enregistré ou mis à jour. Vérifiez le résultat avant de refaire une demande.'
@@ -36,8 +36,9 @@ function PendingRequests() {
       if (resend) { try { token = await context.refreshCsrf(); } catch { /* Same conservative retry as existing console. */ } }
       const result = await (resend ? commandStore.resend(context.schoolId, token, operationId) : commandStore.verify(context.schoolId, operationId));
       if (result.status === 'pending') {
-        const current = commandStore.get(context.schoolId, operationId);
-        if (current && result.message) setFeedback(previous => ({ ...previous, [operationId]: { entry: current, message: result.message } }));
+        // A deadline refusal does not notify the store. Re-read the shared recovery rule at render;
+        // other pending results are already in entry.message. Keep no copy of an entry or its body.
+        if (result.message) refreshRecovery();
       }
       if (result.status === 'confirmed') { setMessage('Le résultat de la demande est confirmé.'); if (commandRefreshesSchool(entry.meta.kind)) void context.reloadSchool(); }
       if (result.status === 'rejected') { setMessage(result.message); void context.reloadSchool(); }
@@ -54,12 +55,9 @@ function PendingRequests() {
       // Une planification dont l'horaire voulu est passé n'est plus renvoyée : vérifier ou arrêter le suivi.
       const resend = available.resend && lessonResendAllowed({ kind: entry.meta.kind, command: entry.command });
       const resendReason = available.resend && !resend ? lessonResendReason({ kind: entry.meta.kind, command: entry.command }) : null;
-      // A local result is relevant only until the store replaces that entry. The store may already explain it.
-      const local = feedback[entry.meta.operationId];
-      const reason = resendReason ?? (local?.entry === entry ? local.message : null);
       return <Alert role="status" aria-live="polite" className="min-w-0 grid-cols-1 break-words" key={entry.meta.operationId}>
         <AlertTitle id={index === 0 ? 'pending-title' : undefined} tabIndex={-1}>{busy ? entry.phase === 'sending' ? 'Enregistrement en cours…' : 'Vérification en cours…' : 'Résultat à vérifier'}</AlertTitle>
-        <AlertDescription><p>{commandSpecs[entry.meta.kind].label}</p>{entry.message && <p>{entry.message}</p>}{reason && reason !== entry.message && <p>{reason}</p>}</AlertDescription>
+        <AlertDescription><p>{commandSpecs[entry.meta.kind].label}</p>{entry.message && <p>{entry.message}</p>}{resendReason && resendReason !== entry.message && <p>{resendReason}</p>}</AlertDescription>
         {!busy && <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap">
           <Button onClick={() => void act(entry.meta.operationId)}>Vérifier le résultat</Button>
           {resend && <Button variant="outline" onClick={() => void act(entry.meta.operationId, true)}>Renvoyer la même demande</Button>}
