@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { test } from 'vitest';
 
-// Real React presentation and command store in Edge; only storage/network boundaries are synthetic.
+// Real React presentation and command store in locked Chromium; only storage/network boundaries are synthetic.
 for (const scenario of ['metadata', 'race']) {
   test(`pending recovery: ${scenario}`, () => {
     execFileSync(process.execPath, [resolve('node_modules/tsx/dist/cli.mjs'),

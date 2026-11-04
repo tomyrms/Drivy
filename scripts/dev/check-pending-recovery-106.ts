@@ -55,14 +55,16 @@ const server = await createServer({ configFile: false, root: resolve('.'), plugi
 await server.listen();
 const address = server.httpServer!.address();
 assert(address && typeof address !== 'string');
-const browser = await chromium.launch({ channel: 'msedge', headless: true, args: ['--disable-gpu'] });
+const origin = `http://127.0.0.1:${address.port}`;
+const browser = await chromium.launch({ headless: true, args: ['--disable-gpu'] });
+const engine = { name: 'Chromium', version: browser.version() };
 const checks: string[] = [];
 async function fixture(failure = '') {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   await page.addInitScript((initial) => {
     const state = window as any;
     state.storageFailure = initial;
-    for (const [method, kind] of [['getItem', 'read'], ['setItem', 'write'], ['removeItem', 'clear']]) {
+    for (const [method, kind] of [['getItem', 'read'], ['setItem', 'write'], ['removeItem', 'clear']] as const) {
       const original = (Storage.prototype as any)[method];
       (Storage.prototype as any)[method] = function (...args: unknown[]) {
         if (state.storageFailure === kind) throw new Error('Synthetic storage refusal');
@@ -71,7 +73,7 @@ async function fixture(failure = '') {
     }
   }, failure);
   page.on('pageerror', error => { throw error; });
-  await page.goto(`http://127.0.0.1:${address.port}/artifacts/pending-recovery-106/index.html`);
+  await page.goto(`${origin}/artifacts/pending-recovery-106/index.html`);
   await page.waitForFunction(() => Boolean((window as any).fixture));
   return page;
 }
@@ -94,7 +96,7 @@ async function capture(page: Page, name: string) {
     return notice.top - control.bottom;
   });
   assert(separation >= 4, `fixture control and focus ring need their own space: ${separation}`);
-  await page.screenshot({ path: `${output}/correction-1-${name}.png`, fullPage: true });
+  await page.screenshot({ path: `${output}/correction-2-chromium-${name}.png`, fullPage: true });
 }
 try {
   if (mode !== 'race') {
@@ -212,6 +214,6 @@ try {
     await page.close(); checks.push('deadline race, unchanged intention, late receipt');
     checks.push('replacement, confirmation, clear, release, same operation restored, context switch without stale feedback');
   }
-  await writeFile(`${output}/${mode}-results.json`, JSON.stringify({ synthetic: true, engine: 'Edge', cssZoom: true, checks }, null, 2));
-  console.log(JSON.stringify({ checks, result: 'PASS' }));
+  await writeFile(`${output}/${mode}-results.json`, JSON.stringify({ synthetic: true, engine, cssZoom: true, checks }, null, 2));
+  console.log(JSON.stringify({ engine, checks, result: 'PASS' }));
 } finally { await browser.close(); await server.close(); }
