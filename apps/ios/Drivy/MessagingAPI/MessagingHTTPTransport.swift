@@ -55,12 +55,15 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             struct Vote: Decodable { let optionIndex: Int; let personIds: [UUID] }
             let optionCount: Int; let multiple: Bool; let closed: Bool; let creatorId: UUID; let votes: [Vote]
         }
+        struct Media: Decodable { let mediaId: UUID; let byteSize: Int; let deleted: Bool }
         struct Item: Decodable {
             let id: UUID; let schoolId: UUID; let conversationId: UUID; let sequence: Int
             let clientMessageId: UUID; let senderId: UUID; let ciphertext: MessagingCiphertext?
             let mentionPersonIds: [UUID]; let acceptedAt: String
             let replyToMessageId: UUID?; let deletedForEveryone: Bool?; let pinned: Bool?
             let reactions: [Reaction]?; let poll: Poll?
+            /// Absent ou null : message sans média. Un objet présent est validé, jamais ignoré.
+            let media: Media?
         }
         struct Access: Decodable { let canWrite: Bool; let readableUntilSequence: Int?; let isGroupAdmin: Bool? }
         struct Receipt: Decodable { let personId: UUID; let lastReadSequence: Int }
@@ -113,6 +116,8 @@ actor MessagingHTTPTransport: MessagingAPITransport {
                             .init(optionID: MessagingPollIndex.id(index),
                                   voterIDs: poll.votes.filter { $0.optionIndex == index }.flatMap(\.personIds))
                         })
+                }, media: try item.media.map {
+                    try MessagingMessageMediaReference(mediaID: $0.mediaId, byteSize: $0.byteSize, deleted: $0.deleted)
                 })
             // Un message supprimé pour tout le monde ne garde aucune enveloppe côté client.
             return MessagingMessageDTO(id: item.id, conversationId: item.conversationId, schoolId: item.schoolId,
@@ -125,11 +130,31 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO {
+        try await sendMessage(scope: scope, conversationID: conversationID, body: body, mediaFailures: false)
+    }
+
+    /// Capacité additive (#97) : même POST que `send`, avec l'intention média et le mapping fermé
+    /// des refus média. Le serveur relit seul les droits ; aucun header d'appareil n'est ajouté ici.
+    func sendMedia(scope: MessagingScope, pending: MessagingPending,
+                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgementDTO {
+        guard pending.poll == nil else { throw MessagingMediaTransportFailure.invalidIntent }
+        return try await sendMessage(scope: scope, conversationID: pending.conversationID,
+            body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
+                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
+                replyToMessageId: pending.replyToMessageID, poll: pending.poll, media: media),
+            mediaFailures: true)
+    }
+
+    private func sendMessage(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO,
+                             mediaFailures: Bool) async throws -> MessagingAcknowledgementDTO {
+        // Exclusivité média/sondage : refus local, avant tout jeton ou requête.
+        guard body.poll == nil || body.media == nil else { throw MessagingFailure.invalidResponse }
         let payload = try JSONEncoder().encode(SendBody(clientMessageId: body.clientMessageId,
             ciphertext: WireCiphertext(body.ciphertext), expectedMembersEpoch: body.ciphertext.expectedMembersEpoch,
             mentionPersonIds: body.mentionPersonIds,
             replyToMessageId: body.replyToMessageId,
-            poll: body.poll.map { SendBody.Poll(optionCount: $0.optionIDs.count, multiple: $0.allowsMultiple) }))
+            poll: body.poll.map { SendBody.Poll(optionCount: $0.optionIDs.count, multiple: $0.allowsMultiple) },
+            media: body.media.map { SendBody.Media(mediaId: $0.mediaID, byteSize: $0.byteSize) }))
         // Deux bornes du protocole, mesurées sur ce qui est réellement émis et avant tout jeton ou
         // requête (#97 §4.2) : le serveur refuse `ciphertext.payload` au-delà de 12 000 caractères
         // base64, et le corps d'un message ordinaire reste sous 16 Kio.
@@ -138,25 +163,37 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         }
         guard payload.count <= Self.maximumSendBodyByteCount else { throw MessagingFailure.invalidResponse }
         let receipt: MessageReceipt = try await request(scope: scope, method: "POST",
-            path: ["conversations", conversationID.uuidString, "messages"], body: payload)
+            path: ["conversations", conversationID.uuidString, "messages"], body: payload,
+            mediaFailures: mediaFailures)
         guard receipt.clientMessageId == body.clientMessageId, receipt.conversationId == conversationID,
               receipt.schoolId == scope.schoolID, receipt.senderId == scope.accountID,
               receipt.ciphertext.map(WireCiphertext.init) == WireCiphertext(body.ciphertext),
               receipt.mentionPersonIds == body.mentionPersonIds else {
             throw MessagingFailure.invalidResponse
         }
+        // Un objet média présent est validé tel quel ; une taille hors bornes échoue fermé.
+        let mediaReference = try receipt.media.map {
+            try MessagingMessageMediaReference(mediaID: $0.mediaId, byteSize: $0.byteSize, deleted: $0.deleted)
+        }
+        if let media = body.media {
+            guard let mediaReference, mediaReference.mediaID == media.mediaID,
+                  mediaReference.byteSize == media.byteSize else { throw MessagingFailure.invalidResponse }
+        }
         return MessagingAcknowledgementDTO(clientMessageId: receipt.clientMessageId, serverMessageId: receipt.id,
             conversationId: receipt.conversationId, schoolId: receipt.schoolId, acceptedAt: try date(receipt.acceptedAt),
-            senderId: receipt.senderId)
+            senderId: receipt.senderId, media: mediaReference)
     }
     private struct SendBody: Encodable {
         struct Poll: Encodable { let optionCount: Int; let multiple: Bool }
+        struct Media: Encodable { let mediaId: UUID; let byteSize: Int }
         let clientMessageId: UUID
         let ciphertext: WireCiphertext
         let expectedMembersEpoch: Int?
         let mentionPersonIds: [UUID]
         let replyToMessageId: UUID?
         let poll: Poll?
+        /// Optionnel : le JSON synthétisé omet la clé quand elle est nil.
+        let media: Media?
     }
 
     /// Plafond du serveur pour `ciphertext.payload`, message comme item de signalement : 12 000
@@ -166,6 +203,22 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     private static let maximumSendBodyByteCount = 16_384
     /// Plafond du corps JSON d'un lot de signalement : 640 Kio (`bodyLimit` du serveur).
     private static let maximumReportBodyByteCount = 655_360
+
+    /// Refus média du POST message, traduits uniquement dans le chemin média (#97 §3.12).
+    /// Aucun identifiant, aucune URL et aucun texte libre ne traversent cette traduction.
+    private static func mediaFailure(_ code: String) -> MessagingMediaTransportFailure? {
+        switch code {
+        case "INVALID_MEDIA": return .invalidIntent
+        case "MEDIA_NOT_FOUND": return .notFound
+        case "MEDIA_INTENT_CONFLICT": return .intentConflict
+        case "MEDIA_ALREADY_ATTACHED": return .alreadyAttached
+        case "MEDIA_SIZE_MISMATCH": return .sizeConflict
+        case "MEDIA_PURGED": return .purged
+        case "MESSAGING_DEVICE_REQUIRED": return .deviceRequired
+        case "MESSAGING_NOT_ENABLED", "SERVICE_UNAVAILABLE": return .unavailable
+        default: return nil
+        }
+    }
 
     /// Le contrat opaque exclut les métadonnées de file locales, y compris pour les signalements.
     private struct WireCiphertext: Encodable, Equatable {
@@ -256,7 +309,8 @@ actor MessagingHTTPTransport: MessagingAPITransport {
     }
 
     private func request<T: Decodable>(scope: MessagingScope, method: String, path: [String],
-                                        query: [URLQueryItem] = [], body: Data? = nil, requestID: UUID? = nil) async throws -> T {
+                                        query: [URLQueryItem] = [], body: Data? = nil, requestID: UUID? = nil,
+                                        mediaFailures: Bool = false) async throws -> T {
         guard scope.apiBaseURL == baseURL.absoluteString, await DrivyAPIClient.permits(baseURL),
               let origin = baseURL.host else { throw MessagingFailure.contextChanged }
         try await verifyCurrent(scope)
@@ -294,13 +348,17 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             }
             // qa84 : sans ce code, un refus du message après chiffrement réussi restait muet sous la saisie.
             if !(200...299).contains(response.status) { diagnostics.recordIfEmpty(MessagingDiagnostics.http(path, response.status)) }
+            let failureCode = (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code
+            // Chemin média seulement : les codes média fermés prennent le type de refus média existant.
+            // MESSAGING_MEMBERS_CHANGED n'en fait pas partie et garde son refus spécifique ci-dessous.
+            if mediaFailures, let failureCode, let failure = Self.mediaFailure(failureCode) { throw failure }
             if response.status == 409 {
-                if (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code == "MESSAGING_MEMBERS_CHANGED" {
+                if failureCode == "MESSAGING_MEMBERS_CHANGED" {
                     throw MessagingFailure.membersChanged
                 }
                 throw MessagingFailure.stateConflict
             }
-            if response.status == 429, (try? JSONDecoder().decode(FailureCode.self, from: response.data))?.code == "REPORT_RATE_LIMITED" {
+            if response.status == 429, failureCode == "REPORT_RATE_LIMITED" {
                 throw MessagingFailure.reportRateLimited
             }
             if response.status == 404 { throw MessagingFailure.conversationUnavailable }

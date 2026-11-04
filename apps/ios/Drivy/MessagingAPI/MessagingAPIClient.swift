@@ -39,6 +39,8 @@ struct MessagingSendDTO: Codable, Sendable {
     let mentionPersonIds: [UUID]
     var replyToMessageId: UUID? = nil
     var poll: MessagingPollDraftMeta? = nil
+    /// Omis du JSON quand nil : un texte ou un sondage ancien garde exactement sa forme.
+    var media: MessagingMediaMessageIntent? = nil
 }
 
 struct MessagingAcknowledgementDTO: Codable, Sendable {
@@ -48,17 +50,34 @@ struct MessagingAcknowledgementDTO: Codable, Sendable {
     let schoolId: UUID
     let acceptedAt: Date
     let senderId: UUID
+    /// Référence média rendue par le serveur, quand le message en porte une.
+    var media: MessagingMessageMediaReference? = nil
 }
 
 protocol MessagingAPITransport: Sendable {
     func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPageDTO<MessagingConversationDTO>
     func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPageDTO<MessagingMessageDTO>
     func send(scope: MessagingScope, conversationID: UUID, body: MessagingSendDTO) async throws -> MessagingAcknowledgementDTO
+    /// Capacité additive (#97) : un double sans implémentation dédiée reste valide et refuse
+    /// localement un sondage porteur d'un média avant tout appel.
+    func sendMedia(scope: MessagingScope, pending: MessagingPending,
+                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgementDTO
+}
+
+extension MessagingAPITransport {
+    func sendMedia(scope: MessagingScope, pending: MessagingPending,
+                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgementDTO {
+        guard pending.poll == nil else { throw MessagingMediaTransportFailure.invalidIntent }
+        return try await send(scope: scope, conversationID: pending.conversationID,
+            body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
+                ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
+                replyToMessageId: pending.replyToMessageID, poll: pending.poll, media: media))
+    }
 }
 
 /// Les routes, l'authentification, les limites et le format de date sont délégués à l'adaptateur
 /// conforme au contrat canonique futur. Les IDs et curseurs sont contrôlés avant affichage.
-struct MessagingAPIClient: MessagingService {
+struct MessagingAPIClient: MessagingService, MessagingMediaMessageSending {
     let transport: any MessagingAPITransport
 
     func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPage<MessagingConversation> {
@@ -101,6 +120,23 @@ struct MessagingAPIClient: MessagingService {
             body: MessagingSendDTO(clientMessageId: pending.clientMessageID,
                 ciphertext: pending.ciphertext, mentionPersonIds: pending.mentionPersonIDs,
                 replyToMessageId: pending.replyToMessageID, poll: pending.poll))
+        return try acknowledgement(ack, scope: scope, pending: pending)
+    }
+
+    /// Capacité additive (#97) : le reçu doit désigner le même média et la même taille, y compris
+    /// quand le transport est un double injecté. Aucun rendu, stockage ou déchiffrement n'est activé.
+    func sendMedia(scope: MessagingScope, pending: MessagingPending,
+                   media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgement {
+        guard pending.poll == nil else { throw MessagingMediaTransportFailure.invalidIntent }
+        let ack = try await transport.sendMedia(scope: scope, pending: pending, media: media)
+        let result = try acknowledgement(ack, scope: scope, pending: pending)
+        guard let reference = ack.media, reference.mediaID == media.mediaID,
+              reference.byteSize == media.byteSize else { throw MessagingFailure.invalidResponse }
+        return result
+    }
+
+    private func acknowledgement(_ ack: MessagingAcknowledgementDTO, scope: MessagingScope,
+                                 pending: MessagingPending) throws -> MessagingAcknowledgement {
         guard ack.clientMessageId == pending.clientMessageID, ack.conversationId == pending.conversationID,
               ack.schoolId == scope.schoolID, ack.senderId == scope.accountID else { throw MessagingFailure.invalidResponse }
         return MessagingAcknowledgement(clientMessageID: ack.clientMessageId, serverMessageID: ack.serverMessageId,
