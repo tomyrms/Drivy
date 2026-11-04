@@ -4,6 +4,89 @@ import XCTest
 import MatrixSDKCrypto
 @testable import Drivy
 
+/// Vocabulaire fermé : seules une catégorie et des codes URLError connus sont exposés.
+private enum RelayTransportCategory: String {
+    case tls = "TLS"
+    case ats = "ATS"
+    case connect = "CONNECT"
+    case timeout = "TIMEOUT"
+    case cancelled = "CANCELLED"
+    case other = "OTHER"
+}
+
+private struct RelayTransportDiagnostic {
+    let category: RelayTransportCategory
+    let code: Int?
+
+    var text: String {
+        guard let code else { return category.rawValue }
+        return "\(category.rawValue) code=\(code)"
+    }
+}
+
+/// Classifie sans lire localizedDescription, userInfo, URL, corps, en-tête ni certificat.
+private func relayTransportDiagnostic(for error: any Error) -> RelayTransportDiagnostic {
+    if error is CancellationError {
+        return RelayTransportDiagnostic(category: .cancelled, code: nil)
+    }
+    let nsError = error as NSError
+    guard nsError.domain == NSURLErrorDomain else {
+        return RelayTransportDiagnostic(category: .other, code: nil)
+    }
+    switch nsError.code {
+    case (-1206)...(-1200):
+        return RelayTransportDiagnostic(category: .tls, code: nsError.code)
+    case -1022:
+        return RelayTransportDiagnostic(category: .ats, code: nsError.code)
+    case -1004, -1005:
+        return RelayTransportDiagnostic(category: .connect, code: nsError.code)
+    case -1001:
+        return RelayTransportDiagnostic(category: .timeout, code: nsError.code)
+    case -999:
+        return RelayTransportDiagnostic(category: .cancelled, code: nsError.code)
+    default:
+        return RelayTransportDiagnostic(category: .other, code: nil)
+    }
+}
+
+/// Diagnostic de readiness borné : statut HTTP et nom fermé du champ divergent, jamais sa valeur.
+private struct RelayReadinessMismatch {
+    enum Field: String {
+        case type
+        case fixture
+        case schoolId
+        case instructorId
+        case learnerId
+    }
+
+    let status: Int
+    let field: Field?
+
+    var text: String {
+        guard let field else { return "statut=\(status)" }
+        return "statut=\(status) champ=\(field.rawValue)"
+    }
+}
+
+private func relayReadinessMismatch(status: Int, data: Data, schoolID: UUID,
+                                    instructorID: UUID, learnerID: UUID) -> RelayReadinessMismatch? {
+    let boundedStatus = (100...599).contains(status) ? status : 0
+    guard let raw = try? JSONSerialization.jsonObject(with: data),
+          let object = raw as? [String: Any] else {
+        return RelayReadinessMismatch(status: boundedStatus, field: .type)
+    }
+    let expected: [(RelayReadinessMismatch.Field, String, String)] = [
+        (.fixture, "fixture", "drivy-messaging-relay-v1"),
+        (.schoolId, "schoolId", schoolID.uuidString.lowercased()),
+        (.instructorId, "instructorId", instructorID.uuidString.lowercased()),
+        (.learnerId, "learnerId", learnerID.uuidString.lowercased())
+    ]
+    for (field, key, value) in expected where (object[key] as? String) != value {
+        return RelayReadinessMismatch(status: boundedStatus, field: field)
+    }
+    return boundedStatus == 200 ? nil : RelayReadinessMismatch(status: boundedStatus, field: nil)
+}
+
 /// Requires the disposable HTTPS Fastify/PostgreSQL relay. Missing setup is a failure, never a skip.
 /// Run explicitly on an Apple simulator. No production URL, credential or mock HTTP transport.
 final class MatrixMessagingRelayIntegrationTests: XCTestCase {
@@ -36,7 +119,10 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
     func testRealRelayExchangeIdempotenceRecoveryAndContextRefusal() async {
         enter("CONFIGURATION")
         do { try await exerciseRealRelay() }
-        catch { XCTFail("Relais interrompu : étape=\(stage), diagnostic=\(safeDiagnostic()).") }
+        catch {
+            let transport = relayTransportDiagnostic(for: error).text
+            XCTFail("Relais interrompu : étape=\(stage), diagnostic=\(safeDiagnostic()), transport=\(transport).")
+        }
     }
 
     @MainActor
@@ -65,13 +151,9 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
         // Readiness proves that this is our disposable fixture server, not merely an open port.
         enter("READINESS")
         let readiness = try await SchoolURLSessionTransport().send(URLRequest(url: base.appendingPathComponent("qualification/ready")))
-        guard readiness.status == 200,
-              let ready = try JSONSerialization.jsonObject(with: readiness.data) as? [String: Any],
-              ready["fixture"] as? String == "drivy-messaging-relay-v1",
-              ready["schoolId"] as? String == school.uuidString.lowercased(),
-              ready["instructorId"] as? String == instructor.uuidString.lowercased(),
-              ready["learnerId"] as? String == learner.uuidString.lowercased() else {
-            XCTFail("Le relais ne correspond pas aux fixtures canoniques de qualification.")
+        if let mismatch = relayReadinessMismatch(status: readiness.status, data: readiness.data,
+                                                schoolID: school, instructorID: instructor, learnerID: learner) {
+            XCTFail("Le relais ne correspond pas aux fixtures canoniques de qualification : \(mismatch.text).")
             return
         }
         enter("CONVERSATION")
@@ -264,5 +346,104 @@ private struct RelayQualificationKeychain: MessagingCryptoKeychain {
     func removeFixture() {
         SecItemDelete([kSecClass as String: kSecClassGenericPassword,
                        kSecAttrService as String: fixtureService] as CFDictionary)
+    }
+}
+
+/// Tests locaux du vocabulaire de diagnostic. Aucune requête, aucun relais, aucun secret.
+final class RelayReadinessDiagnosticTests: XCTestCase {
+    private let school = UUID(uuidString: "10000000-0000-4000-8000-000000000001")!
+    private let instructor = UUID(uuidString: "20000000-0000-4000-8000-000000000002")!
+    private let learner = UUID(uuidString: "20000000-0000-4000-8000-000000000003")!
+
+    private func readinessData(overrides: [String: Any] = [:]) throws -> Data {
+        var fixture: [String: Any] = [
+            "fixture": "drivy-messaging-relay-v1",
+            "schoolId": school.uuidString.lowercased(),
+            "instructorId": instructor.uuidString.lowercased(),
+            "learnerId": learner.uuidString.lowercased()
+        ]
+        for (key, value) in overrides { fixture[key] = value }
+        return try JSONSerialization.data(withJSONObject: fixture)
+    }
+
+    private func mismatch(status: Int = 200, data: Data) -> RelayReadinessMismatch? {
+        relayReadinessMismatch(status: status, data: data, schoolID: school,
+                               instructorID: instructor, learnerID: learner)
+    }
+
+    func testKnownURLErrorCodesUseClosedTransportCategories() {
+        let cases: [(Int, String)] = [
+            (-1200, "TLS code=-1200"),
+            (-1202, "TLS code=-1202"),
+            (-1206, "TLS code=-1206"),
+            (-1022, "ATS code=-1022"),
+            (-1004, "CONNECT code=-1004"),
+            (-1005, "CONNECT code=-1005"),
+            (-1001, "TIMEOUT code=-1001"),
+            (-999, "CANCELLED code=-999")
+        ]
+        for (code, expected) in cases {
+            let error = NSError(domain: NSURLErrorDomain, code: code)
+            XCTAssertEqual(relayTransportDiagnostic(for: error).text, expected)
+        }
+    }
+
+    func testCancellationAndUnknownErrorsStayInTheClosedVocabulary() {
+        XCTAssertEqual(relayTransportDiagnostic(for: CancellationError()).text, "CANCELLED")
+        XCTAssertEqual(relayTransportDiagnostic(for: NSError(domain: NSURLErrorDomain, code: -1003)).text, "OTHER")
+        XCTAssertEqual(relayTransportDiagnostic(for: NSError(domain: "SyntheticDomain", code: -1202)).text, "OTHER")
+    }
+
+    func testTransportDiagnosticNeverLeaksURLTokenNameOrCertificate() throws {
+        let url = try XCTUnwrap(URL(string: "https://127.0.0.1:18443/qualification/ready?token=SENTINEL_TOKEN"))
+        let error = NSError(domain: NSURLErrorDomain, code: -1202, userInfo: [
+            NSURLErrorFailingURLErrorKey: url,
+            NSLocalizedDescriptionKey: "SENTINEL_NAME",
+            "certificate": "SENTINEL_CERTIFICATE"
+        ])
+        let text = relayTransportDiagnostic(for: error).text
+        XCTAssertEqual(text, "TLS code=-1202")
+        for sentinel in ["SENTINEL_TOKEN", "SENTINEL_NAME", "SENTINEL_CERTIFICATE", "127.0.0.1"] {
+            XCTAssertFalse(text.contains(sentinel))
+        }
+    }
+
+    func testReadinessAcceptsOnlyTheExactCanonicalFixture() throws {
+        XCTAssertNil(mismatch(data: try readinessData()))
+    }
+
+    func testMalformedReadinessReportsOnlyStatusAndType() {
+        let malformed = Data("{not-json".utf8)
+        XCTAssertEqual(mismatch(data: malformed)?.text, "statut=200 champ=type")
+    }
+
+    func testEachDivergentFieldIsNamedWithoutItsValue() throws {
+        let cases: [(String, Any, String)] = [
+            ("fixture", "SENTINEL_FIXTURE", "statut=200 champ=fixture"),
+            ("schoolId", "SENTINEL_SCHOOL", "statut=200 champ=schoolId"),
+            ("instructorId", "SENTINEL_INSTRUCTOR", "statut=200 champ=instructorId"),
+            ("learnerId", "SENTINEL_LEARNER", "statut=200 champ=learnerId"),
+            ("fixture", 7_654_321, "statut=200 champ=fixture")
+        ]
+        for (key, value, expected) in cases {
+            let text = mismatch(data: try readinessData(overrides: [key: value]))?.text ?? ""
+            XCTAssertEqual(text, expected)
+            XCTAssertFalse(text.contains("SENTINEL"))
+            XCTAssertFalse(text.contains("7654321"))
+        }
+    }
+
+    func testNonSuccessStatusIsBoundedAndDoesNotInventAField() throws {
+        XCTAssertEqual(mismatch(status: 503, data: try readinessData())?.text, "statut=503")
+        XCTAssertEqual(mismatch(status: 0, data: try readinessData())?.text, "statut=0")
+        XCTAssertEqual(mismatch(status: 999, data: try readinessData())?.text, "statut=0")
+    }
+
+    func testReadinessDiagnosticNeverLeaksFixtureValues() throws {
+        let data = try readinessData(overrides: ["learnerId": "SENTINEL_LEARNER_VALUE"])
+        let text = mismatch(data: data)?.text ?? ""
+        XCTAssertEqual(text, "statut=200 champ=learnerId")
+        XCTAssertFalse(text.contains("SENTINEL_LEARNER_VALUE"))
+        XCTAssertFalse(text.contains(school.uuidString.lowercased()))
     }
 }

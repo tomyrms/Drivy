@@ -66,6 +66,31 @@ relay_mark() {
   printf 'mark=%s value=%s utc=%s\n' "$1" "$2" "$(date -u +%H:%M:%S)" >> "$relay_probe_file" || true
 }
 
+# Preuve de chaîne fermée : uniquement les certificats générés par CE run.
+# Aucun sujet, chemin ou contenu de certificat n'est publié ; seuls ok/ko sortent.
+relay_verify_chain() {
+  local chain=ko identity=ko
+  if [[ -n "$relay_directory" && -f "$relay_directory/ca.crt" && -f "$relay_directory/server.crt" ]]; then
+    if openssl verify -CAfile "$relay_directory/ca.crt" "$relay_directory/server.crt" > /dev/null 2>&1; then
+      chain=ok
+    fi
+    # Identité exacte : localhost et 127.0.0.1, pas un préfixe de SAN.
+    if openssl verify -CAfile "$relay_directory/ca.crt" -purpose sslserver \
+         -verify_hostname localhost "$relay_directory/server.crt" > /dev/null 2>&1 \
+       && openssl verify -CAfile "$relay_directory/ca.crt" -purpose sslserver \
+         -verify_ip 127.0.0.1 "$relay_directory/server.crt" > /dev/null 2>&1; then
+      identity=ok
+    fi
+  fi
+  relay_mark chain "$chain"
+  relay_mark loopback_identity "$identity"
+  if [[ "$chain" != ok || "$identity" != ok ]]; then
+    echo 'RELAY_TLS_CHAIN_INVALID' >&2
+    return 1
+  fi
+  return 0
+}
+
 relay_cleanup() {
   local status=$?
   trap - EXIT
@@ -89,6 +114,7 @@ relay_cleanup() {
 }
 
 relay_start_server() {
+  relay_verify_chain || return 1
   NODE_ENV=test DRIVY_RELAY_ALLOW_RESET=1 \
     TEST_DATABASE_URL='postgres://drivy_test@127.0.0.1:15432/drivy_test' \
     DRIVY_RELAY_PORT=18443 DRIVY_RELAY_TLS_CERT="$relay_directory/server.crt" \
