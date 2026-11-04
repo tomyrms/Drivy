@@ -736,3 +736,13 @@ Deux séries envoient donc ensemble **dès maintenant sans changement d’écran
 
 **Rien n’a été compilé ni exécuté ici** : cette machine n’a pas de compilateur Swift. Ces tests doivent être lancés sur un
 runner Apple (et l’IPA construite) avant de considérer la tâche qualifiée.
+
+## Addendum du 4 novembre 2026 — paire profil/accueil intégrée localement par R6/I1
+
+Le candidat I1 (produit e4900279b3a9a9018504f00d47e99372aace4c6c) inclut R6 code8271c206 et c533b251, rapport53889611. Cette intégration est locale et la qualification Swift/Apple reste NON EXÉCUTÉE ; les constats historiques précédents ne sont pas des preuves de son exécution.
+
+La seule paire ajoutée est **updateProfile ↔ saveOnboarding, dans les deux ordres**, après les gardes existantes d'identité de commande et de portée d'accès. completeOnboarding n'est pas exempté ; aucune ouverture générale entre dossiers d'apprenants, permissions ou versions d'école n'est ajoutée.
+
+Source serveur relue dans apps/api/src/profiles.ts : l'écriture du profil vérifie et avance learner_profile et person ; SAVE_ONBOARDING vérifie et avance onboarding_progress. Sa réponse appelle progressDTO, qui relit bien le dossier et ses champs manquants, sans vérifier ni avancer la version du dossier et sans refuser l'enregistrement pour ce motif. COMPLETE_ONBOARDING consulte au contraire progressDTO avant d'écrire et refuse si pendingActions n'est pas vide. Des lignes écrites distinctes ne justifient donc pas d'étendre l'exception à la finalisation.
+
+Les tests préparés couvrent les deux ordres, l'exclusion de la finalisation et les barrières de portée. Leur présence n'est pas une preuve native ; voir [rapport I1](integration-issues-20261104.md) et [rapport R6](native-regressions-131-20261104.md).

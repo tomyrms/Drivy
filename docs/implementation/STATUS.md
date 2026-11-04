@@ -1629,3 +1629,16 @@ Branche `claude/lot-e-20261104`, quatre tâches relues puis assemblées sans con
 **`[skip ci]` sur un commit de tête supprime aussi les contrôles de la PR.** La branche du lot et la PR #420 n'ont déclenché ni « Refonte · vérifications » ni « ouverture école navigateur » avant le commit `72a97e89`, qui n'en porte plus. Le contrôle qui fait foi est `Refonte · iOS` lancé à la main sur la tête.
 
 **Aucun déploiement** : le lot ne touche que `apps/ios/Drivy`, `apps/ios/DrivyTests` et trois documents ; `apps/api`, `apps/web`, `contract` et les migrations sont inchangés depuis la release `61eeb148` déjà en production.
+
+## 4 novembre 2026 — candidat local I1, avant qualification distante
+
+Les neuf branches de l'orchestration ont été fusionnées localement sans conflit, puis le correctif final du harnais web a été repris. Produit intégré initial38980506d438c32fdc3bc9bf720b83dec7be84c8 ; phase2 e4900279b3a9a9018504f00d47e99372aace4c6c ; rapport d'exécution ce4b3f9e8bd20051ac1045ee8add0d413f7629e8. Le présent ajout est documentaire uniquement. Détails reproductibles : [rapport I1](integration-issues-20261104.md).
+
+- API :1042/1042 tests sur PostgreSQL17 et Mailpit synthétiques réels, typecheck/build verts. Les sources API sont identiques entre les deux phases : preuve exécutée en phase1 et conservée par identité de source, pas une seconde exécution.
+- Web :phase2,80fichiers,842réussis+1échec attendu préexistant (heure doublée dans course-model-fuseaux-limites.test.ts), typecheck/build verts. Harnais pending PASS sous Chromium153.0.8010.12,39captures ; harnais entrée12contrôles en phase1 sur source produit inchangée.
+- Récupération :24tests ciblés et151contrôles de recette PASSED, base onboarding neuve et Keycloak/Mailpit synthétiques. SMTP réel et FaceID physique non qualifiés.
+- Relais :9/9 tests hôtes TLS verts ; cela ne prouve ni la cause ni la réparation du scénario relais Apple.
+- Outillage :les4nouveaux diagnostics du harnais pending sont corrigés. Le tsc global infra/dev reste ROUGE avec3diagnostics préexistants, dans check-v3-agenda-acceptance.ts, check-v3-entry.ts et measure-web-entry.ts, fichiers inchangés. Le job web prépare maintenant le lock infra/dev et Chromium ; sa validation Linux distante reste NON EXÉCUTÉE.
+- Swift/Apple :nouveaux contenus/transports médias, attente5/10secondes, cinq correctifs métier et diagnostics relais **NON COMPILÉS/NON EXÉCUTÉS sur ce candidat**. Le run41861281984 porte uniquement sur883581ad : crypto15/15 verte mais campagne globale6échecs. Aucune preuve physique GPS/batterie/VoiceOver, aucun IPA ou Safari déduit des tests locaux.
+
+Le coordinateur a vérifié les ancêtres,76blobs initiaux sans divergence, l'identité des sources produit après phase2, les JSON et journaux d'exécution, les diffs et un échantillon de captures. Cela ne termine pas les issues : coordinateur média/coffre/cache, préparation et UI natives, mediaRef serveur et consommateurs typés restent à réaliser, ainsi que les autres restes de reprise, d'exploitation et d'audit. Aucun push, PR, merge master, CI distante supplémentaire ou déploiement n'est effectué à ce bilan ; l'accord reçu couvre l'intégration et les tests locaux seulement.
