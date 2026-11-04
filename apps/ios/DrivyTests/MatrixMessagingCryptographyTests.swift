@@ -639,15 +639,17 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
                              acceptedAt: Date(), ciphertext: sealed)
     }
 
-    /// Le contenu v3 est réellement passé à `machine.encrypt` : namespace au premier niveau, repli lisible dans `body`.
+    /// Le contenu v3 est réellement passé à `machine.encrypt` par la capacité typée : namespace au
+    /// premier niveau, repli lisible dans `body`, et la provenance rendue à la lecture est explicite.
     func testEncryptedMediaContentIsNamespacedAndNeverSerialisedInBody() async throws {
         let pair = try await conversationPair()
         let content = MessagingPlainContent(text: "Légende de la photo", media: try mediaAttachment())
-        let encoded = try content.encoded()
-        let sealed = try await pair.a.encrypt(encoded, mentions: [pair.bob],
-                                             scope: pair.aScope, conversationID: conversation)
-        let clear = try await pair.b.decrypt(message(sealed, from: pair.alice), scope: pair.bScope)
-        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: clear) as? [String: Any])
+        let value = try MessagingMediaContentV3(text: content.text, media: try XCTUnwrap(content.media))
+        let sealed = try await pair.a.encryptMatrixContent(value, mentions: [pair.bob],
+                                                          scope: pair.aScope, conversationID: conversation)
+        let decrypted = try await pair.b.decryptContent(message(sealed, from: pair.alice), scope: pair.bScope)
+        XCTAssertEqual(decrypted.provenance, .matrixContent)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: decrypted.bytes) as? [String: Any])
         XCTAssertEqual(object["msgtype"] as? String, "m.text")
         XCTAssertEqual(object["body"] as? String, "Légende de la photo",
                        "Le body porte un repli lisible, jamais le JSON v3")
@@ -658,7 +660,7 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         let mentions = try XCTUnwrap(object["m.mentions"] as? [String: Any])
         XCTAssertEqual(mentions["user_ids"] as? [String], [MatrixMessagingCryptography.userID(pair.bob)])
 
-        let decoded = try XCTUnwrap(MessagingPlainContent.decode(clear))
+        let decoded = try XCTUnwrap(MessagingPlainContent.decodeMatrixContent(decrypted.bytes))
         XCTAssertEqual(decoded.text, "Légende de la photo")
         XCTAssertEqual(decoded.media?.id, content.media?.id)
         XCTAssertEqual(decoded.media?.name, "IMG_0421.jpg")
@@ -676,7 +678,8 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         XCTAssertLessThanOrEqual(sealed.payload.base64EncodedString().utf8.count, 12_000)
     }
 
-    /// Les messages sans média gardent exactement les octets d'avant : texte v1 et enveloppe v2 dans `body`.
+    /// Les messages sans média gardent exactement les octets d'avant : texte v1 et enveloppe v2 dans `body`,
+    /// y compris quand le texte reproduit un contenu Matrix namespacé.
     func testLegacyTextAndEnvelopeKeepTheirBodyBytes() async throws {
         let pair = try await conversationPair()
         let text = try await pair.a.encrypt(Data("Bonjour".utf8), mentions: [], scope: pair.aScope, conversationID: conversation)
@@ -690,20 +693,35 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         XCTAssertEqual(clearPoll, envelope, "L'enveloppe v2 reste, octet pour octet, le contenu du body")
         XCTAssertEqual(MessagingPlainContent.decode(clearPoll), poll)
         XCTAssertEqual(MessagingMediaContent.reading(clearPoll), .notNamespaced)
+
+        // Un ancien texte qui est exactement un lookalike v3/v4 complet : émis tel quel, relu tel quel,
+        // provenance legacy, aucun média, aucun échec.
+        for lookalike in [#"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":4}}"#,
+                          #"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"text":null,"media":{"id":"5c1f","size":10,"mime":"image/jpeg","name":"a.jpg","width":1,"height":1,"file":{}}}}"#] {
+            let bytes = Data(lookalike.utf8)
+            let sealed = try await pair.a.encrypt(bytes, mentions: [], scope: pair.aScope, conversationID: conversation)
+            let decrypted = try await pair.b.decryptContent(message(sealed, from: pair.alice), scope: pair.bScope)
+            XCTAssertEqual(decrypted.provenance, .legacyBody, "Un body n'est jamais un contenu Matrix")
+            XCTAssertEqual(decrypted.bytes, bytes, "Le texte est réémis sans transformation")
+            XCTAssertEqual(MessagingPlainContent.decode(decrypted.bytes)?.text, lookalike)
+            XCTAssertNil(MessagingPlainContent.decode(decrypted.bytes)?.media)
+            let legacyBytes = try await pair.b.decrypt(message(sealed, from: pair.alice), scope: pair.bScope)
+            XCTAssertEqual(legacyBytes, bytes, "L'API Data legacy rend les mêmes octets")
+        }
     }
 
     /// La borne se mesure sur le payload réellement produit, pas sur la longueur du clair.
     func testOrdinaryPayloadIsBoundedAfterRealEncryption() async throws {
         let pair = try await conversationPair()
-        let atLimit = MessagingPlainContent(text: String(repeating: "a", count: 1_000),
-                                            media: try mediaAttachment(name: String(repeating: "é", count: 255)))
-        let encoded = try atLimit.encoded()
+        let value = try MessagingMediaContentV3(text: String(repeating: "a", count: 1_000),
+                                                media: try mediaAttachment(name: String(repeating: "é", count: 255)))
+        let encoded = try MessagingMediaContent.messageContent(value, mentions: nil)
         XCTAssertLessThanOrEqual(encoded.count, MessagingPlainContent.maximumV3ByteCount)
-        let sealed = try await pair.a.encrypt(encoded, mentions: [], scope: pair.aScope, conversationID: conversation)
+        let sealed = try await pair.a.encryptMatrixContent(value, mentions: [], scope: pair.aScope, conversationID: conversation)
         XCTAssertLessThanOrEqual(sealed.payload.base64EncodedString().utf8.count, 12_000,
                                  "Un contenu v3 au plafond de 6 000 octets reste sous la borne du transport")
 
-        // Un texte legacy sous la borne passe ; le même au-delà est refusé APRÈS chiffrement, avant tout envoi.
+        // Un texte legacy sous la borne passe ; au-delà, le refus tombe APRÈS chiffrement, avant tout envoi.
         let accepted = try await pair.a.encrypt(Data(repeating: 0x61, count: 6_000), mentions: [],
                                                 scope: pair.aScope, conversationID: conversation)
         XCTAssertLessThanOrEqual(accepted.payload.base64EncodedString().utf8.count, 12_000)
@@ -716,40 +734,36 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         }
     }
 
-    /// Un contenu média connu mais illisible ne part jamais : ni namespace, ni JSON technique dans `body`.
-    func testMalformedNamespacedContentIsRefusedBeforeSending() async throws {
+    /// Un contenu média au-delà de 6 000 octets encodés est refusé avant tout chiffrement.
+    func testMatrixContentBeyondTheContentBoundIsRefusedBeforeEncryption() async throws {
         let pair = try await conversationPair()
-        let malformed = try JSONSerialization.data(withJSONObject: [
-            "msgtype": "m.text", "body": "Photo",
-            "ch.drivy.messaging": ["v": 3, "media": ["id": UUID().uuidString, "size": 0]],
-        ])
+        let heavy = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
+        let value = try MessagingMediaContentV3(text: heavy, media: try mediaAttachment())
+        XCTAssertGreaterThan(try MessagingMediaContent.messageContent(value, mentions: nil).count,
+                             MessagingPlainContent.maximumV3ByteCount)
         do {
-            _ = try await pair.a.encrypt(malformed, mentions: [], scope: pair.aScope, conversationID: conversation)
-            XCTFail("Un média v3 invalide doit échouer fermé")
-        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
-
-        // Une version future inconnue n'est pas un média : elle reste du texte applicatif, sans échec silencieux.
-        let future = try JSONSerialization.data(withJSONObject: [
-            "msgtype": "m.text", "body": "Photo", "ch.drivy.messaging": ["v": 9, "media": ["id": "x"]],
-        ])
-        do {
-            _ = try await pair.a.encrypt(future, mentions: [], scope: pair.aScope, conversationID: conversation)
-            XCTFail("Un contenu porteur d'une namespace inconnue ne doit pas être émis comme texte")
+            _ = try await pair.a.encryptMatrixContent(value, mentions: [], scope: pair.aScope, conversationID: conversation)
+            XCTFail("Un contenu média au-delà du plafond ne doit pas être chiffré")
         } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
     }
 
-    /// Extraction après déchiffrement : deux formes acceptées, gardes d'expéditeur et de type conservées.
-    func testPlaintextExtractionAcceptsBothFormsAndKeepsItsGuards() throws {
+    /// Extraction après déchiffrement : l'API Data legacy rend toujours le `body`, et la provenance
+    /// explicite distingue un contenu Matrix d'un texte. Les gardes d'expéditeur et de type restent.
+    func testPlaintextExtractionKeepsTheLegacyFormAndExposesProvenance() throws {
         let content = MessagingPlainContent(text: "Légende", media: try mediaAttachment())
-        let encoded = try content.encoded()
+        let value = try MessagingMediaContentV3(text: content.text, media: try XCTUnwrap(content.media))
+        let encoded = try MessagingMediaContent.messageContent(value, mentions: nil)
         let contentObject = try JSONSerialization.jsonObject(with: encoded)
         let namespacedEvent = try JSONSerialization.data(withJSONObject: ["type": "m.room.message", "content": contentObject])
         let namespaced = DecryptedEvent(clearEvent: String(decoding: namespacedEvent, as: UTF8.self),
             senderCurve25519Key: "curve", claimedEd25519Key: nil, forwardingCurve25519Chain: [],
             shieldState: ShieldState(color: .none, code: nil, message: nil))
-        let bytes = try MatrixMessagingCryptography.plaintext(from: namespaced)
-        XCTAssertEqual(MessagingPlainContent.decode(bytes)?.media?.id, content.media?.id,
-                       "La forme Matrix complète rend le média lisible")
+        XCTAssertEqual(try MatrixMessagingCryptography.plaintext(from: namespaced), Data("Légende".utf8),
+                       "L'API Data legacy rend le body, jamais le JSON technique")
+        let decrypted = try MatrixMessagingCryptography.content(from: namespaced)
+        XCTAssertEqual(decrypted.provenance, .matrixContent)
+        XCTAssertEqual(MessagingPlainContent.decodeMatrixContent(decrypted.bytes)?.media?.id, content.media?.id,
+                       "La provenance explicite rend le média lisible")
 
         let legacyEvent = try JSONSerialization.data(withJSONObject: [
             "type": "m.room.message", "content": ["msgtype": "m.text", "body": "Bonjour"],
@@ -757,13 +771,16 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
         let legacy = DecryptedEvent(clearEvent: String(decoding: legacyEvent, as: UTF8.self),
             senderCurve25519Key: "curve", claimedEd25519Key: nil, forwardingCurve25519Chain: [],
             shieldState: ShieldState(color: .none, code: nil, message: nil))
-        XCTAssertEqual(try MatrixMessagingCryptography.plaintext(from: legacy), Data("Bonjour".utf8),
-                       "La forme legacy reste les octets du body")
+        XCTAssertEqual(try MatrixMessagingCryptography.plaintext(from: legacy), Data("Bonjour".utf8))
+        XCTAssertEqual(try MatrixMessagingCryptography.content(from: legacy), .legacyBody(Data("Bonjour".utf8)))
 
         let mismatched = DecryptedEvent(clearEvent: String(decoding: legacyEvent, as: UTF8.self),
             senderCurve25519Key: "curve", claimedEd25519Key: nil, forwardingCurve25519Chain: [],
             shieldState: ShieldState(color: .red, code: .mismatchedSender, message: nil))
         XCTAssertThrowsError(try MatrixMessagingCryptography.plaintext(from: mismatched)) { error in
+            XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable)
+        }
+        XCTAssertThrowsError(try MatrixMessagingCryptography.content(from: mismatched)) { error in
             XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable)
         }
 
@@ -772,6 +789,7 @@ final class MatrixMessagingCryptographyTests: XCTestCase {
             senderCurve25519Key: "curve", claimedEd25519Key: nil, forwardingCurve25519Chain: [],
             shieldState: ShieldState(color: .none, code: nil, message: nil))
         XCTAssertThrowsError(try MatrixMessagingCryptography.plaintext(from: notAMessage))
+        XCTAssertThrowsError(try MatrixMessagingCryptography.content(from: notAMessage))
     }
 }
 
@@ -1306,9 +1324,10 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
 
     // MARK: Contenu v3 média (#97, T2b1) et signalement
 
-    /// Le signalement garde son enveloppe (`body`) et sa propre limite : la borne 12 000 d'un message ordinaire
-    /// ne s'y applique pas, celle des 640 Kio du corps reste côté serveur.
-    func testReportSealingKeepsItsOwnEnvelopeAndItsOwnLimit() async throws {
+    /// Le signalement garde son enveloppe (`body`) et sa propre limite de corps (640 Kio), mais chaque
+    /// enveloppe reste sous le plafond serveur de 12 000 caractères base64. Un contenu de 8 500 octets
+    /// passe ; au-delà de ~8 800 octets de clair, l'item dépasserait le plafond et le transport le refuserait.
+    func testReportSealingKeepsItsEnvelopeAndStaysUnderTheItemBound() async throws {
         let relay = InMemoryRelay()
         await relay.setReportRecipients(school, [admin])
         let reporter = try device(alice, relay: relay)
@@ -1316,17 +1335,18 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
         let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
         XCTAssertTrue(ready)
 
-        let large = Data(String(repeating: "a", count: 20_000).utf8)
-        let sealed = try await reporter.sealForSchoolAdmins(large, scope: scope(alice), conversationID: conversation)
-        XCTAssertGreaterThan(sealed.payload.base64EncodedString().utf8.count, 12_000,
-                             "Un signalement n'est pas soumis à la borne d'un message ordinaire")
+        let content = Data(String(repeating: "a", count: 8_500).utf8)
+        let sealed = try await reporter.sealForSchoolAdmins(content, scope: scope(alice), conversationID: conversation)
+        XCTAssertLessThanOrEqual(sealed.payload.base64EncodedString().utf8.count, 12_000,
+                                 "Un item de signalement reste sous le plafond de 12 000 caractères")
         let clear = try await administrator.decrypt(wire(sealed), scope: scope(admin))
-        XCTAssertEqual(clear, large, "Le signalement conserve son enveloppe et ses octets")
+        XCTAssertEqual(clear, content, "Le signalement conserve son enveloppe et ses octets")
     }
 
-    /// Un signalement de message média : l'enveloppe est préservée octet pour octet, et l'administrateur
-    /// retrouve les métadonnées déjà présentes dans le contenu (nom, type, dimensions), sans aucun octet binaire.
-    func testReportedMediaEnvelopeKeepsTheMetadataReadableForTheAdministrator() async throws {
+    /// Un contenu Matrix v3 mis dans un signalement garde son enveloppe octet pour octet ; le lecteur
+    /// typé (provenance explicite) en retrouve les métadonnées. Le décodeur legacy, lui, ne fabrique
+    /// jamais de média : brancher la boîte de signalement sur le lecteur typé relève du lot UI.
+    func testReportKeepsTheEnvelopeAndTheTypedReaderRecoversTheMediaMetadata() async throws {
         let relay = InMemoryRelay()
         await relay.setReportRecipients(school, [admin])
         let reporter = try device(alice, relay: relay)
@@ -1338,15 +1358,17 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
             width: nil, height: nil,
             file: MessagingMediaEncryptionInfo(key: Data(repeating: 3, count: 32), iv: Data(repeating: 0, count: 16),
                                                sha256: Data(repeating: 5, count: 32)))
-        let content = try MessagingPlainContent(text: "Preuve signalée", media: media).encoded()
+        let value = try MessagingMediaContentV3(text: "Preuve signalée", media: media)
+        let content = try MessagingMediaContent.messageContent(value, mentions: nil)
         let sealed = try await reporter.sealForSchoolAdmins([content], scope: scope(alice), conversationID: conversation)
         let clear = try await administrator.decrypt(wire(sealed[0]), scope: scope(admin))
-        XCTAssertEqual(clear, content, "Le signalement garde l'enveloppe legacy du contenu")
-        let decoded = try XCTUnwrap(MessagingPlainContent.decode(clear))
+        XCTAssertEqual(clear, content, "Le signalement recopie l'enveloppe sans la transformer")
+        let decoded = try XCTUnwrap(MessagingPlainContent.decodeMatrixContent(clear))
         XCTAssertEqual(decoded.text, "Preuve signalée")
         XCTAssertEqual(decoded.media?.name, "bilan.pdf")
         XCTAssertEqual(decoded.media?.mime, .pdf)
         XCTAssertEqual(decoded.media?.size, 4_096)
         XCTAssertEqual(decoded.media?.file, media.file, "La clé de fichier reste explicite pour l'administrateur")
+        XCTAssertNil(MessagingPlainContent.decode(clear)?.media, "Le décodeur legacy ne fabrique aucun média")
     }
 }

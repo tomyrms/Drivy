@@ -111,6 +111,28 @@ final class MessagingCoreTests: XCTestCase {
         } catch MessagingFailure.protectionUnavailable { }
     }
 
+    /// #97 : la file existante ne porte pas de pièce jointe. Refus fermé explicite, avant toute
+    /// vérification de chiffrement et sans écrire d'intention : aucun envoi partiel n'est activé.
+    func testMediaContentIsRefusedByTheLegacyOutboxBeforeEncryptionAndStorage() async throws {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
+        let outbox = MemoryCiphertextOutbox()
+        // Chiffreur par défaut volontairement indisponible : si le refus média arrivait après la
+        // vérification de chiffrement, l'erreur serait `protectionUnavailable` et non `invalidResponse`.
+        let coordinator = MessagingOutboxCoordinator(scope: scope, service: UnavailableMessagingService(),
+            outbox: outbox, currentScope: { scope })
+        let media = try MessagingMediaAttachment(id: UUID(), size: 1_024, mime: .jpeg, name: "photo.jpg",
+            width: 800, height: 600,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 1, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 2, count: 32)))
+        do {
+            _ = try await coordinator.enqueue(content: MessagingPlainContent(text: "légende", media: media),
+                                              conversationID: UUID(), currentScope: scope)
+            XCTFail("La file existante ne porte pas de pièce jointe")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        let pending = try await outbox.entries(scope: scope)
+        XCTAssertTrue(pending.isEmpty, "Rien n'est scellé ni mis en file")
+    }
+
     func testChangeOfAccountOrSchoolFailsClosed() async throws {
         let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 1)
         let coordinator = MessagingOutboxCoordinator(scope: scope, service: UnavailableMessagingService(),

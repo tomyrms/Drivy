@@ -26,11 +26,17 @@ final class MessagingMediaContentTests: XCTestCase {
         try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
     }
 
+    /// Contenu Matrix structuré produit par le type (#97), sans passer par l'enveloppe applicative.
+    private func matrixContent(_ content: MessagingPlainContent) throws -> Data {
+        let value = try MessagingMediaContentV3(text: content.text, media: try XCTUnwrap(content.media))
+        return try MessagingMediaContent.messageContent(value, mentions: nil)
+    }
+
     // MARK: Forme exacte du contenu v3
 
     func testMediaContentUsesTheNamespacedShapeWithAReadableBody() throws {
         let content = MessagingPlainContent(text: "Légende de la photo", media: try attachment())
-        let data = try content.encoded()
+        let data = try matrixContent(content)
         let contentObject = try object(data)
         XCTAssertEqual(Set(contentObject.keys), Set(["msgtype", "body", "ch.drivy.messaging"]))
         XCTAssertEqual(contentObject["msgtype"] as? String, "m.text")
@@ -58,9 +64,9 @@ final class MessagingMediaContentTests: XCTestCase {
     }
 
     func testBodyFallsBackToTheMimeWhenThereIsNoCaption() throws {
-        XCTAssertEqual(try MessagingPlainContent(text: nil, media: try attachment(.jpeg)).encoded().bodyText, "Photo")
-        XCTAssertEqual(try MessagingPlainContent(text: "   ", media: try attachment(.png, name: "capture.png", width: 800, height: 600)).encoded().bodyText, "Photo")
-        XCTAssertEqual(try MessagingPlainContent(text: nil, media: try attachment(.pdf, name: "bilan.pdf", width: nil, height: nil)).encoded().bodyText, "PDF")
+        XCTAssertEqual(try matrixContent(MessagingPlainContent(text: nil, media: try attachment(.jpeg))).bodyText, "Photo")
+        XCTAssertEqual(try matrixContent(MessagingPlainContent(text: "   ", media: try attachment(.png, name: "capture.png", width: 800, height: 600))).bodyText, "Photo")
+        XCTAssertEqual(try matrixContent(MessagingPlainContent(text: nil, media: try attachment(.pdf, name: "bilan.pdf", width: nil, height: nil))).bodyText, "PDF")
     }
 
     func testSummaryStaysReadableForAMediaMessage() throws {
@@ -69,23 +75,36 @@ final class MessagingMediaContentTests: XCTestCase {
         XCTAssertEqual(MessagingPlainContent(media: try attachment(.pdf, name: "bilan.pdf", width: nil, height: nil)).summary, "PDF")
     }
 
-    func testMediaContentRoundTripsThroughItsOwnEncoding() throws {
+    func testMediaContentRoundTripsThroughTheStructuredDecoder() throws {
         let content = MessagingPlainContent(text: "Légende", media: try attachment())
-        let decoded = try XCTUnwrap(MessagingPlainContent.decode(try content.encoded()))
+        let decoded = try XCTUnwrap(MessagingPlainContent.decodeMatrixContent(try matrixContent(content)))
         XCTAssertEqual(decoded, content)
         XCTAssertEqual(decoded.media?.name, "IMG_0421.jpg")
         XCTAssertEqual(decoded.media?.mime, .jpeg)
         XCTAssertEqual(decoded.media?.file, fileInfo())
     }
 
-    /// L'encodage d'un message sans média ne bouge pas : les intentions déjà scellées gardent leurs octets.
+    /// L'enveloppe applicative d'un message sans média ne bouge pas : les intentions déjà scellées
+    /// gardent leurs octets, et une clé optionnelle nulle reste omise comme avant.
     func testContentWithoutMediaKeepsTheVersionTwoEnvelope() throws {
         let poll = MessagingPlainContent(poll: .init(question: "Q", options: [.init(id: "o1", label: "A"), .init(id: "o2", label: "B")]))
-        let data = try poll.encoded()
-        let envelope = try object(data)
-        XCTAssertEqual(Set(envelope.keys), Set(["v", "text", "poll"]))
-        XCTAssertEqual(envelope["v"] as? Int, 2)
-        XCTAssertNil(envelope["ch.drivy.messaging"])
+        let pollEnvelope = try object(try poll.encoded())
+        XCTAssertEqual(Set(pollEnvelope.keys), Set(["v", "poll"]), "text=nil est omis par le Codable historique")
+        XCTAssertEqual(pollEnvelope["v"] as? Int, 2)
+        XCTAssertNil(pollEnvelope["ch.drivy.messaging"])
+
+        let textEnvelope = try object(try MessagingPlainContent(text: "bonjour").encoded())
+        XCTAssertEqual(Set(textEnvelope.keys), Set(["v", "text"]))
+        XCTAssertEqual(textEnvelope["text"] as? String, "bonjour")
+        XCTAssertNil(textEnvelope["poll"], "poll=nil est omis par le Codable historique")
+    }
+
+    /// Une pièce jointe n'entre pas dans l'enveloppe applicative : le chemin média est typé.
+    func testMediaContentIsRefusedByTheApplicationEnvelope() throws {
+        let content = MessagingPlainContent(text: "Légende", media: try attachment())
+        XCTAssertThrowsError(try content.encoded()) { error in
+            XCTAssertEqual(error as? MessagingFailure, .invalidResponse)
+        }
     }
 
     // MARK: Bornes du contrat §4.2
@@ -98,16 +117,20 @@ final class MessagingMediaContentTests: XCTestCase {
         }
     }
 
-    /// La borne se mesure sur le contenu encodé, pas sur le nombre de caractères.
+    /// La borne se mesure sur le contenu Matrix encodé, pas sur le nombre de caractères.
     func testEncodedContentIsBoundedToSixThousandBytes() throws {
         let ordinary = String(repeating: "a", count: 1_000)
         let heaviest = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
         XCTAssertEqual(heaviest.count, 1_000, "Mille caractères, mais bien plus d'octets une fois encodé")
-        XCTAssertLessThanOrEqual(try MessagingPlainContent(text: ordinary, media: try attachment(name: String(repeating: "é", count: 255))).encoded().count,
-                                 MessagingPlainContent.maximumV3ByteCount)
-        XCTAssertThrowsError(try MessagingPlainContent(text: heaviest, media: try attachment()).encoded()) { error in
-            XCTAssertEqual(error as? MessagingFailure, .invalidResponse)
-        }
+        let widest = try matrixContent(MessagingPlainContent(text: ordinary,
+                                                             media: try attachment(name: String(repeating: "é", count: 255))))
+        XCTAssertLessThanOrEqual(widest.count, MessagingPlainContent.maximumV3ByteCount)
+        XCTAssertThrowsError(try matrixContent(MessagingPlainContent(text: heaviest, media: try attachment())))
+        // Le producteur typé refuse lui aussi un contenu au-delà du plafond, avant tout chiffrement.
+        do {
+            _ = try MessagingMediaContent.messageContent(
+                try MessagingMediaContentV3(text: heaviest, media: try attachment()), mentions: nil)
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
     }
 
     func testMediaSizeIsBoundedToOneAndFourMebibytes() throws {
@@ -175,11 +198,11 @@ final class MessagingMediaContentTests: XCTestCase {
                                                           width: 1, height: 1, file: standardKey))
     }
 
-    // MARK: Lecture : compatibilité et échecs fermés
+    // MARK: Lecture : provenance, compatibilité et échecs fermés
 
     func testUnknownNamespacedVersionRendersTheReadableBody() throws {
         let payload = Data(#"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":4,"whatever":true}}"#.utf8)
-        let decoded = try XCTUnwrap(MessagingPlainContent.decode(payload))
+        let decoded = try XCTUnwrap(MessagingPlainContent.decodeMatrixContent(payload))
         XCTAssertEqual(decoded.text, "Photo")
         XCTAssertNil(decoded.media)
         XCTAssertFalse(decoded.text?.contains("{") ?? true, "Jamais de JSON technique brut")
@@ -187,14 +210,23 @@ final class MessagingMediaContentTests: XCTestCase {
 
     func testKnownVersionThreeWithoutUsableMediaIsUnreadable() throws {
         let missingMedia = Data(#"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"text":null}}"#.utf8)
-        XCTAssertNil(MessagingPlainContent.decode(missingMedia), "v3 connu mais incomplet : échec fermé")
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(missingMedia), "v3 connu mais incomplet : échec fermé")
         let brokenSize = Data(#"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"media":{"id":"\#(mediaID)","size":0,"mime":"image/jpeg","name":"a.jpg","width":1,"height":1,"file":{"v":"v2","key":{"kty":"oct","alg":"A256CTR","ext":true,"k":"\#(String(repeating: "A", count: 43))","key_ops":["decrypt","encrypt"]},"iv":"\#(String(repeating: "A", count: 22))","hashes":{"sha256":"\#(String(repeating: "A", count: 43))"}}}}}"#.utf8)
-        XCTAssertNil(MessagingPlainContent.decode(brokenSize), "Une taille hors plafond n'ouvre aucun chemin")
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(brokenSize), "Une taille hors plafond n'ouvre aucun chemin")
         let missingBody = Data(#"{"msgtype":"m.text","ch.drivy.messaging":{"v":3}}"#.utf8)
-        XCTAssertNil(MessagingPlainContent.decode(missingBody))
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(missingBody))
     }
 
-    /// Une ancienne intention dont le texte ressemble à du JSON reste du texte utilisateur.
+    /// Le décodeur structuré ne s'applique qu'à un contenu Matrix : un texte ou une enveloppe v2 n'y entre pas.
+    func testStructuredDecoderRejectsLegacyBytes() throws {
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(Data("bonjour".utf8)))
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(try MessagingPlainContent(text: "bonjour").encoded()))
+        let notNamespaced = Data(#"{"msgtype":"m.text","body":"coucou"}"#.utf8)
+        XCTAssertNil(MessagingPlainContent.decodeMatrixContent(notNamespaced))
+    }
+
+    /// Un ancien `body` qui reproduit **exactement** un contenu namespacé reste le texte d'origine :
+    /// le décodeur legacy ne fabrique ni pièce jointe ni message illisible.
     func testLegacyTextLookingLikeJSONStaysUserText() throws {
         let raw = #"{"media":{"id":"5c1f"},"v":3}"#
         XCTAssertEqual(MessagingPlainContent.decode(Data(raw.utf8))?.text, raw)
@@ -202,6 +234,14 @@ final class MessagingMediaContentTests: XCTestCase {
         let matrixShapedButNotNamespaced = #"{"msgtype":"m.text","body":"coucou"}"#
         XCTAssertEqual(MessagingPlainContent.decode(Data(matrixShapedButNotNamespaced.utf8))?.text,
                        matrixShapedButNotNamespaced)
+        let lookalikeV4 = #"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":4}}"#
+        let v4 = try XCTUnwrap(MessagingPlainContent.decode(Data(lookalikeV4.utf8)))
+        XCTAssertEqual(v4.text, lookalikeV4, "Texte utilisateur intact, pas de repli sur « Photo »")
+        XCTAssertNil(v4.media)
+        let lookalikeV3 = #"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"text":null,"media":{"id":"5c1f","size":10,"mime":"image/jpeg","name":"a.jpg","width":1,"height":1,"file":{}}}}"#
+        let v3 = try XCTUnwrap(MessagingPlainContent.decode(Data(lookalikeV3.utf8)))
+        XCTAssertEqual(v3.text, lookalikeV3, "Un lookalike v3 complet reste du texte, jamais un média")
+        XCTAssertNil(v3.media)
     }
 }
 

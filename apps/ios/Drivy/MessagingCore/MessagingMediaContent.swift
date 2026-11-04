@@ -168,6 +168,9 @@ struct MessagingMediaContentV3: Codable, Sendable, Equatable {
 ///
 /// Écriture : `{"msgtype":"m.text","body":<repli>,"ch.drivy.messaging":{"v":3,"text":…,"media":…}}`.
 /// Le contenu structuré ne va **jamais** dans `body`, et `body` ne contient jamais de JSON.
+///
+/// Cette lecture ne s'applique **qu'à un contenu Matrix authentifié** (`MessagingDecryptedContent`
+/// de provenance `.matrixContent`) : elle n'est jamais appliquée à des octets de `body` legacy.
 enum MessagingMediaContent {
     static let namespacedKey = "ch.drivy.messaging"
     static let messageType = "m.text"
@@ -222,4 +225,23 @@ enum MessagingMediaContent {
     private static func jsonObject<T: Encodable>(_ value: T) throws -> Any {
         try JSONSerialization.jsonObject(with: JSONEncoder().encode(value))
     }
+}
+
+/// Capacité additive (#97) : chiffrer un contenu Matrix **structuré** déjà construit, sans faire
+/// passer de JSON par le chemin texte générique (`encrypt(_:mentions:…)` reste legacy).
+///
+/// Consommateur futur : le coordinateur média/coffre (T2b2/T3), qui construit la valeur typée
+/// puis appelle cette capacité. Aucun conformer n'est obligatoire : les implémentations existantes
+/// du protocole générique restent valides.
+protocol MessagingMatrixContentEncryption: Sendable {
+    func encryptMatrixContent(_ content: MessagingMediaContentV3, mentions: [UUID],
+                              scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext
+}
+
+/// Capacité additive (#97) : rendre la **provenance** du contenu déchiffré.
+///
+/// Consommateur futur : la lecture d'un média (T3) et le signalement d'un média, qui doivent
+/// distinguer un `body` legacy d'un contenu Matrix structuré sans deviner sur des octets.
+protocol MessagingContentProvenanceDecryption: Sendable {
+    func decryptContent(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> MessagingDecryptedContent
 }

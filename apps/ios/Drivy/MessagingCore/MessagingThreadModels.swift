@@ -53,40 +53,44 @@ struct MessagingPlainContent: Codable, Sendable, Equatable {
     var media: MessagingMediaAttachment? = nil
 
     static let version = 2
-    /// Plafond du contenu v3 média encodé (contrat §4.2). La borne réellement contraignante est
+    /// Plafond du contenu Matrix v3 média encodé (contrat §4.2). La borne réellement contraignante est
     /// mesurée après chiffrement, sur l'enveloppe transportée, et non sur le clair.
     static let maximumV3ByteCount = MessagingMediaContent.maximumByteCount
 
+    /// Enveloppe **applicative** (texte v1, sondage v2). Une pièce jointe n'y entre pas : elle voyage
+    /// dans le contenu Matrix structuré (`MessagingMediaContentV3` + `MessagingMatrixContentEncryption`).
+    /// Refuser ici évite qu'un média parte comme texte ou soit stocké dans une enveloppe qui ne le porte pas.
     func encoded() throws -> Data {
-        if let media {
-            guard poll == nil else { throw MessagingFailure.invalidResponse }
-            let value = try MessagingMediaContentV3(text: text, media: media)
-            let data = try MessagingMediaContent.messageContent(value, mentions: nil)
-            guard data.count <= Self.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
-            return data
-        }
+        guard media == nil else { throw MessagingFailure.invalidResponse }
         let data = try JSONEncoder().encode(Envelope(v: Self.version, text: text, poll: poll))
         guard data.count <= 16_384 else { throw MessagingFailure.invalidResponse }
         return data
     }
 
-    /// Deux formes acceptées en lecture :
-    /// - legacy : les octets de `body` (texte brut v1, enveloppe applicative v2 JSON) ;
-    /// - v3 : le contenu Matrix complet porteur de `ch.drivy.messaging`.
+    /// Décodeur **legacy** : texte UTF-8 brut (v1) et enveloppe applicative (v2), rien d'autre.
     ///
-    /// Une version namespacée inconnue rend le `body` de repli ; un v3 connu mais illisible
-    /// échoue fermé (`nil`) sans exposer le JSON technique.
+    /// Les octets d'un `body` ne sont jamais réinterprétés comme un contenu Matrix : un ancien texte
+    /// qui reproduit exactement un contenu namespacé (v3, v4 ou futur) reste le texte d'origine.
+    /// Un contenu Matrix structuré se lit avec `decodeMatrixContent`, sur la provenance `.matrixContent`.
     static func decode(_ bytes: Data) -> MessagingPlainContent? {
-        switch MessagingMediaContent.reading(bytes) {
-        case .v3(let value): return MessagingPlainContent(text: value.text, media: value.media)
-        case .fallbackBody(let body): return MessagingPlainContent(text: body)
-        case .invalid: return nil
-        case .notNamespaced: break
-        }
         if let envelope = try? JSONDecoder().decode(Envelope.self, from: bytes), envelope.v == version {
             return MessagingPlainContent(text: envelope.text, poll: envelope.poll)
         }
         return String(data: bytes, encoding: .utf8).map { MessagingPlainContent(text: $0) }
+    }
+
+    /// Décodeur du **contenu Matrix authentifié** (provenance `.matrixContent`), jamais d'un `body`.
+    ///
+    /// - namespace v3 valide → contenu et pièce jointe ;
+    /// - version namespacée inconnue → `body` de repli, jamais le JSON technique ;
+    /// - v3 connu mais invalide → `nil` (échec fermé) ;
+    /// - aucun contenu Matrix complet → `nil` : l'appelant a utilisé le mauvais décodeur.
+    static func decodeMatrixContent(_ bytes: Data) -> MessagingPlainContent? {
+        switch MessagingMediaContent.reading(bytes) {
+        case .v3(let value): return MessagingPlainContent(text: value.text, media: value.media)
+        case .fallbackBody(let body): return MessagingPlainContent(text: body)
+        case .invalid, .notNamespaced: return nil
+        }
     }
 
     var summary: String {

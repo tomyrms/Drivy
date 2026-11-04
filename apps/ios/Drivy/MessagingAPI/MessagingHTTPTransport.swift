@@ -130,8 +130,12 @@ actor MessagingHTTPTransport: MessagingAPITransport {
             mentionPersonIds: body.mentionPersonIds,
             replyToMessageId: body.replyToMessageId,
             poll: body.poll.map { SendBody.Poll(optionCount: $0.optionIDs.count, multiple: $0.allowsMultiple) }))
-        // Borne mesurée sur le corps réellement sérialisé, avant tout jeton et toute requête (#97 §4.2).
-        // Le signalement garde sa propre limite : cette garde ne s'applique qu'à `send`.
+        // Deux bornes du protocole, mesurées sur ce qui est réellement émis et avant tout jeton ou
+        // requête (#97 §4.2) : le serveur refuse `ciphertext.payload` au-delà de 12 000 caractères
+        // base64, et le corps d'un message ordinaire reste sous 16 Kio.
+        guard body.ciphertext.payload.base64EncodedString().utf8.count <= Self.maximumEnvelopePayloadCharacters else {
+            throw MessagingFailure.invalidResponse
+        }
         guard payload.count <= Self.maximumSendBodyByteCount else { throw MessagingFailure.invalidResponse }
         let receipt: MessageReceipt = try await request(scope: scope, method: "POST",
             path: ["conversations", conversationID.uuidString, "messages"], body: payload)
@@ -155,8 +159,13 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         let poll: Poll?
     }
 
-    /// Plafond du corps JSON réellement émis pour un message ordinaire (#97 §4.2, 12 000 caractères de payload).
+    /// Plafond du serveur pour `ciphertext.payload`, message comme item de signalement : 12 000
+    /// caractères base64 (`apps/api/src/messaging-routes.ts`, schéma `envelope`).
+    private static let maximumEnvelopePayloadCharacters = 12_000
+    /// Plafond du corps JSON réellement émis pour un message ordinaire (#97 §4.2).
     private static let maximumSendBodyByteCount = 16_384
+    /// Plafond du corps JSON d'un lot de signalement : 640 Kio (`bodyLimit` du serveur).
+    private static let maximumReportBodyByteCount = 655_360
 
     /// Le contrat opaque exclut les métadonnées de file locales, y compris pour les signalements.
     private struct WireCiphertext: Encodable, Equatable {
@@ -428,8 +437,14 @@ actor MessagingHTTPTransport: MessagingAPITransport {
         struct Item: Encodable { let messageId: UUID; let ciphertext: WireCiphertext }
         struct Body: Encodable { let clientReportId: UUID; let conversationId: UUID; let items: [Item] }
         guard (1...50).contains(items.count) else { throw MessagingFailure.invalidResponse }
+        // Le signalement garde sa propre limite de corps (640 Kio), mais **chaque** enveloppe reste
+        // soumise au plafond du serveur : 12 000 caractères base64 par item, sans exception.
+        guard items.allSatisfy({
+            $0.ciphertext.payload.base64EncodedString().utf8.count <= Self.maximumEnvelopePayloadCharacters
+        }) else { throw MessagingFailure.invalidResponse }
         let body = try JSONEncoder().encode(Body(clientReportId: clientReportID, conversationId: conversationID,
             items: items.map { Item(messageId: $0.messageID, ciphertext: WireCiphertext($0.ciphertext)) }))
+        guard body.count <= Self.maximumReportBodyByteCount else { throw MessagingFailure.invalidResponse }
         let _: Done = try await request(scope: scope, method: "POST", path: ["reports"], body: body)
     }
 

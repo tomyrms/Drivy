@@ -40,7 +40,8 @@ struct MessagingOwnDevice: Sendable, Hashable, Identifiable {
 
 /// Chiffrement de bout en bout #67 : Olm/Megolm de matrix-sdk-crypto (vodozemac), transport API Drivy.
 /// Aucun chemin ne renvoie ou n'envoie de clair : toute erreur devient `protectionUnavailable`.
-actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement, MessagingReportSealing {
+actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement, MessagingReportSealing,
+    MessagingMatrixContentEncryption, MessagingContentProvenanceDecryption {
     static let scheme = "megolm.v1"
     static let serverName = "drivy"
     /// Rotation périodique en plus de la rotation à chaque départ.
@@ -110,8 +111,32 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         try guardScope(scope)
         diagnostics.clear()
-        guard String(data: plaintext, encoding: .utf8)?.isEmpty == false else { throw MessagingFailure.invalidResponse }
-        return try await shielded {
+        guard let text = String(data: plaintext, encoding: .utf8), !text.isEmpty else {
+            throw MessagingFailure.invalidResponse
+        }
+        // Chemin texte générique : les octets applicatifs vont dans `body`, tels quels. Aucune
+        // réinterprétation d'un texte qui ressemblerait à un contenu Matrix (une pièce jointe
+        // passe par `encryptMatrixContent`, jamais par ici).
+        return try await encryptContent(try Self.messageContent(text: text, mentions: mentions),
+                                        scope: scope, conversationID: conversationID)
+    }
+
+    /// Contenu Matrix structuré (#97) : légende et pièce jointe, construits par le type, jamais devinés.
+    func encryptMatrixContent(_ content: MessagingMediaContentV3, mentions: [UUID],
+                              scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        try guardScope(scope)
+        diagnostics.clear()
+        let data = try MessagingMediaContent.messageContent(content, mentions: mentions.map(Self.userID))
+        guard data.count <= MessagingPlainContent.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
+        return try await encryptContent(String(decoding: data, as: UTF8.self),
+                                        scope: scope, conversationID: conversationID)
+    }
+
+    /// Partage de session, chiffrement Megolm, bornes sur l'enveloppe produite, sauvegarde.
+    /// Le contenu reçu ici est déjà construit : aucun octet utilisateur n'est relu.
+    private func encryptContent(_ content: String, scope: MessagingScope,
+                                conversationID: UUID) async throws -> MessagingCiphertext {
+        try await shielded {
             let machine = try await open()
             let room = Self.roomID(conversationID)
             let listed = try await relay.members(scope: scope, deviceID: deviceID, conversationID: conversationID)
@@ -136,7 +161,6 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
             state.members[conversationID] = members.sorted { $0.uuidString < $1.uuidString }
             if let epoch = listed.membersEpoch { state.membersEpoch[conversationID] = epoch }
             try vault.save(state)
-            let content = try Self.messageContent(plaintext: plaintext, mentions: mentions)
             let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
             let envelope = try Self.envelope(fromEncryptedContent: encrypted)
             // La taille se mesure sur l'enveloppe réellement produite par le chiffrement officiel,
@@ -156,6 +180,15 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
     }
 
     func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data {
+        try Self.plaintext(from: try await decryptedEvent(message, scope: scope))
+    }
+
+    /// Provenance explicite (#97) : un `body` legacy n'est jamais confondu avec un contenu Matrix.
+    func decryptContent(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> MessagingDecryptedContent {
+        try Self.content(from: try await decryptedEvent(message, scope: scope))
+    }
+
+    private func decryptedEvent(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> DecryptedEvent {
         try guardScope(scope)
         guard let ciphertext = message.ciphertext, ciphertext.scheme == Self.scheme,
               message.schoolID == scope.schoolID else { throw MessagingFailure.protectionUnavailable }
@@ -179,7 +212,7 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                 // Raison du SDK seulement (catégorie fixe), jamais le message d'erreur libre.
                 throw MessagingDecryptionFailure(code: Self.decryptionCode(error))
             }
-            return try Self.plaintext(from: decrypted)
+            return decrypted
         }
     }
 
@@ -659,27 +692,6 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         return String(decoding: try JSONSerialization.data(withJSONObject: content, options: [.sortedKeys]), as: UTF8.self)
     }
 
-    /// Contenu réellement passé à `machine.encrypt` : namespace v3 pour un contenu média, corps legacy sinon.
-    ///
-    /// Un contenu média connu mais illisible est refusé : ni namespace partielle, ni JSON technique dans `body`.
-    /// Les messages sans média gardent exactement la forme d'avant (`body` = octets applicatifs reçus).
-    static func messageContent(plaintext: Data, mentions: [UUID]) throws -> String {
-        guard let text = String(data: plaintext, encoding: .utf8), !text.isEmpty else {
-            throw MessagingFailure.invalidResponse
-        }
-        switch MessagingMediaContent.reading(plaintext) {
-        case .v3(let value):
-            let data = try MessagingMediaContent.messageContent(value, mentions: mentions.map(userID))
-            guard data.count <= MessagingPlainContent.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
-            return String(decoding: data, as: UTF8.self)
-        case .invalid, .fallbackBody(_):
-            // Un contenu porteur d'une namespace non comprise ne part pas comme texte : aucun envoi ambigu.
-            throw MessagingFailure.invalidResponse
-        case .notNamespaced:
-            return try messageContent(text: text, mentions: mentions)
-        }
-    }
-
     /// keyId = session_id Megolm en base64url (jeu de caractères accepté par l'enveloppe).
     static func envelope(fromEncryptedContent content: String) throws -> MessagingCiphertext {
         let data = Data(content.utf8)
@@ -723,25 +735,37 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         }
     }
 
-    /// Extraction du contenu après déchiffrement. Deux formes acceptées, documentées ensemble :
+    /// Extraction **legacy** après déchiffrement : les octets de `body`, rien d'autre.
     ///
-    /// - **legacy** : les octets de `body` (texte brut v1, enveloppe applicative v2 JSON) — c'est ce que
-    ///   reçoivent les messages déjà stockés, et ces octets ne changent pas ;
-    /// - **v3** : le JSON du `content` Matrix complet quand il porte `ch.drivy.messaging`, ce qui rend
-    ///   la légende, la pièce jointe et ses métadonnées au décodeur applicatif.
+    /// C'est ce que reçoivent les appels existants (texte v1, enveloppe applicative v2, contenu de
+    /// récupération local) et ces octets ne changent pas. Un `body` qui reproduit un contenu Matrix
+    /// reste ce texte : la provenance d'un vrai contenu Matrix se lit avec `content(from:)`.
     ///
     /// La garde d'expéditeur Megolm (`mismatchedSender`) et le type `m.room.message` restent obligatoires.
     static func plaintext(from decrypted: DecryptedEvent) throws -> Data {
+        try legacyEvent(decrypted).body
+    }
+
+    /// Provenance explicite (#97) : `body` legacy, ou `content` Matrix complet quand l'événement
+    /// authentifié porte la namespace `ch.drivy.messaging` au niveau de son contenu.
+    static func content(from decrypted: DecryptedEvent) throws -> MessagingDecryptedContent {
+        let event = try legacyEvent(decrypted)
+        guard event.content[MessagingMediaContent.namespacedKey] != nil else {
+            return .legacyBody(event.body)
+        }
+        guard let data = try? JSONSerialization.data(withJSONObject: event.content, options: [.sortedKeys]) else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        return .matrixContent(data)
+    }
+
+    private static func legacyEvent(_ decrypted: DecryptedEvent) throws -> (content: [String: Any], body: Data) {
         if decrypted.shieldState.code == .mismatchedSender { throw MessagingFailure.protectionUnavailable }
         guard let event = try JSONSerialization.jsonObject(with: Data(decrypted.clearEvent.utf8)) as? [String: Any],
               event["type"] as? String == "m.room.message",
               let content = event["content"] as? [String: Any],
               let body = content["body"] as? String else { throw MessagingFailure.protectionUnavailable }
-        guard content[MessagingMediaContent.namespacedKey] != nil else { return Data(body.utf8) }
-        guard let data = try? JSONSerialization.data(withJSONObject: content, options: [.sortedKeys]) else {
-            throw MessagingFailure.protectionUnavailable
-        }
-        return data
+        return (content, Data(body.utf8))
     }
 
     struct SyncPage: Equatable {

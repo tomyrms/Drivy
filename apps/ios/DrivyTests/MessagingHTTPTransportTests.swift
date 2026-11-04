@@ -214,40 +214,22 @@ final class MessagingHTTPTransportTests: XCTestCase {
         XCTAssertEqual(requests, 0)
     }
 
-    // MARK: Borne de l'enveloppe réellement sérialisée (#97, T2b1)
+    // MARK: Bornes du protocole sur l'enveloppe réellement émise (#97, T2b1)
 
-    private func sendFixture(payload: Data, intent: UUID = UUID()) -> MessagingSendDTO {
+    private func sendFixture(payload: Data, mentions: [UUID] = [], intent: UUID = UUID()) -> MessagingSendDTO {
         MessagingSendDTO(clientMessageId: intent,
             ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture", payload: payload,
                                             expectedMembersEpoch: 3),
-            mentionPersonIds: [])
+            mentionPersonIds: mentions)
     }
 
-    /// Un corps au-delà de 16 Kio est refusé avant le jeton et le transport : zéro requête réseau.
-    func testSendBodyBeyondSixteenKilobytesIsRefusedBeforeAnyRequest() async throws {
-        let baseURL = URL(string: "https://api.example.invalid/")!
-        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
-        let wire = RecordingMessagingHTTP { request in
-            XCTFail("Aucune requête ne doit partir pour une enveloppe trop grande")
-            return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
-        }
-        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
-                                                     transport: wire, currentScope: { scope })
-        do {
-            _ = try await transport.send(scope: scope, conversationID: UUID(),
-                                         body: sendFixture(payload: Data(repeating: 0x41, count: 12_200)))
-            XCTFail("Un corps au-delà de 16 Kio doit être refusé avant émission")
-        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
-        let requests = await wire.requests()
-        XCTAssertEqual(requests, 0, "Aucun octet ni jeton consommé au refus")
-    }
-
-    /// Juste sous la borne, le même corps part réellement : la garde ne refuse pas un message ordinaire valide.
-    func testSendBodyUnderTheBoundIsAccepted() async throws {
+    /// 9 000 octets → 12 000 caractères base64 : la frontière exacte du serveur, corps sous 16 Kio.
+    func testSendPayloadAtTheTwelveThousandBoundIsAccepted() async throws {
         let baseURL = URL(string: "https://api.example.invalid/")!
         let account = UUID(), school = UUID(), conversation = UUID(), intent = UUID()
         let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
-        let payload = Data(repeating: 0x41, count: 11_000)
+        let payload = Data(repeating: 0x41, count: 9_000)
+        XCTAssertEqual(payload.base64EncodedString().utf8.count, 12_000)
         let wire = RecordingMessagingHTTP { request in
             let raw = try XCTUnwrap(request.httpBody)
             XCTAssertLessThanOrEqual(raw.count, 16_384)
@@ -265,13 +247,65 @@ final class MessagingHTTPTransportTests: XCTestCase {
         XCTAssertEqual(requests, 1)
     }
 
-    /// Le signalement garde sa propre limite : un corps de 20 Kio de payload n'est pas refusé par la garde du message.
-    func testReportEnvelopeKeepsItsOwnLimitAndIsNotRefusedByTheSendGuard() async throws {
+    /// 9 001 octets → 12 004 caractères : au-delà du plafond serveur, donc refusé avant émission.
+    /// Le corps seul (≈ 12,3 Kio) serait pourtant sous les 16 Kio : c'est bien la borne du payload qui tranche.
+    func testSendPayloadBeyondTheTwelveThousandBoundIsRefusedBeforeTokenAndRequest() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
+        let payload = Data(repeating: 0x41, count: 9_001)
+        XCTAssertEqual(payload.base64EncodedString().utf8.count, 12_004)
+        let wire = RecordingMessagingHTTP { request in
+            XCTFail("Aucune requête ne doit partir pour une enveloppe au-delà de 12 000 caractères")
+            return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let token = CountingMessagingToken()
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: token,
+                                                     transport: wire, currentScope: { scope })
+        do {
+            _ = try await transport.send(scope: scope, conversationID: UUID(), body: sendFixture(payload: payload))
+            XCTFail("Un payload au-delà de 12 000 caractères base64 doit être refusé avant émission")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 0, "Aucune requête réseau au refus")
+        let tokens = token.requests
+        XCTAssertEqual(tokens, 0, "Aucun jeton consommé au refus")
+    }
+
+    /// Garde défensive du corps : même avec un payload sous 12 000 caractères, un `SendBody` au-delà de
+    /// 16 Kio ne part pas. Le cas est fabriqué (mentions hors plafond serveur) : c'est la garde client
+    /// qui est éprouvée, pas la validité du message.
+    func testSendBodyBeyondSixteenKilobytesIsRefusedBeforeAnyRequest() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 3, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            XCTFail("Aucune requête ne doit partir pour un corps au-delà de 16 Kio")
+            return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let token = CountingMessagingToken()
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: token,
+                                                     transport: wire, currentScope: { scope })
+        let payload = Data(repeating: 0x41, count: 9_000)
+        let mentions = (0..<400).map { _ in UUID() }
+        do {
+            _ = try await transport.send(scope: scope, conversationID: UUID(),
+                                         body: sendFixture(payload: payload, mentions: mentions))
+            XCTFail("Un corps au-delà de 16 Kio doit être refusé avant émission")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 0)
+        let tokens = token.requests
+        XCTAssertEqual(tokens, 0)
+    }
+
+    /// Signalement : le lot garde sa limite de 640 Kio, donc un corps au-delà de 16 Kio reste valide
+    /// quand chaque item respecte 12 000 caractères base64 (4 × 9 000 octets ici).
+    func testReportAcceptsSeveralItemsWhoseBodyExceedsSixteenKilobytes() async throws {
         let baseURL = URL(string: "https://api.example.invalid/")!
         let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
         let wire = RecordingMessagingHTTP { request in
             let raw = try XCTUnwrap(request.httpBody)
             XCTAssertGreaterThan(raw.count, 16_384, "Le corps du signalement dépasse la borne d'un message ordinaire")
+            XCTAssertLessThanOrEqual(raw.count, 655_360)
             let response = """
             {"data":{},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":1}}
             """
@@ -279,18 +313,74 @@ final class MessagingHTTPTransportTests: XCTestCase {
         }
         let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
                                                      transport: wire, currentScope: { scope })
-        try await transport.report(scope: scope, conversationID: UUID(), clientReportID: UUID(), items: [
-            MessagingReportItem(messageID: UUID(),
-                ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture",
-                                                payload: Data(repeating: 0x42, count: 20_000), expectedMembersEpoch: 9)),
-        ])
+        try await transport.report(scope: scope, conversationID: UUID(), clientReportID: UUID(),
+                                   items: (0..<4).map { _ in reportItem(bytes: 9_000) })
         let requests = await wire.requests()
         XCTAssertEqual(requests, 1)
+    }
+
+    /// Le plafond de 12 000 s'applique aussi à **chaque** item de signalement : un seul item trop grand
+    /// suffit à refuser le lot avant émission, même si le corps reste sous 640 Kio.
+    func testReportItemBeyondTwelveThousandBase64IsRefusedBeforeRequest() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            XCTFail("Aucune requête ne doit partir pour un item au-delà de 12 000 caractères")
+            return SchoolHTTPResponse(data: Data(), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let token = CountingMessagingToken()
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: token,
+                                                     transport: wire, currentScope: { scope })
+        let items = [reportItem(bytes: 9_000), reportItem(bytes: 9_001)]
+        do {
+            try await transport.report(scope: scope, conversationID: UUID(), clientReportID: UUID(), items: items)
+            XCTFail("Un item au-delà de 12 000 caractères base64 doit être refusé")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 0)
+        let tokens = token.requests
+        XCTAssertEqual(tokens, 0)
+    }
+
+    /// Frontière haute admissible : 50 items de 9 000 octets tiennent sous 640 Kio et partent.
+    func testReportBodyBoundAcceptsTheProtocolMaximum() async throws {
+        let baseURL = URL(string: "https://api.example.invalid/")!
+        let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1, apiBaseURL: baseURL.absoluteString)
+        let wire = RecordingMessagingHTTP { request in
+            let raw = try XCTUnwrap(request.httpBody)
+            XCTAssertLessThanOrEqual(raw.count, 655_360)
+            XCTAssertGreaterThan(raw.count, 500_000)
+            let response = """
+            {"data":{},"context":{"schoolId":"\(scope.schoolID)","actorPersonId":"\(scope.accountID)","accessEpoch":1}}
+            """
+            return SchoolHTTPResponse(data: Data(response.utf8), status: 200, url: request.url!, contentType: "application/json")
+        }
+        let transport = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: MessagingFixtureToken(),
+                                                     transport: wire, currentScope: { scope })
+        try await transport.report(scope: scope, conversationID: UUID(), clientReportID: UUID(),
+                                   items: (0..<50).map { _ in reportItem(bytes: 9_000) })
+        let requests = await wire.requests()
+        XCTAssertEqual(requests, 1)
+    }
+
+    private func reportItem(bytes: Int) -> MessagingReportItem {
+        MessagingReportItem(messageID: UUID(),
+            ciphertext: MessagingCiphertext(scheme: "megolm.v1", keyID: "fixture",
+                                            payload: Data(repeating: 0x42, count: bytes), expectedMembersEpoch: 9))
     }
 }
 
 @MainActor private final class MessagingFixtureToken: AccessTokenSource {
     func accessToken() async throws -> String { "synthetic-token" }
+}
+
+/// Jeton compteur : prouve qu'un refus avant émission ne consomme aucun jeton.
+@MainActor private final class CountingMessagingToken: AccessTokenSource {
+    private(set) var requests = 0
+    func accessToken() async throws -> String {
+        requests += 1
+        return "synthetic-token"
+    }
 }
 
 private actor RecordingMessagingHTTP: SchoolHTTPTransport {
