@@ -14,7 +14,7 @@ est une étape séparée, sur le vrai candidat.
 | Couverture MCP | les 8 fichiers du lot : `no_recorded_issue`, `metadata_match` ; `parse_partial` sur 5 fichiers **hors périmètre** ; `openapi.yaml` non analysable ; `.claude`, assets, migrations, scripts et fixtures exclus par ignore |
 | SHA de base | `883581ad321b67ae3b7efe15ef2c6b89970b1e20` (HEAD initial du worktree, identique au `headSha` du run) |
 | Branche | `tomyrms/issues-rouges-metier-131` (branche de travail du worktree) |
-| Commit de code et tests | `8271c20624df3fde35569b74a3a86331b6b1809a` |
+| Commit de code et tests | `8271c20624df3fde35569b74a3a86331b6b1809a` (lot initial), `c533b2516663b1af8e3f9e46ee69648e0cfdbc7f` (correction 1/2 : commentaire exact et régression `save`) |
 | Run de référence | job 126683437419 « Tests métier iPhone · all » : 1415 cas, 1409 passés, 6 échoués (dont les 5 du lot ; le relais est un autre lot, non touché) |
 | Limite locale | aucune compilation, aucun test Swift, aucune preuve visuelle. Le seul code exécuté ici est un **port Python jetable** de la table de décision de `blocksQueueEntry` (§7), qui ne prouve rien du client Swift |
 
@@ -22,7 +22,7 @@ est une étape séparée, sur le vrai candidat.
 
 | Cas | Rouge observé | Cause établie sur le source | Correction |
 |---|---|---|---|
-| A | `SchoolCommandScopes106Tests/anInvitationAndAProfileRecordDoNotShareAVersion` | `blocksQueueEntry` sérialise `updateProfile` et `saveOnboarding` (tous deux `.school`), alors que l'API vérifie deux lignes distinctes | exception limitée à cette paire, dans les deux ordres, après les gardes de portée |
+| A | `SchoolCommandScopes106Tests/anInvitationAndAProfileRecordDoNotShareAVersion` | `blocksQueueEntry` sérialise `updateProfile` et `saveOnboarding` (tous deux `.school`), alors que l'API vérifie et avance deux lignes/versions distinctes, sans validation finale côté accueil | exception limitée à cette paire, dans les deux ordres, après les gardes de portée |
 | B1 | `SchoolLessonHubTests/aRefusedPermitReviewKeepsTheLessonAndFallsBackToTheWrittenReason` | le refus définitif retire la commande mais ne recalcule pas `blockingCommand` ; `canMutate` exige `blockingCommand == nil` depuis `f1833925` | relecture de la barrière après retrait réussi, derrière la garde de génération |
 | B2 | `SchoolLessonLifecycleTests/laterGPSDepartureAlsoWaitsForSavedObjectives` | même verrou, même chemin (`422 INVALID_REQUEST` → `.rejected` → refus définitif) | le même correctif, aucun second correctif |
 | C | `SchoolLiveObservationRecorderTests/lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed` | `canMutate` a perdu `pending == nil` dans `ae9fff26` ; `canAdd` n'a plus de porte stricte pendant l'envoi d'un signalement posé ici | `canAdd` exige `pending == nil` ; `acceptsAdd` et `liveSendInFlight` inchangés |
@@ -41,13 +41,18 @@ rouge est donc refusée par la file.
 - `UPDATE_ADMINISTRATIVE_PROFILE` : `checkVersion(row.version)` sur `drivy.learner_profile` (`:127`), puis écrit
   `drivy.person` (`:148`) et `drivy.learner_profile` (`:152`).
 - `SAVE_ONBOARDING` : `checkVersion(row.version)` sur `drivy.onboarding_progress` de `(school, membership, kind)`
-  (`:266`), puis écrit cette même ligne (`:277-278`). Aucune lecture de `learner_profile`.
-- `COMPLETE_ONBOARDING` : avant d'écrire, appelle `progressDTO` (`:268`), qui pour un accueil `STUDENT` relit
-  `drivy.learner_profile` et calcule les champs manquants (`:167-173`). **La finalisation dépend donc du dossier.**
+  (`:266`), puis écrit cette même ligne (`:277-278`). Sa réponse appelle `progressDTO` (`:280`), qui pour un accueil
+  `STUDENT` relit `drivy.learner_profile` et calcule les champs manquants (`:167-173`) : **lecture de projection
+  seulement** — aucune version du dossier n'est vérifiée ni avancée, et rien n'est refusé pour ce motif.
+- `COMPLETE_ONBOARDING` : appelle `progressDTO` **avant** d'écrire (`:268`) et refuse sur `pendingActions`
+  (`ONBOARDING_NOT_READY`, `:174`, `:268`) : le dossier est ici une dépendance de validation, pas une projection.
+  **La finalisation dépend donc du dossier.**
 
 **Correction** (`SchoolCommandOutbox.swift`, après l'exception invitation) : retour `false` uniquement pour
-`(updateProfile, saveOnboarding)` et `(saveOnboarding, updateProfile)`, commentaire citant les lignes ci-dessus et
-l'exclusion de `completeOnboarding`.
+`(updateProfile, saveOnboarding)` et `(saveOnboarding, updateProfile)`. Le commentaire produit ne dit plus que les
+deux commandes s'ignorent — `saveOnboarding` relit bien le dossier pour sa réponse — il énonce la distinction
+exacte : deux écritures et deux versions distinctes, sans validation finale, contre une finalisation qui refuse sur
+le dossier. L'exclusion de `completeOnboarding` reste, sans généralisation fondée sur des tables séparées.
 
 **Conservé tel quel** : deux dossiers (même deux élèves), deux enregistrements d'accueil, deux finalisations,
 politique de champ, invitations, même intention (`id`), autre portée/époque/adhésion, empreinte d'enseignement
@@ -116,15 +121,23 @@ observations.count < 100`. `acceptsChanges`/`acceptsAdd` et `liveSendInFlight` s
 statut de leçon, de publication, de capacité 100 et d'accès/stockage sont conservées.
 
 **Autres usages de `canAdd` confirmés** : contrairement à l'affirmation du diagnostic, `canAdd` **a** un appelant de
-production, `save(_:text:marker:competencyID:themeKey:status:)` (`:252`), en plus des tests (`SchoolLessonHubTests`
-489/494/497/509, `SchoolLiveObservationRecorderTests` 145/151/172, `SchoolObservationRefusalTests` 68). Le
-graphique MCP ne résout pas cet accès de propriété (0 appelant entrant) : la lecture du source fait foi.
-Conséquence assumée : une feuille ouverte pendant l'envoi bref d'un signalement de la même leçon sera refusée à
-l'enregistrement — même motif déjà accepté pendant une relecture (`begin` suit `acceptsAdd`, `save` suit `canMutate`).
-La palette « Signaler » (`liveRecorder`, `acceptsAdd`) reste, elle, ouverte pendant l'envoi, par conception.
+production, `save(_:text:marker:competencyID:themeKey:status:)` (`:251-279`, garde `:255`), en plus des tests
+(`SchoolLessonHubTests` 489/494/497/509, `SchoolLiveObservationRecorderTests` 145/151/172/…,
+`SchoolObservationRefusalTests` 68). Le graphique MCP ne résout pas cet accès de propriété (0 appelant entrant) : la
+lecture du source fait foi. Conséquence assumée : une feuille ouverte pendant l'envoi bref d'un signalement de la
+même leçon sera refusée à l'enregistrement — même motif déjà accepté pendant une relecture (`begin` suit
+`acceptsAdd`, `save` suit `canMutate`). La palette « Signaler » (`liveRecorder`, `acceptsAdd`) reste, elle, ouverte
+pendant l'envoi, par conception.
 
-**Tests** : le rouge C (`lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed`) est **inchangé**. Aucun
-changement de vue, aucun test UI : un vert simulé ne serait pas une correction visuelle observée.
+**Tests** : le rouge C (`lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed`) est **inchangé**. Une
+régression ciblée couvre désormais le chemin de production `save` :
+`aStrictAddDuringTheLiveSendWritesNothingAndKeepsTheStoredCommand` (même suite, pour réutiliser le transport qui
+retient le POST). Avec une commande LIVE suspendue de la même leçon et `pending` renseigné, elle vérifie que
+`acceptsAdd` reste vrai (tolérance de présentation), qu'un ajout par `save` rend `false`, qu'aucun second POST ne
+part, que la file contient **exactement** la commande du geste (vrai coffre chiffré `inOutbox`, pas un double
+permissif), et qu'après confirmation cette intention aboutit normalement (`pending == nil`, `canAdd`, une
+observation, file vide). Aucun changement de vue ; la preuve que la saisie reste affichée dans la feuille relève
+d'une qualification UI future et n'est pas inventée ici.
 
 ## 5. Cas D — reçu d'une autre leçon
 
@@ -146,7 +159,7 @@ assertions : une notification, la bonne cible.
 | `SchoolCommandScopes106Tests` | `anInvitationAndAProfileRecordDoNotShareAVersion` (rouge A), `aProfileRecordAndAnOnboardingSaveCoexistInEitherOrder`, `theProfileAndOnboardingExceptionStopsAtCompletionAndAtTheSameRecord`, `theProfileAndOnboardingExceptionKeepsTheAccessBarrier`, `aProfilePolicyStillBlocksAnInvitation`, `twoDistinctInvitationsCoexistAndTheSameInvitationStaysSequential`, `theDossierIsEditableExactlyWhenTheQueueAcceptsItsProfile`, `observationsAreOfferedExactlyWhenTheQueueAcceptsThem` |
 | `SchoolLessonHubTests` | `aRefusedPermitReviewKeepsTheLessonAndFallsBackToTheWrittenReason` (rouge B1), `seeingThePermitRecordsItThenReloadsWithoutLosingTypedText`, `aRereadKeepsTheObservationListAndItsActionsInPlace`, `onlyARequestLeftWaitingIsShownAndLocksTheObservations`, `changedServerPreparationDoesNotEraseOrSilentlyRebaseLocalEdits`, `failedObjectivesSavePreventsStartingAndKeepsTheDraft`, `anUnstartedLessonCannotSendCompletion` |
 | `SchoolLessonLifecycleTests` | `laterGPSDepartureAlsoWaitsForSavedObjectives` (rouge B2), `startingPersistsTheCommandThenRereadsTheSameLessonAndCanFinish`, `startingSavesObjectivesBeforeStartingTheLesson`, `invalidObjectivesCannotBeDiscardedByStarting` |
-| `SchoolLiveObservationRecorderTests` | `lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed` (rouge C), `lateConfirmationCannotReopenAnInvalidatedObservationWorkspace`, `theSendThatFollowsAGestureNeverDelaysTheNextGesture` |
+| `SchoolLiveObservationRecorderTests` | `lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed` (rouge C), `aStrictAddDuringTheLiveSendWritesNothingAndKeepsTheStoredCommand`, `lateConfirmationCannotReopenAnInvalidatedObservationWorkspace`, `theSendThatFollowsAGestureNeverDelaysTheNextGesture` |
 | `SchoolTrainingRefreshTests` | `receiptOfAnotherLessonNeverBroadcastsTheOpenLessonAsItsTarget` (rouge D, attente corrigée), `lessonChangeIsBroadcastOnlyAfterDurableConfirmation` |
 | `SchoolNativeRegression131Tests` (nouveau) | `aRefusedPermitReviewKeepsTheRemainingBlockingCommand`, `aRefusedPermitReviewWhoseRemovalFailsKeepsTheLockAndTheCommand` |
 | Suites à ne pas casser | `SchoolPendingRequestResolutionTests`, `SchoolObservationRefusalTests`, `SchoolLessonClosureReactivityTests`, `SchoolProfileWorkspaceTests`, `SchoolOnboardingDraftTests`, `SchoolObservationCorrectionTests`, `SchoolCommandScopes106Tests` (tâche 4), l'ensemble des 1415 cas du run |
@@ -171,6 +184,17 @@ Le fichier `SchoolNativeRegression131Tests.swift` est pris par la cible `DrivyTe
 | `git diff --check` | aucun défaut d'espace | 0 |
 | `git commit` | `8271c20624df3fde35569b74a3a86331b6b1809a` | 0 |
 
+### Correction 1/2 (commentaire exact et chemin `save` couvert)
+
+| Commande | Résultat | Exit |
+|---|---|---|
+| MCP `index_repository` (ré-indexation après `cfb90492`) puis `status` | `succeeded`, 39 011 nœuds / 167 078 arêtes, `indexed_at 2026-11-04T18:21:15Z` | 0 |
+| MCP `check_index_coverage` (6 chemins : outbox, workspace, suite, enregistreur, `profiles.ts`, rapport) | `metadata_match` / `no_recorded_issue` ; le rapport est hors index (sous-arbre `docs` exclu), lu sur disque | 0 |
+| MCP `search_graph` : `save` (fichier du workspace), puis `progressDTO`, `missingProfileFields`, `saveProfile` | `save` 251-279 ; `progressDTO` 167-179 | 0 |
+| MCP `trace_path` sortant : `progressDTO` | appelle `missingProfileFields` et `profile` (la projection relit bien le dossier) | 0 |
+| `git diff --check` (après édition) | aucun défaut d'espace | 0 |
+| `git commit` (correction 1/2) | `c533b2516663b1af8e3f9e46ee69648e0cfdbc7f` | 0 |
+
 Aucune commande `swift`, `xcodebuild`, `xcodegen` ou `npm test` n'a été lancée : elle n'existe pas sur ce poste.
 
 ## 8. Risques, limites, écarts
@@ -181,10 +205,11 @@ Aucune commande `swift`, `xcodebuild`, `xcodegen` ou `npm test` n'a été lancé
    dans l'état exact du rouge (§4). Le pseudocode du diagnostic n'aurait pas rendu ce cas vert.
 3. **Origine du rouge C corrigée par rapport au diagnostic** : `ae9fff26`, pas `4cb4cee3` (qui a seulement introduit
    la séparation de présentation).
-4. **`canAdd` a un appelant de production** (`save`, `:252`), contrairement à ce qu'affirmait le diagnostic. Le
-   resserrement y est volontaire ; une saisie ouverte pendant l'envoi bref d'un signalement de la même leçon sera
-   refusée à l'enregistrement, comme elle l'est déjà pendant une relecture. Aucun test ne couvre ce chemin de
-   feuille ; il n'est pas qualifié visuellement.
+4. **`canAdd` a un appelant de production** (`save`, `:251-279`, garde `:255`), contrairement à ce qu'affirmait le
+   diagnostic. Le resserrement y est volontaire ; une saisie ouverte pendant l'envoi bref d'un signalement de la même
+   leçon sera refusée à l'enregistrement, comme elle l'est déjà pendant une relecture. Ce chemin est couvert au
+   niveau du modèle par `aStrictAddDuringTheLiveSendWritesNothingAndKeepsTheStoredCommand` ; la preuve visuelle que
+   la saisie reste affichée dans la feuille relève d'une qualification UI future, non réalisée ici.
 5. **Cas B non-régression** : la commande restante est injectée par le double au moment du retrait. Le scénario réel
    (un autre écran écrit entre la lecture et le retrait) n'est pas rejoué en concurrence.
 6. **Dérive documentaire** : `docs/implementation/registre-commandes-106.md` (§ « Paires desserrées ») ne liste pas
