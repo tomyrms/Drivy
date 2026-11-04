@@ -11,7 +11,9 @@ protocol SchoolCourseIntentStoring: AnyObject {
     func commands(scope: SchoolCommandScope, seriesID: UUID) throws -> [PendingSchoolCommand]
     /// Tous les gestes de cours de ce compte et de cette école, pour dire dans les listes ce qui attend.
     func commands(scope: SchoolCommandScope) throws -> [PendingSchoolCommand]
-    /// Écrit `new` ; retire d'abord `old` quand le geste change avant son envoi.
+    /// Écrit `new` ; retire d'abord `old` quand le geste change avant son envoi. Un geste de l'élève qui partagerait
+    /// la série ou l'obligation de formation d'un geste conservé est refusé (`SchoolConfigurationFailure.pendingCommand`,
+    /// #106 tâche 5), et rien n'est retiré dans ce cas.
     func replace(_ old: PendingSchoolCommand?, with new: PendingSchoolCommand) throws
     func remove(_ command: PendingSchoolCommand) throws
 }
@@ -62,6 +64,11 @@ final class EncryptedSchoolCourseIntentStore: SchoolCourseIntentStoring {
     }
 
     func replace(_ old: PendingSchoolCommand?, with new: PendingSchoolCommand) throws {
+        // Le coffre applique la règle d'admission des gestes de l'élève : la même série attend, deux séries de gestes
+        // d'agrégats disjoints entrent ensemble (#106, tâche 5). Rien n'est retiré avant ce contrôle.
+        if try outbox.pendingCommands(for: new.scope).contains(where: { $0.id != old?.id && SchoolCourseLearnerLane.blocks(new, $0) }) {
+            throw SchoolConfigurationFailure.pendingCommand
+        }
         if let old { try outbox.remove(old) }
         try outbox.save(new)
     }
@@ -86,6 +93,10 @@ final class SchoolCourseIntentMemoryStore: SchoolCourseIntentStoring {
 
     func replace(_ old: PendingSchoolCommand?, with new: PendingSchoolCommand) throws {
         guard !refusesToStore else { throw SchoolConfigurationFailure.storage }
+        // Même règle que le coffre chiffré : les deux implémentations ne peuvent pas diverger (#106, tâche 5).
+        if try commands(scope: new.scope).contains(where: { $0.id != old?.id && SchoolCourseLearnerLane.blocks(new, $0) }) {
+            throw SchoolConfigurationFailure.pendingCommand
+        }
         if let old { stored.removeAll { $0.id == old.id } }
         stored.removeAll { $0.id == new.id }
         stored.append(new)
@@ -199,6 +210,56 @@ struct SchoolCourseLearnerRecord: Codable, Equatable, Sendable {
     func command(scope: SchoolCommandScope, seriesID: UUID, createdAt: Date) throws -> PendingSchoolCommand {
         PendingSchoolCommand(id: operationId, scope: scope, kind: .courseLearnerIntent, resourceVersion: 0, createdAt: createdAt,
             body: try JSONEncoder().encode(self), resourceID: seriesID, routeResourceID: seriesID)
+    }
+}
+
+// MARK: Agrégats d'un geste de l'élève (#106, tâche 5)
+
+/// Règle d'admission des gestes de l'élève dans le coffre, tirée de `apps/api/src/course-enrollments.ts` et de
+/// `apps/api/migrations/043_course_enrollment_waitlist_cancellation.sql`. Un geste n'entre que si aucun geste conservé
+/// ne lit ou n'écrit le même agrégat.
+///
+/// - La **série** : chaque route la verrouille — `course_queue_advance` (`043:47`), `course_join_waitlist` (`:149`),
+///   `course_leave_waitlist` (`:168`), `course_accept_offer` (`:183`), `course_decline_offer` (`:195`),
+///   `course_cancel_enrollment` (`:212`) — et c'est elle qui porte les places (`course_seats_taken`), la file, les
+///   propositions de place et la version d'inscription (`course-enrollments.ts:220-223`). Deux gestes sur la même série
+///   se suivent, le second attendant la réponse du premier.
+/// - L'**obligation de formation de l'élève** : `drivy.course_learner_admissible` (`043:21-32`) refuse une inscription
+///   active dans une autre série publiée du **même type** de cours (et un cours du type déjà effectué). Elle est lue par
+///   l'inscription (`043:122`), la file (`:157`) et l'acceptation d'une place (`:187`), et changée par la désinscription
+///   (`:223`). Le type du cours n'est pas dans le coffre : deux gestes qui la lisent ou la changent restent donc
+///   séquentiels, faute de preuve de disjonction.
+/// - Le **retrait de la file** (`:174`) et le **refus d'une place** (`:197-199`) ne touchent que les lignes de leur
+///   série et ne lisent ni ne changent cette obligation : ils partent avec les gestes des autres séries.
+///
+/// Les autres genres du coffre (feuille d'un cours, éditeur) restent hors de cette règle : ils ont leurs propres
+/// agrégats et ne sont jamais retenus par un geste de l'élève.
+enum SchoolCourseLearnerLane {
+    /// Vrai quand le geste conservé `kept` doit passer avant `new`.
+    static func blocks(_ new: PendingSchoolCommand, _ kept: PendingSchoolCommand) -> Bool {
+        guard new.kind == .courseLearnerIntent, kept.kind == .courseLearnerIntent else { return false }
+        // Même série : place, file d'attente et version d'inscription sont un seul agrégat.
+        if let series = new.routeResourceID, series == kept.routeResourceID { return true }
+        // Corps illisible : rien ne prouve la disjonction, la paire attend (comme une empreinte inconnue).
+        guard let mine = intent(of: new), let theirs = intent(of: kept) else { return true }
+        return mine.obligesTraining && theirs.obligesTraining
+    }
+
+    /// Genre du geste conservé, relu dans son corps ; `nil` quand l'archive ne dit pas tout (jamais deviné).
+    static func intent(of command: PendingSchoolCommand) -> SchoolCourseLearnerRecord.Kind? {
+        guard let record = try? JSONDecoder().decode(SchoolCourseLearnerRecord.self, from: command.body),
+              record.operationId == command.id, record.action != nil else { return nil }
+        return record.kind
+    }
+}
+
+extension SchoolCourseLearnerRecord.Kind {
+    /// Ce que la route lit ou change de l'obligation de formation de l'élève (`043:21-32`, `:122`, `:157`, `:187`, `:223`).
+    var obligesTraining: Bool {
+        switch self {
+        case .enroll, .joinWaitlist, .accept, .cancel: true
+        case .leaveWaitlist, .decline: false
+        }
     }
 }
 

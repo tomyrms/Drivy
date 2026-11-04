@@ -157,7 +157,9 @@ struct SchoolCourseLearnerPending: Equatable {
     let client: SchoolCourseClient
     private(set) var reply: SchoolCourseLearnerReply?
     private(set) var isLoading = false
-    /// Demande en cours ou à reprendre ; une seule à la fois pour un cours (les gestes s’excluent).
+    /// Demande en cours ou à reprendre ; une seule à la fois pour un cours : la série est l'agrégat (place, file
+    /// d'attente, version d'inscription), le second geste attend la réponse du premier. Une fiche par cours : deux
+    /// séries distinctes envoient ensemble, sauf obligation de formation partagée (#106, tâche 5).
     private(set) var pending: SchoolCourseLearnerPending?
     var errorMessage: String?
     /// Dernière commande confirmée par l’école, annoncée une fois.
@@ -166,6 +168,8 @@ struct SchoolCourseLearnerPending: Equatable {
     /// Coffre des demandes de cet appareil (#126) ; sans lui (tests, aperçus), la demande reste en mémoire.
     private let persistence: SchoolCourseIntentPersistence?
     @ObservationIgnored private var kept: PendingSchoolCommand?
+    /// Refus du coffre qui n'est pas une panne : un autre geste de l'élève attend sa réponse (#106, tâche 5).
+    @ObservationIgnored private var refusal: String?
     @ObservationIgnored private var didRestore = false
 
     init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient, persistence: SchoolCourseIntentPersistence? = nil) {
@@ -249,10 +253,10 @@ struct SchoolCourseLearnerPending: Equatable {
             }
         default: break
         }
-        errorMessage = nil; confirmation = nil
+        errorMessage = nil; confirmation = nil; refusal = nil
         let request = SchoolCourseLearnerPending(action: action, operation: UUID())
         // Écrite avant tout : une demande que l'appareil ne peut pas conserver n'est pas envoyée.
-        guard keep(request) else { errorMessage = SchoolCourseIntentPersistence.unkeptMessage; return }
+        guard keep(request) else { errorMessage = refusal ?? SchoolCourseIntentPersistence.unkeptMessage; refusal = nil; return }
         pending = request
         Task { await send() }
     }
@@ -308,7 +312,12 @@ struct SchoolCourseLearnerPending: Equatable {
             try persistence.store.replace(kept, with: command)
             kept = command
             return true
-        } catch { return false }
+        } catch {
+            // Un autre geste de l'élève attend sa réponse : celui-ci ne part pas et le dit avec le message du coffre
+            // (même série, ou obligation de formation du même type de cours, #106 tâche 5). Une panne reste « non conservé ».
+            if let failure = error as? SchoolConfigurationFailure, failure == .pendingCommand { refusal = failure.errorDescription }
+            return false
+        }
     }
 
     /// L'école a répondu (ou refusé) : la demande quitte le coffre. Un reste éventuel reviendrait en « non confirmé », et rejouer
