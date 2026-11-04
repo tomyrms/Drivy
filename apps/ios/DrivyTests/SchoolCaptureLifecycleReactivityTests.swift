@@ -111,7 +111,10 @@ struct SchoolCaptureLifecycleReactivityTests {
         #expect(controller.state == .paused && controller.segments.count == 1 && fixture.source.startCount == 1)
         let afterReconnection = await fixture.server.requests()
         #expect(afterReconnection.dropFirst(beforeReconnection).allSatisfy { $0.value(forHTTPHeaderField: "Idempotency-Key") == nil })
-        #expect(afterReconnection.filter { ["stop", "finalize"].contains($0.url?.lastPathComponent ?? "") }.isEmpty)
+        // Liaison préalable : `#expect` déplie `.isEmpty` en `__checkPropertyAccess(..., getting: { $0?.isEmpty })`,
+        // et l'inférence ne promeut pas en optionnel le résultat direct d'un `filter` à closure.
+        let stopOrFinalizeRequests = afterReconnection.filter { ["stop", "finalize"].contains($0.url?.lastPathComponent ?? "") }
+        #expect(stopOrFinalizeRequests.isEmpty)
 
         let pauseRequests = afterReconnection.filter {
             $0.httpMethod == "POST" && $0.url?.lastPathComponent.lowercased() == "pause"
