@@ -1313,14 +1313,15 @@ struct MessagingInboxPreview: Equatable, Sendable {
                 pending = existing
             } else {
                 // Tous les contenus d'abord, puis un seul scellement : une session pour tout le signalement.
-                var chosen: [(message: MessagingWireMessage, bytes: Data)] = []
+                // La provenance est déclarée par ce producteur : un média reste un contenu Matrix v3 typé,
+                // un texte ou un sondage garde ses octets applicatifs, sans réinterprétation.
+                var chosen: [(message: MessagingWireMessage, payload: MessagingReportPayload)] = []
                 for message in selected.sorted(by: { $0.id.uuidString < $1.id.uuidString }) {
                     guard let content = await content(for: message) else { throw MessagingFailure.protectionUnavailable }
                     try verifyReportContext()
-                    chosen.append((message: message, bytes: try content.encoded()))
+                    chosen.append((message: message, payload: try Self.reportPayload(for: content)))
                 }
-                let sealed = try await reportSealing.sealForSchoolAdmins(chosen.map { $0.bytes }, scope: scope,
-                                                                         conversationID: conversationID)
+                let sealed = try await sealReport(chosen.map(\.payload), conversationID: conversationID)
                 try verifyReportContext()
                 guard sealed.count == chosen.count else { throw MessagingFailure.protectionUnavailable }
                 var items: [MessagingReportItem] = []
@@ -1348,6 +1349,29 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private func verifyReportContext() throws {
         try Task.checkCancellation()
         guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+    }
+
+    /// Contenu d'un message choisi pour le signalement, avec sa provenance déclarée (#97).
+    ///
+    /// Un média voyage comme contenu Matrix v3 typé (légende et métadonnées, aucun octet de fichier) ;
+    /// un texte ou un sondage garde l'enveloppe applicative existante, octet pour octet.
+    private static func reportPayload(for content: MessagingPlainContent) throws -> MessagingReportPayload {
+        guard let media = content.media else { return .legacy(try content.encoded()) }
+        return .media(try MessagingMediaContentV3(text: content.text, media: media))
+    }
+
+    /// Scellement du lot typé. Sans la capacité typée, seul un lot entièrement legacy reste acceptable :
+    /// un média n'est jamais dégradé en texte ni scellé par un chemin qui ne le représente pas.
+    private func sealReport(_ payloads: [MessagingReportPayload], conversationID: UUID) async throws -> [MessagingCiphertext] {
+        if let typed = reportSealing as? any MessagingTypedReportSealing {
+            return try await typed.sealReport(payloads, scope: scope, conversationID: conversationID)
+        }
+        var legacy: [Data] = []
+        for payload in payloads {
+            guard case .legacy(let data) = payload else { throw MessagingFailure.protectionUnavailable }
+            legacy.append(data)
+        }
+        return try await reportSealing.sealForSchoolAdmins(legacy, scope: scope, conversationID: conversationID)
     }
 
     @discardableResult

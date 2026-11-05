@@ -157,51 +157,89 @@ dans la file existante (comportement inchangé de `retry`, aucun succès annonc�
   spécifier dans le lot UI. Aucun consommateur ne doit interpréter un ancien `body` ressemblant au v3 par
   heuristique.
 
-## 7. Tests écrits — **NON EXÉCUTÉS**
+## 7. Signalement média typé (#97, raccord)
 
-36 méthodes de test au total dans le lot après la correction 2, toutes écrites et relues, **aucune compilée ni
-exécutée** (aucun outil Apple sur ce poste).
+Le signalement d'un média ne passe plus par l'enveloppe applicative (qui refuse un média) : le lot est
+**typé de bout en bout**, du producteur à la boîte de l'administrateur.
+
+| Élément | Contenu |
+|---|---|
+| `MessagingReportPayload` | `.legacy(Data)` (texte v1, sondage v2 : octets conservés) ou `.media(MessagingMediaContentV3)` (contenu Matrix v3 validé) |
+| `MessagingTypedReportSealing` | capacité additive : `sealReport(_:scope:conversationID:)`, une seule session pour tout le signalement |
+| `MatrixMessagingCryptography.sealReport` | contenu construit **avant** toute ouverture de session : `.legacy` → `body` comme avant, `.media` → contenu Matrix v3 borné à 6 000 octets ; ordre, rotation, destinataires et `backupOrMarkPending` inchangés |
+| `sealForSchoolAdmins(_:)` / `(_ plaintexts:)` | **inchangées** : elles délèguent au lot typé en déclarant `.legacy`, donc aucun octet legacy ne change |
+| `MessagingWorkspace.report` | construit un `.media` quand le contenu porte une pièce jointe, un `.legacy` sinon ; garde l'intention durable, l'ordre des identifiants et l'acquittement existants |
+| Sans capacité typée | un lot qui contient un média est **refusé fermé** (`protectionUnavailable`) : aucun contenu n'est scellé à sa place, aucune intention n'est écrite ; un lot purement legacy reste accepté |
+
+Boîte de l'administrateur : `MessagingReportInboxModel` consomme la **provenance authentifiée**
+(`decryptContent`) et décode `decodeMatrixContent` pour un contenu Matrix, le décodeur legacy sinon. Un ancien
+`body` qui ressemble à un v3 reste donc du texte, jamais une pièce jointe. Le modèle de présentation
+`MessagingReportLine` porte en plus `media: MessagingReportAttachment?` :
+
+- `nature` (`photo` | `pdf`), `name` (déjà assaini par le contenu), `caption` (légende ou `nil`),
+- `bytesTransmitted` : **toujours `false` dans cette livraison** — aucun octet de fichier n'est demandé, copié,
+  téléchargé ni transmis aux administrateurs.
+
+Ni clé de fichier, ni IV, ni hash, ni URL n'entrent dans ce modèle : la clé reste dans l'enveloppe chiffrée que
+seuls les appareils destinataires déchiffrent. La vue appartient au lot UI (Codex) : ce lot ne modifie aucun
+fichier de vue, aucune fixture UI et aucune suite `MessagingReportScreensUITests`.
+
+## 8. Tests écrits — **NON EXÉCUTÉS côté Apple**
+
+40 méthodes de test dans le lot (36 précédentes + 4 pour ce raccord, plus les étapes média ajoutées au cas de
+relais), toutes écrites et relues, **aucune compilée ni exécutée** (aucun outil Apple sur ce poste).
 
 | Fichier | Cas ajoutés |
 |---|---|
 | `MessagingMediaContentTests.swift` (nouveau) | 18 : forme namespacée et `body` lisible, repli par MIME, synthèse, aller-retour par le décodeur structuré, enveloppe v2 inchangée (`text`/`poll` nuls omis), refus du média par l'enveloppe applicative, légende 1 000/1 001, sérialiseur qui **mesure** sans borner (unicode lourd), **v3 connu au-delà de 6 000 octets illisible à la lecture**, taille 0/1/4 Mio/4 Mio+1/−1, MIME hors liste, nom assaini, dimensions, métadonnées crypto, version future → `body`, v3 incomplet → `nil`, décodeur structuré qui refuse des octets legacy, lookalike v3/v4 complet → texte |
-| `MessagingThreadTests.swift` | 4 : legacy seulement, contenu Matrix par le décodeur dédié, `recoveryContent` texte inchangé, enveloppe applicative qui refuse un média |
-| `MatrixMessagingCryptographyTests.swift` | 5 : média namespacé chiffré par la capacité typée (Megolm réel, deux appareils, mentions contrôlées, aucune valeur média dans le payload), legacy/lookalike octet pour octet avec provenance `.legacyBody`, bornes après chiffrement (contenu 6 000 accepté ; 9 000 et 16 000 refusés), contenu média > 6 000 refusé par `encryptMatrixContent`, extraction `plaintext`/`content` avec gardes |
-| `MatrixMessagingCryptographyTests.swift` (signalement) | 2 : mesure de l'enveloppe scellée (cas nominal sous 12 000, cas trop grand **mesuré** au-delà, refus par la frontière du transport), conservation des octets d'un contenu v3 relu par le lecteur typé appelé manuellement |
+| `MessagingThreadTests.swift` | 7 : 4 sur le contenu (legacy seulement, contenu Matrix par le décodeur dédié, `recoveryContent` texte inchangé, enveloppe applicative qui refuse un média) + 3 sur le raccord : média scellé par la capacité typée, refus fermé sans capacité, lot mixte texte + média dans l'ordre |
+| `MatrixMessagingCryptographyTests.swift` | 5 : média namespacé chiffré par la capacité typée (Megolm réel, deux appareils, mentions contrôlées), legacy/lookalike octet pour octet avec provenance `.legacyBody`, bornes après chiffrement, contenu média > 6 000 refusé par `encryptMatrixContent`, extraction `plaintext`/`content` avec gardes |
+| `MatrixMessagingCryptographyTests.swift` (signalement) | 5 : mesure de l'enveloppe scellée, conservation des octets d'un v3 par le lecteur typé, **lot typé texte + média dans une session**, **lookalike legacy conservé comme texte**, **média > 6 000 refusé avant scellement** |
+| `MessagingReportInboxTests.swift` | 3 : pièce jointe présentée (nature, nom, légende, `bytesTransmitted == false`) sans clé/IV/hash, lookalike legacy rendu comme texte sans pièce jointe, message illisible sans pièce jointe |
+| `MatrixMessagingSealedReportRelayTests.swift` | étapes média ajoutées au cas unique existant : message média réel, scellement typé, POST, boîte administrateur avec légende et métadonnées |
 | `MessagingHTTPTransportTests.swift` | 6 : payload 12 000 accepté / 12 004 refusé (zéro requête, zéro jeton), corps 16 Kio refusé (garde défensive), signalement de 4 items > 16 Kio accepté, item > 12 000 refusé, 50 items sous 640 Kio acceptés |
 | `MessagingCoreTests.swift` | 1 : refus fermé du média par la file existante, avant chiffrement et sans écriture |
 
-## 8. Commandes réellement exécutées
+Inscriptions : `MatrixMessagingCryptographyTests`, `MessagingMediaContentTests` et `MessagingThreadTests`
+rejoignent la sélection `messaging` dans `scripts/ios/test-selection.sh` **et** dans
+`scripts/ios/test_test_selection.py` (les deux listes restent identiques, les noms existent réellement).
+
+## 9. Commandes réellement exécutées
 
 | Commande | Résultat | Code |
 |---|---|---|
-| `git rev-parse HEAD` / `git status --porcelain` | `7120c3a4…`, arbre propre avant édition | 0 |
-| `index_repository` + `index_status` + `check_index_coverage` | projet `drivy-t2b1-contenu-97-20261104`, même racine, `ready`, 39 105 nœuds | — |
+| `git rev-parse HEAD` / `git status --porcelain` | `b562c0e0…`, arbre propre avant édition | 0 |
+| `index_repository` + `index_status` + `check_index_coverage` | projet `drivy-t2b1-contenu-97-20261104`, même racine, `ready` | — |
+| `python scripts/ios/test_test_selection.py` | **25 tests, OK**, 12,6 s — sélection `messaging` identique entre le shell et Python, noms de suites présents dans les sources Swift | 0 |
 | `Select-String` sur `apps/api/src/messaging-routes.ts` | `max(12000)` par enveloppe, `bodyLimit: 655_360`, items 1..50 | — |
+| `Select-String` sur `apps/api/src/messaging.ts` | cadence des signalements : 3 par conversation et par heure, 10 par école et par jour | — |
 | `Get-Command swift,xcodebuild,xcrun` | **0 outil** | — |
 | `git diff --check` / `git diff` / `git status` après édition | aucune erreur d'espace, diff relu, seuls les chemins autorisés | 0 |
 
 ### NON EXÉCUTÉ
 
-- **Swift / Xcode / simulateur** : aucun outil Apple ici. Aucune compilation, aucun RED/GREEN, aucun GREEN.
-- **Chiffrement Megolm réel des cas v3** : écrit, non exécuté. Les bornes finales (12 000 base64 sur le payload
-  produit, 16 384 octets de `SendBody`) restent à **démontrer** par l'exécution Apple, pas par estimation.
-- **Aucun calcul arithmétique n'est présenté comme mesure du SDK** : la taille d'un item de signalement dépend du
-  chiffré réel et se vérifie à l'exécution (le double encodage est seulement décrit, pas simulé).
-- **CommonCrypto / CryptoKit / Keychain** : hors lot (T2a), inchangés.
+- **Swift / Xcode / simulateur** : aucun outil Apple ici. Aucune compilation, aucun RED/GREEN, aucun GREEN sur
+  les cas ajoutés ; la preuve Apple reste à produire sur le SHA de cette branche.
+- **Cas de relais HTTPS** : nécessite `DRIVY_RELAY_QUALIFICATION_URL` ; les étapes média sont écrites, non
+  exécutées.
+- **Chiffrement Megolm réel** : non exécuté ici ; les bornes finales restent à démontrer par Apple.
 
-## 9. Limites, risques et écarts de périmètre
+## 10. Limites, risques et écarts de périmètre
 
 - **Aucune preuve Apple.** La prochaine exécution doit viser le SHA de cette branche ; le run `41861281984`
   couvre T2a (`883581ad`), pas ce code.
-- **La file existante refuse les médias** (`MessagingOutboxCoordinator.enqueue(content:)`, refus fermé explicite).
-  Le coordinateur média/coffre et l'activation du parcours restent à faire ; aucun envoi partiel n'est activé.
-- **Aucune UI, aucun champ `media` serveur, aucun transport binaire, aucun cache, aucun coffre.**
-- **Le fil et la boîte de signalement lisent encore la forme legacy** (`decrypt` + `decode`) : un média y apparaît
-  comme son `body` de repli, jamais comme une pièce jointe ; le signalement d'un média n'est pas branché sur le
-  lecteur typé. Le passage au lecteur typé et l'adaptation de la boîte de signalement restent à spécifier (lot UI).
-- **Lecture d'un v3 connu au-delà de 6 000 octets** : échec fermé (`nil`), rien n'est décodé. Le legacy, lui, affiche
-  le `body` de repli ; aucun décodeur ne fabrique de média à partir d'un `body`.
+- **La file des messages ordinaires refuse les médias** (`MessagingOutboxCoordinator.enqueue(content:)`, refus
+  fermé explicite). Le coordinateur média/coffre et l'activation du parcours d'envoi restent à faire ; le
+  signalement, lui, est raccordé.
+- **Aucune UI modifiée** : aucune vue, aucune fixture UI, aucune suite `MessagingReportScreensUITests`. La vue du
+  signalement ne compose pas encore la ligne média (nature, nom, « pièce jointe non transmise ») : elle relève du
+  lot UI Codex, à partir du modèle `MessagingReportAttachment` livré ici.
+- **Aucun champ `media` serveur, aucun transport binaire, aucun cache, aucun coffre** dans ce raccord.
+- **Le fil lit encore la forme legacy** (`decrypt` + `decode`) : un média y apparaît comme son `body` de repli,
+  jamais comme une pièce jointe. Le passage du fil au lecteur typé reste à faire (lot UI) ; la **boîte de
+  signalement**, elle, consomme la provenance authentifiée.
+- **Lecture d'un v3 connu au-delà de 6 000 octets** : échec fermé (`nil`), rien n'est décodé. Le legacy, lui,
+  affiche le `body` de repli ; aucun décodeur ne fabrique de média à partir d'un `body`.
 - **Garde de corps du message (16 Kio)** : défensive, jamais atteinte par un message conforme au schéma serveur
   (payload ≤ 12 000 + champs bornés). Elle est testée avec un cas fabriqué, signalé comme tel.
 - **Garde de corps du signalement (640 Kio)** : inatteignable avec 50 items de 12 000 caractères ; conservée comme

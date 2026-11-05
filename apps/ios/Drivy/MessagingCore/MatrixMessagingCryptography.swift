@@ -41,7 +41,7 @@ struct MessagingOwnDevice: Sendable, Hashable, Identifiable {
 /// Chiffrement de bout en bout #67 : Olm/Megolm de matrix-sdk-crypto (vodozemac), transport API Drivy.
 /// Aucun chemin ne renvoie ou n'envoie de clair : toute erreur devient `protectionUnavailable`.
 actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement, MessagingReportSealing,
-    MessagingMatrixContentEncryption, MessagingContentProvenanceDecryption {
+    MessagingMatrixContentEncryption, MessagingContentProvenanceDecryption, MessagingTypedReportSealing {
     static let scheme = "megolm.v1"
     static let serverName = "drivy"
     /// Rotation périodique en plus de la rotation à chaque départ.
@@ -242,16 +242,22 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         return first
     }
 
-    /// Une session de groupe neuve par signalement, partagée par to-device Olm aux appareils des administrateurs,
-    /// puis un chiffrement par message choisi. Sans administrateur joignable, rien n'est chiffré ni envoyé.
+    /// API legacy conservée telle quelle : chaque `Data` est traitée comme contenu applicatif (texte v1 ou
+    /// enveloppe v2), jamais réinterprétée. Elle délègue au scellement typé en déclarant la provenance.
     func sealForSchoolAdmins(_ plaintexts: [Data], scope: MessagingScope, conversationID: UUID) async throws -> [MessagingCiphertext] {
+        try await sealReport(plaintexts.map(MessagingReportPayload.legacy), scope: scope, conversationID: conversationID)
+    }
+
+    /// Une session de groupe neuve par signalement, partagée par to-device Olm aux appareils des administrateurs,
+    /// puis un chiffrement par message choisi, dans l'ordre du lot. Sans administrateur joignable, rien n'est
+    /// chiffré ni envoyé. Chaque contenu est construit selon la provenance **déclarée** avant toute ouverture
+    /// de session : un média est un contenu Matrix v3 typé, un texte reste le `body` legacy.
+    func sealReport(_ payloads: [MessagingReportPayload], scope: MessagingScope,
+                    conversationID: UUID) async throws -> [MessagingCiphertext] {
         try guardScope(scope)
         diagnostics.clear()
-        guard (1...50).contains(plaintexts.count) else { throw MessagingFailure.invalidResponse }
-        let texts = try plaintexts.map { data -> String in
-            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { throw MessagingFailure.invalidResponse }
-            return text
-        }
+        guard (1...50).contains(payloads.count) else { throw MessagingFailure.invalidResponse }
+        let contents = try payloads.map(Self.reportContent)
         return try await shielded {
             let machine = try await open()
             let room = Self.reportRoomID(scope.schoolID)
@@ -274,13 +280,31 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                 try await dispatch(request, machine)
             }
             var sealed: [MessagingCiphertext] = []
-            for text in texts {
-                let content = try Self.messageContent(text: text, mentions: [])
+            for content in contents {
                 let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
                 sealed.append(try Self.envelope(fromEncryptedContent: encrypted))
             }
             try await backupOrMarkPending(machine)
             return sealed
+        }
+    }
+
+    /// Contenu Matrix réellement chiffré pour un élément de signalement, selon la provenance déclarée.
+    ///
+    /// - `legacy` : les octets applicatifs vont dans `body`, comme avant #97 ;
+    /// - `media` : contenu Matrix v3 complet (namespace, légende, métadonnées), borné à 6 000 octets,
+    ///   sans aucune demande ni octet de fichier.
+    private static func reportContent(_ payload: MessagingReportPayload) throws -> String {
+        switch payload {
+        case .legacy(let data):
+            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else {
+                throw MessagingFailure.invalidResponse
+            }
+            return try messageContent(text: text, mentions: [])
+        case .media(let value):
+            let data = try MessagingMediaContent.messageContent(value, mentions: [])
+            guard data.count <= MessagingPlainContent.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
+            return String(decoding: data, as: UTF8.self)
         }
     }
 
