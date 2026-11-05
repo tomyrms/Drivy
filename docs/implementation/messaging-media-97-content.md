@@ -226,18 +226,19 @@ rejoignent la sélection `messaging` dans `scripts/ios/test-selection.sh` **et**
 
 ## 10. Limites, risques et écarts de périmètre
 
-- **Aucune preuve Apple.** La prochaine exécution doit viser le SHA de cette branche ; le run `41861281984`
-  couvre T2a (`883581ad`), pas ce code.
+- **Aucune preuve Apple du nouveau raccord de signalement `457ce9c4`.** Les preuves Q8/Q11 des lots
+  médias déjà intégrés restent attachées à leurs SHA ; elles ne qualifient pas ce delta. La sélection
+  `messaging` doit compiler puis exécuter le candidat publié avant tout verdict sur ce raccord.
 - **La file des messages ordinaires refuse les médias** (`MessagingOutboxCoordinator.enqueue(content:)`, refus
-  fermé explicite). Le coordinateur média/coffre et l'activation du parcours d'envoi restent à faire ; le
-  signalement, lui, est raccordé.
+  fermé explicite). Le parcours média possède déjà son coordinateur dédié, son coffre et ses preuves
+  antérieures ; ce refus du chemin ordinaire ne signifie pas que ces lots restent à implémenter.
 - **Aucune UI modifiée** : aucune vue, aucune fixture UI, aucune suite `MessagingReportScreensUITests`. La vue du
   signalement ne compose pas encore la ligne média (nature, nom, « pièce jointe non transmise ») : elle relève du
   lot UI Codex, à partir du modèle `MessagingReportAttachment` livré ici.
 - **Aucun champ `media` serveur, aucun transport binaire, aucun cache, aucun coffre** dans ce raccord.
-- **Le fil lit encore la forme legacy** (`decrypt` + `decode`) : un média y apparaît comme son `body` de repli,
-  jamais comme une pièce jointe. Le passage du fil au lecteur typé reste à faire (lot UI) ; la **boîte de
-  signalement**, elle, consomme la provenance authentifiée.
+- **Le fil dispose déjà du lecteur typé** dans `MessagingWorkspace.content(for:)`, avec contrôle de la
+  référence média serveur et des retraits. Ce raccord ajoute la lecture typée dans la **boîte de
+  signalement** ; il ne réimplémente pas le parcours du fil déjà intégré.
 - **Lecture d'un v3 connu au-delà de 6 000 octets** : échec fermé (`nil`), rien n'est décodé. Le legacy, lui,
   affiche le `body` de repli ; aucun décodeur ne fabrique de média à partir d'un `body`.
 - **Garde de corps du message (16 Kio)** : défensive, jamais atteinte par un message conforme au schéma serveur
