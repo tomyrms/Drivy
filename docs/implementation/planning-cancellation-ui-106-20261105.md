@@ -407,3 +407,43 @@ iPad XXXL : waiting-token 0/0, Annuler hittable et touché avant expiration, pre
 second réussi, removed et saisie intacte. Standards token/me préservés ; vérifier les traces temporelles
 et les zones de chaque geste. Le coût réel du nouvel instantané et la réception des gestes restent
 à mesurer sur Apple ; aucune exécution distante ni autre correction automatique par ce worker.
+
+## Extension Q11 — accès au réessai après le refus de retrait
+
+Le rouge Apple du candidat `d1be4068f45045fdb561e252904efed5fd57e68b`, run UI
+`42067109116`, survient sur iPhone XXXL avant le deuxième toucher : l'accès direct à
+`cancel.isEnabled` ne retrouve plus le bouton. Le premier clic arrive à +8,01 s après
+Planifier, son retour à +8,48 s ; le témoin conserve `waiting-token|me=0|mutations=0`.
+L'arbre AX `B25FCF07-5A79-4B42-9C88-A1F1D7348670.txt` place l'erreur entre y=360,7
+et 855,4, au-delà du Form qui finit à y=734. La vidéo
+`9C93A6E9-08C2-4454-B4EA-D8DEFD6AAFF9.mp4`, extraite à 42 et 44 secondes,
+montre Annuler avant le refus, puis l'erreur dépassant sous le footer ; aucun second clic.
+Les offsets vidéo ne sont pas les temps depuis Planifier. La vue insère l'erreur avant
+Annuler ; le workspace conserve son éligibilité en `cancellationStorageFailed`.
+Cela fonde le rétablissement de l'accès au contrôle, sans prétendre connaître sa frame
+absente de l'arbre AX. Aucun défaut de l'admission n'est établi.
+
+Delta : un seul `try reveal(cancel, app: app, up: true)` après l'attente du message,
+avant l'assertion `isEnabled` et le second `tap`. Même helper, mêmes gestes bornés,
+mêmes assertions, saisie, compteurs et délai de 25 secondes. Sur iPad, le parcours
+précédent touchait déjà le réessai à +14,19 s et passait ; si le bouton est hittable,
+le helper retourne sans geste. Son coût et l'accès restauré restent à qualifier.
+
+Préflight : reçu initial `ctx_03e2318e5896`, effective `codex/gpt-6-astra/high`, même
+incarnation `structured:1bfdfca6-7879-485f-8a8c-426c16376122`. Méthodes réellement relues :
+`C:/Users/jtoma/.codex/skills/systematic-debugging/SKILL.md` et
+`C:/Users/jtoma/.codex/skills/verification-before-completion/SKILL.md`.
+Profil harnais sans effet sur le produit : pas de nouveau test, TDD ou skill design.
+Codebase Memory : projet `C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-planification-ui-106`,
+racine exacte, ready/watched (53 373 nœuds), contrôlé puis complété par `rg` et lecture
+du test, du helper, de la vue et du workspace ; les blobs des quatre sources de planification
+étaient identiques au candidat intégré avant édition.
+
+Validation locale et SHA dans `artifacts/q11-retry-finalisation/RAPPORT.md` : revue du diff
+et de l'appel `throws`, périmètre et identité des blobs hors périmètre, `git diff --check`.
+**Delta NON COMPILÉ / NON EXÉCUTÉ sur Apple à la remise pour revue.** Aucun GREEN déduit
+des contrôles Windows. Après revue et publication du candidat par le coordinateur, une seule
+campagne UI autorisée, sans rerun : huit cas sur chaque appareil, dont refus explicite,
+vrai second toucher, retrait durable `removed`, zéro mutation et saisie intacte.
+Le run et son résultat seront consignés dans le rapport d'artefacts ; les 1 814 tests métier
+verts antérieurs ne qualifient pas ce delta UI. Aucun push ni intégration par ce worker.

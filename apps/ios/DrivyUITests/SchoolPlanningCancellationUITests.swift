@@ -75,6 +75,7 @@ import XCTest
         let error = app.descendants(matching: .any)["planning-send-cancellation-error"].firstMatch
         if failsRemoval {
             XCTAssertTrue(error.waitForExistence(timeout: 5))
+            try reveal(cancel, app: app, up: true)
             XCTAssertTrue(cancel.isEnabled)
             print("L2 réessai du retrait : +\(ProcessInfo.processInfo.systemUptime - plannedAt)s")
             cancel.tap()
