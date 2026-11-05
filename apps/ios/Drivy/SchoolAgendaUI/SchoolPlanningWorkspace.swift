@@ -745,7 +745,8 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         return await transmit(firstAttempt: true)
     }
     /// Création ou déplacement dont l'horaire demandé est passé : la demande reste à vérifier, jamais à renvoyer.
-    var pendingIsStale: Bool { pending?.isStaleLessonRequest() ?? false }
+    /// La même horloge que la barrière du client est lue, pour ne pas offrir un renvoi qu'il refusera.
+    var pendingIsStale: Bool { pending?.isStaleLessonRequest(at: client.currentDate) ?? false }
     var canRetry: Bool {
         !invalidated && !isBusy && !isLoading && !accessRevoked && !pendingRequiresReview && !pendingIsStale
             && pending?.scope == scope && pending?.kind.isPlanning == true
@@ -754,7 +755,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     var pendingNotes: [String] {
         guard let command = pending else { return [] }
         if command.scope != scope { return ["Tes accès ont changé. La demande initiale reste conservée."] }
-        if pendingIsStale { return ["L’horaire demandé est passé : la demande ne sera pas renvoyée. Vérifie-la auprès de l’école."] }
+        if pendingIsStale, command.requestedLessonStart != nil {
+            return ["L’horaire demandé est passé : la demande ne sera pas renvoyée. Vérifie-la auprès de l’école."]
+        }
         return []
     }
     func retry() async -> Bool { sentDraft = draftSnapshot; return await transmit(firstAttempt: false) }

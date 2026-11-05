@@ -75,11 +75,11 @@ extension PendingSchoolCommand {
         return SchoolLesson.date(value)
     }
 
-    /// Une réservation dont l’horaire est passé ne se renvoie plus : l’école la refuserait, et rien ne doit la rejouer
-    /// à l’insu de la personne. Elle reste à vérifier, puis à abandonner si l’école ne la connaît pas.
+    /// Une réservation dont l’horaire est passé — ou dont le début n’est plus lisible — ne se renvoie plus : l’école
+    /// la refuserait, et rien ne doit la rejouer à l’insu de la personne. Elle reste à vérifier, puis à abandonner si
+    /// l’école ne la connaît pas. Les autres commandes gardent leur propre contrat.
     func isStaleLessonRequest(at now: Date = Date()) -> Bool {
-        guard let start = requestedLessonStart else { return false }
-        return start <= now
+        !SchoolPlanningRecoveryPolicy.permitsWrite(self, at: now)
     }
 
     /// Dit quelle demande attend, depuis quand, et ce que l’école en sait après une vérification.
