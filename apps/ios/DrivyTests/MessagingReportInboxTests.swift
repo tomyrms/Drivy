@@ -123,6 +123,70 @@ final class MessagingReportInboxTests: XCTestCase {
         XCTAssertTrue(inbox.reports.isEmpty)
         XCTAssertEqual(inbox.availability, .unknown)
     }
+
+    // MARK: Pièce jointe signalée (#97)
+
+    /// Une pièce jointe signalée est annoncée par sa nature, son nom et sa légende : aucun octet de fichier,
+    /// aucune clé, aucun IV ni URL n'entre dans le modèle de présentation.
+    func testMediaReportShowsNatureNameAndCaptionWithoutFileSecrets() async throws {
+        let message = UUID()
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x5A, count: 32), iv: Data(repeating: 0x11, count: 16),
+                                               sha256: Data(repeating: 0x7B, count: 32)))
+        let value = try MessagingMediaContentV3(text: "Preuve signalée", media: media)
+        let sealed = try MessagingMediaContent.messageContent(value, mentions: nil)
+        let report = record(messages: [message])
+        let crypto = ReportProvenanceCrypto(matrix: [message: sealed])
+        let inbox = model(ReportModerationStub(pages: [MessagingReportPage(reports: [report], nextCursor: nil, openCount: 1)]),
+                          crypto: crypto)
+        await inbox.load()
+        await inbox.open(report)
+        let line = try XCTUnwrap(inbox.lines[report.id]?.first)
+        XCTAssertEqual(line.text, "Preuve signalée")
+        XCTAssertNil(line.unreadable)
+        XCTAssertEqual(line.media?.nature, .pdf)
+        XCTAssertEqual(line.media?.name, "bilan.pdf")
+        XCTAssertEqual(line.media?.caption, "Preuve signalée")
+        XCTAssertEqual(line.media?.bytesTransmitted, false)
+        // Le modèle de présentation ne porte aucune valeur de fichier : ni clé, ni IV, ni hash.
+        let presented = String(describing: line)
+        for secret in [media.file.key.k, media.file.iv, media.file.hashes.sha256] {
+            XCTAssertFalse(presented.contains(secret), "Aucune valeur de fichier dans la présentation")
+        }
+    }
+
+    /// Un ancien `body` qui reproduit exactement un contenu Matrix v3 reste le texte d'origine : la boîte
+    /// ne fabrique jamais de pièce jointe à partir d'un texte.
+    func testLegacyBodyThatLooksLikeV3StaysTextWithoutAttachment() async throws {
+        let message = UUID()
+        let lookalike = #"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"text":null,"media":{"id":"5c1f","size":10,"mime":"image/jpeg","name":"a.jpg","width":1,"height":1,"file":{}}}}"#
+        let report = record(messages: [message])
+        let crypto = ReportProvenanceCrypto(legacy: [message: Data(lookalike.utf8)])
+        let inbox = model(ReportModerationStub(pages: [MessagingReportPage(reports: [report], nextCursor: nil, openCount: 1)]),
+                          crypto: crypto)
+        await inbox.load()
+        await inbox.open(report)
+        let line = try XCTUnwrap(inbox.lines[report.id]?.first)
+        XCTAssertEqual(line.text, lookalike, "Le texte utilisateur est rendu tel quel")
+        XCTAssertNil(line.media, "Aucun média n'est déduit d'un ancien body")
+        XCTAssertNil(line.unreadable)
+    }
+
+    /// Un message illisible ne porte aucune pièce jointe inventée.
+    func testUnreadableReportItemCarriesNoAttachment() async {
+        let message = UUID()
+        let report = record(messages: [message])
+        let crypto = ReportProvenanceCrypto()
+        let inbox = model(ReportModerationStub(pages: [MessagingReportPage(reports: [report], nextCursor: nil, openCount: 1)]),
+                          crypto: crypto)
+        await inbox.load()
+        await inbox.open(report)
+        let line = inbox.lines[report.id]?.first
+        XCTAssertNil(line?.text)
+        XCTAssertNil(line?.media)
+        XCTAssertEqual(line?.unreadable, MessagingDecryptionFailure.explanation(for: "D-NOKEY"))
+    }
 }
 
 /// Un lot qui ne dépend pas de la crypto réelle : seul le contrat de scellement par défaut compte ici.
@@ -201,5 +265,35 @@ private actor ReportDecryptionStub: MessagingCryptography {
         seen.append(Seen(messageID: message.id, conversationID: message.conversationID, senderID: message.senderID))
         if let code = failures[message.id] { throw MessagingDecryptionFailure(code: code) }
         return Data((texts[message.id] ?? "").utf8)
+    }
+}
+
+/// Crypto synthétique **avec provenance** (#97) : sert un contenu Matrix média ou des octets legacy selon
+/// le message, sans jamais interpréter un `body` pour en déduire une pièce jointe.
+private actor ReportProvenanceCrypto: MessagingCryptography, MessagingContentProvenanceDecryption {
+    struct Seen: Equatable { let messageID: UUID; let conversationID: UUID; let senderID: UUID }
+    private let matrix: [UUID: Data]
+    private let legacy: [UUID: Data]
+    private(set) var seen: [Seen] = []
+
+    init(matrix: [UUID: Data] = [:], legacy: [UUID: Data] = [:]) { self.matrix = matrix; self.legacy = legacy }
+
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data {
+        seen.append(Seen(messageID: message.id, conversationID: message.conversationID, senderID: message.senderID))
+        guard let data = legacy[message.id] else { throw MessagingDecryptionFailure(code: "D-NOKEY") }
+        return data
+    }
+    func decryptContent(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> MessagingDecryptedContent {
+        seen.append(Seen(messageID: message.id, conversationID: message.conversationID, senderID: message.senderID))
+        if let data = matrix[message.id] { return .matrixContent(data) }
+        if let data = legacy[message.id] { return .legacyBody(data) }
+        throw MessagingDecryptionFailure(code: "D-NOKEY")
     }
 }
