@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import Security
 import UIKit
@@ -123,6 +124,92 @@ private struct MediaQualificationKeychain: MessagingCryptoKeychain {
         SecItemDelete([kSecClass as String: kSecClassGenericPassword,
                        kSecAttrService as String: fixtureService] as CFDictionary)
     }
+
+    /// Contrôle d'absence après nettoyage : seule la fixture de cette exécution est interrogée.
+    func isAbsent() -> Bool {
+        var result: CFTypeRef?
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: fixtureService,
+                                    kSecReturnAttributes as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitAll]
+        return SecItemCopyMatching(query as CFDictionary, &result) == errSecItemNotFound
+    }
+}
+
+/// Nettoyage et contrôle d'absence des espaces Keychain de cette exécution uniquement.
+private enum MediaQualificationKeychainSpace {
+    static func remove(service: String, account: String) -> OSStatus {
+        SecItemDelete([kSecClass as String: kSecClassGenericPassword,
+                       kSecAttrService as String: service,
+                       kSecAttrAccount as String: account] as CFDictionary)
+    }
+
+    static func isAbsent(service: String, account: String) -> Bool {
+        var result: CFTypeRef?
+        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
+                                    kSecAttrService as String: service,
+                                    kSecAttrAccount as String: account,
+                                    kSecReturnAttributes as String: true,
+                                    kSecMatchLimit as String: kSecMatchLimitAll]
+        return SecItemCopyMatching(query as CFDictionary, &result) == errSecItemNotFound
+    }
+}
+
+/// File d'intentions média du test : service Keychain **dédié à l'exécution**, vraie Keychain
+/// et attributs de production attendus (non synchronisée, lisible appareil déverrouillé
+/// uniquement). Le service global du produit n'est ni lu, ni écrit, ni supprimé ici.
+private struct MediaQualificationOutboxKeyStore: MessagingMediaOutboxKeyStore {
+    let service: String
+    let account: String
+
+    func key(create: Bool) throws -> SymmetricKey {
+        if let existing = try existingKey() { return existing }
+        guard create else { throw MessagingFailure.protectionUnavailable }
+        var bytes = Data(count: 32)
+        let random = bytes.withUnsafeMutableBytes { buffer -> OSStatus in
+            guard let base = buffer.baseAddress else { return errSecParam }
+            return SecRandomCopyBytes(kSecRandomDefault, 32, base)
+        }
+        guard random == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
+        let insert: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecValueData as String: bytes
+        ]
+        let added = SecItemAdd(insert as CFDictionary, nil)
+        if added == errSecDuplicateItem {
+            guard let existing = try existingKey() else { throw MessagingFailure.protectionUnavailable }
+            return existing
+        }
+        guard added == errSecSuccess else { throw MessagingFailure.protectionUnavailable }
+        return SymmetricKey(data: bytes)
+    }
+
+    /// Une clé existante dont la classe d'accessibilité ou la synchronisation ne correspond
+    /// pas à l'exigence échoue fermé : elle n'est ni utilisée, ni remplacée, ni élargie.
+    private func existingKey() throws -> SymmetricKey? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let attributes = result as? [String: Any],
+              let accessible = attributes[kSecAttrAccessible as String] as? String,
+              accessible == (kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String),
+              let bytes = attributes[kSecValueData as String] as? Data, bytes.count == 32 else {
+            throw MessagingFailure.protectionUnavailable
+        }
+        return SymmetricKey(data: bytes)
+    }
 }
 
 /// Panne de **remise** contrôlée, jamais une panne du serveur : le POST réel est exécuté
@@ -132,6 +219,8 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
     private let upstream: any MessagingMediaMessageSending
     private var discardNextSuccess = false
     private(set) var discarded = 0
+    /// Enveloppes réellement transmises au serveur, dans l'ordre des POST émis.
+    private(set) var transmitted: [MessagingCiphertext] = []
 
     init(upstream: any MessagingMediaMessageSending) { self.upstream = upstream }
 
@@ -139,6 +228,7 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
 
     func sendMedia(scope: MessagingScope, pending: MessagingPending,
                    media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgement {
+        transmitted.append(pending.ciphertext)
         let acknowledgement = try await upstream.sendMedia(scope: scope, pending: pending, media: media)
         if discardNextSuccess {
             discardNextSuccess = false
@@ -161,6 +251,9 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
 ///
 /// Les identités média sont synthétiques, dédiées et distinctes de celles du scénario texte :
 /// elles vivent dans leur propre école et ne partagent ni compte, ni conversation, ni appareil.
+/// Les deux appareils sont publiés **avant** le premier chiffrement émetteur, et chaque espace
+/// Keychain (file, cache, chiffrement) porte un service propre à l'exécution, nettoyé et
+/// contrôlé absent en fin de parcours — jamais le service global du produit.
 ///
 /// Bornes : chaque échange réseau est borné par les délais URLSession du transport média
 /// (20 s par requête, 30 s par ressource) et par la durée de vie bornée du relais jetable ;
@@ -180,9 +273,13 @@ final class MessagingMediaRealRelayTests: XCTestCase {
 
     // MARK: Fixtures locales
 
-    /// PNG synthétique 1×1, sans métadonnée personnelle.
+    /// PNG synthétique 1×1 RGB, sans métadonnée personnelle.
+    ///
+    /// Même base64 que `scripts/messaging-media-relay-qualification.test.mjs`, où les CRC de
+    /// chaque chunk et la décompression zlib du flux IDAT sont réellement vérifiés. Ces
+    /// contrôles ne remplacent pas le décodage ImageIO de la future exécution Apple.
     private var tinyPNG: Data {
-        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nWQAAAAASUVORK5CYII=")!
+        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNQaFAAAAGEAMFfsCuZAAAAAElFTkSuQmCC")!
     }
 
     /// PDF synthétique rendu en mémoire : aucune page réelle, aucun fichier, aucun lien.
@@ -252,11 +349,17 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         let outboxServiceB = "ch.drivy.qualification.media.outbox.\(run).B"
         let cacheServiceA = "ch.drivy.qualification.media.cache.\(run).A"
         let cacheServiceB = "ch.drivy.qualification.media.cache.\(run).B"
+        // Comptes dédiés : le nettoyage porte exactement sur service+account créés ici, jamais
+        // sur le service global du produit ni sur un espace d'application réel.
+        let outboxAccount = "media-outbox-key"
+        let cacheAccount = "cache-key"
+        let outboxAStore = MediaQualificationOutboxKeyStore(service: outboxServiceA, account: outboxAccount)
+        let outboxBStore = MediaQualificationOutboxKeyStore(service: outboxServiceB, account: outboxAccount)
         defer {
             keychainA.removeFixture(); keychainB.removeFixture()
-            for service in [outboxServiceA, outboxServiceB, cacheServiceA, cacheServiceB] {
-                SecItemDelete([kSecClass as String: kSecClassGenericPassword,
-                               kSecAttrService as String: service] as CFDictionary)
+            for (service, account) in [(outboxServiceA, outboxAccount), (outboxServiceB, outboxAccount),
+                                       (cacheServiceA, cacheAccount), (cacheServiceB, cacheAccount)] {
+                _ = MediaQualificationKeychainSpace.remove(service: service, account: account)
             }
         }
 
@@ -269,18 +372,18 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         defer { try? fileManager.removeItem(at: root) }
 
         let aOutbox = try MessagingProtectedMediaOutbox(scope: aScope, root: rootA,
-            keyStore: KeychainMediaOutboxKeyStore(account: outboxServiceA),
+            keyStore: outboxAStore,
             fileSystem: SystemMediaOutboxFileSystem(), limits: .standard)
-        let aCacheNamespace = MessagingMediaCacheKeychain(service: cacheServiceA, account: "cache-key")
+        let aCacheNamespace = MessagingMediaCacheKeychain(service: cacheServiceA, account: cacheAccount)
         let aCache = try MessagingProtectedMediaCache(scope: aScope, anchor: rootA,
             maximumScopeBytes: MessagingProtectedMediaCache.maximumScopeByteSize,
             keyProvider: { mayCreate in
                 try MessagingProtectedMediaCache.keychainKey(mayCreate: mayCreate, namespace: aCacheNamespace)
             })
         let bOutbox = try MessagingProtectedMediaOutbox(scope: bScope, root: rootB,
-            keyStore: KeychainMediaOutboxKeyStore(account: outboxServiceB),
+            keyStore: outboxBStore,
             fileSystem: SystemMediaOutboxFileSystem(), limits: .standard)
-        let bCacheNamespace = MessagingMediaCacheKeychain(service: cacheServiceB, account: "cache-key")
+        let bCacheNamespace = MessagingMediaCacheKeychain(service: cacheServiceB, account: cacheAccount)
         let bCache = try MessagingProtectedMediaCache(scope: bScope, anchor: rootB,
             maximumScopeBytes: MessagingProtectedMediaCache.maximumScopeByteSize,
             keyProvider: { mayCreate in
@@ -307,6 +410,23 @@ final class MessagingMediaRealRelayTests: XCTestCase {
             return MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { aToken },
                                                invalidate: { _ in false }, currentScope: { aScope })
         }
+
+        // Les DEUX appareils sont publiés avant le premier chiffrement émetteur : une session
+        // Megolm ne couvre que les appareils connus au moment du partage, et ce parcours nominal
+        // n'a ensuite aucune émission A capable de rattraper une inscription tardive. Le
+        // scénario historique couvre séparément ce cas d'inscription tardive, sans hypothèse ici.
+        enter(MediaRelayStage.readyB)
+        guard await bCrypto.isAvailable(scope: bScope, conversationID: conversation) else {
+            XCTFail("Publication des clés du destinataire impossible sur le relais média."); return
+        }
+        let bFactory: MessagingMediaTransportFactory = {
+            let deviceID = try await bCrypto.currentDeviceID(scope: bScope)
+            return MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { bToken },
+                                               invalidate: { _ in false }, currentScope: { bScope })
+        }
+        let bMedia = MessagingMediaCoordinator(scope: bScope, preparer: MessagingMediaPreparer(),
+            cryptography: AESCTRMediaCryptography(), outbox: bOutbox, cache: bCache,
+            encryption: bCrypto, sending: apiB, transportFactory: bFactory, currentScope: { bScope })
 
         let lostSender = LostResponseMediaSender(upstream: apiA)
         let aMedia = MessagingMediaCoordinator(scope: aScope, preparer: MessagingMediaPreparer(),
@@ -354,7 +474,7 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         // se rouvre, sans recréer d'identifiant ni de sceau. La machine Megolm reste la même
         // instance (deux écrivains sur le même magasin scellé ne sont pas ouverts en parallèle).
         let reopenedOutbox = try MessagingProtectedMediaOutbox(scope: aScope, root: rootA,
-            keyStore: KeychainMediaOutboxKeyStore(account: outboxServiceA),
+            keyStore: outboxAStore,
             fileSystem: SystemMediaOutboxFileSystem(), limits: .standard)
         let reopenedCache = try MessagingProtectedMediaCache(scope: aScope, anchor: rootA,
             maximumScopeBytes: MessagingProtectedMediaCache.maximumScopeByteSize,
@@ -370,9 +490,9 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         XCTAssertEqual(reopenedSnapshot.byteSize, pdfSnapshot.byteSize)
         let entriesReopened = try await reopenedOutbox.entries(scope: aScope)
         let durableReopened = try XCTUnwrap(entriesReopened.first { $0.mediaID == pdfSnapshot.mediaID })
-        XCTAssertEqual(durableReopened.sealed, durableBefore.sealed, "Le sceau et ses octets sont identiques.")
-        XCTAssertEqual(durableReopened.messageCiphertext, durableBefore.messageCiphertext,
-                       "L'enveloppe Megolm durable n'est pas réémise à la réouverture.")
+        XCTAssertTrue(durableReopened.sealed == durableBefore.sealed, "Le sceau et ses octets sont identiques.")
+        XCTAssertTrue(durableReopened.messageCiphertext == durableBefore.messageCiphertext,
+                      "L'enveloppe Megolm durable n'est pas réémise à la réouverture.")
 
         // 4. Réponse perdue après un POST réellement accepté : renvoi idempotent.
         enter(MediaRelayStage.lost)
@@ -391,6 +511,13 @@ final class MessagingMediaRealRelayTests: XCTestCase {
             XCTFail("Le POST réellement accepté doit laisser exactement un message serveur pour ce média.")
             return
         }
+        // Enveloppe durable mesurée APRÈS la perte de réponse et AVANT toute reprise : c'est
+        // elle que le renvoi doit réutiliser, sans réchiffrement.
+        let entriesAfterLoss = try await reopenedOutbox.entries(scope: aScope)
+        let envelopeAfterLoss = try XCTUnwrap(entriesAfterLoss
+            .first { $0.mediaID == pdfSnapshot.mediaID }?.messageCiphertext)
+        XCTAssertTrue(envelopeAfterLoss == durableBefore.messageCiphertext,
+                      "La perte de réponse ne modifie pas l'enveloppe persistée.")
 
         enter(MediaRelayStage.resend)
         let resentDelivery = await reopenedMedia.send(clientMessageID: pdfClientID)
@@ -405,26 +532,18 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         let afterResend = try await apiA.messages(scope: aScope, conversationID: conversation, before: nil)
         XCTAssertEqual(afterResend.items.filter { $0.meta.media?.mediaID == pdfSnapshot.mediaID }.count, 1,
                        "Un seul message serveur porte ce média après le renvoi.")
+        // Enveloppes réellement transmises par les deux POST du décorateur transparent.
+        let transmitted = await lostSender.transmitted
+        XCTAssertEqual(transmitted.count, 2, "Deux POST réels ont été émis : perdu puis renvoyé.")
+        XCTAssertTrue(transmitted.first == durableBefore.messageCiphertext
+                      && transmitted.last == durableBefore.messageCiphertext,
+                      "Les deux émissions portent l'enveloppe persistée, sans réchiffrement.")
+        // Le reçu valide et le nettoyage prouvé ont retiré l'intention de la file.
         let entriesAfterResend = try await reopenedOutbox.entries(scope: aScope)
-        let envelopeAfterResend = try XCTUnwrap(entriesAfterResend
-            .first { $0.mediaID == pdfSnapshot.mediaID }?.messageCiphertext)
-        XCTAssertEqual(envelopeAfterResend, durableBefore.messageCiphertext,
-                       "Le renvoi conserve l'enveloppe Megolm persistée, sans réchiffrement.")
+        XCTAssertTrue(entriesAfterResend.filter { $0.mediaID == pdfSnapshot.mediaID }.isEmpty,
+                      "Une intention confirmée et nettoyée ne reste pas dans la file.")
 
         // 5. Destinataire : relecture serveur, provenance v3, mediaRef, ouverture réelle.
-        enter(MediaRelayStage.readyB)
-        guard await bCrypto.isAvailable(scope: bScope, conversationID: conversation) else {
-            XCTFail("Publication des clés du destinataire impossible sur le relais média."); return
-        }
-        let bFactory: MessagingMediaTransportFactory = {
-            let deviceID = try await bCrypto.currentDeviceID(scope: bScope)
-            return MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { bToken },
-                                               invalidate: { _ in false }, currentScope: { bScope })
-        }
-        let bMedia = MessagingMediaCoordinator(scope: bScope, preparer: MessagingMediaPreparer(),
-            cryptography: AESCTRMediaCryptography(), outbox: bOutbox, cache: bCache,
-            encryption: bCrypto, sending: apiB, transportFactory: bFactory, currentScope: { bScope })
-
         enter(MediaRelayStage.receive)
         let page = try await apiB.messages(scope: bScope, conversationID: conversation, before: nil)
         guard let imageMessage = page.items.first(where: { $0.id == imageAck.serverMessageID }),
@@ -465,7 +584,7 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         XCTAssertEqual(receivedPDF.name, "fixture-document.pdf")
         XCTAssertNil(receivedPDF.width)
 
-        // 6. Suppression pour tous : tombstone serveur, ouverture refusée, cache jamais servi.
+        // 6. Suppression pour tous : tombstone serveur, ouverture refusée, purge ciblée du cache.
         enter(MediaRelayStage.deletion)
         let cachedBeforeDeletion = try await bCache.data(mediaID: imageSnapshot.mediaID, scope: bScope)
         XCTAssertNotNil(cachedBeforeDeletion, "La pièce reçue a été mise en cache scellé après validation.")
@@ -485,9 +604,20 @@ final class MessagingMediaRealRelayTests: XCTestCase {
             XCTAssertTrue(error as? MessagingMediaRuntimeFailure == .removed,
                           "Le refus vient du tombstone serveur.")
         }
-        // Le cache scellé existe encore : c'est bien le point d'entrée qui refuse, pas une absence de cache.
+        // Un ancien snapshot (objet d'avant suppression, référence non marquée) ne doit plus
+        // rendre les octets non plus : le cache ne contourne jamais une suppression connue.
+        do {
+            _ = try await bMedia.open(imageMessage)
+            XCTFail("Un ancien snapshot ne doit pas resservir un média supprimé.")
+        } catch {
+            XCTAssertTrue(error as? MessagingMediaRuntimeFailure == .removed,
+                          "Le média purgé n'est plus servi, même depuis un snapshot antérieur.")
+        }
+        // Exigence du contrat corrigé (#97 correction1) : la suppression connue purge l'entrée
+        // de cache ciblée. Cette attente peut rester rouge sur la base 62850171 et sera
+        // qualifiée au candidat corrigé ; elle n'est pas abaissée pour autant.
         let cachedAfterDeletion = try await bCache.data(mediaID: imageSnapshot.mediaID, scope: bScope)
-        XCTAssertNotNil(cachedAfterDeletion)
+        XCTAssertNil(cachedAfterDeletion, "La purge ciblée après suppression retire l'entrée de cache.")
         let downloadAfterDeletion = MessagingHTTPMediaTransport(baseURL: base,
             deviceID: try await bCrypto.currentDeviceID(scope: bScope), token: { bToken },
             invalidate: { _ in false }, currentScope: { bScope })
@@ -515,6 +645,25 @@ final class MessagingMediaRealRelayTests: XCTestCase {
             XCTAssertTrue(error as? MessagingMediaTransportFailure == .accessChanged,
                           "Le refus inter-écoles vient des droits serveur, sans élargissement.")
         }
+
+        // 8. Nettoyage vérifié : seules les clés Keychain de cette exécution sont supprimées,
+        // et leur absence est constatée. Le service global du produit n'est ni lu ni modifié.
+        let outboxRemovals = [MediaQualificationKeychainSpace.remove(service: outboxServiceA, account: outboxAccount),
+                              MediaQualificationKeychainSpace.remove(service: outboxServiceB, account: outboxAccount)]
+        let cacheRemovals = [MediaQualificationKeychainSpace.remove(service: cacheServiceA, account: cacheAccount),
+                             MediaQualificationKeychainSpace.remove(service: cacheServiceB, account: cacheAccount)]
+        keychainA.removeFixture()
+        keychainB.removeFixture()
+        for status in outboxRemovals + cacheRemovals {
+            XCTAssertTrue(status == errSecSuccess || status == errSecItemNotFound,
+                          "Le nettoyage d'une clé de fixture réussit ou constate son absence.")
+        }
+        XCTAssertTrue(MediaQualificationKeychainSpace.isAbsent(service: outboxServiceA, account: outboxAccount))
+        XCTAssertTrue(MediaQualificationKeychainSpace.isAbsent(service: outboxServiceB, account: outboxAccount))
+        XCTAssertTrue(MediaQualificationKeychainSpace.isAbsent(service: cacheServiceA, account: cacheAccount))
+        XCTAssertTrue(MediaQualificationKeychainSpace.isAbsent(service: cacheServiceB, account: cacheAccount))
+        XCTAssertTrue(keychainA.isAbsent(), "L'espace Keychain chiffrement A est nettoyé.")
+        XCTAssertTrue(keychainB.isAbsent(), "L'espace Keychain chiffrement B est nettoyé.")
 
         // La fixture média n'a jamais servi les identités canoniques du scénario texte.
         XCTAssertNotEqual(mediaSchool, UUID(uuidString: "10000000-0000-4000-8000-000000000001"))

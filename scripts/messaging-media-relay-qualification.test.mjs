@@ -5,11 +5,29 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { inflateSync } from 'node:zlib';
 import { Pool } from 'pg';
 import { buildQualificationRelay, qualificationConfig } from './messaging-relay-qualification.mts';
 import { mediaFixtureCollisions, mediaFixtureIds, mediaFixtureSubjects, mediaReadinessFixture,
   seedMessagingMediaFixtures } from './qualification/messaging-media-fixtures.mjs';
 import { fixtureIds } from '../apps/api/scripts/fixtures.js';
+
+/**
+ * Fixture image partagée avec `MessagingMediaRealRelayTests.swift` (même base64, PNG 1×1 RGB).
+ * Ce fichier en vérifie réellement les CRC et la décompression zlib ; ImageIO reste du ressort
+ * de la future exécution Apple, et cette preuve ne la remplace pas.
+ */
+const fixturePngBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR42mNQaFAAAAGEAMFfsCuZAAAAAElFTkSuQmCC';
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 
 /**
  * Qualification Node du bootstrap média (#97, Q97).
@@ -72,6 +90,67 @@ describe('gardes de configuration du relais média', () => {
     await assert.rejects(seedMessagingMediaFixtures(denied, 'https://identity.example.com'), /^Error: MEDIA_FIXTURE_ISSUER_REQUIRED$/);
     await assert.rejects(seedMessagingMediaFixtures(denied, ''), /^Error: MEDIA_FIXTURE_ISSUER_REQUIRED$/);
   });
+  test('la fixture image est un PNG réellement valide (CRC et zlib)', () => {
+    const bytes = Buffer.from(fixturePngBase64, 'base64');
+    assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const chunks = [];
+    let offset = 8;
+    while (offset < bytes.length) {
+      const length = bytes.readUInt32BE(offset);
+      const type = bytes.subarray(offset + 4, offset + 8).toString('ascii');
+      const data = bytes.subarray(offset + 8, offset + 8 + length);
+      const stored = bytes.readUInt32BE(offset + 8 + length);
+      // Chaque CRC de chunk est recalculé : un IDAT corrompu (cas du premier jet) échoue ici.
+      assert.equal(stored, crc32(bytes.subarray(offset + 4, offset + 8 + length)), `CRC ${type}`);
+      chunks.push({ type, data });
+      offset += 12 + length;
+    }
+    assert.deepEqual(chunks.map(chunk => chunk.type), ['IHDR', 'IDAT', 'IEND']);
+    const header = chunks[0].data;
+    assert.equal(header.readUInt32BE(0), 1);
+    assert.equal(header.readUInt32BE(4), 1);
+    assert.equal(header[8], 8);
+    assert.equal(header[9], 2);
+    // Décompression réelle du flux IDAT : un zlib corrompu lèverait ici.
+    assert.deepEqual([...inflateSync(chunks[1].data)], [0, 0x20, 0x80, 0x20]);
+  });
+});
+
+describe('cible de reset réellement consommée', () => {
+  // `freshDatabase()` lit `process.env.TEST_DATABASE_URL` : une configuration validée qui
+  // diverge de l'environnement du processus ne doit jamais atteindre le reset. Les chemins TLS
+  // volontairement absents prouvent que le refus précède toute lecture de fichier, et aucune
+  // adresse n'est contactée (cible loopback ou base non dédiée uniquement).
+  const divergent = [
+    ['hôte', { TEST_DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:15498/drivy_test' }],
+    ['base', { TEST_DATABASE_URL: 'postgresql://fixture:fixture@127.0.0.1:15497/other_database' }],
+    ['mode', { NODE_ENV: 'production' }],
+    ['opt-in', { DRIVY_RELAY_ALLOW_RESET: '' }]
+  ];
+  const watched = ['TEST_DATABASE_URL', 'NODE_ENV', 'DRIVY_RELAY_ALLOW_RESET'];
+
+  for (const [name, change] of divergent) {
+    test(`refuse une cible de reset divergente (${name}) avant TLS et connexion`, async () => {
+      const saved = Object.fromEntries(watched.map(key => [key, process.env[key]]));
+      try {
+        process.env.TEST_DATABASE_URL = base.TEST_DATABASE_URL;
+        process.env.NODE_ENV = 'test';
+        process.env.DRIVY_RELAY_ALLOW_RESET = '1';
+        for (const [key, value] of Object.entries(change)) process.env[key] = value;
+        await assert.rejects(buildQualificationRelay({
+          ...base, DRIVY_RELAY_TLS_CERT: '/nonexistent/media-fixture.crt', DRIVY_RELAY_TLS_KEY: '/nonexistent/media-fixture.key'
+        }), error => {
+          assert.equal(error.message, 'RELAY_QUALIFICATION_ENVIRONMENT_DIVERGED');
+          return true;
+        });
+      } finally {
+        for (const key of watched) {
+          if (saved[key] === undefined) delete process.env[key];
+          else process.env[key] = saved[key];
+        }
+      }
+    });
+  }
 });
 
 describe('bootstrap média sur PostgreSQL synthétique', () => {
@@ -112,10 +191,13 @@ describe('bootstrap média sur PostgreSQL synthétique', () => {
     execFileSync('openssl', ['x509', '-req', '-sha256', '-days', '1', '-in', join(directory, 'server.csr'),
       '-CA', join(directory, 'ca.crt'), '-CAkey', join(directory, 'ca.key'), '-CAcreateserial',
       '-extfile', extension, '-extensions', 'server', '-out', join(directory, 'server.crt')]);
-    relay = await buildQualificationRelay({
-      ...base, TEST_DATABASE_URL: process.env.TEST_DATABASE_URL,
-      DRIVY_RELAY_TLS_CERT: join(directory, 'server.crt'), DRIVY_RELAY_TLS_KEY: join(directory, 'server.key')
-    });
+    // Le chemin positif doit être exactement celui du CLI : le relais reçoit l'environnement
+    // qu'il consommera pour le reset, donc aucune cible validée ne peut différer de la cible réelle.
+    process.env.NODE_ENV = 'test';
+    process.env.DRIVY_RELAY_ALLOW_RESET = '1';
+    process.env.DRIVY_RELAY_TLS_CERT = join(directory, 'server.crt');
+    process.env.DRIVY_RELAY_TLS_KEY = join(directory, 'server.key');
+    relay = await buildQualificationRelay(process.env);
     pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
     const membership = await pool.query('SELECT access_epoch FROM drivy.membership WHERE id=$1', [mediaFixtureIds.instructorMember]);
     accessEpoch = membership.rows[0].access_epoch;
@@ -127,6 +209,7 @@ describe('bootstrap média sur PostgreSQL synthétique', () => {
   after(async () => {
     await pool?.end();
     await relay?.close();
+    for (const key of ['DRIVY_RELAY_TLS_CERT', 'DRIVY_RELAY_TLS_KEY', 'DRIVY_RELAY_ALLOW_RESET']) delete process.env[key];
     if (directory) rmSync(directory, { recursive: true, force: true });
   });
 
