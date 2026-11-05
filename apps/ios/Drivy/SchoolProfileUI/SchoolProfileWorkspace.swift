@@ -369,12 +369,11 @@ final class SchoolProfileWorkspace: Identifiable {
         clearOnboardingDraft(discardingUnreadable: true)
         setDraft(profile.map { SchoolProfileDraft($0) } ?? SchoolProfileDraft())
     }
-    /// Déconnexion : le brouillon quitte l’appareil avec les autres intentions du compte.
-    /// Le coffre est déjà scopé par compte, école, adhésion et époque : aucun autre compte ne peut le lire.
-    func purgeOnboardingDraft() {
-        guard onboardingKind != nil else { return }
-        clearOnboardingDraft(discardingUnreadable: true)
-        setDraft(profile.map { SchoolProfileDraft($0) } ?? SchoolProfileDraft())
+    /// Retire seulement le brouillon de cette portée, jamais une commande conservée ou en vol.
+    @discardableResult
+    func purgeOnboardingDraft() -> Bool {
+        invalidate()
+        return clearOnboardingDraft(discardingUnreadable: true)
     }
     private func prepare<Value: Encodable>(_ payload: Value, id: UUID, kind: SchoolCommandKind,
         resourceID: UUID?, version: Int, routeID: UUID? = nil, expectedVersion: Int? = nil) async -> Bool {
@@ -473,15 +472,18 @@ final class SchoolProfileWorkspace: Identifiable {
             onboardingDraftError = SchoolConfigurationFailure.storage.localizedDescription
         }
     }
-    private func clearOnboardingDraft(discardingUnreadable: Bool) {
+    @discardableResult
+    private func clearOnboardingDraft(discardingUnreadable: Bool) -> Bool {
         onboardingDraftTask?.cancel()
-        onboardingDraft = nil
-        guard let onboardingKind, let store = onboardingDraftStore else { return }
+        onboardingDraftTask = nil
+        guard let onboardingKind, let store = onboardingDraftStore else { return true }
         do {
             try store.remove(scope: scope, kind: onboardingKind, discardingUnreadable: discardingUnreadable)
+            onboardingDraft = nil
             onboardingDraftError = nil
+            return true
         }
-        catch { onboardingDraftError = SchoolConfigurationFailure.storage.localizedDescription }
+        catch { onboardingDraftError = SchoolConfigurationFailure.storage.localizedDescription; return false }
     }
     /// Première lecture de l’accueil : le brouillon revient s’il porte encore la version confirmée.
     /// Une version différente signifie que l’école a avancé : rien ne se réapplique, rien n’est inventé.
@@ -510,7 +512,7 @@ final class SchoolProfileWorkspace: Identifiable {
     /// Réponse de l’école : ce qui vient d’être confirmé quitte le brouillon ; une saisie encore non
     /// envoyée reste, portée par l’étape désormais confirmée.
     private func reconcileOnboardingDraft(after command: PendingSchoolCommand) {
-        guard onboardingKind != nil else { return }
+        guard !invalidated, onboardingKind != nil else { return }
         switch command.kind {
         case .completeOnboarding:
             clearOnboardingDraft(discardingUnreadable: true)

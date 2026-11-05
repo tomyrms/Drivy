@@ -34,6 +34,7 @@ struct SchoolRootView: View {
     @State private var invitationsRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
     @State private var inviteRoute: SchoolWorkspaceSheet<SchoolInvitationWorkspace>?
     @State private var profileWorkspace: SchoolProfileWorkspace?
+    @State private var onboardingExit = SchoolOnboardingExitModel()
     @State private var profileRoute: ProfileSheet?
     @State private var joinWorkspace: SchoolJoinWorkspace?
     @State private var joinRoute: SchoolWorkspaceSheet<SchoolJoinWorkspace>?
@@ -118,6 +119,7 @@ struct SchoolRootView: View {
             updateCaptureScope()
         }
         .onChange(of: identity.isAuthenticated) { _, authenticated in
+            if authenticated { onboardingExit.connectionStarted() }
             if !authenticated {
                 captureController.setScope(nil)
                 closeAll(); selectedHomeTab = .session; workspace?.reset()
@@ -164,12 +166,20 @@ struct SchoolRootView: View {
             }
         }
         .onChange(of: identity.isWorking) { _, working in
+            if working { onboardingExit.connectionStarted() }
             // Une restauration ou une connexion vient de rendre son verdict : la reprise peut partir, une fois.
             guard !working else { return }
             identitySettled = true
             retryPushRevocationIfSettled()
         }
         .safeAreaInset(edge: .top) {
+            if !identity.isAuthenticated, let error = onboardingExit.errorMessage {
+                SchoolErrorNotice(message: error, retry: {
+                    guard !identity.isAuthenticated, !identity.isWorking else { return }
+                    onboardingExit.retry()
+                })
+                .drivyPageContent(maxWidth: DrivyLayout.narrowColumn)
+            }
             if identity.isAuthenticated, let error = captureController.pendingSynchronizationError {
                 VStack(alignment: .leading, spacing: DrivySpacing.s) {
                     Text(error).font(.callout).fixedSize(horizontal: false, vertical: true)
@@ -691,6 +701,7 @@ struct SchoolRootView: View {
         SchoolSignInLanding(isConfigured: configuration != nil, isWorking: identity.isWorking && accessRoute == nil,
             errorMessage: accessRoute == nil ? identity.errorMessage : nil,
             signIn: { email, password in
+                onboardingExit.connectionStarted()
                 joinsByCodeAfterSignIn = false
                 Task { await identity.signIn(email: email, password: password) }
             },
@@ -742,14 +753,21 @@ struct SchoolRootView: View {
 
 
     private func signOut() {
-        captureController.setScope(nil)
-        pendingJoinLink = nil
-        joinsByCodeAfterSignIn = false
-        closeAll()
-        workspace?.reset()
-        showsAccount = false
+        let ticket = onboardingExit.begin(person: workspace?.person,
+            apiBaseURL: configuration?.apiBaseURL.absoluteString, liveWorkspace: profileWorkspace) {
+            captureController.setScope(nil)
+            pendingJoinLink = nil
+            joinsByCodeAfterSignIn = false
+            closeAll()
+            workspace?.reset()
+            showsAccount = false
+        }
         // L’appareil est retiré tant que le jeton d’accès vaut encore ; une panne ne retient pas la déconnexion.
-        Task { await SchoolPushCenter.shared.sessionEnding(); await identity.signOut() }
+        Task {
+            await onboardingExit.finish(ticket,
+                revokePush: { await SchoolPushCenter.shared.sessionEnding() },
+                closeIdentity: { await identity.signOut() })
+        }
     }
 
     private func closeAll() {
