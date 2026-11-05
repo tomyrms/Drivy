@@ -6,7 +6,7 @@ dispatch `ctx_0fe4874cde03`, worker `orca_session_id:e0bc243a-f5ce-4614-81d8-a7d
 - Worktree : `C:/Users/jtoma/orca/workspaces/Drivy/integration-issues-20261105`
 - Branche : `tomyrms/integration-issues-20261105`
 - Base vérifiée avant toute opération : `b91e173b2e41f414a553d315fac17a0b6c82c508`, arbre propre
-- **SHA produit** des sept fusions, avant ce rapport : `d6d742ee3ff936c45ded547307672b72a2a49984`
+- **SHA produit** des huit fusions, avant cette mise à jour : `59b33ea5a8900638086ba247e58e6b037e40ce9a`
 - **SHA final** complet : celui du commit de ce rapport, indiqué dans `git log -1` et dans la
   livraison Orca (un fichier ne peut pas citer son propre SHA avant d'être créé).
 - Aucune publication, PR, CI distante, fusion `master`, activation ni déploiement.
@@ -18,7 +18,7 @@ dispatch `ctx_0fe4874cde03`, worker `orca_session_id:e0bc243a-f5ce-4614-81d8-a7d
 |---|---|
 | Modèle | `opencode-go/deepseek-v4.1-flash` (OpenCode Go, identifiant relevé par l'outil `models`) ; variantes `low/high/max` existantes mais **aucun effort demandé ni exposé**. Aucun changement de modèle ou de fournisseur. |
 | Superpowers | `verification-before-completion` effectivement chargé depuis `C:\Users\jtoma\.config\opencode\node_modules\superpowers\skills\verification-before-completion`. `test-driven-development` et `systematic-debugging` **non applicables** : aucune ligne de produit ni de test produite, aucun défaut corrigé ici. |
-| Codebase Memory | Projet propre à la racine exacte du worktree : `C-Users-jtoma-orca-workspaces-Drivy-integration-issues-20261105`, indexé **par chemin absolu** avant fusion (40 632 nœuds / 178 856 arêtes) puis laissé à jour après chaque fusion par le watcher du projet : **54 709 nœuds / 214 643 arêtes**, `status: ready`, dernier scan `2026-11-05T01:19:47Z`. Aucun index de worktree parent utilisé comme preuve. |
+| Codebase Memory | Projet propre à la racine exacte du worktree : `C-Users-jtoma-orca-workspaces-Drivy-integration-issues-20261105`, indexé **par chemin absolu** avant fusion (40 632 nœuds / 178 856 arêtes) puis laissé à jour après chaque fusion par le watcher du projet : **54 790 nœuds / 214 945 arêtes**, `status: ready`, dernier scan `2026-11-05T01:28:50Z`. Aucun index de worktree parent utilisé comme preuve. |
 | Node | 24.22.2 portable (`C:/Users/jtoma/AppData/Local/Temp/drivy-orchestration-20261104/node-v24.22.2-win-x64`), injecté dans le `PATH` du processus seulement ; npm 11.19.1. |
 | Docker | Inventaire avant création : 6 conteneurs actifs (`idrive-*`, projet sans rapport) et 25 au total, tous laissés intacts. Aucun arrêt, aucune purge. |
 | Apple | Xcode/Swift/simctl **absents** de ce poste : aucune compilation, aucun XCTest, aucun simulateur, aucun relais Apple exécuté. |
@@ -80,12 +80,56 @@ Lecture de source avant fusion (contrôle d'identité, sans éditer) :
   « tâche non coopérative » ajouté ; aucune assertion métier retirée (seuls des `_ = try?` sur des
   valeurs non utilisées).
 
-Conséquence pour les validations : `git diff --name-only fd626687..HEAD -- apps/api apps/web scripts
-infra package.json package-lock.json .github` est **vide**. Les campagnes API, web et scripts
-exécutées sur l'arbre `fd626687` restent donc valides **par identité de source** pour le candidat
-final ; aucune n'a été rejouée après la Phase B, et aucun résultat Swift n'est transféré.
+Conséquence pour les validations : `git diff --name-only fd626687..HEAD -- apps/api apps/web infra
+package.json package-lock.json .github` est **vide** (seuls des scripts et documents neufs s'ajoutent
+ensuite avec Q131, aucun fichier produit ni existant). Les campagnes API, web et scripts exécutées sur
+l'arbre `fd626687` restent donc valides **par identité de source** pour le candidat final ; aucune n'a
+été rejouée, et aucun résultat Swift n'est transféré.
 
-Delta total `b91e173b..HEAD` (hors rapport) : **30 fichiers, +4775 / −72**.
+Delta total `b91e173b..HEAD` (hors rapport) : **39 fichiers, +5415 / −72**.
+
+## Ajout Q131 — harnais de mesures web (8e fusion, autorisée après les têtes fixées)
+
+Fusion **locale et additive** de `7cefeb415623ab5e36f5952d203bf19e28871e5c` (parent `1a6a27da`),
+autorisée par le coordinateur après les sept premières têtes, sans écraser de travail.
+
+| Élément | Constat |
+|---|---|
+| Merge `--no-ff` | `59b33ea5a8900638086ba247e58e6b037e40ce9a` (parents `4925882d` + `7cefeb41`) |
+| Base de la branche | `e2edc85e` (candidat publié) ; merge-base avec I2 = `e2edc85e` |
+| Chemins | 8 fichiers **tous nouveaux** : `docs/implementation/web-reactivity-measures-131-20261105.md`, `scripts/dev/measure-web-reactivity-131.ts`, `scripts/dev/reactivity-131/{fixture,guards,guards.test,observe,stats,stats.test}.ts` — **+383 / −0** |
+| Blobs comparés à `7cefeb41` | identiques sur les 8 (`830466fb`, `4ac05f93`, `4fdd94be`, `bfa2068f`, `ea33ed58`, `47db98ad`, `45ed2b13`, `7c03e114`) |
+| Chevauchement avec les chemins déjà modifiés par I2 | aucun ; ces 8 chemins n'existaient pas à `HEAD` avant fusion |
+| Fichier produit, lock, workflow, infra dans ce lot | **aucun** |
+| `git diff --check` / arbre | exit 0 / propre |
+
+### Identité des preuves Q131 (héritées, non rejouées)
+
+Ce harnais qualifie **intentionnellement** les sources web de `e2edc85e` : `measure-web-reactivity-131.ts:22`
+fixe `sha = 'e2edc85ed092237016620079d52d11eb7a2d02b5'`, l'injecte en `__DRIVY_BUILD_SHA__` et, ligne 23,
+refuse la campagne si `git diff e2edc85e -- apps/web` n'est pas vide, puis exige que le build d'entrée
+porte la même identité.
+
+Sur I2, cette garde est **légitimement en échec** : `git diff e2edc85e -- apps/web` retourne
+`apps/web/server/rate-limit.ts`, `apps/web/server/recovery-direct-guard.ts`,
+`apps/web/server/recovery-direct-guard-main.ts` et `apps/web/test/recovery-direct-guard.test.ts`
+(lot R50). Le harnais **n'a donc pas été relancé** sur I2, ses gardes n'ont pas été contournées et aucune
+ancienne preuve n'a été renommée. Le contrôle ci-dessus est la garde elle-même, lue et rejouée comme
+commande `git`, **pas** un lancement de benchmark.
+
+Preuves conservées comme mesures ciblées **sur `e2edc85e` uniquement** (rapport du lot, artefacts dans
+l'ancien worktree, non recopiés ici) : campagne PASS exit 0, **42 échantillons dont 3 chauffes → 39
+mesures retenues**, **14 accès positivement confirmés**, **9 verdicts initiaux sans faux confirmé**
+(3 perdus, 3 refusés, 3 comptes changés), **3 reprises positivement confirmées**, 5 captures Chromium ;
+empreinte du harnais `8621dbb398dbb900806439b82380f2a3e89021f1f9584f4fa2f7516cda4d24a5`, Chromium
+153.0.8010.12, Node v24.22.2.
+
+Limites à ne pas dépasser en les citant : n=3 à 0/1 s et n=1 à 5/15 s, Windows/Chromium de bureau
+seulement, production synthétique sans base ni appareil physique ; l'oracle de stockage ne couvre que
+les métadonnées de `updateMember`, **pas** la durabilité des corps ; aucune mesure Safari/iPad,
+VoiceOver, zoom natif ni grande taille de texte. Ces chiffres **ne qualifient pas** I2 : ils décrivent
+`e2edc85e`. Aucune campagne API/web d'I2 n'a été rejouée pour ce seul ajout de scripts et de
+documentation.
 
 ## Vérifications exécutées — commandes et codes de sortie
 
@@ -219,7 +263,9 @@ Recherches de contrôle exécutées sur l'arbre fusionné, projet propre à ce w
   `scripts/dev/check-recovery-direct-guard-50.ts` ;
 - `worker-process` / `sleep` → `apps/api/test/fixtures/course-worker-process/worker-process.ts` ;
 - `boundedValue` → helper de test désormais `throws` (`MessagingMediaCoordinatorTests.swift:90-100`) ;
-  `reconfirmed` → `MessagingMediaCoordinator.reconfirmed` (`MessagingMediaCoordinator.swift:702-740`).
+  `reconfirmed` → `MessagingMediaCoordinator.reconfirmed` (`MessagingMediaCoordinator.swift:702-740`) ;
+- `verifyMetadataOnly` et `accessVerdictMatches` → `scripts/dev/reactivity-131/guards.ts` (l. 5-16 et
+  19-25), le harnais Q131 étant indexé après sa fusion.
 
 Limites de couverture déclarées par l'index : 89 fichiers en lecture partielle, 4 fichiers inutilisables
 pour l'analyseur (`openapi.yaml`, 3 migrations SQL), 9 répertoires exclus par conception (`node_modules`,
@@ -253,5 +299,9 @@ de passe PostgreSQL synthétique a été supprimé ; aucun secret, jeton ni donn
   froid du harnais `pending-recovery-106` restent **non corrigés** : hors périmètre d'un intégrateur,
   ils appartiennent à leurs auteurs.
 - Aucun push, PR, CI distante, `merge master`, déploiement, activation ni clôture d'issue ; `STATUS.md`
-  et le registre restent au coordinateur. Aucun harnais Q131 fusionné (SHA final non transmis).
+  et le registre restent au coordinateur. Le harnais Q131 est désormais **fusionné** comme lot
+  documentaire/harnais, mais ses mesures restent des preuves ciblées sur `e2edc85e` et ne sont **pas**
+  rejouables sur I2 sans contourner sa garde `apps/web`.
+- Les lots **N106** et **U106-L2** sont encore en cours : aucune de leurs têtes n'est entrée dans I2,
+  faute de SHA final relu transmis.
 - Zéro retour correctif consommé pour cette tâche ; les plafonds des lots sources sont inchangés.
