@@ -257,7 +257,7 @@ struct SchoolPlanningAdmission106Tests {
         let token = AdmissionTokenSource()
         let client = makeClient(token: token, server: server)
 
-        await #expect(throws: SchoolPlanningFailure.forbidden) {
+        await #expect(throws: SchoolAPIError.forbidden) {
             try await client.send(command, admission: admission)
         }
         #expect(admission.phase == .waiting)
