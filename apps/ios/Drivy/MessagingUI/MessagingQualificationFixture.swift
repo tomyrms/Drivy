@@ -26,9 +26,14 @@ struct MessagingQualificationFixture: View {
             token: { "synthetic-ui-only" }, invalidate: { _ in false }, currentScope: { scope })
         let memory = MessagingQualificationMemory()
         let mediaScenario = arguments.contains("-messaging-ui-media")
-        let crypto: any MessagingCryptography = reportMedia
-            ? MessagingReportQualificationCrypto(fallback: MessagingQualificationCrypto()) : mediaScenario
-            ? MessagingMediaQualificationCrypto(fallback: MessagingQualificationCrypto()) : MessagingQualificationCrypto()
+        let crypto: any MessagingCryptography
+        if reportMedia {
+            crypto = MessagingReportQualificationCrypto(fallback: MessagingQualificationCrypto())
+        } else if mediaScenario {
+            crypto = MessagingMediaQualificationCrypto(fallback: MessagingQualificationCrypto())
+        } else {
+            crypto = MessagingQualificationCrypto()
+        }
         let mediaRuntime: (any MessagingMediaRuntime)? = mediaScenario || reportMedia
             ? MessagingMediaQualificationRuntime(scope: scope, arguments: arguments, reportBoundary: reportBoundary) : nil
         // Text crypto remains decrypt-only. The opt-in media runtime can inject synthetic
