@@ -1,6 +1,6 @@
 import XCTest
 
-/// #99/#143 : vraies vues, données fictives, mutations coupées au transport.
+/// #37/#99/#143 : vraies vues et clients, réponses synthétiques au transport, aucun serveur réel.
 @MainActor final class SchoolCourseJourneyUITests: XCTestCase {
     func testParticipantSearchFindsBothHomonymsAfterTheTwentiethLearner() {
         let app = launch("course-roster")
@@ -128,17 +128,174 @@ import XCTest
         XCTAssertTrue((title.value as? String)?.contains("modifié") == true)
     }
 
-    private func launch(_ screen: String) -> XCUIApplication {
+    func testPriorityOfferRequiresReviewAndExplicitAcceptance() {
+        let app = launch("course-offered")
+        defer { app.terminate() }
+        let accept = app.buttons["course-accept-offer"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertTrue(app.staticTexts["course-learner-status"].label.hasPrefix("Place proposée jusqu’à"))
+        assertWitness("mutations=0; events=; unexpected=0; mail=0; messages=0", in: app)
+        XCTAssertFalse(app.buttons["course-payment"].exists)
+        XCTAssertFalse(app.buttons["course-validate"].exists)
+        accept.tap()
+        XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Inscription pour les 4 séances."].exists)
+        let confirm = app.buttons["course-confirm-enrollment"]
+        reveal(confirm, in: app)
+        confirm.tap()
+        XCTAssertTrue(app.navigationBars["Vérifier l’inscription"].waitForNonExistence(timeout: 5))
+        assertStatus("Inscrit", in: app)
+        assertWitness("mutations=1; events=accept; unexpected=0; mail=0; messages=0", in: app)
+        XCTAssertFalse(app.buttons["course-accept-offer"].exists)
+        XCTAssertTrue(app.buttons["course-cancel"].exists)
+        attachScreen("offre-acceptée", in: app)
+    }
+
+    /// Une proposition restée affichée après son échéance ne peut plus être acceptée.
+    func testExpiredPriorityOfferCannotSendAnAcceptance() {
+        let app = launch("course-offer-expired")
+        defer { app.terminate() }
+        assertStatus("Délai de réponse passé", in: app)
+        XCTAssertFalse(app.buttons["course-accept-offer"].exists)
+        XCTAssertFalse(app.buttons["course-decline-offer"].exists)
+        XCTAssertFalse(app.buttons["course-confirm-enrollment"].exists)
+        assertWitness("mutations=0; events=; unexpected=0; mail=0; messages=0", in: app)
+        attachScreen("offre-expirée", in: app)
+    }
+
+    func testCancellationBeforeDeadlineConfirmsOnlyTheEnrollment() throws {
+        let app = launch("course-cancel-success")
+        defer { app.terminate() }
+        assertStatus("Inscrit", in: app)
+        assertWitness("mutations=0; events=; unexpected=0; mail=0; messages=0", in: app)
+        app.buttons["course-cancel"].tap()
+        XCTAssertTrue(app.staticTexts["Ton inscription aux 4 séances sera annulée."].waitForExistence(timeout: 10))
+        try tapConfirmation("Annuler l’inscription", in: app)
+        assertStatus("Annulé", in: app)
+        assertWitness("mutations=1; events=cancel; unexpected=0; mail=0; messages=0", in: app)
+        XCTAssertTrue(app.navigationBars["Sensibilisation du soir"].exists)
+        XCTAssertFalse(app.buttons["course-cancel"].exists)
+        attachScreen("inscription-annulée", in: app)
+    }
+
+    func testContactAfterDeadlineInLargeTextKeepsEnrollmentAndSendsNothing() {
+        let app = launch("course-after-deadline", largeText: true)
+        defer { app.terminate() }
+        assertStatus("Inscrit", in: app)
+        let contact = app.buttons["course-contact-school"]
+        reveal(contact, in: app)
+        XCTAssertFalse(app.buttons["course-cancel"].exists)
+        XCTAssertTrue(app.staticTexts["Le délai d’annulation est passé."].exists)
+        contact.tap() // OpenURL intercepté seulement dans cette fixture : aucun logiciel Mail lancé.
+        assertWitness("mutations=0; events=; unexpected=0; mail=1; messages=0", in: app)
+        let messages = app.buttons["messages-entry"]
+        reveal(messages, in: app, upwards: false)
+        messages.tap()
+        XCTAssertTrue(app.staticTexts["course-fixture-messages"].waitForExistence(timeout: 10))
+        app.navigationBars["Messages"].buttons["Fermer"].tap()
+        XCTAssertTrue(app.staticTexts["course-fixture-messages"].waitForNonExistence(timeout: 5))
+        assertWitness("mutations=0; events=; unexpected=0; mail=1; messages=1", in: app)
+        reveal(app.staticTexts["course-learner-status"], in: app, upwards: false)
+        assertStatus("Inscrit", in: app)
+        XCTAssertFalse(app.buttons["course-cancel"].exists)
+        attachScreen("contact-sans-annulation-grand-texte", in: app)
+    }
+
+    func testPaymentAttendanceAndCompletionRequireThreeDistinctActions() throws {
+        let app = launch("course-facts")
+        defer { app.terminate() }
+        let modes = app.segmentedControls["course-participant-mode"]
+        XCTAssertTrue(modes.waitForExistence(timeout: 15), app.debugDescription)
+        modes.buttons["Validation"].tap()
+        let validate = app.buttons["course-validate"]
+        XCTAssertTrue(validate.waitForExistence(timeout: 10))
+        XCTAssertFalse(validate.isEnabled)
+        XCTAssertTrue(app.staticTexts["3 sur 4 séances obligatoires"].exists)
+        modes.buttons["Règlements"].tap()
+        app.buttons["course-payment"].tap()
+        let amount = app.textFields["course-payment-amount"]
+        XCTAssertTrue(amount.waitForExistence(timeout: 10))
+        amount.tap(); amount.typeText("80")
+        XCTAssertEqual(amount.value as? String, "80")
+        app.buttons["course-payment-submit"].tap()
+        XCTAssertTrue(app.navigationBars["Règlement sur place"].waitForNonExistence(timeout: 5))
+        assertWitness("mutations=1; events=payment; unexpected=0; mail=0; messages=0", in: app)
+        let paid = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Payé :")).firstMatch
+        XCTAssertTrue(paid.waitForExistence(timeout: 10))
+        XCTAssertTrue(paid.label.contains("80"))
+        modes.buttons["Validation"].tap()
+        XCTAssertTrue(app.staticTexts["3 sur 4 séances obligatoires"].exists)
+        XCTAssertFalse(validate.isEnabled)
+        XCTAssertFalse(app.staticTexts["Cours validé"].exists)
+        modes.buttons["Appel"].tap()
+        let present = app.buttons["course-attendance-present"]
+        reveal(present, in: app)
+        present.tap()
+        assertWitness("mutations=2; events=payment,attendance; unexpected=0; mail=0; messages=0", in: app)
+        modes.buttons["Validation"].tap()
+        XCTAssertTrue(app.staticTexts["4 sur 4 séances obligatoires"].waitForExistence(timeout: 10))
+        XCTAssertTrue(validate.isEnabled)
+        XCTAssertFalse(app.staticTexts["Cours validé"].exists)
+        validate.tap()
+        try tapConfirmation("Valider", in: app)
+        XCTAssertTrue(app.staticTexts["Cours validé"].waitForExistence(timeout: 10))
+        assertWitness("mutations=3; events=payment,attendance,validation; unexpected=0; mail=0; messages=0", in: app)
+        attachScreen("accomplissement-explicite", in: app)
+        modes.buttons["Règlements"].tap()
+        XCTAssertTrue(paid.exists && paid.label.contains("80"))
+    }
+
+    func testStaffRightsDoNotGrantTheOtherParticipantTasks() {
+        for screen in ["course-attendance-only", "course-payments-history"] {
+            let app = launch(screen)
+            let target = app.buttons[screen == "course-attendance-only" ? "course-attendance-present" : "course-payment"].firstMatch
+            XCTAssertTrue(target.waitForExistence(timeout: 15), app.debugDescription)
+            XCTAssertFalse(app.segmentedControls["course-participant-mode"].exists)
+            XCTAssertFalse(app.buttons["course-validate"].exists)
+            XCTAssertFalse(app.buttons[screen == "course-attendance-only" ? "course-payment" : "course-attendance-present"].exists)
+            attachScreen(screen, in: app)
+            app.terminate()
+        }
+    }
+
+    private func assertStatus(_ label: String, in app: XCUIApplication) {
+        let status = app.staticTexts["course-learner-status"]
+        XCTAssertTrue(status.waitForExistence(timeout: 15), app.debugDescription)
+        let matches = expectation(for: NSPredicate(format: "label == %@", label), evaluatedWith: status)
+        XCTAssertEqual(XCTWaiter.wait(for: [matches], timeout: 10), .completed, app.debugDescription)
+    }
+    private func assertWitness(_ label: String, in app: XCUIApplication) {
+        let witness = app.staticTexts["course-fixture-witness"]
+        XCTAssertTrue(witness.waitForExistence(timeout: 10), app.debugDescription)
+        let matches = expectation(for: NSPredicate(format: "label == %@", label), evaluatedWith: witness)
+        XCTAssertEqual(XCTWaiter.wait(for: [matches], timeout: 10), .completed, app.debugDescription)
+    }
+    private func tapConfirmation(_ label: String, in app: XCUIApplication) throws {
+        XCTAssertTrue(app.buttons[label].firstMatch.waitForExistence(timeout: 10), app.debugDescription)
+        // Bouton terminal du dialogue iOS 26 ; aucun repli sur une coordonnée supposée.
+        let leaves = app.buttons.matching(identifier: label).allElementsBoundByIndex.filter {
+            $0.descendants(matching: .button).matching(identifier: label).count == 0 && $0.isHittable
+        }
+        XCTAssertEqual(leaves.count, 1, app.debugDescription)
+        try XCTUnwrap(leaves.first).tap()
+    }
+    private func attachScreen(_ name: String, in app: XCUIApplication) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name; attachment.lifetime = .keepAlways; add(attachment)
+    }
+
+    private func launch(_ screen: String, largeText: Bool = false) -> XCUIApplication {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = screen
         app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
+        if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
         return app
     }
-    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        for _ in 0..<8 { if element.exists && element.isHittable { return }; app.swipeUp() }
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication, upwards: Bool = true) {
+        for _ in 0..<8 { if element.exists && element.isHittable { return }; if upwards { app.swipeUp() } else { app.swipeDown() } }
         XCTAssertTrue(element.exists && element.isHittable, app.debugDescription)
     }
     private func dismissConfirmation(in app: XCUIApplication, cancelLabel: String) {
