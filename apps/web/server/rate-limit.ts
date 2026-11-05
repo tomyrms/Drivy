@@ -56,6 +56,14 @@ export class RateLimiter {
     return entry.count <= this.limit;
   }
 
+  /** Useful wait for a refused key: seconds left in its live window, 0 when no window is open. */
+  retryAfterSeconds(key: string): number {
+    const entry = this.windows.get(key);
+    if (!entry) return 0;
+    const remaining = entry.resetAt - this.clock();
+    return remaining > 0 ? Math.ceil(remaining / 1000) : 0;
+  }
+
   sweep(now: number = this.clock()): void {
     for (const [key, entry] of this.windows) if (entry.resetAt <= now) this.windows.delete(key);
   }
