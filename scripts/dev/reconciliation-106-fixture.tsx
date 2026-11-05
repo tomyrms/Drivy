@@ -101,6 +101,14 @@ function DraftInner() {
     },
     refresh: () => setBaseline({ ...initialDraft, email: 'server@example.invalid' }),
     resolve: () => { const current = latest.current.draft!; latest.current.setDraft({ ...current, email: 'server@example.invalid' }); },
+    adoptEdit: () => {
+      const sent = { ...latest.current.draft!, name: ' Ecole ' };
+      latest.current.setDraft(sent);
+      latest.current.markSaved({ ...sent, name: 'Ecole' }, sent);
+      setBaseline({ ...initialDraft, name: 'Ecole' });
+    },
+    editName: () => { const current = latest.current.draft!; latest.current.setDraft({ ...current, name: 'Autre école' }); },
+    editEmail: () => { const current = latest.current.draft!; latest.current.setDraft({ ...current, email: 'autre@example.invalid' }); },
     state: () => ({ draft: latest.current.draft, conflicts: latest.current.conflicts,
       edited: latest.current.edited, guards: guardCount }),
   };
@@ -108,6 +116,9 @@ function DraftInner() {
     <button id="batch-conflict" onClick={() => (window as any).fixture.batchConflict()}>confirmation concurrente</button>
     <button id="refresh" onClick={() => (window as any).fixture.refresh()}>rafraîchir</button>
     <button id="resolve" onClick={() => (window as any).fixture.resolve()}>résoudre</button>
+    <button id="adopt-edit" onClick={() => (window as any).fixture.adoptEdit()}>adoption puis édition</button>
+    <button id="edit-name" onClick={() => (window as any).fixture.editName()}>éditer le nom</button>
+    <button id="edit-email" onClick={() => (window as any).fixture.editEmail()}>éditer l’e-mail</button>
     <pre id="draft">{JSON.stringify(draftState.draft)}</pre>
     <pre id="conflicts">{JSON.stringify(draftState.conflicts)}</pre>
     <pre id="edited">{String(draftState.edited)}</pre>
@@ -135,6 +146,7 @@ function SetupInner() {
     document: () => latest.current.document && structuredClone(latest.current.document),
     step: () => latest.current.step,
     phase: () => latest.current.saveState.phase,
+    saveConflicts: () => latest.current.saveState.conflicts,
     reload: () => latest.current.loaded.reload(),
     writes: () => structuredClone(writes),
     waiting: () => holding,

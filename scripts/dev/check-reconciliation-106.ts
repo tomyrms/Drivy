@@ -105,6 +105,31 @@ try {
   checks.push('C2: première confirmation durable transmise, GET en échec sans perte, relecture explicite sans écraser le local');
   await conflict.close();
 
+  const trackConflict = await pageFor('setup');
+  await trackConflict.locator('input[name="identity.name"]').waitFor({ timeout: 15000 });
+  await trackConflict.locator('input[name="identity.name"]').fill('Avant');
+  await trackConflict.evaluate(() => { (window as any).fixture.conflictResponse(); (window as any).fixture.hold(); (window as any).fixture.saveSameStep(); });
+  await trackConflict.waitForFunction(() => (window as any).fixture.waiting(), undefined, { timeout: 10000 });
+  await trackConflict.locator('input[name="identity.name"]').fill('Local');
+  await trackConflict.evaluate(() => new Promise<void>(done => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+  await trackConflict.evaluate(() => (window as any).fixture.release());
+  await trackConflict.waitForFunction(() => (window as any).fixture.phase() === 'conflict', undefined, { timeout: 10000 });
+  const trackOnly = await trackConflict.evaluate(() => ({
+    writes: (window as any).fixture.writes().length,
+    document: (window as any).fixture.document(),
+    content: (window as any).fixture.content(),
+    phase: (window as any).fixture.phase(),
+    conflicts: (window as any).fixture.saveConflicts(),
+  }));
+  assert.equal(trackOnly.writes, 1);
+  assert.equal(trackOnly.document.content.identity.name, 'Serveur Normalisé');
+  assert.equal(trackOnly.content.identity.name, 'Local');
+  assert.equal(trackOnly.phase, 'conflict');
+  assert.deepEqual(trackOnly.conflicts, ['content.identity.name']);
+  results.trackOnly = trackOnly;
+  checks.push('R1: conflit d’une saisie track sans second enqueue signalé par l’état existant, local et confirmation conservés');
+  await trackConflict.close();
+
   const draft = await pageFor('draft');
   await draft.locator('#batch-conflict').click();
   await draft.waitForFunction(() => (window as any).fixture.state().conflicts.includes('email'), undefined, { timeout: 5000 });
@@ -126,9 +151,27 @@ try {
   const resolved = await draft.evaluate(() => (window as any).fixture.state());
   assert.equal(resolved.edited, false);
   assert.equal(resolved.guards, 0);
-  results.draft = { conflicted, refreshed, resolved };
-  checks.push('C3: conflit atomique avec la valeur, survit au refresh, garde libérée seulement à la résolution');
+  await draft.locator('#edit-email').click();
+  await draft.waitForFunction(() => (window as any).fixture.state().draft.email === 'autre@example.invalid', undefined, { timeout: 5000 });
+  const afterResolutionEdit = await draft.evaluate(() => (window as any).fixture.state());
+  assert.deepEqual(afterResolutionEdit.conflicts, []);
+  results.draft = { conflicted, refreshed, resolved, afterResolutionEdit };
+  checks.push('C3/R2: conflit atomique avec la valeur, survit au refresh, résolution puis édition sans résurrection');
   await draft.close();
+
+  const adoption = await pageFor('draft');
+  await adoption.locator('#adopt-edit').click();
+  await adoption.waitForFunction(() => (window as any).fixture.state().draft.name === 'Ecole', undefined, { timeout: 5000 });
+  const adopted = await adoption.evaluate(() => (window as any).fixture.state());
+  assert.deepEqual(adopted.conflicts, []);
+  await adoption.locator('#refresh').click();
+  await adoption.locator('#edit-name').click();
+  await adoption.waitForFunction(() => (window as any).fixture.state().draft.name === 'Autre école', undefined, { timeout: 5000 });
+  const afterAdoptionEdit = await adoption.evaluate(() => (window as any).fixture.state());
+  assert.deepEqual(afterAdoptionEdit.conflicts, []);
+  results.adoption = { adopted, afterAdoptionEdit };
+  checks.push('R2: adoption normale puis édition et refresh ne fabriquent aucun conflit');
+  await adoption.close();
 
   await writeFile(`${output}/results.json`, JSON.stringify({ synthetic: true, engine: { name: 'Chromium', version: browser.version() }, checks, results }, null, 2));
   console.log(JSON.stringify({ result: 'PASS', checks, results }, null, 2));

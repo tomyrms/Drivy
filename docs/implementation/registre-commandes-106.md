@@ -794,10 +794,13 @@ Preuve web locale du 5 novembre 2026 : `draft-rebase.test.ts` et les scénarios 
 les captures et le harnais `pending-recovery` ne sont pas qualifiés par ce contrôle.
 
 Retour correctif du même jour : `use-setup-guide` adopte le brouillon fusionné dans le contenu réel de
-l'éditeur, y compris une saisie seulement suivie par `track`, et la confirmation durable est transmise
-avant un éventuel conflit de la saisie suivante. `useDraft` dérive valeur, conflits et garde de la même
-mise à jour React ; un conflit non résolu survit à un rafraîchissement de baseline. Le harnais
-React/Chromium `scripts/dev/check-reconciliation-106.ts` couvre C1–C3 avec latence contrôlée.
+l’éditeur, y compris une saisie seulement suivie par `track`, et la confirmation durable est transmise
+avant un éventuel conflit de la saisie suivante. Un conflit de la dernière saisie trackée est signalé par
+la phase/le message existants et ses chemins, sans second envoi ni perte de la confirmation ; le snapshot
+expose `conflicts`. `useDraft` stocke valeur, conflits réellement détectés et garde dans un réducteur
+unique ; une frappe après adoption ou résolution ne recrée pas de faux conflit, et un conflit non résolu
+survit au rafraîchissement. Le harnais React/Chromium `scripts/dev/check-reconciliation-106.ts` couvre
+C1-C3 ainsi que R1/R2 avec latence contrôlée.
 
 Contrat minimal restant pour le propriétaire UI école, non réalisé ici : `useDraft` expose
 `conflicts: readonly string[]` en chemins du brouillon (`name`, `contactEmail`, `contactPhone`, etc.).

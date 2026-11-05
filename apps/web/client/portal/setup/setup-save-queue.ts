@@ -45,6 +45,8 @@ export interface SetupSaveSnapshot {
   readonly heldVersion: number | null;
   /** Étape dont l'enregistrement a rencontré une autre version : « à relire ». */
   readonly conflictStep: SetupStep | null;
+  /** Chemins réellement conflictuels de la dernière saisie ; vides hors conflit. */
+  readonly conflicts: readonly string[];
 }
 
 export interface SetupSaveHooks {
@@ -99,7 +101,7 @@ const UNSAVED = 'Enregistrement non confirmé. Vérifiez son résultat avant de 
 export class SetupSaveQueue {
   private readonly listeners = new Set<() => void>();
   private readonly waiters: Array<(snapshot: SetupSaveSnapshot) => void> = [];
-  private snapshot: SetupSaveSnapshot = { phase: 'idle', message: null, saving: false, synced: false, held: null, heldVersion: null, conflictStep: null };
+  private snapshot: SetupSaveSnapshot = { phase: 'idle', message: null, saving: false, synced: false, held: null, heldVersion: null, conflictStep: null, conflicts: [] };
   private held: { version: number; entry: Entry } | null = null;
   private latest: Entry | null = null;
   private pending: Entry | null = null;
@@ -107,6 +109,7 @@ export class SetupSaveQueue {
   private phase: SetupSavePhase = 'idle';
   private message: string | null = null;
   private conflictStep: SetupStep | null = null;
+  private conflicts: readonly string[] = [];
   private generation = 0;
   private pumping = false;
   private disposed = false;
@@ -121,7 +124,8 @@ export class SetupSaveQueue {
       && this.latest !== null && this.latest.contentKey === this.held.entry.contentKey;
     this.snapshot = { phase: this.phase, message: this.message, saving: this.phase === 'saving', synced,
       held: this.held?.entry.body ?? null, heldVersion: this.held?.version ?? null,
-      conflictStep: this.phase === 'conflict' && !synced ? this.conflictStep : null };
+      conflictStep: this.phase === 'conflict' && !synced ? this.conflictStep : null,
+      conflicts: this.phase === 'conflict' ? this.conflicts : [] };
     for (const listener of this.listeners) listener();
   }
 
@@ -155,7 +159,7 @@ export class SetupSaveQueue {
     const entry = entryOf(body);
     this.latest = entry;
     this.pending = entry;
-    this.conflictStep = null;
+    this.conflictStep = null; this.conflicts = [];
     if (this.phase !== 'saving') { this.phase = 'idle'; this.message = null; }
     this.publish();
     void this.pump();
@@ -185,6 +189,7 @@ export class SetupSaveQueue {
     if (this.disposed) return;
     this.pending = null;
     this.latest = this.held?.entry ?? null;
+    this.conflicts = [];
     if (this.phase !== 'saving') { this.phase = 'idle'; this.message = null; }
     this.publish();
   }
@@ -195,7 +200,7 @@ export class SetupSaveQueue {
     this.disposed = true;
     this.generation++;
     this.held = null; this.latest = null; this.pending = null; this.flight = null;
-    this.phase = 'idle'; this.message = null; this.conflictStep = null;
+    this.phase = 'idle'; this.message = null; this.conflictStep = null; this.conflicts = [];
     this.publish();
     this.listeners.clear();
     this.settleWaiters();
@@ -246,6 +251,7 @@ export class SetupSaveQueue {
       const next = this.pending;
       let latestHandled = false;
       let conflict: SetupDraftBody | null = null;
+      let conflictPaths: readonly string[] = [];
       // Une intention plus récente que l'envoi en vol est basée sur le brouillon parti, pas sur la réponse :
       // seuls les champs qu'elle n'a pas retouchés prennent la valeur confirmée (normalisation ou changement externe).
       if (next !== null && next.key !== pending.key) {
@@ -253,7 +259,7 @@ export class SetupSaveQueue {
         if (rebased.conflicts.length) {
           // Même champ modifié localement et confirmé autrement : la saisie locale reste, l'écran de conflit existant
           // demande une relecture. Rien n'est renvoyé automatiquement sur la valeur de l'école.
-          conflict = next.body;
+          conflict = next.body; conflictPaths = rebased.conflicts;
           this.pending = null;
           if (this.latest?.key === next.key) { this.latest = entryOf(rebased.value); latestHandled = true; }
         } else {
@@ -267,11 +273,19 @@ export class SetupSaveQueue {
         if (this.latest?.key === pending.key) { this.latest = confirmedEntry; latestHandled = true; }
       }
       // Une saisie seulement suivie par `track` (sans enqueue) est rebasée elle aussi : elle garde ses champs locaux
-      // et reçoit les champs que l'école vient de normaliser.
+      // et reçoit les champs que l'école vient de normaliser. Ses conflits ne sont jamais jetés.
       if (!latestHandled && this.latest !== null && this.latest.key !== pending.key) {
-        this.latest = entryOf(rebaseConfirmedDraft(pending.body, outcome.body, this.latest.body).value);
+        const rebasedLatest = rebaseConfirmedDraft(pending.body, outcome.body, this.latest.body);
+        if (rebasedLatest.conflicts.length) {
+          // La dernière saisie est conflictuelle, même sans second enqueue : l'état conflictuel existant la signale.
+          // Une intention plus ancienne ne doit ni masquer ce conflit ni repartir à sa place.
+          conflict = this.latest.body; conflictPaths = rebasedLatest.conflicts;
+          this.pending = null;
+        }
+        this.latest = entryOf(rebasedLatest.value);
       }
       if (conflict !== null) {
+        this.conflicts = conflictPaths;
         this.phase = 'conflict'; this.conflictStep = conflict.currentStep;
         this.message = 'La préparation a changé à l’école. Votre saisie est conservée : relisez l’étape avant d’enregistrer.';
         this.publish();
@@ -281,6 +295,7 @@ export class SetupSaveQueue {
         return;
       }
       if (this.pending?.contentKey === this.held.entry.contentKey) this.pending = null;
+      this.conflicts = [];
       this.phase = 'idle'; this.message = null; this.conflictStep = null;
       this.publish();
       this.options.confirmed?.(outcome.body, outcome.version, pending.body);
@@ -288,7 +303,7 @@ export class SetupSaveQueue {
     }
     if (outcome.status === 'conflict') {
       // Le brouillon local reste la référence : rien n'est réécrit, l'école relue, l'étape marquée.
-      this.pending = null;
+      this.pending = null; this.conflicts = [];
       this.phase = 'conflict'; this.conflictStep = pending.body.currentStep;
       this.message = 'La préparation a changé à l’école. Votre saisie est conservée : relisez l’étape avant d’enregistrer.';
       this.publish();

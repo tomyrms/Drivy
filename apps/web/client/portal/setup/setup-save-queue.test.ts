@@ -315,6 +315,31 @@ describe('Enregistrement coalescé du brouillon (#123)', () => {
     expect(h.queue.getSnapshot().held?.content.identity.contactEmail).toBe('normalise@example.invalid');
   });
 
+  test('un conflit de la dernière saisie suivie par track est signalé sans second envoi', async () => {
+    const confirmed = vi.fn<NonNullable<SetupSaveHooks['confirmed']>>();
+    const conflicted = vi.fn<NonNullable<SetupSaveHooks['conflict']>>();
+    const h = harness({ confirmed, conflict: conflicted });
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('Avant');
+    h.queue.enqueue(draft(first));
+    // Une intention plus ancienne, puis une saisie seulement suivie : les deux diffèrent du brouillon parti.
+    h.queue.enqueue(draft(content('Avant', 'second@example.invalid'), 'PRICING'));
+    h.queue.track(draft(content('Dernière', 'ecole@example.invalid')));
+
+    const confirmedFirst = content('Serveur', 'ecole@example.invalid');
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    expect(confirmed).toHaveBeenCalledTimes(1);
+    expect(conflicted).toHaveBeenCalledTimes(1);
+    expect(conflicted.mock.calls[0]![0].content.identity.name).toBe('Dernière');
+    expect(h.send).toHaveBeenCalledTimes(1);
+    expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', conflictStep: 'FORMATIONS', heldVersion: 2,
+      conflicts: ['content.identity.name'] });
+  });
+
   test('la confirmation durable précède le conflit de la saisie suivante', async () => {
     const confirmed = vi.fn<NonNullable<SetupSaveHooks['confirmed']>>();
     const conflicted = vi.fn<NonNullable<SetupSaveHooks['conflict']>>();
