@@ -12,12 +12,20 @@ import react from '../../apps/web/node_modules/@vitejs/plugin-react/dist/index.j
 import tailwind from '../../apps/web/node_modules/@tailwindcss/vite/dist/index.mjs';
 import { fixtureSource } from './reactivity-131/fixture.js';
 import { summarize } from './reactivity-131/stats.js';
-const output = resolve('artifacts/web-reactivity-131');
+import { accessReason, verifyMetadataOnly, type AccessVerdict } from './reactivity-131/guards.js';
+import { waitForAccessVerdict } from './reactivity-131/observe.js';
+const runId = new Date().toISOString().replaceAll(':','-');
+const outputRelative = `artifacts/web-reactivity-131/correction-1/run-${runId}`;
+const output = resolve(outputRelative);
 await mkdir(output, { recursive:true });
-const sha = execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+const harnessBaseSha = execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+const sha = 'e2edc85ed092237016620079d52d11eb7a2d02b5';
+assert.equal(execFileSync('git',['diff',sha,'--','apps/web'],{encoding:'utf8'}),'','product sources must match qualified SHA');
+const entryBuildSha = (await readFile('apps/web/dist/client/index.html','utf8')).match(/name="drivy-build" content="([a-f0-9]{40})"/)?.[1];
+assert.equal(entryBuildSha,sha,'entry production build must match product SHA');
 const hash = createHash('sha256');
-for (const path of ['scripts/dev/measure-web-reactivity-131.ts','scripts/dev/reactivity-131/fixture.ts','scripts/dev/reactivity-131/stats.ts']) hash.update(await readFile(path));
-const results: any = { date:new Date().toISOString(), sourceSha:sha, harnessSha256:hash.digest('hex'), node:process.version, os:`${os.platform()} ${os.release()} ${os.arch()}`, modes:['Vite production entry served by buildWebApp','Vite production isolated real AccessPilot/PortalPendingRequests and PortalPreferencesPage, real demo transport'], samples:[], captures:[], checks:[], limits:['Synthetic BFF, no database or physical device','Added delay plus unchanged demo transport 650ms access / 500ms preferences','No p95; n=3 at 0/1s, n=1 at 5/15s; warmup separate','Bodies memory only; metadata sessionStorage is not body durability'] };
+for (const path of ['scripts/dev/measure-web-reactivity-131.ts','scripts/dev/reactivity-131/fixture.ts','scripts/dev/reactivity-131/stats.ts','scripts/dev/reactivity-131/guards.ts','scripts/dev/reactivity-131/observe.ts']) hash.update(await readFile(path));
+const results: any = { date:new Date().toISOString(), sourceSha:sha, entryBuildSha, harnessBaseSha, output:outputRelative, harnessSha256:hash.digest('hex'), node:process.version, os:`${os.platform()} ${os.release()} ${os.arch()}`, modes:['Vite production entry served by buildWebApp','Vite production isolated real AccessPilot/PortalPendingRequests and PortalPreferencesPage, real demo transport'], samples:[], captures:[], checks:[], limits:['Synthetic BFF, no database or physical device','No concurrent tests launched by this worker during campaign; other machine workloads are uncontrolled','Added delay plus unchanged demo transport 650ms access / 500ms preferences','No p95; n=3 at 0/1s, n=1 at 5/15s; warmup separate','Bodies memory only; metadata sessionStorage is not body durability'] };
 const flush = async () => writeFile(`${output}/results.json`, JSON.stringify(results,null,2));
 await writeFile(`${output}/index.html`, '<html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script type="module" src="./fixture.tsx"></script></html>');
 await writeFile(`${output}/fixture.tsx`, fixtureSource);
@@ -25,7 +33,7 @@ const config = { configFile:false as const, root:resolve('.'), base:'/', plugins
 await build(config);
 const server = await preview({...config,preview:{host:'127.0.0.1',port:0}});
 const address = server.httpServer.address(); assert(address && typeof address !== 'string');
-const fixtureOrigin = `http://127.0.0.1:${address.port}/artifacts/web-reactivity-131/index.html`;
+const fixtureOrigin = `http://127.0.0.1:${address.port}/${outputRelative}/index.html`;
 const unavailable = async (): Promise<never> => { throw new Error('Unexpected identity call'); };
 const identity: IdentityProvider = {begin:unavailable,complete:unavailable,password:unavailable,refresh:unavailable,revoke:unavailable};
 let app: Awaited<ReturnType<typeof buildWebApp>> | undefined;
@@ -62,7 +70,9 @@ try {
   await page.setContent('<button id="trigger">Calibration</button>');
   await assert.rejects(arm(page,'#absent','click',{selector:'#absent'}), /Missing trigger/);
   await arm(page,'#trigger','click',{selector:'#absent',timeoutMs:100}); await page.click('#trigger'); await assert.rejects(duration(page), /NON_MESURÉ/);
-  results.checks.push('missing trigger rejects; missing expected DOM rejects without zero'); await page.close();
+  await page.evaluate(() => { (window as any).q = { matches: () => false }; });
+  await assert.rejects(waitForAccessVerdict(page,'confirmed',100), /Timeout/);
+  results.checks.push('missing trigger rejects; missing expected DOM rejects; absent store verdict times out without PASS'); await page.close();
   const delays = process.argv.includes('--smoke') ? [0] : [0,1000,5000,15000];
   for(const delay of delays) for(let repeat=delay===0?-1:0; repeat<(delay<=1000?3:1); repeat++) {
     const p: Page=await browser.newPage({viewport:{width:390,height:844}});
@@ -96,7 +106,7 @@ try {
     if(surface==='access') {
       await p.locator('#role-ADMIN').waitFor(); await p.locator('label[for=role-ADMIN]').click();
       await p.getByRole('button',{name:'Continuer',exact:true}).click(); await p.getByRole('button',{name:'Continuer',exact:true}).click();
-      await p.locator('#access-reason').fill('Mesure synthétique Q131');
+      await p.locator('#access-reason').fill(accessReason);
       await p.getByRole('button',{name:'Confirmer les changements',exact:true}).click();
     } else await p.getByRole('switch').first().waitFor();
     const startupAndPreparationMs=performance.now()-boot;
@@ -114,10 +124,17 @@ try {
     if(delay===15000 && surface==='access') { await capture(p,'access-wait-1440-light'); sample.independentAction='NON_MESURÉ: modal active; measured theme action on preferences instead'; }
     if(fault==='account') await p.evaluate(()=>(window as any).q.switchAccount());
     if(surface==='access') {
-      assert.equal(await p.evaluate(()=>sessionStorage.getItem('drivy-gestion-demandes-v1')?.includes('Mesure synth�tique Q131') ?? false),false,'no command body persisted');
-      await p.waitForFunction(()=>{const q=(window as any).q; return q.events.some((e:any)=>['write-response','response-lost'].includes(e.name));},null,{timeout:22000});
-      await p.waitForTimeout(150); // settle after response; never used as feedback duration
+      verifyMetadataOnly(await p.evaluate(()=>sessionStorage.getItem('drivy-gestion-demandes-v1')));
+      const expectedVerdict: AccessVerdict = fault === 'lost' || fault === 'refused' || fault === 'account' ? fault : 'confirmed';
+      await waitForAccessVerdict(p, expectedVerdict);
+      if(fault === 'refused') await p.getByText('Modification refusée',{exact:true}).waitFor();
+      if(fault === 'account') await p.getByRole('dialog').waitFor({state:'hidden'});
       const q=await p.evaluate(()=>(window as any).q);
+      assert.equal(q.metadataViolations,0,'every persisted write contains valid metadata only');
+      if(fault !== 'storage') assert(q.metadataCheckedEntries > 0,'non-empty metadata actually checked');
+      sample.expectedVerdict=expectedVerdict; sample.verdict='PASS';
+      sample.metadataChecks=q.metadataChecks; sample.metadataCheckedEntries=q.metadataCheckedEntries; sample.metadataViolations=q.metadataViolations;
+      if(expectedVerdict === 'confirmed') assert.equal(q.confirmed,true,'positive confirmation required');
       sample.transportResponseMs=q.events.find((e:any)=>['write-response','response-lost'].includes(e.name)).at-start;
       sample.confirmed=q.confirmed; sample.metadata=q.metadata; sample.events=q.events;
       const confirmed=q.events.find((e:any)=>e.name==='store-confirmed'); sample.confirmedMs=confirmed?confirmed.at-start:'NON_MESURÉ: aucune confirmation';
@@ -126,7 +143,7 @@ try {
       if(fault==='lost') {
         await p.getByRole('button',{name:'Vérifier le résultat',exact:true}).waitFor();
         await arm(p,'section[aria-label="Demandes en cours"] button','click',{selector:'body',text:'Le résultat de la demande est confirmé.'});
-        await p.getByRole('button',{name:'Vérifier le résultat',exact:true}).click(); sample.reconciliationMs=await duration(p);
+        await p.getByRole('button',{name:'Vérifier le résultat',exact:true}).click(); sample.reconciliationMs=await duration(p); await waitForAccessVerdict(p,'confirmed'); sample.reconciledConfirmed=true;
       }
       if(fault==='storage') await p.getByText(/Le suivi local n’a pas pu/).waitFor();
       if(fault==='reread') { await p.getByText('Actualisation impossible',{exact:true}).waitFor(); sample.readFailedAfterRealConfirmation=true; }
@@ -137,6 +154,7 @@ try {
       await p.getByText('Préférences synchronisées.',{exact:true}).waitFor({timeout:22000});
       sample.confirmedObservedMs=await p.evaluate(()=>performance.now())-start; sample.confirmedTimingLimit='DOM observed after Playwright wait: upper bound, includes driver overhead';
     }
+    if(surface==='access') { const finalStorage=await p.evaluate(()=>({checks:(window as any).q.metadataChecks,violations:(window as any).q.metadataViolations})); assert.equal(finalStorage.violations,0,'metadata verified through recovery'); sample.finalMetadataChecks=finalStorage.checks; }
     assert.deepEqual(errors,[]); results.samples.push(sample); console.log(JSON.stringify({surface,delay,repeat,fault,feedbackMs})); await p.close(); await flush();
   }
   results.summaries=Object.fromEntries(['entry','access','preferences'].flatMap(surface=>delays.map(delay=>[`${surface}/${delay}`,summarize(results.samples.filter((s:any)=>s.surface===surface&&s.delay===delay&&!s.fault&&!s.warmup).map((s:any)=>s.feedbackMs))])));

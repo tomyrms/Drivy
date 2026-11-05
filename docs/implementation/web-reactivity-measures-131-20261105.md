@@ -1,5 +1,44 @@
 # Q131 — premières mesures web sous latence, 5 novembre 2026
 
+## Correction 1 — confidentialité et verdict réellement observés
+
+Cette section remplace la portée des contrôles de stockage et de confirmation de la livraison `1a6a27dab7a7b2e94f7927aea76e76a70a92a3cb`, conservée dans l'historique. Les observations et fichiers JSON anciens restent inchangés : leur test de sentinelle mal encodée ne prouvait pas l'absence de contenu persisté, et leur attente de 150 ms n'exigeait pas un verdict positif. Ne pas les utiliser comme preuves de ces deux propriétés.
+
+**Correction.** `verifyMetadataOnly` parse le JSON stocké et exige exactement les six champs du contrat `updateMember` (`operationId`, `schoolId`, `kind`, `resourceId`, `resourceVersion`, `createdAt`), avec UUID, type et valeurs valides. La fixture appelle ce même vérificateur après chaque écriture réelle de la clé de suivi et compte les entrées non vides effectivement vérifiées ; une violation fait échouer la campagne sans journaliser le contenu. La saisie et les témoins partagent `accessReason`. Tests négatifs : contenu ajouté à un champ `reason`, corps imbriqué, contenu à la place d'un UUID, Unicode brut et Unicode échappé ; tous doivent être rejetés. Le cas de stockage refusé n'a aucune écriture réussie à qualifier.
+
+`waitForAccessVerdict` attend au plus 22 s un verdict du vrai magasin après réponse. Nominal, stockage refusé et relecture échouée exigent `confirmed=true` et une file vide ; réponse perdue exige une entrée incertaine, refus exige une file vide plus l'erreur UI, compte changé exige le changement de scope et une file vide plus fermeture de la modale. Les trois derniers exigent `confirmed=false`. La reprise après réponse perdue exige aussi positivement le reçu confirmé. La pause de 150 ms est supprimée ; les horodatages page restent ceux des événements et frames observés. Un timeout provoque `completed=false` et une sortie en erreur.
+
+**Préflight réutilisé et revérifié.** Même session `93de892f-dcb4-41f0-8916-80dbfa8b15e4` : reçu initial Orca relu, `launch.effective={agent:codex,model:gpt-6-astra,effort:high}` ; le dispatch de suivi ne répète pas ces options. Skills Superpowers debugging/TDD/verification relus aux chemins ci-dessous ; Impeccable et Uncodixfy déjà chargés, chemins et SHA256 revérifiés inchangés. Application : précision des preuves d'état, contrôles existants et design Drivy préservés, aucune refonte ni score du détecteur ENOENT. Codebase Memory `C-Users-jtoma-orca-workspaces-Drivy-issues-mesures-web-131`, racine absolue correcte, `ready`, watcher actif, index au 5 novembre 00:49:25 UTC / scan 00:59:54 UTC avant édition ; recherche ciblée `parseMetadata|toMetadata` dans `command-core.ts`, contrat et source relus.
+
+**Reproduction.** Commandes Node/tsx identiques ci-dessous ; avant une reconstruction du client, fixer `$env:DRIVY_BUILD_SHA='e2edc85ed092237016620079d52d11eb7a2d02b5'`. Le script refuse des sources produit différentes ou un build d'entrée d'identité différente. Chaque exécution écrit un nouveau dossier horodaté sous `artifacts/web-reactivity-131/correction-1/` ; pas d'écrasement d'une campagne précédente. L'empreinte inclut maintenant les deux nouveaux helpers de vérification et d'attente.
+
+**Campagne fraîche : PASS, exit 0, 42 échantillons dont 3 chauffes**, fichier `artifacts/web-reactivity-131/correction-1/run-2026-11-05T01-06-11.175Z/results.json` ; cinq captures nouvelles dans ce même dossier. Identité exacte du harnais : `8621dbb398dbb900806439b82380f2a3e89021f1f9584f4fa2f7516cda4d24a5` (sources mesurées copiées et empreinte recomposée). Chromium 153.0.8010.12, win32 10.0.26200 x64, Node v24.22.2, produit et build d'entrée `e2edc85ed092237016620079d52d11eb7a2d02b5` inchangés. Les résultats de la première exécution de correction restent dans leur dossier antérieur, comme les résultats initiaux.
+
+| Surface | Latence ajoutée | n hors chauffe | Retour UI min / médiane / max (ms) |
+|---|---:|---:|---|
+| entry | 0 s | 3 | 3.5 / 3.8 / 12.6 |
+| entry | 1 s | 3 | 6.4 / 12.7 / 24.4 |
+| entry | 5 s | 1 | 7.6 / 7.6 / 7.6 |
+| entry | 15 s | 1 | 17.1 / 17.1 / 17.1 |
+| access | 0 s | 3 | 9.6 / 10.1 / 10.1 |
+| access | 1 s | 3 | 11.0 / 11.6 / 17.6 |
+| access | 5 s | 1 | 15.9 / 15.9 / 15.9 |
+| access | 15 s | 1 | 8.8 / 8.8 / 8.8 |
+| preferences | 0 s | 3 | 8.2 / 14.6 / 15.6 |
+| preferences | 1 s | 3 | 7.6 / 12.8 / 14.2 |
+| preferences | 5 s | 1 | 12.9 / 12.9 / 12.9 |
+| preferences | 15 s | 1 | 12.8 / 12.8 / 12.8 |
+
+Hors chauffe : **14 accès positivement confirmés**, **9 verdicts initiaux sans faux confirmé** (3 perdus, 3 refusés, 3 comptes changés), puis **3 reprises positivement confirmées**. Aucun champ hors métadonnées ni valeur invalide dans les écritures observées ; les 3 stockages refusés ont explicitement zéro écriture réussie vérifiée. Changement de thème indépendant pendant l'attente 15 s : **11.0 ms**, n=1. Les temps de confirmation, métadonnées et convergence sont agrégés séparément dans `metricSummaries`. Les contrôles sont faits sur l'état et les écritures réels, pas sur la seule absence d'une phrase.
+
+**Revue visuelle fraîche.** Captures du dernier dossier inspectées : `access-wait-1440-light.png`, `access-storage-390-dark-keyboard.png`, `access-refused-390-dark-keyboard.png`. Attente modale, confirmation distincte de l'alerte de stockage, motif préservé au refus et focus visible ; aucun changement de présentation.
+
+**Validation ciblée.** Commandes `node apps/web/node_modules/tsx/dist/cli.mjs scripts/dev/reactivity-131/guards.test.ts` et `stats.test.ts`, puis tsc ciblé avec les options strictes listées dans la livraison initiale et `guards.test.ts` ajouté ; sorties `guards-green.log`, `stats-green.log`, `types-final.log`, exit 0. `verify-final.py` valide les 42 échantillons et l'empreinte exacte, exit 0. RED reproduits : `correction-1/guards-red.log` (absence d'exception malgré fuite) puis `verdict-red.log` (réponse sans confirmation acceptée). GREEN des mêmes tests, statistiques et typage strict ciblé ; contrôle navigateur d'un verdict volontairement absent : timeout attendu, jamais zéro/PASS. La suite web complète inchangée et le typage global hors lot ne sont pas réexécutés, conformément au mandat. Aucune source produit ni ancien test #106 modifié ; aucun outil installé, push, CI ou déploiement. Fichiers : script, fixture, nouveaux `guards.ts`, `guards.test.ts`, `observe.ts`, présent rapport.
+
+**Limites.** Aucun test concurrent lancé par ce worker pendant la mesure ; les autres charges de la machine ne sont pas contrôlées. Le coût du vérificateur et des observateurs est inclus dans les temps ; ces chiffres ne constituent pas un gain comparatif sur la campagne initiale. Windows/Chromium et production synthétique uniquement, n=3 aux cas courts et n=1 à 5/15 s, chauffes séparées ; aucune garantie sur appareil physique, aucune mesure de corps durable. L'oracle de stockage est volontairement limité aux métadonnées de `updateMember`, pas à toutes les clés ni aux familles de commandes de l'application.
+
+## Livraison initiale — observations historiques conservées
+
 Campagne locale ciblée de #131/#105/#106, sans changement produit. Sources produit `e2edc85ed092237016620079d52d11eb7a2d02b5`. Le commit contenant ce rapport identifie le harnais ; son SHA-256 exact et les dates figurent dans `artifacts/web-reactivity-131/results.json`. Les artefacts sont ignorés et restent dans ce worktree.
 
 ## Préflight et périmètre

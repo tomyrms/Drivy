@@ -1,6 +1,7 @@
 // Compiled in production mode; only composition, transport faults and observation hooks live here.
 export const fixtureSource = `
 import React from 'react';
+import { verifyMetadataOnly, accessVerdictMatches } from '/scripts/dev/reactivity-131/guards';
 import { createRoot } from 'react-dom/client';
 import { z } from '/apps/web/node_modules/zod/index.js';
 import { ConsoleContext } from '/apps/web/client/console/context';
@@ -13,11 +14,12 @@ import { ids, previewMe, previewMembership, previewSchool } from '/apps/web/clie
 import '/apps/web/client/portal/portal.css';
 z.config({ jitless: true });
 const params = new URLSearchParams(location.search), delay = Number(params.get('delay') || 0), fault = params.get('fault') || '';
-const q = window.q = { events: [], writes: 0, reads: 0, confirmed: false, metadata: null, changed: false };
+const q = window.q = { events: [], writes: 0, reads: 0, confirmed: false, metadata: null, changed: false, phases: [], metadataChecks: 0, metadataCheckedEntries: 0, metadataViolations: 0 };
 const event = name => q.events.push({ name, at: performance.now() });
-const originalSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function(key, value) { if(key !== 'drivy-gestion-demandes-v1') return originalSetItem.call(this,key,value); if(fault === 'storage') { event('metadata-refused'); throw new Error('Synthetic metadata refusal'); } const result=originalSetItem.call(this,key,value); event('metadata-saved'); return result; };
+const originalSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function(key, value) { if(key !== 'drivy-gestion-demandes-v1') return originalSetItem.call(this,key,value); if(fault === 'storage') { event('metadata-refused'); throw new Error('Synthetic metadata refusal'); } const result=originalSetItem.call(this,key,value); event('metadata-saved'); try { q.metadataCheckedEntries += verifyMetadataOnly(this.getItem(key)); q.metadataChecks++; } catch { q.metadataViolations++; event('metadata-invalid'); } return result; };
 installPreviewTransport();
 if (fault === 'lost' || fault === 'refused') setPreviewScenario(fault === 'lost' ? 'lost-reply' : 'refused');
+q.matches = expected => q.metadataViolations === 0 && q.events.some(e => ['write-response','response-lost'].includes(e.name)) && accessVerdictMatches(q,expected);
 const transport = window.fetch;
 window.fetch = async (input, init) => {
   const method = init?.method || 'GET', url = String(input), write = method !== 'GET';
