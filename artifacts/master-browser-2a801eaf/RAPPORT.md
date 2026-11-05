@@ -52,3 +52,36 @@ Préfixe Node de toutes les commandes : `C:/Users/jtoma/.cache/codex-runtimes/co
 Le build produit exact 2a801eaf déjà construit reste valide : le delta ne modifie aucun fichier compilé de l’UI. Le scénario metadata antérieur instrumenté passait, mais ce résultat n’est pas transféré à la correction. Le timeout local actuel est distinct du compte DOM 0/1 de la CI : aucun contrôle de contenu n’est atteint. Les fichiers HTML et TSX de fixture sont présents et générés par le script ; race réussit ensuite sur ce même mécanisme. Cela ne démontre pas la cause du timeout, ni une contention : metadata a été lancé pendant le démarrage de la recette complète, donnée de contexte seulement. La cause de ce timeout reste inconnue, sans nouvelle correction autorisée.
 
 Les conteneurs de base et mail dédiés à cette passe sont vérifiés par label task_7dbf53db6fe0 avant retrait ; le conteneur étranger n’est jamais modifié. Aucun push, qualification CI ou déploiement lancé par le worker. Cause exacte du run opening historique toujours non établie. Le delta est prêt pour revue de code, mais **la validation locale metadata corrigée n’est pas acquise** ; décision du coordinateur requise avant suite et unique qualification CI sur SHA publié.
+
+
+## Qualification CI unique autorisée — collecte terminée
+
+Après revue du commit 2250751d, le coordinateur a publié le candidat `f81ba3d0fbcd5ef229fecd4008df4369e5ca1619` sur `tomyrms/integration-issues-20261105` et a confié explicitement au worker les deux déclenchements et leur collecte. Les deux scripts du candidat sont identiques au commit revu (git diff ciblé code 0). Le distant vérifié pointe sur ce SHA ; la requête des runs de ce SHA retournait zéro résultat avant déclenchement (`ci-preflight.json`).
+
+Déclenchements uniques, chacun code 0 :
+
+- `gh workflow run refonte-checks.yml --repo tomyrms/Drivy --ref tomyrms/integration-issues-20261105 -f final_campaign=false -f messaging_qualification=false -f candidate_ref=` → run **42123686676**, tentative 1 ; watcher unique session **38321**, journal `ci-checks-42123686676-watch.log`, code de sortie collecté dans le fichier homonyme `.exit`.
+- `gh workflow run school-opening-e2e.yml --repo tomyrms/Drivy --ref tomyrms/integration-issues-20261105 -f extended_suites=` → run **42123694742**, tentative 1 ; watcher unique session **64058**, journal `ci-opening-42123694742-watch.log`, code **0**.
+
+Ouverture CI : **RÉUSSI**. `ci-opening-final.json` et l’identity.json téléchargé attestent SHA f81ba3d0, run 42123694742, tentative 1. Le result.json contient **115 contrôles**, status PASSED, Chromium 153.0.8010.12, extendedSuites vide. Le checkout contient bien level:1 pour le contrôle STAFF ; le contrôle distinct du nom est inchangé. Artefact `onboarding-web-synthetic-f81ba3d0fbcd5ef229fecd4008df4369e5ca1619`, téléchargé dans `ci-opening-artifacts/` ; métadonnées `ci-opening-artifacts.json`, journal `ci-opening-job.log`. Cela ne prouve pas la cause de l’ancien échec d’ouverture.
+
+Le point d’entrée vérifications impose API/web/docs ensemble : ce couplage demandé est conservé, aucune campagne API supplémentaire. Aucun validation-finale, Apple, IPA, full, qualification_sha, rerun, push, modification de master ou déploiement du worker ; le watcher Apple d’un autre worker est laissé intact.
+
+
+### Résultat final de la collecte CI
+
+**Les deux runs autorisés sont RÉUSSIS, tentative 1 sur f81ba3d0fbcd5ef229fecd4008df4369e5ca1619 ; les deux watchers ont terminé avec le code 0.** Identités et compteurs vérifiés dans `ci-summary.json`, `ci-checks-final.json`, `ci-opening-final.json` et les identity.json des artefacts. Aucun watcher restant pour ce lot.
+
+| Preuve CI | Résultat |
+|---|---|
+| [Vérifications 42123686676](https://github.com/tomyrms/Drivy/actions/runs/42123686676) | Documentation, sélection, API et web réussis ; job final volontairement skipped. |
+| API, job 127582347909 | **95 fichiers, 1060/1060 tests**, zéro failed/pending/todo ; typage et build réussis. Couplage du workflow manuel, sans campagne API distincte. |
+| Web, job 127582348134 | **82 fichiers ; 890 passed + 1 expected fail = 891 cas**. Le JSON Vitest compte 891 passed et zéro failed/pending/todo : ce compteur inclut l’échec attendu. Typage et build réussis. |
+| Pending effectivement exécuté | `ci-web-job.log` atteste **metadata passed (10904 ms)** et **race passed (3762 ms)**, sans retry ni skip. Le compteur exact=1 et la disparition de notice sont ceux du script candidat revu. |
+| [Ouverture 42123694742](https://github.com/tomyrms/Drivy/actions/runs/42123694742) | **115 contrôles**, dont parcours STAFF et suite de première leçon, artefact PASSED ; H1 ciblé dans le script exact du checkout, nom école inchangé. |
+
+Artefacts téléchargés : `ci-web-artifacts/{web,identity}.json`, `ci-api-artifacts/{api,identity}.json`, dossier `ci-opening-artifacts/`. Métadonnées et identifiants des archives dans `ci-checks-artifacts.json` et `ci-opening-artifacts.json`. Journaux ciblés : `ci-web-job.log`, `ci-api-job.log`, `ci-opening-job.log` ; traces des watchers avec leurs codes réels. Les journaux ANSI ont été décolorés en mémoire pour vérifier les deux lignes de succès pending, sans modifier leurs verdicts ni les fichiers sources.
+
+Le timeout metadata de l’unique tentative locale demeure un échec avant contrôle, de cause inconnue ; il n’est pas effacé par ce vert CI. Le contrôle corrigé est en revanche **qualifié sur le candidat publié par la CI présente**. La cause exacte de l’ancien run ouverture demeure non établie : le défaut latent du sélecteur et sa correction sont prouvés séparément, sans réécriture de l’historique.
+
+Les seules ressources locales dédiées ont été libérées ; l’inventaire final ne montre que le conteneur étranger `idrive-stream-regression-db`, laissé intact. Aucun push, modification de master, déploiement, lancement Apple/IPA ou rerun du worker. Correction locale 2250751d intégrée par le coordinateur dans f81ba3d0 ; le présent complément de rapport n’altère aucun fichier exécuté par les runs qualifiés.
