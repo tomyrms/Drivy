@@ -2,6 +2,14 @@
 
 23 octobre 2026. Étude #68, articulation #67 et #77. **NOT_QUALIFIED : aucune infrastructure de messagerie déployée ou auditée.** Cette note propose des exigences et une recette. Elle ne certifie ni conformité juridique, ni résidence effective, ni accord du porteur sur les exceptions. Voir `messaging-security-20261023.md`.
 
+## Actualisation du 5 novembre 2026
+
+Les constats du 23 octobre ci-dessous décrivent leur état historique, pas l'absence actuelle des mécanismes. Les [décisions du porteur](decisions-messaging-20261023.md) ont retenu Matrix Olm/Megolm avec transport Drivy, sans homeserver Matrix, et accepté le passage APNs sans texte de message. Ces décisions sont acquises ; elles ne démontrent ni une résidence exclusivement suisse d'APNs ni une émission réelle. Aucun nouvel arbitrage sur le choix crypto ou sur ce principe APNs n'est requis par cette étude.
+
+Le lot de restauration intégré depuis `fafa2d10` apporte une preuve locale avec PostgreSQL réel, `pg_dump` et `pg_restore`, données synthétiques et rejeu avant réouverture : voir [le scénario et ses limites](messaging-restore-replay-20261105.md). Les lignes RES04/RES05 distinguent cette preuve du chiffrement de la sauvegarde et d'une archive indépendante durable de production, toujours non qualifiés. La coupe seule d'un lien ne suffit pas : la fin d'affectation acquise couverte est également rejouée, puis la synchronisation vérifie l'absence de réouverture. Les autres causes de perte de droit restent hors de cette preuve.
+
+Le déploiement applicatif `1778ed7d` et sa sauvegarde répétée ne certifient pas le périmètre suisse et n'activent pas la messagerie publique. Restent à établir les destinations/opérateurs de toutes les copies, l'archive durable indépendante et sa barrière de réouverture, le chiffrement de sauvegarde, les objectifs RPO/RTO et les politiques de conservation/export approuvées. L'historique conservé tant que la conversation existe est la règle provisoire déjà décidée ; aucun délai de purge nouveau n'est déduit de cette actualisation.
+
 ## 1. Frontière immédiate
 
 Le coordinateur a autorisé le prototype isolé `prototypes/messaging-crypto/**` le 23 octobre 2026 à 01:26 UTC. Ses quatre scénarios synthétiques utilisant la machine officielle Matrix sont écrits et compilés, **non exécutés** conformément à #84. Aucun homeserver, stockage distant, push ou service tiers n'a été activé. Les téléchargements de dépendances publiques ne transportent pas de conversations. Cette compilation n'apporte aucune preuve de résidence, de restauration ou de sécurité opérationnelle.
@@ -56,10 +64,10 @@ Le schéma représente une proposition, pas des routes ou des garanties en produ
 | Index et caches | Index local clair après déchiffrement, cache serveur opaque | Aucun index plein texte serveur du contenu sous E2EE. Tout cache personnel côté service dans le périmètre suisse | À réaliser |
 | Queues/outbox/DLQ | Opaque et métadonnées de distribution | Suisse, payload exclu des erreurs et consoles, purge des doublons/copies | À réaliser |
 | Sauvegardes DB, WAL, médias, snapshots | Copies ciphertext et métadonnées, éventuellement configurations | Toutes destinations et tous opérateurs identifiés, chiffrement et restauration isolée testés | Non prouvé |
-| Sauvegarde des clés utilisateur | Coffre chiffré et métadonnées | Suisse côté service, secret utilisateur non récupérable par opérateur dans le modèle proposé | Décision #67 requise |
+| Sauvegarde des clés utilisateur | Coffre chiffré et métadonnées | Suisse côté service, secret utilisateur non récupérable par opérateur dans le modèle retenu | Choix #67 acquis ; exploitation et résidence à qualifier |
 | Clés serveur et secrets d'exploitation | TLS, authentification push, clés de stockage, credentials | Coffre et secours suisses, séparation de comptes et accès minimaux | À inventorier, jamais lire/committer ici |
 | Signalements | Extraits choisis et contexte, dossier d'action | Copie explicite protégée, seuls modérateurs habilités, conservation distincte approuvée | #77 bloquant |
-| APNs | Jeton d'appareil, sujet applicatif, horaires, IP du fournisseur, payload | Apple, garantie Suisse-only non trouvée dans les sources consultées [A1, A2] | Bloqué sans arbitrage |
+| APNs | Jeton d'appareil, sujet applicatif, horaires, IP du fournisseur, payload | Apple, garantie Suisse-only non trouvée dans les sources consultées [A1, A2] | Principe accepté sans texte ; exécution et contrôle des flux à qualifier |
 | Logs/crash/monitoring/support | Codes d'erreur, horaires et parfois métadonnées personnelles | Suisse pour données personnelles, suppression du corps avant émission, pas de session replay | À démontrer |
 | CI/GitHub et dépendances | Sources publiques et fixtures synthétiques uniquement | Jamais base réelle, clés, conversations, tokens, positions ou dump appareil. Build Apple ne qualifie pas la résidence des données réelles | Règle de développement |
 | DNS, certificats, réseau, identité annexe | Noms d'hôtes, adresses, données de connexion selon service | Inventorier prestataires, lieux de traitement et accès, ne pas promettre trajet réseau exclusivement suisse | Non qualifié |
@@ -126,7 +134,7 @@ Exigences de réalisation proposées :
 
 ## 8. Décisions à obtenir et sources
 
-Avant activation : approuver séparément lecteurs/cryptographie (#67), droits et parcours (#66/#69), conservation et copies (#68), modération minimale (#77), frontières APNs/appareils. Documenter le sort des utilisateurs voyageant hors Suisse plutôt que promettre une localisation de leurs téléphones. Aucun consentement ou validation n'est fabriqué par cette note.
+Avant activation : confronter lecteurs/cryptographie (#67), droits et parcours (#66/#69), modération (#77) et flux APNs aux décisions déjà acquises, puis obtenir les décisions restantes sur conservation, copies et frontières des appareils (#68). Documenter le sort des utilisateurs voyageant hors Suisse plutôt que promettre une localisation de leurs téléphones. Aucun consentement ou validation n'est fabriqué par cette note.
 
 Sources Apple officielles consultées le 23 octobre 2026, pages mouvantes :
 
@@ -137,4 +145,4 @@ Sources Apple officielles consultées le 23 octobre 2026, pages mouvantes :
 
 Sources locales : AGENTS.md, conception `04-technique/securite-vie-privee.md`, `docs/implementation/deploiement-refonte.md`, issues #68 et #77. La présente note ne déduit aucune garantie contractuelle ou juridique d'une documentation technique Apple. Une revue juridique ciblée du montage réel reste à obtenir, sans affirmer ici une règle de transfert non vérifiée.
 
-**Livré :** inventaire documentaire partiel, cartographie cible, blocages et protocole de recette. **Non livré :** infrastructure suisse qualifiée, restauration réelle, purge effective, APNs approuvé ou messagerie activée. Le coordinateur doit conserver ces limites dans STATUS.md, hors propriété de cette contribution.
+**Livré :** inventaire documentaire partiel, cartographie cible, protocole de recette et restauration locale synthétique pour le scénario RES05 décrit. **Non qualifié :** infrastructure suisse complète, sauvegarde chiffrée, archive durable indépendante de production, purge selon politique approuvée et flux APNs réels. Le principe APNs minimal est approuvé ; la messagerie publique n'est pas déclarée activée par cette note. Le coordinateur conserve ces limites dans STATUS.md.

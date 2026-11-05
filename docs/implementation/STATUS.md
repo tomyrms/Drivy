@@ -1,5 +1,13 @@
 # État de la réalisation
 
+## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
+
+- **Intégration qualifiée sous Linux** : candidat `7dc77d30f1614d76dd31e4efde935af68d7acb7b`, [run 42111093690](https://github.com/tomyrms/Drivy/actions/runs/42111093690), tentative 1, success, watcher unique code 0. API PostgreSQL réel **1060/1060**, dont dix tests restauration/rejeu et SIGTERM du worker cours ; web **890 réussis + un échec attendu préexistant**, dont les deux cas pending-recovery ; typages, builds et contrats verts. Le résumé web sanitizé compte l'échec attendu parmi ses 891 assertions acceptées ; le journal conserve la distinction. Preuves locales : `artifacts/qualification-restes-7dc77d30/RAPPORT.md`.
+- **Lots réunis** : réconciliation par champ et conflits dans la file/hooks web (`88f07c5e`), raccord réel du formulaire école (`2a3a3f95`), restauration synthétique avec rejeu et refus de résurrection pour les causes couvertes (`fafa2d10`), scénarios cours (`63c4901f`). Les harnais Chromium autonomes conservent leurs preuves locales ; ils ne sont pas présentés comme rejoués par la CI Linux.
+- **Cours Apple encore partiel** : [run 42105462976](https://github.com/tomyrms/Drivy/actions/runs/42105462976) sur `7c2acdb1`, iPhone **13/13**, iPad **12/13**, zéro ignoré. Le test de règlement iPad n'a produit aucune mutation : le premier toucher a seulement masqué le clavier. Correction de geste `d9dc901b` relue, sans changement produit, à compiler/exécuter avant validation ; toucher direct clavier ouvert non qualifié. Voir [traçabilité cours](../qa/cours-collectifs-tracabilite.md).
+- **Limites conservées** : le signalement média typé reste incomplet à l'envoi et à la lecture administrateur ; aucune copie d'octets n'est autorisée. RES05 reste une preuve locale bornée ; sauvegarde chiffrée et archive indépendante durable de production manquent. Les décisions Matrix/APNs du porteur sont acquises, sans nouvelle preuve de résidence suisse. SMTP réel et Face ID physique restent hors qualification. Les dix issues ne sont pas déclarées terminées.
+- **Exploitation** : master et dernière bascule vérifiée restent `1778ed7d`. Le nouvel ensemble n'est pas déployé. IPA Messages build 498 du run 42108372415 livré dans Downloads sur ce master, non signé/non installé ; les essais physiques restent à effectuer par le porteur.
+
 ## 5 novembre 2026 — Intégration des lots et qualification avant déploiement
 
 Les lots serveur et client média, récupération web, worker de cours, accès et socle de réactivité sont assemblés dans `tomyrms/integration-issues-20261105`. Cette intégration ne clôture pas les issues : leurs critères d'exploitation, de parcours complémentaires et de qualification physique restent distincts.
