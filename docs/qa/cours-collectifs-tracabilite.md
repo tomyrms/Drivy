@@ -135,3 +135,29 @@ Cinq fichiers de tests API et un fichier de tests web ajoutés pour #83, sans au
 Critères dont le statut a changé dans les tableaux ci-dessus : #38 aucun paiement en ligne (NOT_COVERED vers PARTIAL, revue d'écrans manquante), #39 leçon simultanée, push en échec et fuseaux (vers PASS), #40 échéance et changement d'heure, proposition visible sans push (vers PASS), #41 DST serveur (reste PARTIAL, horloge client fausse), #82 effets d'une validation sur la file et sur une inscription future (vers PASS).
 
 Restent hors de cette recette, sans test : #40 alertes « prochaines sessions » (fonction non livrée, #43/#44), #40 plusieurs places libérées et inscription manuelle pendant une offre, #41 horloge client fausse, et tout ce qui demande un appareil (réception APNs réelle, refus système des notifications). Le parcours navigateur « série créée sur le web puis inscription » n'a toujours pas de script de bout en bout : seuls les modèles web et le BFF sont testés. Les tests Swift et UI de cours (`SchoolCourseClientTests`, `SchoolCourseJourneyUITests`) n'ont pas été rejoués dans ce lot ; leur dernier résultat connu est celui de la campagne du 28 octobre (voir `STATUS.md`). Aucun résultat physique n'est affirmé.
+
+
+## Parcours utilisateur #37 — complément du 5 novembre 2026
+
+Base `1778ed7d90ec12a4c7de5163ac9b343c5076684e`, lot `task_d1e32a7ad740`. Les résultats historiques ci-dessus ne sont pas réinterprétés comme une qualification de ce candidat.
+
+La lecture des vrais écrans confirme que le contact après échéance existe déjà : `course-contact-school` ouvre un `mailto`, et `SchoolMessagingEntryButton` ouvre la composition Messages lorsqu’elle est fournie. Aucun de ces gestes n’appelle l’annulation. Aucun défaut produit reproduit dans ce lot ; aucun écran métier, client, contrat, serveur ou moteur de cours modifié.
+
+`SchoolCourseVisualReview` ajoute six scènes DEBUG/simulateur explicites et `SchoolCourseJourneyUITests` six parcours aux sept existants (13 cas). Les scènes historiques conservent leurs échecs de mutation. Les nouvelles scènes utilisent les vrais workspaces et le vrai client, avec des réponses scriptées à la frontière HTTP, des opérations ordonnées et un témoin des mutations inattendues. Elles ne prouvent pas une écriture serveur durable.
+
+| Critère | Contrôle ajouté / exécuté |
+| --- | --- |
+| Proposition prioritaire disponible | Relecture des quatre séances, acceptation explicite, réponse 201 puis « Inscrit », une seule mutation `accept` ; jamais d’inscription automatique. |
+| Proposition expirée | Snapshot synthétique d’une offre restée affichée après son échéance : texte « Délai de réponse passé », aucune action accepter/refuser, zéro mutation. Ceci vérifie la défense de présentation ; le passage de file côté serveur n’est pas simulé. |
+| Annulation avant échéance | Confirmation de l’inscription aux quatre séances, réponse 200, état « Annulé » ; la série reste affichée. |
+| Contact après limite | Taille d’accessibilité XXXL, ouverture Mail interceptée vers l’adresse synthétique prévue et ouverture de l’entrée Messages sur une destination de fixture ; retour « Inscrit », zéro mutation. Aucun message ni e-mail envoyé, aucun transport Messages qualifié par ce test. |
+| Trois faits distincts | Montant 80 saisi au clavier, réponse de règlement sans nouvelle présence ; dernière présence enregistrée séparément ; validation encore explicite après quatre présences confirmées. |
+| Droits affichés | Élève sans actions de personnel ; personnel appel seul et règlements seuls sans accès aux autres tâches. Les refus API ne sont pas prouvés par des boutons absents. |
+
+**Apple : NON COMPILÉ / NON EXÉCUTÉ à ce stade.** La sélection `SchoolCourseJourneyUITests` doit être exécutée sur iPhone et iPad après revue et publication du SHA par le coordinateur. Les captures sont attachées par les tests après leurs assertions ; aucune capture native n’est inventée. Les deux cycles maximum de ce problème restent le budget de qualification, sans réinitialiser les budgets planning.
+
+**Web local exécuté**, Node portable 24.22.1, dépendances déjà présentes de l’intégration via une jonction locale ignorée, `package.json` et `package-lock.json` identiques par SHA-256, aucune installation : sept fichiers ciblés Vitest, **85 réussis et 1 échec attendu déclaré** (86 au total), exit 0 ; `tsc --noEmit` et `tsc -p tsconfig.check.json`, exit 0. L’échec attendu préexistant est `course-model-fuseaux-limites.test.ts:131` (relecture de la première occurrence de l’heure doublée), pas une réparation de ce lot.
+
+Parcours réels du navigateur Orca sur l’aperçu existant, source web inchangée : règlement synthétique 80 CHF au clavier, état à confirmer puis compté ; présence toujours non renseignée après paiement, puis présence explicite ; validation interdite tant qu’une séance requise manque ; validation d’un autre participant après deux présences et confirmation dédiée ; offres disponibles/expirées visibles ; annulation par le personnel après échéance avec motif, historique conservé. Inspection des captures en thème réellement sombre, largeurs 803 et 390 px, défilement réel jusqu’à l’inscription annulée. Aucune modification web nécessaire pour les parcours observés. La parité porte sur les tâches de bureau existantes, pas sur un parcours élève web ajouté.
+
+Preuves et commandes : `artifacts/courses-37-journeys/` (logs, instantanés AX/DOM du navigateur, captures et rapport de lot). Les données sont exclusivement synthétiques et les transports de prévisualisation locaux. Pas de PostgreSQL, SIGTERM, métier all, APNs, mail réel, VoiceOver physique ou déploiement exécutés par ce lot. La recette multi-client contre un même serveur réel reste distincte de ces fixtures.
