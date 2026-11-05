@@ -1554,7 +1554,15 @@ private struct MessagingThreadFooter: View {
         } message: {
             let count = thread.reportSelection.count
             let noun = count == 1 ? "ce message" : "ces \(count) messages"
-            Text("Les administrateurs de l'école pourront lire \(noun), avec leur auteur et leur date. Le reste de la conversation ne leur est pas montré.")
+            let includesMedia = workspace.visibleMessages(thread.conversationID).contains {
+                thread.reportSelection.contains($0.id)
+                    && ($0.meta.media != nil || workspace.contents[$0.id]?.media != nil)
+            }
+            if includesMedia {
+                Text("Vous transmettez \(noun), avec leur auteur et leur date. Pour chaque pièce jointe, seuls sa nature, son nom et sa légende éventuelle sont lisibles : pièce jointe non transmise aux administrateurs. Le reste de la conversation ne leur est pas montré.")
+            } else {
+                Text("Les administrateurs de l'école pourront lire \(noun), avec leur auteur et leur date. Le reste de la conversation ne leur est pas montré.")
+            }
         }
     }
 }

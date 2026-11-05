@@ -10,10 +10,10 @@ final class MessagingReportScreensUITests: XCTestCase {
 
     // MARK: Aides
 
-    private func launch() -> XCUIApplication {
+    private func launch(extra: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-messaging-ui-fixture", "-messaging-ui-rich", "-messaging-ui-reports",
-                               "-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"]
+                               "-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"] + extra
         for attempt in 0..<2 {
             app.launch()
             if app.wait(for: .runningForeground, timeout: 20) { return app }
@@ -139,7 +139,7 @@ final class MessagingReportScreensUITests: XCTestCase {
         capture("07-confirmation-avant-transmission")
         XCTAssertTrue(shown, "La confirmation doit s'afficher avant tout envoi : " + app.debugDescription)
         // Annuler : rien n'est transmis.
-        app.buttons["Annuler"].firstMatch.tap()
+        dismissReportConfirmation(in: app)
     }
 
     // MARK: Message illisible
@@ -161,5 +161,164 @@ final class MessagingReportScreensUITests: XCTestCase {
         XCTAssertTrue(line.waitForExistence(timeout: 15), app.debugDescription)
         XCTAssertTrue(line.label.contains("ne peut pas être lu"), "Le message illisible est dit : " + line.label)
         capture("05b-message-illisible")
+    }
+
+    // MARK: Médias signalés (#97), frontières synthétiques et vrais workspace/vues
+
+    private func reportMessageID(_ sequence: Int) -> String {
+        "b0000001-0000-4000-8000-" + String(format: "%012x", sequence)
+    }
+
+    private func assertReportWitness(_ expected: String, in app: XCUIApplication) {
+        let witness = app.staticTexts["messaging.report.fixture"]
+        XCTAssertTrue(witness.waitForExistence(timeout: 10))
+        let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", expected), object: witness)
+        XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 10), .completed)
+    }
+
+    private func dismissReportConfirmation(in app: XCUIApplication) {
+        let cancel = app.buttons["Annuler"].firstMatch
+        if cancel.exists && cancel.isHittable { cancel.tap(); return }
+        // Native iPad confirmation popovers can omit the cancel action: dismiss outside their bounds.
+        let popover = app.popovers.firstMatch
+        XCTAssertTrue(popover.exists)
+        let navigation = app.navigationBars.firstMatch
+        let point = CGPoint(x: navigation.frame.midX, y: navigation.frame.midY)
+        XCTAssertFalse(popover.frame.contains(point))
+        navigation.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+    }
+
+    /// Gestes natifs bornés dans la liste, sans toucher de modèle ni supposer qu'un élément AX est visible.
+    private func revealReportElement(_ target: XCUIElement, in app: XCUIApplication, towardOlder: Bool = false,
+                                     contentPrefix: String = "messaging.reports.line.") {
+        // iPad also has an inbox list: scope the gesture to the list containing the relevant rows.
+        let lists = app.descendants(matching: .any).matching(NSPredicate(format:
+            "elementType == %d OR elementType == %d OR elementType == %d",
+            XCUIElement.ElementType.collectionView.rawValue, XCUIElement.ElementType.table.rawValue,
+            XCUIElement.ElementType.scrollView.rawValue))
+        let list = lists.containing(NSPredicate(format: "identifier BEGINSWITH %@",
+            towardOlder ? "messaging.report.select." : contentPrefix)).firstMatch
+        XCTAssertTrue(list.waitForExistence(timeout: 10))
+        for _ in 0..<10 {
+            if target.exists && target.isHittable { return }
+            let frame = list.frame.intersection(app.windows.firstMatch.frame)
+            XCTAssertGreaterThan(frame.height, 100)
+            let origin = app.coordinate(withNormalizedOffset: .zero)
+            let start = origin.withOffset(CGVector(dx: frame.midX, dy: frame.minY + frame.height * (towardOlder ? 0.3 : 0.8)))
+            let end = origin.withOffset(CGVector(dx: frame.midX, dy: frame.minY + frame.height * (towardOlder ? 0.8 : 0.3)))
+            start.press(forDuration: 0.05, thenDragTo: end)
+        }
+        XCTAssertTrue(target.exists && target.isHittable, "Le contrôle doit être visible et atteignable après défilement")
+    }
+
+    func testMediaReportDetailInLargeTextDoesNotOpenFiles() {
+        let app = launch(extra: ["-messaging-ui-report-media", "-UIPreferredContentSizeCategoryName",
+                                 "UICTContentSizeCategoryAccessibilityXXXL"])
+        openMessages(app)
+        let entry = app.buttons["messaging.reports.open"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 20))
+        entry.tap()
+        let report = element("messaging.reports.row.d0000000-0000-4000-8000-000000000004", in: app)
+        XCTAssertTrue(report.waitForExistence(timeout: 10))
+        revealReportElement(report, in: app, contentPrefix: "messaging.reports.row.")
+        XCTAssertTrue(report.label.contains("6 messages"))
+        report.tap()
+        XCTAssertTrue(app.navigationBars["Signalement"].waitForExistence(timeout: 10))
+        XCTAssertTrue(element("messaging.reports.line.", in: app).waitForExistence(timeout: 15))
+        let expected: [(Int, String, String?)] = [
+            (23, "Photo · Photo synthétique.png", "Photo de l’exercice fictif"),
+            (24, "PDF · Document synthétique.pdf", nil),
+            (25, "Photo · Photo synthétique.png", nil),
+            (26, "PDF · Document synthétique.pdf", "Consignes du cours fictif")
+        ]
+        for (sequence, title, caption) in expected {
+            let line = element("messaging.reports.line." + reportMessageID(sequence), in: app)
+            revealReportElement(line, in: app)
+            XCTAssertTrue(line.label.contains("Marc Fixture"))
+            XCTAssertTrue(line.label.contains(title), line.label)
+            XCTAssertTrue(line.label.contains("Pièce jointe non transmise aux administrateurs"), line.label)
+            if let caption { XCTAssertTrue(line.label.contains(caption), line.label) }
+            else {
+                XCTAssertFalse(line.label.contains("Photo de l’exercice fictif"))
+                XCTAssertFalse(line.label.contains("Consignes du cours fictif"))
+            }
+            XCTAssertNotNil(line.label.range(of: #"\d{1,2}:\d{2}"#, options: .regularExpression), "Date et heure conservées")
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Ouvrir ' OR label CONTAINS 'Télécharger'")).count, 0)
+            capture("report-media-large-\(sequence)")
+        }
+        let text = element("messaging.reports.line." + reportMessageID(19), in: app)
+        revealReportElement(text, in: app)
+        XCTAssertTrue(text.label.contains("Texte synthétique conservé"))
+        XCTAssertFalse(text.label.contains("Pièce jointe non transmise"))
+        let unreadable = element("messaging.reports.line." + reportMessageID(7), in: app)
+        revealReportElement(unreadable, in: app)
+        XCTAssertTrue(unreadable.label.contains("ne peut pas être lu"))
+        XCTAssertFalse(unreadable.label.contains("Photo ·"))
+        capture("report-media-large-text-unreadable")
+        assertReportWitness("prepared=0;post=0;ack=0;removed=0;files=0;selection=-", in: app)
+    }
+
+    func testMixedMediaReportCancellationAndConfirmedSelection() {
+        mixedMediaReport(largeText: false)
+    }
+
+    func testMixedMediaReportConfirmationInLargeText() {
+        mixedMediaReport(largeText: true)
+    }
+
+    private func mixedMediaReport(largeText: Bool) {
+        var extra = ["-messaging-ui-report-media"]
+        if largeText { extra += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
+        let app = launch(extra: extra)
+        openMessages(app)
+        let general = app.buttons["messaging.general.open"].firstMatch
+        XCTAssertTrue(general.waitForExistence(timeout: 20))
+        general.tap()
+        let options = app.buttons["messaging.options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 15))
+        options.tap()
+        let start = app.buttons["Signaler des messages"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10))
+        start.tap()
+        XCTAssertTrue(element("messaging.report.select.", in: app).waitForExistence(timeout: 15))
+        let titles = [24: "PDF", 23: "Photo de l’exercice fictif", 21: "Leçon de conduite confirmée"]
+        for sequence in [24, 23, 21] {
+            let row = app.buttons["messaging.report.select." + reportMessageID(sequence)]
+            revealReportElement(row, in: app, towardOlder: true)
+            // Wait for the real decryption before selecting, never seed a selection in the model.
+            let readable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label CONTAINS %@", titles[sequence]!), object: row)
+            XCTAssertEqual(XCTWaiter.wait(for: [readable], timeout: 10), .completed)
+            row.tap()
+            let selected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isSelected == true"), object: row)
+            XCTAssertEqual(XCTWaiter.wait(for: [selected], timeout: 5), .completed)
+        }
+        let send = app.buttons["messaging.report.send"]
+        XCTAssertTrue(send.isHittable)
+        XCTAssertEqual(send.label, "Transmettre (3)")
+        assertReportWitness("prepared=0;post=0;ack=0;removed=0;files=0;selection=-", in: app)
+        send.tap()
+        let confirm = app.buttons["messaging.report.confirm"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        let explanation = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
+            "pièce jointe non transmise aux administrateurs")).firstMatch
+        XCTAssertTrue(explanation.exists)
+        XCTAssertTrue(explanation.label.contains("ces 3 messages"))
+        XCTAssertTrue(explanation.label.contains("auteur et leur date"))
+        XCTAssertTrue(confirm.isHittable)
+        capture(largeText ? "report-mixed-confirm-large" : "report-mixed-confirm")
+        dismissReportConfirmation(in: app)
+        XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
+        XCTAssertEqual(send.label, "Transmettre (3)")
+        assertReportWitness("prepared=0;post=0;ack=0;removed=0;files=0;selection=-", in: app)
+        send.tap()
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        confirm.tap()
+        let acknowledgement = app.alerts["Signalement transmis"]
+        XCTAssertTrue(acknowledgement.waitForExistence(timeout: 15))
+        capture(largeText ? "report-mixed-ack-large" : "report-mixed-ack")
+        acknowledgement.buttons["OK"].tap()
+        assertReportWitness("prepared=1;post=1;ack=1;removed=1;files=0;selection=21,23,24", in: app)
+        XCTAssertFalse(send.exists)
+        capture(largeText ? "report-mixed-result-large" : "report-mixed-result")
     }
 }

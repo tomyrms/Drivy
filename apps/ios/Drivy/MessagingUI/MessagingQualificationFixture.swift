@@ -8,36 +8,53 @@ import SwiftUI
 struct MessagingQualificationFixture: View {
     @State private var workspace: MessagingWorkspace
     private let keys = MessagingQualificationKeys()
+    private let reportWitness: MessagingReportQualificationWitness?
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
         let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 1,
                                    apiBaseURL: "https://messaging-ui.example.invalid/")
         let rich = arguments.contains("-messaging-ui-rich")
+        let reportMedia = arguments.contains("-messaging-ui-report-media")
+        let witness = reportMedia ? MessagingReportQualificationWitness() : nil
+        reportWitness = witness
+        let reportBoundary = witness.map { MessagingReportQualificationBoundary(scope: scope, witness: $0) }
         let seed = rich ? MessagingQualificationHTTP.seed(me: scope.accountID) : []
         let transport = MessagingQualificationHTTP(scope: scope,
-            readOnly: arguments.contains("-messaging-ui-readonly"), rich: rich, seed: seed)
+            readOnly: arguments.contains("-messaging-ui-readonly"), rich: rich, seed: seed, reportBoundary: reportBoundary)
         let http = MessagingHTTPTransport(baseURL: URL(string: scope.apiBaseURL)!, transport: transport,
             token: { "synthetic-ui-only" }, invalidate: { _ in false }, currentScope: { scope })
         let memory = MessagingQualificationMemory()
         let mediaScenario = arguments.contains("-messaging-ui-media")
-        let crypto: any MessagingCryptography = mediaScenario
+        let crypto: any MessagingCryptography = reportMedia
+            ? MessagingReportQualificationCrypto(fallback: MessagingQualificationCrypto()) : mediaScenario
             ? MessagingMediaQualificationCrypto(fallback: MessagingQualificationCrypto()) : MessagingQualificationCrypto()
-        let mediaRuntime: (any MessagingMediaRuntime)? = mediaScenario
-            ? MessagingMediaQualificationRuntime(scope: scope, arguments: arguments) : nil
+        let mediaRuntime: (any MessagingMediaRuntime)? = mediaScenario || reportMedia
+            ? MessagingMediaQualificationRuntime(scope: scope, arguments: arguments, reportBoundary: reportBoundary) : nil
         // Text crypto remains decrypt-only. The opt-in media runtime can inject synthetic
         // UI confirmations; these never qualify a real encrypted or server-accepted send.
         _workspace = State(initialValue: MessagingWorkspace(scope: scope,
             service: MessagingAPIClient(transport: http), cryptography: crypto,
             outbox: memory, drafts: memory, directory: http, actions: http,
-            history: MessagingQualificationHistory(seed: seed), mutations: memory, notifications: MessagingQualificationNotifications(),
+            history: MessagingQualificationHistory(seed: seed),
+            reportSealing: reportBoundary.map { $0 as any MessagingReportSealing } ?? UnavailableMessagingReportSealing(),
+            reports: reportBoundary.map { $0 as any MessagingProtectedReports } ?? UnavailableMessagingReports(),
+            mutations: memory, notifications: MessagingQualificationNotifications(),
             mediaRuntime: mediaRuntime, currentScope: { scope }))
     }
 
     var body: some View {
         SchoolMessagingEntryButton()
             .environment(\.schoolMessagingEntry, SchoolMessagingEntry(scopeID: "synthetic-ui-only", makeView: { _ in
-                AnyView(MessagingInboxView(workspace: workspace, keys: keys, currentScope: { [scope = workspace.scope] in scope }))
+                let inbox = MessagingInboxView(workspace: workspace, keys: keys, currentScope: { [scope = workspace.scope] in scope })
+                if let reportWitness {
+                    return AnyView(inbox.safeAreaInset(edge: .bottom) {
+                            Text(reportWitness.summary).font(.caption2)
+                                .dynamicTypeSize(.medium)
+                                .accessibilityIdentifier("messaging.report.fixture")
+                    })
+                }
+                return AnyView(inbox)
             }))
             .environment(\.locale, Locale(identifier: "fr_CH"))
     }
@@ -100,12 +117,15 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
     private let unreadFilter: Bool
     /// Boîte des signalements (#77), seulement avec `-messaging-ui-reports`.
     private let reports: MessagingQualificationReports?
+    private let reportBoundary: MessagingReportQualificationBoundary?
     /// General page 1 holds sequences 24...9, page 2 holds 8...1.
     private static let generalPageCursor = "fixture-page-2"
     private static let generalPageFloor = 9
 
-    init(scope: MessagingScope, readOnly: Bool, rich: Bool, seed: [FixtureConversation]) {
+    init(scope: MessagingScope, readOnly: Bool, rich: Bool, seed: [FixtureConversation],
+         reportBoundary: MessagingReportQualificationBoundary? = nil) {
         self.scope = scope; self.readOnly = readOnly; self.rich = rich
+        self.reportBoundary = reportBoundary
         let arguments = ProcessInfo.processInfo.arguments
         let delay = arguments.first { $0.hasPrefix("-messaging-ui-mutation-delay=") }
             .flatMap { Int($0.dropFirst("-messaging-ui-mutation-delay=".count)) } ?? 0
@@ -115,7 +135,8 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         unreadFilter = arguments.contains("-messaging-ui-unread-filter")
         conversation = rich ? MessagingQualificationIDs.general : UUID()
         member = rich ? MessagingQualificationIDs.leaPerson : UUID()
-        reports = arguments.contains("-messaging-ui-reports") ? MessagingQualificationReports(admin: scope.accountID) : nil
+        reports = arguments.contains("-messaging-ui-reports")
+            ? MessagingQualificationReports(admin: scope.accountID, media: reportBoundary != nil) : nil
         guard rich else { return }
         conversations = seed
         if unreadFilter, let index = conversations.firstIndex(where: { $0.id == MessagingQualificationIDs.general }) {
@@ -129,6 +150,7 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
 
     /// Synthetic conversations shared by the HTTP fixture and the in-memory history (inbox previews).
     static func seed(me: UUID) -> [FixtureConversation] {
+        let reportMedia = ProcessInfo.processInfo.arguments.contains("-messaging-ui-report-media")
         let lea = MessagingQualificationIDs.leaPerson, marc = MessagingQualificationIDs.marcPerson
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
@@ -154,9 +176,14 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         }
         set(23) { $0.text = "Merci, je les apporte"; $0.replyTo = MessagingQualificationIDs.message(1, 20) }
         set(24) { $0.text = "Rendez-vous à 14 h devant l'auto-école" }
+        if reportMedia {
+            // Three visible choices plus one unselected text; keep the ordinary fixture unchanged.
+            general = general.filter { [19, 21, 23, 24].contains($0.sequence) }
+            for index in general.indices { general[index].replyTo = nil }
+        }
         return [
             FixtureConversation(id: MessagingQualificationIDs.general, kind: "GENERAL", title: "Général", peer: nil,
-                                messages: general, lastRead: 21),
+                                messages: general, lastRead: reportMedia ? 24 : 21),
             FixtureConversation(id: MessagingQualificationIDs.lea, kind: "PRIVATE", title: "Léa Fixture", peer: lea,
                 messages: (1...6).map { seq in
                     FixtureMessage(id: MessagingQualificationIDs.message(2, seq), sequence: seq, sender: seq % 2 == 0 ? lea : me,
@@ -179,6 +206,10 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         let path = url.path.lowercased()
         let parts = url.pathComponents.map { $0.lowercased() }
         let method = request.httpMethod ?? "GET"
+        if let reportBoundary, parts.contains("media") {
+            await reportBoundary.recordFileRequest()
+            throw MessagingFailure.unavailable
+        }
         let requestID = request.value(forHTTPHeaderField: "Idempotency-Key").flatMap(UUID.init(uuidString:))
         if parts.count >= 2, parts[parts.count - 2] == "reactions", method == "PUT" || method == "DELETE" {
             if mutationDelay > 0 { try await Task.sleep(for: .seconds(mutationDelay)) }
@@ -243,6 +274,9 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
         } else if rich, parts.count >= 2, parts[parts.count - 2] == "poll", parts.last == "close", method == "POST",
                   let messageID = uuid(after: "messages", in: parts) {
             closedPolls.insert(messageID)
+            data = #"{"done":true}"#
+        } else if let reportBoundary, parts.last == "reports", method == "POST" {
+            try await reportBoundary.accept(request.httpBody)
             data = #"{"done":true}"#
         } else if let reports, let answer = try await reports.answer(method: method, parts: parts, body: request.httpBody) {
             data = answer
@@ -316,6 +350,10 @@ private actor MessagingQualificationHTTP: SchoolHTTPTransport {
             row["replyToMessageId"] = message.replyTo.map { $0.uuidString.lowercased() as Any } ?? NSNull()
             if ProcessInfo.processInfo.arguments.contains("-messaging-ui-media"),
                let media = try? MessagingMediaQualificationSamples.attachment(message.id) {
+                row["media"] = ["mediaId": media.id.uuidString.lowercased(), "byteSize": media.size, "deleted": false]
+            }
+            if reportBoundary != nil, let content = try? MessagingReportQualificationCrypto.sample(message.id) {
+                let media = content.media
                 row["media"] = ["mediaId": media.id.uuidString.lowercased(), "byteSize": media.size, "deleted": false]
             }
             if message.poll != nil {
@@ -470,7 +508,7 @@ private actor MessagingQualificationReports {
     private let admin: UUID
     private let formatter = ISO8601DateFormatter()
 
-    init(admin: UUID) {
+    init(admin: UUID, media: Bool = false) {
         self.admin = admin
         let formatter = ISO8601DateFormatter()
         let now = Date()
@@ -502,6 +540,13 @@ private actor MessagingQualificationReports {
                 ["actorPersonId": admin.uuidString.lowercased(), "actorDisplayName": "Admin Fixture", "fromStatus": "OPEN",
                  "toStatus": "HANDLED", "createdAt": formatter.string(from: now.addingTimeInterval(-48 * 3600))]]),
         ]
+        if media {
+            let mediaItems = [23, 24, 25, 26].map { item($0, marc, "Marc Fixture", text: "", readable: true) }
+            reports.insert(report(4, kind: "GENERAL", reporter: lea, reporterName: "Léa Fixture", ago: 0,
+                status: "OPEN", items: mediaItems + [
+                    item(19, marc, "Marc Fixture", text: "Texte synthétique conservé", readable: true),
+                    item(7, lea, "Léa Fixture", text: "", readable: false)]), at: 0)
+        }
     }
 
     /// nil quand la route n'est pas celle d'un signalement : la fixture garde alors son refus habituel.
