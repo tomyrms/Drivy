@@ -23,3 +23,13 @@ Journal : `integration-issues-20261105/artifacts/qualification-62875344/artifact
 - `git diff --check` propre ; 14 usages vérifiés ; aucun `folderContents` sans étiquette.
 - Aucun Swift/Xcode sur le poste Windows : pas de faux GREEN local. Le RED est celui de la CI (exit 65).
 - Le candidat doit être reconstruit et testé sur runner Apple ; les 3 diagnostics d'inférence ne sont pas revendiqués comme corrigés avant cette exécution.
+
+## Q4 — fixture de conflit avec un sceau cohérent
+
+Première exécution native du candidat `62560a2e` (run `41962003316`, job `127030313656`) : build vert, tests réellement rouges. Pour la file outbox, un seul cas échoue : `testPutIsIdempotentAndConflictsStayClosed` ligne 312 attend `stateConflict` et reçoit `invalidResponse`.
+
+Cause : `sealMedia(OTHER_BYTES)` fabriquait un nouveau `mediaID`; `mediaIDOverride: pending.mediaID` ne changeait que `content.media.id` et laissait `sealed.mediaID` différent. Le validateur compare ces identités avant de chercher un conflit, donc son refus était correct.
+
+Correction de fixture : `sameIDOtherSealed` reprend l'identité `pending.mediaID` avec le chiffré, la clé/IV et le hash du nouveau sceau authentique ; `sameIDOtherBytes` conserve les autres champs d'intention (client, conversation, nom, légende, mentions, réponse, date, enveloppe). Des préconditions vérifient l'identité, la cohérence descripteur/sceau, les octets et informations réellement différents, et l'égalité des autres champs avant le `put`. L'attente `stateConflict` et l'assertion finale `retained == [pending]` sont inchangées ; aucun autre scénario ni fichier produit n'est modifié.
+
+L'exécution Apple ultérieure reste nécessaire : aucun GREEN local n'est revendiqué sous Windows.
