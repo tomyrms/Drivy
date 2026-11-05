@@ -121,9 +121,16 @@ import XCTest
                     [.staticText, .textField, .textView].contains($0.elementType)
                         && !$0.label.isEmpty && $0.frame.intersects(viewport)
                 }.sorted { abs($0.frame.midY - viewport.midY) < abs($1.frame.midY - viewport.midY) }
-                let anchor = try XCTUnwrap(anchors.first { candidate in
+                let selectedAnchor = anchors.first { candidate in
                     content.filter { sameAnchor($0, candidate) }.count == 1
-                }, "Aucun repère unique de contenu visible pour vérifier le défilement")
+                }
+                if selectedAnchor == nil {
+                    attachMissingAnchor(snapshot: snapshot, nodes: nodes, content: content,
+                        form: form, window: windowSnapshot, viewport: viewport,
+                        up: direction, attempt: attempt + 1)
+                }
+                let anchor = try XCTUnwrap(selectedAnchor,
+                    "Aucun repère unique de contenu visible pour vérifier le défilement")
                 let interactiveTypes: [XCUIElement.ElementType] = [
                     .textField, .textView, .secureTextField, .button, .switch, .slider,
                     .picker, .pickerWheel, .datePicker, .stepper, .segmentedControl, .link
@@ -164,6 +171,97 @@ import XCTest
         }
         XCTFail("Le contrôle doit être matérialisé et atteignable après au plus vingt gestes du formulaire")
         return nodes
+    }
+
+    /// Uniquement au refus, dans la scène L2 synthétique lancée par exercise ; jamais de requête AX.
+    private func attachMissingAnchor(snapshot: any XCUIElementSnapshot, nodes: [any XCUIElementSnapshot],
+                                     content: [any XCUIElementSnapshot], form: any XCUIElementSnapshot,
+                                     window: any XCUIElementSnapshot, viewport: CGRect, up: Bool, attempt: Int) {
+        #if DEBUG && targetEnvironment(simulator)
+        let nodeLimit = 200
+        let contextLimit = 8
+        let stringLimit = 256 // Scalaires Unicode, pas de chaîne arbitrairement longue.
+        var truncatedStrings = 0
+        var omittedScalars = 0
+        func quoted(_ text: String) -> String {
+            let count = text.unicodeScalars.count
+            if count > stringLimit {
+                truncatedStrings += 1
+                omittedScalars += count - stringLimit
+            }
+            let prefix = text.unicodeScalars.prefix(stringLimit).map { String($0) }.joined()
+            let escaped = prefix.replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
+                .replacingOccurrences(of: "\r", with: "\\r")
+                .replacingOccurrences(of: "\t", with: "\\t")
+            return "\"" + escaped + "\""
+        }
+        var paths: [String] = []
+        func collectPaths(_ parent: any XCUIElementSnapshot, path: String) {
+            for (index, child) in parent.children.enumerated() {
+                guard paths.count < nodeLimit else { return }
+                let childPath = path + "/\(index)"
+                paths.append(childPath)
+                collectPaths(child, path: childPath)
+            }
+        }
+        collectPaths(form, path: "Form") // Même préordre que descendants(of:).
+        var candidates = 0
+        var uniqueCandidates = 0
+        var details: [String] = []
+        for (index, node) in content.enumerated() {
+            let typeAccepted = [XCUIElement.ElementType.staticText, .textField, .textView].contains(node.elementType)
+            let labelAccepted = !node.label.isEmpty
+            let intersects = node.frame.intersects(viewport)
+            // Calcul sur tout content, même pour les lignes non émises ou hors viewport.
+            let matches = content.filter { sameAnchor($0, node) }.count
+            let candidate = typeAccepted && labelAccepted && intersects
+            if candidate { candidates += 1 }
+            if candidate && matches == 1 { uniqueCandidates += 1 }
+            if index < nodeLimit {
+                let path = index < paths.count ? paths[index] : "chemin local absent"
+                details.append("index=\(index) path=\(quoted(path)) type=\(node.elementType.rawValue) id=\(quoted(node.identifier)) label=\(quoted(node.label)) frame=\(node.frame) typeOK=\(typeAccepted) labelOK=\(labelAccepted) intersects=\(intersects) sameAnchorCount=\(matches) candidate=\(candidate)")
+            }
+        }
+        var lines = [
+            "L2 synthétique — repère refusé, aucun verdict modifié ; aucune value collectée.",
+            "direction=\(up ? "haut" : "bas") gesteÀPréparer=\(attempt)/10",
+            "descendants=\(content.count) candidats=\(candidates) candidatsUniques=\(uniqueCandidates)",
+            "snapshotFrame=\(snapshot.frame) selectedFormFrame=\(form.frame) selectedWindowFrame=\(window.frame) viewport=\(viewport)",
+            "limites: descendants=\(nodeLimit), nœudsParRôle=\(contextLimit), scalairesParChaîne=\(stringLimit)",
+            "Détail Form, préordre (les comptes ci-dessus ne sont pas tronqués):"
+        ] + details
+        var omittedContextNodes = 0
+        func context(_ role: String, matching predicate: (any XCUIElementSnapshot) -> Bool) {
+            let matches = nodes.enumerated().filter { predicate($0.element) }
+            lines.append("\(role): count=\(matches.count)" + (matches.isEmpty ? " ABSENT des données locales" : ""))
+            omittedContextNodes += max(0, matches.count - contextLimit)
+            for (index, node) in matches.prefix(contextLimit) {
+                lines.append("nodes[\(index)] type=\(node.elementType.rawValue) id=\(quoted(node.identifier)) label=\(quoted(node.label)) frame=\(node.frame)")
+            }
+        }
+        context("fenêtres") { $0.elementType == .window }
+        context("formulaires") { $0.elementType == .collectionView }
+        context("navigation") { $0.elementType == .navigationBar }
+        context("clavier") { $0.elementType == .keyboard }
+        context("footer") { $0.label == "Rendu de contrôle · données fictives" }
+        context("témoin") { $0.identifier == "planning-l2-rendezvous" }
+        // Cible du refus Q9 ; ne pas résoudre element pour identifier la requête appelante.
+        context("cible Q9 planning-confirm") { $0.identifier == "planning-confirm" }
+        let omittedNodes = max(0, content.count - nodeLimit) + omittedContextNodes
+        lines.append("troncature: nœudsOmis=\(omittedNodes), chaînesTronquées=\(truncatedStrings), scalairesOmis=\(omittedScalars)")
+        lines.append(omittedNodes > 0 || truncatedStrings > 0
+            ? "LIMITE DIAGNOSTIQUE : détail tronqué, comptes complets ; échec conservé."
+            : "Détail complet dans les limites ; échec conservé.")
+        let attachment = XCTAttachment(string: lines.joined(separator: "\n"))
+        #else
+        let attachment = XCTAttachment(string: "LIMITE DIAGNOSTIQUE : capture réservée à DEBUG simulateur ; échec conservé.")
+        #endif
+        attachment.name = "L2 — snapshot local au refus du repère (sans value)"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        print("L2 pièce locale demandée ; si absente du résultat, preuve indisponible ; échec inchangé.")
     }
 
     private func descendants(of snapshot: any XCUIElementSnapshot) -> [any XCUIElementSnapshot] {
