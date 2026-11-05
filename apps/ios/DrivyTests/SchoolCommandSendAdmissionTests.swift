@@ -92,6 +92,41 @@ struct SchoolCommandSendAdmissionTests {
         #expect(attempts.last?.createdAt == command.createdAt)
     }
 
+    @Test func aReentrantHandOffInsideTheRemovalCallbackIsAlreadyRefused() throws {
+        let command = try creation()
+        let admission = SchoolCommandSendAdmission(command: command)
+        var phaseInsideCallback: SchoolCommandSendPhase?
+        var reentrantFailure: SchoolCommandAdmissionFailure?
+        var otherFailure = false
+        var successfulHandOffs = 0
+        var removed: [PendingSchoolCommand] = []
+
+        let result = admission.cancel { candidate in
+            removed.append(candidate)
+            // Le retrait synchrone s'exécute après la fermeture : une remise réentrante doit déjà être refusée.
+            phaseInsideCallback = admission.phase
+            do {
+                try admission.handOff(candidate)
+                successfulHandOffs += 1
+            } catch let failure as SchoolCommandAdmissionFailure {
+                reentrantFailure = failure
+            } catch {
+                otherFailure = true
+            }
+        }
+
+        #expect(result == .cancelledBeforeSend)
+        #expect(phaseInsideCallback == .cancelledBeforeSend)
+        #expect(reentrantFailure == .cancelledBeforeSend)
+        #expect(!otherFailure)
+        // Aucune remise n'a abouti pendant le callback : rien ne peut être émis pour cette commande.
+        #expect(successfulHandOffs == 0)
+        #expect(removed == [command])
+        #expect(admission.phase == .cancelledBeforeSend)
+        #expect(throws: SchoolCommandAdmissionFailure.cancelledBeforeSend) { try admission.check(command) }
+        #expect(throws: SchoolCommandAdmissionFailure.cancelledBeforeSend) { try admission.handOff(command) }
+    }
+
     @Test func handOffIsFinalAndCancellingThenNeverRemovesTheCommand() throws {
         let command = try creation()
         let admission = SchoolCommandSendAdmission(command: command)

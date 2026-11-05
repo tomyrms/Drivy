@@ -14,13 +14,14 @@ ont été écrits avant l'implémentation, mais aucun échec n'a pu être exécu
 
 Codebase Memory : projet de CE worktree indexé par chemin absolu
 `C:/Users/jtoma/orca/workspaces/Drivy/issues-annulation-native-106`, nom retourné
-`C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-native-106` (ready, 39 564 nœuds, 171 405 arêtes,
-génération 2026-11-05T01:09:55Z, mode moderate, watch actif). Recherches : `search_graph`
-`SchoolPlanningClient send`, lecture du source `SchoolPlanningClient.swift` (lignes 1-412),
+`C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-native-106` (ready, réindexé à 53 232 nœuds et
+203 690 arêtes, génération 2026-11-05T01:16:30Z, watch actif relu à 01:30:44Z, mode moderate). Recherches :
+`search_graph` `SchoolPlanningClient send`, lecture du source `SchoolPlanningClient.swift` (lignes 1-412),
 `search_code` sur `Admission`, `trace_path` entrant sur `SchoolPlanningClient.send` (aucun appelant indexé,
 le seul appel de production étant `SchoolPlanningWorkspace.transmit:817`), `check_index_coverage` sur les
-trois fichiers lus (`no_recorded_issue`, `metadata_match`, best effort). Aucun index d'un autre worktree
-consulté.
+trois fichiers lus (`no_recorded_issue`, `metadata_match`, best effort) ; à la correction 1/2,
+`search_graph` sur `SchoolCommandSendAdmission`/`AdmissionTokenSource` a retrouvé les symboles du type et du
+harnais dans les nouveaux fichiers. Aucun index d'un autre worktree consulté.
 
 
 ## 1. Défaut visé
@@ -113,7 +114,9 @@ dépendance, workflow, projet XcodeGen, `STATUS.md`, registre ou dossier de conc
 Barrière : attente sans remise sur `check` ; remise sur `handOff` ; refus d'une autre commande y compris
 même UUID avec autre corps, autre version ou autre portée ; retrait du record exact et fermeture ; répétition
 idempotente ; échec de retrait puis reprise sans réécriture ; remise finale, `cancel` sans callback et
-répétition `handOff` après 401.
+répétition `handOff` après 401 ; **remise réentrante refusée pendant le callback de retrait** (la tentative
+`handOff` sur la même commande lève `cancelledBeforeSend`, n'aboutit pas et n'émet rien, l'état est déjà
+fermé avant le callback).
 
 Client : admission facultative pour les appels existants ; annulation avant jeton (zéro jeton, zéro requête) ;
 annulation pendant le jeton (aucune requête, aucun `/me`) ; annulation pendant `/me` (zéro mutation, une
@@ -125,6 +128,29 @@ famille ; lectures et AP72 non soumis à la barrière ; garde L1b toujours appli
 reprise après refus avant remise (mêmes octets, même admission) ; reprise après échec de transport (admission
 déjà remise, requête identique). Les doubles comptent séparément lectures et mutations et ne touchent ni
 compte ni serveur réel.
+
+### Correction 1/2 : harnais borné
+
+Aucun code produit ni signature n'a changé depuis `d5c9dee0` ; seuls les deux fichiers de tests et ce
+rapport sont corrigés. Les retenues du jeton, de `/me` et de l'écriture ne sont plus des continuations nues :
+
+- `BoundedHold` porte une échéance interne (5 s par défaut), échoue explicitement (`timedOut`) au lieu
+  d'attendre indéfiniment, refuse une seconde attente concurrente (`duplicateWait`) et mémorise une
+  libération arrivée avant l'enregistrement de la continuation. `release()` est idempotente et annule son
+  minuteur ; elle ne produit jamais un succès métier.
+- `requireArrival` borne l'attente d'arrivée à 3 s et lève `arrivalTimedOut` ; le test enchaîne une condition
+  `#require` au lieu de se fier au retour silencieux de `HubFixture.wait` (inchangé, non modifié).
+- `boundedValue` borne la terminaison de l'opération (10 s) avec une course indépendante : la première issue
+  gagne, l'échéance publie un échec explicite puis annule la tâche. Aucun groupe de tâches, aucune jointure
+  d'une tâche non coopérative ne décide du verdict.
+- Chaque tâche d'envoi est créée puis immédiatement suivie de `defer { hold.release(); attempt.cancel() }`,
+  avant toute attente : une assertion qui interrompt le scénario libère les retenues et annule l'opération.
+- Contrôles du harnais : une retenue jamais libérée échoue explicitement à son échéance ; une opération qui
+  n'atteint jamais la retenue échoue sur l'arrivée bornée puis est libérée/annulée ; une opération qui ne
+  termine jamais est rejetée par la borne externe, échéance publiée puis tâche annulée (confirmation bornée) ;
+  une libération arrivée avant l'attente n'est pas perdue et ne suspend rien.
+- Toutes les assertions métier et tous les compteurs lectures/mutations sont conservés.
+
 
 ### Exécution Apple requise (NON EXÉCUTÉE)
 
@@ -153,6 +179,8 @@ Puis la suite `DrivyTests` complète au même SHA, en particulier `SchoolPlannin
 - La création de l'admission, le bouton « Annuler l'envoi », le texte « La demande est déjà transmise… »
   et la gestion de génération de geste appartiennent à U106-L2 (workspace/vue), hors de ce lot.
 - VoiceOver, Dynamic Type, rendu, latence et comportement batterie ne sont ni modifiés ni vérifiés ici.
+- Les bornes du harnais (5 s retenue, 3 s arrivée, 10 s opération) ne s'appliquent qu'aux chemins d'échec ;
+  un scénario nominal libère immédiatement. Elles restent non compilées et non exécutées sous Windows.
 - `STATUS.md`, le registre, la conception, l'OpenAPI et les workflows restent inchangés.
 
 Commit local : relevé après rédaction de ce document et rapporté au coordinateur avec le SHA exact.
