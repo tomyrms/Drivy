@@ -233,10 +233,15 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         }
         return result
     }
-    @discardableResult func send(_ command: PendingSchoolCommand) async throws -> SchoolOperationReceipt? {
+    @discardableResult func send(_ command: PendingSchoolCommand, admission: SchoolCommandSendAdmission? = nil) async throws -> SchoolOperationReceipt? {
         guard command.kind.isPlanning, command.hasValidTarget, command.scope.apiBaseURL == baseURL.absoluteString,
               let object = try? JSONSerialization.jsonObject(with: command.body) as? [String: Any],
               UUID(uuidString: object["operationId"] as? String ?? "") == command.id else { throw SchoolPlanningFailure.invalidResponse }
+        // L’annulation locale ne couvre que le pilote (#106 L2) : une autre famille garde son propre contrat.
+        if let admission {
+            guard command.kind == .createLesson || command.kind == .moveLesson else { throw SchoolPlanningFailure.invalidResponse }
+            try admission.check(command)
+        }
         // Déjà inadmissible : aucun jeton n’est demandé, aucun paquet ne part.
         try requireAdmissibleLessonStart(command)
         if command.kind == .startLessonNow { _ = try await startNow(command); return nil }
@@ -259,7 +264,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             path = [command.kind == .removeClosure ? "closures" : "availability-rules", id.uuidString, "remove"]
         default: throw SchoolPlanningFailure.invalidResponse
         }
-        let _: MutationAcknowledgement = try await request(command.scope.schoolID, path, command: command)
+        let _: MutationAcknowledgement = try await request(command.scope.schoolID, path, command: command, admission: admission)
         // AP72 confirms both the operation and its target; a bare HTTP success is insufficient.
         // Once the write answered 200/201, a missing or unreadable proof is an uncertainty to verify,
         // never a fresh refusal: the command stays queued instead of being dropped as « rien n’a été enregistré ».
@@ -296,7 +301,7 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         func accessToken() async throws -> String { value }
     }
     private func request<Value: Decodable>(_ schoolID: UUID, _ path: [String], query: [URLQueryItem] = [], command: PendingSchoolCommand? = nil,
-                                          statuses: Set<Int>? = nil) async throws -> Value {
+                                          admission: SchoolCommandSendAdmission? = nil, statuses: Set<Int>? = nil) async throws -> Value {
         guard DrivyAPIClient.permits(baseURL) else { throw SchoolPlanningFailure.invalidResponse }
         var url = baseURL
         for part in ["v1", "schools", schoolID.uuidString] + path { url.appendPathComponent(part) }
@@ -304,14 +309,18 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
         if !query.isEmpty { components.queryItems = query }
         guard let target = components.url else { throw SchoolPlanningFailure.invalidResponse }
         let token = try await accessToken()
-        do { return try await perform(target, command: command, statuses: statuses, token: token) }
+        // L’annulation décidée pendant l’attente du jeton ferme l’émission avant même la lecture d’identité.
+        if let admission, let command { try admission.check(command) }
+        do { return try await perform(target, command: command, admission: admission, statuses: statuses, token: token) }
         catch SchoolPlanningFailure.unauthorized {
             // Un premier 401 peut viser un jeton que l’appareil croit encore valable : un seul renouvellement forcé
             // et un seul nouvel essai, même opération et même clé d’idempotence (le 401 précède tout traitement).
             guard await tokenSource.invalidateAccessToken(token) else { throw SchoolPlanningFailure.unauthorized }
             let renewed = try await accessToken()
             guard renewed != token else { throw SchoolPlanningFailure.unauthorized }
-            return try await perform(target, command: command, statuses: statuses, token: renewed)
+            // Une mutation déjà remise reste remise : la vérification laisse passer cette répétition (handOff idempotent).
+            if let admission, let command { try admission.check(command) }
+            return try await perform(target, command: command, admission: admission, statuses: statuses, token: renewed)
         }
     }
     private func accessToken() async throws -> String {
@@ -328,7 +337,8 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             throw SchoolPlanningWriteRefusal.lessonStartNotAdmissible
         }
     }
-    private func perform<Value: Decodable>(_ target: URL, command: PendingSchoolCommand?, statuses: Set<Int>?, token: String) async throws -> Value {
+    private func perform<Value: Decodable>(_ target: URL, command: PendingSchoolCommand?, admission: SchoolCommandSendAdmission? = nil,
+                                           statuses: Set<Int>?, token: String) async throws -> Value {
         if let command {
             let person = try await DrivyAPIClient(baseURL: baseURL, tokenSource: PinnedToken(token), transport: transport).me()
             guard person.personId == command.scope.personID, person.memberships.contains(where: {
@@ -337,7 +347,8 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             }) else { throw SchoolPlanningFailure.forbidden }
         }
         try Task.checkCancellation()
-        // Dernière barrière avant le transport : elle couvre le jeton, `/me` et le second essai après 401.
+        // Annulation et créneau sont relus à l’instant exact de l’écriture, après le jeton et `/me`.
+        if let admission, let command { try admission.check(command) }
         if let command { try requireAdmissibleLessonStart(command) }
         var request = URLRequest(url: target)
         if let command { request.httpMethod = [.updateAvailabilityRule, .savePlanningDefaults].contains(command.kind) ? "PUT" : "POST" }
@@ -352,6 +363,9 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
             if command.resourceVersion > 0 { request.setValue("\"\(command.ifMatchVersion)\"", forHTTPHeaderField: "If-Match") }
         }
         let response: SchoolHTTPResponse
+        // Dernière transition synchrone, immédiatement avant la remise au transport : aucune suspension entre
+        // le verdict de l’admission et l’émission de la mutation.
+        if let admission, let command { try admission.handOff(command) }
         // Une requête interrompue reste une interruption : elle n’est ni un refus ni une panne de l’école.
         do { response = try await transport.send(request) } catch { throw error.unlessCancelled(SchoolPlanningFailure.unavailable) }
         try Task.checkCancellation()
