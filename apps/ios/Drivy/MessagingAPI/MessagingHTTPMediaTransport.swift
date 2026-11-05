@@ -94,7 +94,17 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
     }
 
     func send(_ request: URLRequest, ceiling: MessagingMediaResponseCeiling) async throws -> MessagingMediaHTTPResponse {
-        let (bytes, response) = try await session.bytes(for: request)
+        // L'ouverture du flux est une attente à part entière. Une annulation qui tombe ici
+        // doit devenir une `CancellationError` comme pendant la lecture : sinon elle ressort
+        // brute de Foundation, avec un type d'erreur non garanti par la documentation Apple.
+        let opened: (bytes: URLSession.AsyncBytes, response: URLResponse)
+        do {
+            opened = try await session.bytes(for: request)
+        } catch {
+            throw Self.normalized(error)
+        }
+        let bytes = opened.bytes
+        let response = opened.response
         // La tâche qui alimente le flux s'annule seule : toute sortie prématurée l'arrête,
         // sans annuler ni interrompre les autres requêtes du même transport.
         let stream = MessagingMediaStreamTask(bytes.task)
@@ -131,8 +141,7 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
             // Dépassement pendant la lecture ou annulation appelante : le flux est arrêté
             // avant que la tâche sous-jacente ne continue à consommer le réseau.
             stream.cancel()
-            if error.isRequestCancellation { throw CancellationError() }
-            throw error
+            throw Self.normalized(error)
         }
         if Task.isCancelled {
             stream.cancel()
@@ -150,6 +159,14 @@ actor MessagingMediaURLSessionTransport: MessagingMediaHTTPWire {
     private static func declaredByteSize(_ response: HTTPURLResponse) -> Int? {
         guard let raw = response.value(forHTTPHeaderField: "Content-Length") else { return nil }
         return Int(raw.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// Une annulation reste une `CancellationError`, à l'ouverture du flux comme pendant sa
+    /// lecture — l'appelant annulé passe avant toute autre erreur. Toute autre erreur est
+    /// conservée telle quelle : sa requalification appartient à l'adaptateur, pas au wire.
+    private static func normalized(_ error: any Error) -> any Error {
+        if error.isRequestCancellation || Task.isCancelled { return CancellationError() }
+        return error
     }
 }
 

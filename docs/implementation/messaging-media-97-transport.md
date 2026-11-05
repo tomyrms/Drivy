@@ -74,7 +74,7 @@ Le wire applique les plafonds de flux/enveloppe ; l'adaptateur applique la limit
 8. **Wire dédié.** `URLSessionConfiguration.ephemeral`, délais 20/30 s (identiques au transport existant), délégate `MessagingMediaNoRedirects` qui répond `nil` à toute redirection, même de même hôte.
 9. **Garanties indépendantes de la configuration injectée.** `MessagingMediaURLSessionTransport.harden(_:)` retire cache, stockage de cookies, envoi de cookies et réutilisation d'une réponse locale **quel que soit** l'objet `URLSessionConfiguration` reçu, puis l'initialiseur crée la session. Un appelant (tests `URLProtocol`) ne peut donc pas réactiver ces comportements par inadvertance.
 10. **Lecture bornée avant allocation.** `Content-Length` déclaré au-delà du plafond → refus immédiat ; `expectedContentLength` au-delà → refus ; pendant la lecture, refus dès que la taille atteint le plafond. `reserveCapacity` n'est appelé qu'avec une longueur déjà bornée. Aucun `data(for:)` (vérifié, §10).
-11. **Arrêt effectif du flux.** Toute sortie prématurée (en-tête refusé, dépassement pendant la lecture, annulation appelante) annule la tâche `URLSessionDataTask` qui alimente **ce** flux (`URLSession.AsyncBytes.task`, iOS 15+, [documentation Apple](https://developer.apple.com/documentation/foundation/urlsession/asyncbytes/task) ; [`URLSessionTask.cancel()`](https://developer.apple.com/documentation/foundation/urlsessiontask/cancel())). L'annulation appelante ne dépend **pas** de la coopération de l'itérateur : `withTaskCancellationHandler` annule la tâche dès la cancellation, même sans nouvel octet (la tâche n'est pas `Sendable`, elle est portée par une enveloppe `@unchecked Sendable` dont `cancel()` est documenté thread-safe). Aucune autre requête du même transport n'est annulée : ni la session (`invalidateAndCancel`) ni une tâche partagée ne sont touchées.
+11. **Arrêt effectif du flux.** Toute sortie prématurée (en-tête refusé, dépassement pendant la lecture, annulation appelante) annule la tâche `URLSessionDataTask` qui alimente **ce** flux (`URLSession.AsyncBytes.task`, iOS 15+, [documentation Apple](https://developer.apple.com/documentation/foundation/urlsession/asyncbytes/task) ; [`URLSessionTask.cancel()`](https://developer.apple.com/documentation/foundation/urlsessiontask/cancel())). L'annulation appelante ne dépend **pas** de la coopération de l'itérateur : `withTaskCancellationHandler` annule la tâche dès la cancellation, même sans nouvel octet (la tâche n'est pas `Sendable`, elle est portée par une enveloppe `@unchecked Sendable` dont `cancel()` est documenté thread-safe). L'attente d'ouverture (`session.bytes(for:)`) est normalisée par la même fonction que la lecture : une annulation qui tombe avant les premiers en-têtes devient aussi une `CancellationError`, alors que Foundation ne garantit pas le type d'erreur à cet instant (§16). Aucune autre requête du même transport n'est annulée : ni la session (`invalidateAndCancel`) ni une tâche partagée ne sont touchées.
 12. **Dépôt.** Refus local de `0` octet et de `> 4 194 304` **avant réseau** ; cohérence du sceau T2a (`info.validatedMaterial()`, hash du chiffré) vérifiée avant émission ; puis vérification exacte de `mediaId`, `byteSize`, `sha256`, de l'état (`UPLOADED`/`ATTACHED`, `PURGED` refusé) et du contexte.
 13. **Téléchargement.** Type `application/octet-stream`, URL finale exacte, école et époque identiques au scope, `Content-Length` présent, égal au corps et dans `1…4 194 304`, SHA-256 hex64 égal au corps. Rien de partiel n'est rendu ; aucune écriture disque.
 14. **Annulation.** Succès **seulement** après `200` cohérent (`mediaId`, `deleted: true`, contexte). `409 MEDIA_ALREADY_ATTACHED` n'est jamais un succès ; `404` et délai dépassé restent des refus honnêtes. Aucune suppression locale d'intention dans ce transport.
@@ -116,7 +116,7 @@ La primitive expose **seulement** des cas fermés ; elle ne contient ni texte, n
 
 Aucun écran, aucun libellé et aucune activation produit ne sont ajoutés par ce lot.
 
-## 7. Tests écrits (45)
+## 7. Tests écrits (47)
 
 `apps/ios/DrivyTests/MessagingHTTPMediaTransportTests.swift` (33) — fil injectable qui capture méthode, URL, en-têtes, corps et plafond, plus des compteurs de barrière (entrées dans la source de jeton, émissions) :
 
@@ -138,7 +138,7 @@ Aucun écran, aucun libellé et aucune activation produit ne sont ajoutés par c
 - annulation : `200` cohérent ; `409 ATTACHED`, `PURGED`, `404`, `503` ; `deleted:false`, identifiant étranger, contexte étranger, `204` ;
 - diagnostics : quatre codes fixes réellement enregistrés, sans identifiant/hash/URL/sentinelle.
 
-`apps/ios/DrivyTests/MessagingMediaURLSessionTransportTests.swift` (12) — vrai wire sur `URLProtocol` local :
+`apps/ios/DrivyTests/MessagingMediaURLSessionTransportTests.swift` (14) — vrai wire sur `URLProtocol` local :
 
 - plafond média **dérivé de la constante** : borne acceptée avec un **corps cohérent** de `mediaLimit` octets, puis `mediaLimit + 1` refusé sur en-tête (flux ouvert, petit prélude) ;
 - plafond de flux strictement supérieur à la limite métier, identité des deux constantes de 4 Mio, et `4 194 305` **lu** avec un corps de la taille annoncée ;
@@ -146,15 +146,18 @@ Aucun écran, aucun libellé et aucune activation produit ne sont ajoutés par c
 - flux sans longueur déclarée au-delà du plafond média → refus pendant la lecture ;
 - en-têtes nommés lus (école, époque, hash, type), `Set-Cookie` non conservé ;
 - **flux laissé ouvert** (en-têtes + prélude, aucun `didFinishLoading`) : en-tête refusé, dépassement pendant la lecture et annulation appelante produisent chacun une issue observée **avant** nettoyage, puis `stopLoading` ; succès normal lu et rendu ;
-- **contrôle du harnais** : une opération volontairement retenue n'est jamais attendue par `await` sur une tâche non coopérative — l'échéance expire, le test échoue proprement, puis le flux est libéré (`abortAll`) ;
+- **annulation après prélude remis** : barrière sur le prélude **remis à Foundation** (`deliveredCount`, mis à jour après `didLoad` du `URLProtocol`). Cela ne prouve **pas** que la routine du wire a repris `bytes(for:)` ni consommé un premier octet : le cas est donc « annulation après prélude remis » ;
+- **annulation pendant l'ouverture** (stub muet : aucun en-tête envoyé, `bytes(for:)` suspendu) → `cancelled`, `stopLoading` observé ; le signal `readyCount` n'avance qu'avec l'enregistrement de la poignée d'abandon, dans la même section critique, donc l'échec ou l'annulation ne peut pas être injecté avant que le chargement soit prêt à le recevoir. `rawCancel` est le verdict de régression : il signale une `URLError(.cancelled)` brute, donc une frontière non normalisée ;
+- **témoin non annulé** : échec d'ouverture injecté (`URLError(.timedOut)`) → verdict `transport(code)`, avec le **code exact** de l'erreur (`URLError.timedOut.rawValue`) exigé par l'assertion ; ni URL, ni description libre, ni `userInfo` ne sont conservés ;
+- **contrôle du harnais** : une opération volontairement retenue n'est jamais attendue par `await` sur une tâche non coopérative — l'échéance expire, le test échoue proprement, puis le flux est libéré (`abortAll` / `failAll`) ;
 - configuration injectée hostile (cache, cookies, politique de cache) : les garanties sont rétablies par `harden` ;
 - la délégate de redirection répond toujours `nil`.
 
-**Limites de méthode, explicitement assumées :** un `URLProtocol` remet le corps depuis la mémoire locale. Ces tests prouvent la boucle de lecture bornée, l'appel d'annulation de la tâche et le refus de redirection ; ils ne mesurent **ni** le débit réseau réel **ni** une fuite mémoire, et `stopLoading` n'est pas une preuve de fermeture de socket : c'est le seul signal observable. Le nettoyage `abortAll` libère une tâche suspendue après constat, il ne sert jamais de preuve. Les deux cas de borne acceptée lisent réellement ~4 Mio octet par octet : coût assumé pour des réponses cohérentes.
+**Limites de méthode, explicitement assumées :** un `URLProtocol` remet le corps depuis la mémoire locale. Ces tests prouvent la boucle de lecture bornée, l'appel d'annulation de la tâche et le refus de redirection ; ils ne mesurent **ni** le débit réseau réel **ni** une fuite mémoire, et `stopLoading` n'est pas une preuve de fermeture de socket : c'est le seul signal observable. `deliveredCount` atteste seulement que le prélude a été **remis à Foundation** après `didLoad`, pas que la routine du wire a repris `bytes(for:)` ni consommé un premier octet. Le nettoyage `abortAll` / `failAll` libère une tâche suspendue après constat, il ne sert jamais de preuve. Les deux cas de borne acceptée lisent réellement ~4 Mio octet par octet : coût assumé pour des réponses cohérentes.
 
 ## 8. Ce qui n'a PAS été exécuté
 
-**NON EXÉCUTÉ — aucun outil Apple sur ce poste (Windows).** Aucun test Swift de ce lot n'a été compilé ni exécuté ; aucun RED/GREEN Swift n'est revendiqué. Les 45 tests sont écrits et relus, pas prouvés. Les corrections des §13 viennent d'une revue source, d'arithmétique et de documentation primaire, **pas** d'un test natif rouge.
+**NON EXÉCUTÉ — aucun outil Apple sur ce poste (Windows).** Aucun test Swift de ce lot n'a été compilé ni exécuté **ici** ; aucun GREEN Swift n'est revendiqué. Les 47 tests sont écrits et relus, pas prouvés. Un seul RED natif réel existe dans l'historique de ce lot : l'échec intermittent de `testCancellingTheCallerStopsTheOpenStream` en qualification Q6 (§16), constaté par la CI et non reproduit localement. Les corrections des §13 à §16 viennent d'une revue source, d'arithmétique et de documentation primaire.
 
 À lancer sur un runner Apple, au SHA de livraison exact :
 
@@ -216,7 +219,7 @@ Non vérifiable ici : comportement réel de `URLSession.AsyncBytes` sous `URLPro
 | `apps/ios/Drivy/MessagingCore/MessagingMediaTransport.swift` | protocole §4.5, reçu typé, erreurs typées sans présentation |
 | `apps/ios/Drivy/MessagingAPI/MessagingHTTPMediaTransport.swift` | adaptateur, wire URLSession dédié durci, arrêt de la tâche de flux, mapping fermé du jeton, délégate sans redirection |
 | `apps/ios/DrivyTests/MessagingHTTPMediaTransportTests.swift` | 33 tests de l'adaptateur sur fil injecté, compteurs de barrière |
-| `apps/ios/DrivyTests/MessagingMediaURLSessionTransportTests.swift` | 12 tests du vrai wire via `URLProtocol`, dont flux laissé ouvert et contrôle du harnais |
+| `apps/ios/DrivyTests/MessagingMediaURLSessionTransportTests.swift` | 14 tests du vrai wire via `URLProtocol`, dont flux laissé ouvert, ouverture muette et contrôle du harnais |
 | `docs/implementation/messaging-media-97-transport.md` | ce document |
 
 Aucune dépendance, aucun lockfile, aucun `project.yml` (sources par répertoire), aucun workflow, aucun fichier partagé (`SchoolAPI`, `MessagingHTTPTransport`, `MessagingCryptoRelay`, diagnostics global, authentification), aucune primitive crypto, aucun contenu v3, aucun store/coffre/outbox/factory/UI, aucune API/SQL, aucun `STATUS.md`, aucune conception modifiés.
@@ -226,6 +229,7 @@ Aucune dépendance, aucun lockfile, aucun `project.yml` (sources par répertoire
 - **Aucune preuve Apple** : compilation, tests, conformité Swift 6, comportement réel de `URLProtocol`/`AsyncBytes` restent à qualifier. Le code peut ne pas compiler.
 - **`stopLoading` n'est pas une preuve de fin de consommation réseau** : il prouve que la tâche a été marquée annulée et que la couche URL a clôturé le chargement ; la fermeture de la socket n'est pas observable dans ces tests.
 - **Annulation sans nouvel octet** : le gestionnaire d'annulation annule la tâche URLSession sans attendre l'itérateur ; que l'itération rende ensuite la main (erreur `NSURLErrorCancelled`) reste à vérifier sur Apple. La garantie de code ne dépend plus de la coopération de l'itérateur, mais l'issue observable n'est pas mesurée ici.
+- **Annulation pendant l'ouverture** : aucun handle de tâche n'existe avant le retour de `bytes(for:)` ; l'arrêt repose sur la couche URL et n'est attesté que par `stopLoading`. Le type d'erreur natif n'est pas documenté par Apple : le wire le normalise, et le run Apple doit confirmer que l'attente se dénoue bien (le test est borné, il échoue au lieu de figer).
 - **Coût des tests de borne acceptée** : deux réponses d'environ 4 Mio sont lues octet par octet ; c'est volontaire (réponses cohérentes) et cela allonge la suite.
 - **Nettoyage de harnais** : `abortAll` libère un flux retenu après constat ; il n'est jamais une preuve d'annulation.
 - **Configuration mutée** : `harden` modifie l'objet `URLSessionConfiguration` reçu (type référence). C'est voulu et documenté, mais un appelant qui réutiliserait la même configuration pour une autre session verrait ses réglages de cache/cookies retirés.
@@ -280,4 +284,72 @@ Commandes réellement exécutées pour cette correction (Windows, sans Swift) :
 | 3 | Python jetable : équilibre des délimiteurs du fichier de test | `balanced` | 0 |
 | 4 | `git diff --stat` + `git status --porcelain` | 2 fichiers (test + ce rapport), aucun autre | 0 |
 
-Les 45 tests restent **NON EXÉCUTÉS** Apple (§8) : cette correction est une revue statique et une mise en cohérence de fixture, pas un RED/GREEN natif.
+Les tests restent **NON EXÉCUTÉS** Apple (§8) : cette correction est une revue statique et une mise en cohérence de fixture, pas un RED/GREEN natif.
+
+## 16. Q6 — annulation pendant l'ouverture du flux (frontière normalisée)
+
+**Le RED est réel et vient d'Apple** : `testCancellingTheCallerStopsTheOpenStream` a échoué en qualification Q6 au candidat `3f20ce1b` (run 41971981391, job 127062112371) avec le verdict `other` au lieu de `cancelled`, alors que le même test était vert en Q4 (12/12) et qu'aucun changement de ce produit n'a eu lieu entre les deux. Ce n'est pas attribuable à E0 et aucun GREEN local n'est revendiqué.
+
+Diagnostic, établi sur pièces avant toute modification :
+
+| Pièce | Constat |
+|---|---|
+| Source d'intégration | `3f20ce1b:apps/ios/Drivy/MessagingAPI/MessagingHTTPMediaTransport.swift` et le fichier de tests sont **identiques octet pour octet** à ce worktree (même `git hash-object` des deux côtés) : le défaut est bien dans ce code, pas dans une divergence d'intégration |
+| Source du wire | `try await session.bytes(for: request)` (ligne 97) était **hors** du `do/catch` qui convertissait `error.isRequestCancellation` : la normalisation ne couvrait que la lecture du corps |
+| Documentation Apple | [`bytes(for:delegate:)`](https://developer.apple.com/documentation/foundation/urlsession/bytes(for:delegate:)) ne documente **aucune** normalisation d'annulation : le type d'erreur levé quand la tâche est annulée pendant l'attente d'ouverture n'est pas garanti. Rien n'autorise à supposer `CancellationError` |
+| Barrière du test | le test attendait `openCount >= 1`, c'est-à-dire l'entrée dans `startLoading` — pas le fait que `bytes(for:)` ait rendu la main. L'annulation pouvait donc tomber **pendant l'ouverture**, ce qui explique l'intermittence |
+
+Correctif, strictement limité au wire :
+
+- l'ouverture est isolée dans un `do/catch` qui passe par `Self.normalized(_:)` ; la lecture du corps utilise la même fonction, ce qui donne **une seule règle** pour les deux attentes ;
+- `normalized` : annulation (`CancellationError` ou `URLError(.cancelled)`) **ou** appelant annulé → `CancellationError` ; toute autre erreur est rendue **telle quelle** (l'adaptateur garde son mapping fermé, aucun élargissement à `other`) ;
+- aucun changement de délai, de plafond, d'authentification, de redirection, de cookie, de l'adaptateur ni du transport ordinaire de 2 Mio ;
+- la tâche réseau reste arrêtée par les chemins existants (`stream.cancel()` sur sortie prématurée, `withTaskCancellationHandler` à la lecture) ; pour l'attente d'ouverture, il n'existe aucun handle de tâche avant le retour de `bytes(for:)`, et c'est `stopLoading` qui atteste, côté `URLProtocol`, que le chargement a été clos — ce n'est **pas** une preuve de fermeture de socket.
+
+Preuves préparées (aucune n'est exécutée ici). La colonne « avant correctif » est une **prévision par lecture de source, pas un verdict observé** : le seul RED Apple réel est le verdict `other` de l'ancien classifieur sur `testCancellingTheCallerStopsTheOpenStream` (run 41971981391). Le cas silencieux et le classifieur actuel n'ont jamais tourné sur Apple.
+
+| Test | Ce qu'il prouve | Prévision avant correctif (non exécutée) |
+|---|---|---|
+| `testCancellingBeforeHeadersIsACancellation` (stub **muet**, aucun en-tête, signal `readyCount` atomique) | annulation pendant l'**ouverture** → `.cancelled`, `stopLoading` observé | erreur Foundation brute : `rawCancel` si `URLError(.cancelled)`, sinon `other` |
+| `testTransportErrorBeforeHeadersIsPreserved` (témoin non annulé, `URLError(.timedOut)` injecté) | une panne d'ouverture garde son **type et son code exacts** (`.transport(URLError.timedOut.rawValue)`), sans requalification | `.transport(code)` : déjà correct, non-régression exigée |
+| `testCancellingTheCallerStopsTheOpenStream` (barrière sur le prélude **remis**, pas sur l'ouverture) | annulation **après prélude remis** → `.cancelled` | intermittent quand l'annulation tombait pendant l'attente d'ouverture |
+
+Le classifieur du harnais distingue `.cancelled`, `.rawCancel`, `.transport(code)` et `.other` : une régression de normalisation se lit sans ambiguïté, et le témoin ne peut pas se satisfaire d'une autre erreur que `timedOut`.
+
+Commandes réellement exécutées pour Q6 (Windows, sans Swift) :
+
+| # | Commande | Résultat | Code |
+|---|---|---|---|
+| 1 | `index_status` + `index_repository` (MCP, chemin absolu) | `ready`, `indexed_at 2026-11-05T05:54:27Z`, 39 225 nœuds | 0 |
+| 2 | `git -C integration-issues-20261105 show 3f20ce1b:<fichier> \| git hash-object --stdin` comparé à `git hash-object` local, sur les 2 fichiers | hashes identiques (`3e30bec8…`, `8ef0689d…`) : aucune divergence d'intégration | 0 |
+| 3 | `webfetch` documentation Apple `bytes(for:delegate:)` | aucune sémantique d'annulation documentée à l'ouverture | 0 |
+| 4 | `Select-String 'normalized\|let opened'` sur le wire | 1 ouverture isolée, 2 appels à `normalized`, 1 définition | 0 |
+| 5 | Python jetable : équilibre des délimiteurs des 4 fichiers | 4 × `balanced` | 0 |
+| 6 | Comptage des méthodes de test + `XCTAssert…await` | 47 tests (33 + 14), aucun `await` dans une autoclosure | 0 |
+| 7 | `git diff --stat` + `git status --porcelain` | 3 fichiers (wire, tests, ce rapport), aucun autre | 0 |
+
+Les 47 tests restent **NON EXÉTÉS** sur Apple : le seul RED réel est celui de la CI Q6 cité plus haut, et la vérification du correctif appartient au prochain run Apple.
+
+### Correctif du harnais (retour 1/2 sur le défaut Q6, tests et rapport seulement)
+
+Le correctif produit du §16 n'est pas modifié dans ce suivi. Deux écarts de **preuve** sont corrigés, plus les affirmations qui les présentaient.
+
+| # | Écart | Cause | Correctif |
+|---|---|---|---|
+| 1 | course réelle du témoin non annulé : `MediaSilentRegistry.take()` incrémentait `opened` dans une section critique, puis `startLoading` appelait `register` dans une autre. Le test pouvait voir `openCount >= 1` et appeler `failAll()` **avant** que la poignée figure dans `live` : `failAll` ne trouvait rien, `register` arrivait trop tard et la requête restait suspendue | deux sections critiques distinctes pour un même signal | `take()` ne compte plus ; `register(_:)` ajoute la poignée **et** incrémente `opened` dans la même section critique. Le compteur est renommé `readyCount()` : il signifie « poignée d'abandon enregistrée, l'échec injecté sera réellement remis à ce chargement ». Aucune pause ni délai ajouté ; les nettoyages restent bornés |
+| 2 | le classifieur ne prouvait pas que l'erreur `timedOut` injectée était conservée : un simple libellé `transport` acceptait n'importe quelle `URLError` | verdict réduit à une chaîne | `MediaOutcome` typé : `.returned`, `.failure(cas)`, `.cancelled`, `.rawCancel`, `.transport(code)`. Le témoin exige `.transport(URLError.timedOut.rawValue)`, donc le type **et** le code exacts ; `cancelled` et `rawCancel` restent distincts, et aucune autre erreur n'est acceptée. Ni URL, ni description libre, ni `userInfo` ne sont conservés |
+| 3 | le rapport présentait l'annulation après `deliveredCount` comme « pendant la lecture », et le tableau des verdicts comme observés | surinterprétation de `didLoad` et d'une prévision | `recordDelivered` est documenté comme « prélude remis à Foundation, après `didLoad` » — pas une reprise de `bytes(for:)` ni un premier octet consommé ; le cas est présenté comme **annulation après prélude remis**, la frontière d'ouverture restant couverte par le stub muet déterministe. Le tableau des verdicts est explicitement qualifié de **prévision non exécutée** : le seul RED Apple observé reste `other` dans l'ancien classifieur |
+
+Commandes réellement exécutées pour ce retour (Windows, sans Swift) :
+
+| # | Commande | Résultat | Code |
+|---|---|---|---|
+| 1 | `index_status` + `index_repository` (MCP, chemin absolu) | `ready`, `indexed_at 2026-11-05T06:04:53Z`, 39 248 nœuds | 0 |
+| 2 | `Select-String` des comparaisons textuelles (`"tooLarge"`, `"cancelled"`, `"transport"`, `"raw-cancel"`, `"returned"`) | aucune ne subsiste : tout passe par `MediaOutcome` | 0 |
+| 3 | `Select-String 'MediaSilentRegistry.shared.openCount'` | aucun usage résiduel : le signal est `readyCount()` | 0 |
+| 4 | `Select-String 'take\|register\|opened \+= 1\|readyCount'` | `opened` n'avance plus que dans `register`, même section critique | 0 |
+| 5 | Python jetable : équilibre des délimiteurs des 4 fichiers | 4 × `balanced` | 0 |
+| 6 | Comptage des tests + `XCTAssert…await` | 47 tests (33 + 14), aucun `await` dans une autoclosure | 0 |
+| 7 | `git diff --stat` + `git status --porcelain` | 2 fichiers (tests wire + ce rapport), wire intouché | 0 |
+
+Les 47 tests restent **NON EXÉTÉS** Apple : ce retour ne produit aucun RED/GREEN nouveau et ne prétend aucune exécution Swift locale.

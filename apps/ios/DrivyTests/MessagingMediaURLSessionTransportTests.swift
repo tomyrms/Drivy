@@ -21,6 +21,8 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
     override func tearDown() {
         MediaStreamRegistry.shared.abortAll()
         MediaStreamRegistry.shared.reset()
+        MediaSilentRegistry.shared.failAll()
+        MediaSilentRegistry.shared.reset()
         MediaStubRegistry.shared.reset()
         super.tearDown()
     }
@@ -34,6 +36,14 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
     private func makeStreamingWire() -> MessagingMediaURLSessionTransport {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MediaStreamURLProtocol.self]
+        return MessagingMediaURLSessionTransport(configuration: configuration)
+    }
+
+    /// Wire branché sur un stub qui n'envoie **aucun** en-tête : l'attente d'ouverture de
+    /// `bytes(for:)` reste suspendue jusqu'à l'abandon.
+    private func makeSilentWire() -> MessagingMediaURLSessionTransport {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MediaSilentURLProtocol.self]
         return MessagingMediaURLSessionTransport(configuration: configuration)
     }
 
@@ -54,25 +64,31 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
 
     /// Issue d'un appel lancé dans une tâche non structurée, observée par drapeau : l'échéance
     /// rend la main même si l'appel reste suspendu.
-    private func waitForOutcome(_ box: MediaOutcomeBox, timeout: TimeInterval = 3) async -> String? {
+    private func waitForOutcome(_ box: MediaOutcomeBox, timeout: TimeInterval = 3) async -> MediaOutcome? {
         _ = await waitUntil(timeout: timeout) { box.current != nil }
         return box.current
     }
 
-    /// Lance `send` dans une tâche non structurée et consigne son issue textuelle.
+    /// Lance `send` dans une tâche non structurée et consigne son issue réelle.
+    /// `rawCancel` signale une `URLError(.cancelled)` brute, c'est-à-dire une frontière
+    /// **non** normalisée par le wire ; `transport` conserve le code exact de l'erreur.
     private func startSend(_ wire: MessagingMediaURLSessionTransport, _ request: URLRequest,
                            ceiling: MessagingMediaResponseCeiling) -> (Task<Void, Never>, MediaOutcomeBox) {
         let box = MediaOutcomeBox()
         let call = Task {
             do {
                 _ = try await wire.send(request, ceiling: ceiling)
-                box.set("returned")
+                box.set(.returned)
             } catch let failure as MessagingMediaTransportFailure {
-                box.set(String(describing: failure))
+                box.set(.failure(failure))
             } catch is CancellationError {
-                box.set("cancelled")
+                box.set(.cancelled)
+            } catch let error as URLError where error.code == .cancelled {
+                box.set(.rawCancel)
+            } catch let error as URLError {
+                box.set(.transport(error.code.rawValue))
             } catch {
-                box.set("other")
+                box.set(.other)
             }
         }
         return (call, box)
@@ -85,6 +101,13 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
         call.cancel()
         let resolved = await waitUntil(timeout: 1) { outcome.current != nil }
         if !resolved { MediaStreamRegistry.shared.abortAll() }
+    }
+
+    /// Même libération pour le stub qui n'envoie aucun en-tête.
+    private func releaseSilent(_ call: Task<Void, Never>, _ outcome: MediaOutcomeBox) async {
+        call.cancel()
+        let resolved = await waitUntil(timeout: 1) { outcome.current != nil }
+        if !resolved { MediaSilentRegistry.shared.failAll() }
     }
 
     // MARK: Plafonds dérivés des constantes
@@ -182,7 +205,7 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
         let (call, outcome) = startSend(makeStreamingWire(), request(), ceiling: .media)
 
         let refused = await waitForOutcome(outcome)
-        XCTAssertEqual(refused, "tooLarge")
+        XCTAssertEqual(refused, MediaOutcome.failure(.tooLarge))
         let stopped = await waitUntil(timeout: 3) { MediaStreamRegistry.shared.stopCount() >= 1 }
         XCTAssertTrue(stopped, "La tâche du flux doit être annulée sur en-tête refusé")
         await releaseStream(call, outcome)
@@ -195,7 +218,7 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
         let (call, outcome) = startSend(makeStreamingWire(), request(), ceiling: .envelope)
 
         let overflowed = await waitForOutcome(outcome)
-        XCTAssertEqual(overflowed, "tooLarge")
+        XCTAssertEqual(overflowed, MediaOutcome.failure(.tooLarge))
         let stopped = await waitUntil(timeout: 3) { MediaStreamRegistry.shared.stopCount() >= 1 }
         XCTAssertTrue(stopped, "La tâche du flux doit être annulée au dépassement")
         await releaseStream(call, outcome)
@@ -207,18 +230,60 @@ final class MessagingMediaURLSessionTransportTests: XCTestCase {
             prelude: Data(repeating: 0x41, count: 1_024), finishes: false))
         let wire = makeStreamingWire()
         let (call, outcome) = startSend(wire, request(), ceiling: .media)
-        let opened = await waitUntil(timeout: 3) { MediaStreamRegistry.shared.openCount() >= 1 }
-        XCTAssertTrue(opened, "La requête doit s'ouvrir avant l'annulation")
+        // Le prélude a été **remis à Foundation** (`didLoad` du URLProtocol). Cela ne prouve pas
+        // que la routine du wire a repris `bytes(for:)` ni qu'elle a consommé un premier octet :
+        // ce cas est donc « annulation après prélude remis », pas « annulation pendant la lecture ».
+        // La frontière d'ouverture, elle, est couverte de façon déterministe par le stub muet.
+        let delivered = await waitUntil(timeout: 3) { MediaStreamRegistry.shared.deliveredCount() >= 1_024 }
+        XCTAssertTrue(delivered, "Le prélude doit être remis avant l'annulation")
 
         call.cancel()
 
         // L'état observé AVANT nettoyage fait foi.
         let verdict = await waitForOutcome(outcome)
-        XCTAssertEqual(verdict, "cancelled",
+        XCTAssertEqual(verdict, MediaOutcome.cancelled,
                        "Une annulation appelante doit rester une CancellationError")
         let stopped = await waitUntil(timeout: 3) { MediaStreamRegistry.shared.stopCount() >= 1 }
         XCTAssertTrue(stopped, "La tâche du flux doit être annulée à l'annulation appelante")
         await releaseStream(call, outcome)
+    }
+
+    // MARK: Annulation pendant l'ouverture, avant tout en-tête
+
+    func testCancellingBeforeHeadersIsACancellation() async throws {
+        // Flux muet : aucun en-tête n'est délivré, donc `bytes(for:)` est encore suspendu.
+        // C'est la frontière qui laissait sortir l'erreur brute de Foundation en qualification.
+        MediaSilentRegistry.shared.install()
+        let (call, outcome) = startSend(makeSilentWire(), request(), ceiling: .media)
+        let ready = await waitUntil(timeout: 3) { MediaSilentRegistry.shared.readyCount() >= 1 }
+        XCTAssertTrue(ready, "Le chargement doit être prêt avant l'annulation")
+
+        call.cancel()
+
+        let verdict = await waitForOutcome(outcome)
+        XCTAssertEqual(verdict, MediaOutcome.cancelled,
+                       "Une annulation pendant l'ouverture reste une CancellationError")
+        let stopped = await waitUntil(timeout: 3) { MediaSilentRegistry.shared.stopCount() >= 1 }
+        XCTAssertTrue(stopped, "La tâche d'ouverture doit être arrêtée")
+        await releaseSilent(call, outcome)
+    }
+
+    func testTransportErrorBeforeHeadersIsPreserved() async throws {
+        // Témoin non annulé : une panne d'ouverture ne doit pas être requalifiée en annulation.
+        let injected = URLError(.timedOut)
+        MediaSilentRegistry.shared.install(failure: injected)
+        let (call, outcome) = startSend(makeSilentWire(), request(), ceiling: .media)
+        // `readyCount` n'avance qu'avec l'enregistrement de la poignée, dans la même section
+        // critique : le signal garantit que l'échec injecté sera réellement remis à CE chargement.
+        let ready = await waitUntil(timeout: 3) { MediaSilentRegistry.shared.readyCount() >= 1 }
+        XCTAssertTrue(ready, "Le chargement doit être prêt à recevoir l'échec injecté")
+
+        MediaSilentRegistry.shared.failAll()
+
+        let verdict = await waitForOutcome(outcome)
+        XCTAssertEqual(verdict, MediaOutcome.transport(injected.code.rawValue),
+                       "Une panne d'ouverture garde son type et son code exacts, pas un texte libre")
+        await releaseSilent(call, outcome)
     }
 
     func testCompletedStreamIsReadAndClosedNormally() async throws {
@@ -296,14 +361,29 @@ private final class MediaFlag: @unchecked Sendable {
     func set() { lock.withLock { value = true } }
 }
 
+/// Issue d'un appel, telle que la tâche appelante l'a réellement observée.
+///
+/// Aucune erreur n'est réduite à un texte libre : le type et le code exact sont conservés
+/// pour que le témoin puisse exiger `URLError.timedOut` et rien d'autre.
+private enum MediaOutcome: Equatable, Sendable {
+    case returned
+    case failure(MessagingMediaTransportFailure)
+    case cancelled
+    /// `URLError(.cancelled)` brute : frontière non normalisée par le wire.
+    case rawCancel
+    /// `URLError` non liée à une annulation, avec son code exact.
+    case transport(Int)
+    case other
+}
+
 /// Issue d'un appel consignée par la tâche elle-même : le test lit un drapeau, il n'attend
 /// jamais une tâche qui pourrait rester suspendue.
 private final class MediaOutcomeBox: @unchecked Sendable {
     private let lock = NSLock()
-    private var value: String?
+    private var value: MediaOutcome?
 
-    var current: String? { lock.withLock { value } }
-    func set(_ text: String) { lock.withLock { if value == nil { value = text } } }
+    var current: MediaOutcome? { lock.withLock { value } }
+    func set(_ outcome: MediaOutcome) { lock.withLock { if value == nil { value = outcome } } }
 }
 
 /// Réponses locales livrées d'un bloc. Aucune requête ne sort de la machine.
@@ -387,6 +467,7 @@ private final class MediaStreamRegistry: @unchecked Sendable {
     private var plan: Plan?
     private var stops = 0
     private var opened = 0
+    private var delivered = 0
     private var live: [MediaStreamHandle] = []
 
     func install(_ plan: Plan) {
@@ -394,6 +475,7 @@ private final class MediaStreamRegistry: @unchecked Sendable {
             self.plan = plan
             stops = 0
             opened = 0
+            delivered = 0
             live = []
         }
     }
@@ -403,6 +485,7 @@ private final class MediaStreamRegistry: @unchecked Sendable {
             plan = nil
             stops = 0
             opened = 0
+            delivered = 0
             live = []
         }
     }
@@ -416,8 +499,12 @@ private final class MediaStreamRegistry: @unchecked Sendable {
 
     func register(_ handle: MediaStreamHandle) { lock.withLock { live.append(handle) } }
     func recordStop() { lock.withLock { stops += 1 } }
+    /// Appelé **après** `didLoad` du `URLProtocol` : atteste que le prélude a été remis à
+    /// Foundation, pas que la routine du wire a repris `bytes(for:)` ni consommé un octet.
+    func recordDelivered(_ count: Int) { lock.withLock { delivered += count } }
     func stopCount() -> Int { lock.withLock { stops } }
     func openCount() -> Int { lock.withLock { opened } }
+    func deliveredCount() -> Int { lock.withLock { delivered } }
 
     /// Libération explicite des flux encore ouverts (échec d'assertion, fin de test).
     func abortAll() {
@@ -448,6 +535,7 @@ private final class MediaStreamURLProtocol: URLProtocol {
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
         if !plan.prelude.isEmpty {
             client?.urlProtocol(self, didLoad: plan.prelude)
+            MediaStreamRegistry.shared.recordDelivered(plan.prelude.count)
         }
         if plan.finishes {
             client?.urlProtocolDidFinishLoading(self)
@@ -457,4 +545,72 @@ private final class MediaStreamURLProtocol: URLProtocol {
     }
 
     override func stopLoading() { MediaStreamRegistry.shared.recordStop() }
+}
+
+/// Registre d'un stub **muet** : le chargement s'ouvre mais aucun en-tête n'est délivré, donc
+/// `URLSession.bytes(for:)` reste suspendu. Seul un abandon (annulation appelante ou échec
+/// injecté) termine la requête.
+private final class MediaSilentRegistry: @unchecked Sendable {
+    static let shared = MediaSilentRegistry()
+
+    private let lock = NSLock()
+    private var failure: URLError?
+    private var stops = 0
+    private var opened = 0
+    private var live: [MediaStreamHandle] = []
+
+    func install(failure: URLError? = nil) {
+        lock.withLock {
+            self.failure = failure
+            stops = 0
+            opened = 0
+            live = []
+        }
+    }
+
+    func reset() { install() }
+
+    /// Ne compte rien : le signal « prêt » n'avance qu'avec l'enregistrement de la poignée
+    /// (`register`), dans la même section critique, pour que le test ne puisse pas injecter
+    /// un échec avant que le chargement soit en état de le recevoir.
+    func take() -> URLError? {
+        lock.withLock { failure }
+    }
+
+    func register(_ handle: MediaStreamHandle) {
+        lock.withLock {
+            live.append(handle)
+            opened += 1
+        }
+    }
+
+    func recordStop() { lock.withLock { stops += 1 } }
+    func stopCount() -> Int { lock.withLock { stops } }
+    func readyCount() -> Int { lock.withLock { opened } }
+
+    /// Termine les chargements encore muets : nettoyage, ou échec injecté du témoin.
+    func failAll() {
+        let handles: [MediaStreamHandle] = lock.withLock {
+            let copy = live
+            live = []
+            return copy
+        }
+        for handle in handles { handle.abort() }
+    }
+}
+
+private final class MediaSilentURLProtocol: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        // Aucun en-tête, aucune donnée : `bytes(for:)` ne peut pas rendre la main.
+        let failure = MediaSilentRegistry.shared.take()
+        MediaSilentRegistry.shared.register(MediaStreamHandle { [weak self] in
+            guard let self else { return }
+            self.client?.urlProtocol(self, didFailWithError: failure ?? URLError(.cancelled))
+        })
+    }
+
+    override func stopLoading() { MediaSilentRegistry.shared.recordStop() }
 }
