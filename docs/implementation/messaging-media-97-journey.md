@@ -223,9 +223,13 @@ déclenche ni révocation ni purge.
 
 Le rapport ne prétend plus « zéro Task.sleep » : les trois `Task.sleep` restants sont des
 échéances bornées pour l'arrivée dans `Gate` et pour la terminaison des opérations
-retenues. Toutes les attentes de tâches retenues passent par `boundedValue` (surcharges
-throwing et non throwing) ou par une barrière ouverte sur tous les chemins ; aucun groupe
-structuré n'attend un enfant non coopératif.
+retenues. Les attentes de tâches retenues passent par `boundedValue` (surcharges throwing
+et non throwing) : une course entre la tâche et l'échéance rend une valeur ou lève
+`BoundedTimeout`, sans joindre une tâche qui ignorerait l'annulation. Sur le chemin
+d'échéance, la barrière est ouverte et la tâche/le watcher sont annulés avant le verdict ;
+sur le chemin de valeur, l'échéance et le watcher sont annulés. Le watcher resté attaché à
+une opération non coopérative n'est pas attendu. Un test dédié vérifie ce cas avec une
+continuation volontairement non coopérative et une échéance `fulfillment` indépendante.
 
 ## 4. Tests préparés (NON EXÉCUTÉS)
 
@@ -233,9 +237,9 @@ Aucun outil Apple n'est présent sur ce poste Windows : `swift`, `swiftc`, `xcod
 `xcrun` et `xcodegen` sont absents. **Aucune compilation, aucun RED/GREEN Swift et aucune
 suite XCTest ne sont revendiqués.**
 
-Deux fichiers, 52 méthodes préparées (aucune exécutée Apple) :
+Deux fichiers, 53 méthodes préparées (aucune exécutée Apple) :
 
-- `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (43)
+- `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (44)
   - préparation hors MainActor et mapping fermé ;
   - ordre `put` du sceau → chiffrement → CAS de l'enveloppe, avant tout dépôt ;
   - panne à la persistance, légende/mentions/nom bornés ;
@@ -259,7 +263,9 @@ Deux fichiers, 52 méthodes préparées (aucune exécutée Apple) :
     reste en cache ; invalidation de scope : autres médias purgés ;
   - workspace : tombstone fourni contre un live chargé, `media.deleted` seul, référence
     média disparue, ancien live après tombstone ; IDs transmis et cache purgé ;
-  - panne de coffre non rendue comme liste vide ; entrée de barrière qui n'arrive pas.
+  - panne de coffre non rendue comme liste vide ; entrée de barrière qui n'arrive pas ;
+  - opération volontairement non coopérative : `boundedValue` rend une échéance explicite
+    (`BoundedTimeout`) sans joindre la tâche retenue, sous `fulfillment` XCTest indépendant.
 - `apps/ios/DrivyTests/MessagingMediaJourneyIntegrationTests.swift` (9)
   - parcours émetteur avec file et cache **réels** sur répertoire temporaire, PNG 1×1
     synthétique valide, primitives AES-CTR/SHA-256 réelles ; seuls Megolm/dépôt/POST sont doublés ;
@@ -302,7 +308,7 @@ lancée ici et aucun workflow n'a été modifié.
 | Script Python d'équilibre des délimiteurs (chaînes/commentaires ignorés) | équilibré sur les 7 fichiers touchés/neufs |
 | `Select-String 'XCTAssert\w+\([^)]*await'` | 0 occurrence dans les deux fichiers de tests |
 | `Select-String 'Task\.sleep|sleep\('` | 3 occurrences bornées (`Gate` et les deux surcharges `boundedValue`), aucun sommeil de preuve |
-| Comptage des méthodes de test | 43 + 9 = 52 |
+| Comptage des méthodes de test | 44 + 9 = 53 |
 | `Select-String 'await\s+\w+\.\w+\s*='` dans les tests | 0 mutation externe de propriété d'acteur |
 | PNG 1×1 de test : CRC des chunks + `zlib.decompress(IDAT)` | valides (Python standard) |
 | Codebase Memory `drivy-medias-parcours-97` | réindexé avant remise, `status: ready` ; les deux fichiers de tests, le coordinateur et le workspace sont absents de `parse_partial` |

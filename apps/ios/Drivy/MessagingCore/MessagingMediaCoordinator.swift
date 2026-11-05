@@ -725,6 +725,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
                 return latest
             } catch is CancellationError {
                 throw CancellationError()
+            } catch let failure as MessagingMediaRuntimeFailure {
+                throw failure
             } catch let failure as MessagingFailure {
                 throw Self.map(failure)
             } catch {
@@ -732,6 +734,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             }
         } catch is CancellationError {
             throw CancellationError()
+        } catch let failure as MessagingMediaRuntimeFailure {
+            throw failure
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
         } catch {
@@ -790,6 +794,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             return result
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
+        } catch let failure as MessagingMediaRuntimeFailure {
+            throw failure
         } catch is CancellationError {
             throw CancellationError()
         } catch {
