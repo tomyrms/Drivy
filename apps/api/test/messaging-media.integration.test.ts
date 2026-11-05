@@ -23,6 +23,12 @@ const app = buildApp({
   }
 });
 const path = `/v1/schools/${id.schoolA}/messaging`;
+// Instrumentation de FIXTURE seulement : impose un requestId de test (pour reproduire un identifiant réel contenant
+// une sous-chaîne comme « 409 »). Aucun générateur d'ID ni gestionnaire d'erreurs du produit n'est modifié.
+app.addHook('onRequest', async request => {
+  const forced = request.headers['x-test-request-id'];
+  if (typeof forced === 'string' && forced.length > 0) request.id = forced;
+});
 const deviceA = 'DEVICEA0001';
 const deviceB = 'DEVICEB0001';
 const deviceForeign = 'DEVICEF0001';
@@ -46,6 +52,26 @@ const call = (subject: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE', target
 const cipherBytes = (size: number, seed = 7) => Buffer.from(Array.from({ length: size }, (_value, index) => (index * 31 + seed) % 256));
 const envelope = { scheme: 'synthetic', keyId: 'fixture', payload: 'AA==' };
 const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+interface ProblemResponse { statusCode: number; body: string; json(): unknown }
+/**
+ * Vérifie un refus média réel par son STATUT et son TYPE/CODE de problème, jamais par des sous-chaînes du corps :
+ * un requestId légal peut contenir « 409 » (ou tout autre fragment) sans qu'il s'agisse d'un conflit.
+ * Seuls les champs de métadonnée média sont interdits.
+ */
+function expectProblem(response: ProblemResponse, status: number, code: string) {
+  expect(response.statusCode, response.body).toBe(status);
+  const body = response.json() as Record<string, unknown>;
+  expect(body).toMatchObject({ status, code, type: `urn:drivy:problem:${code.toLowerCase()}` });
+  expect(typeof body.requestId).toBe('string');
+  expect(Object.keys(body).sort()).toEqual(['code', 'requestId', 'status', 'title', 'type']);
+  expect(JSON.stringify(body)).not.toMatch(/sha256|byteSize|ciphertext|purgedAt|mediaId|messageId/);
+}
+/** Réponse de problème fabriquée par la fixture : prouve que le vérificateur refuse un code erroné ou une fuite. */
+function problemResponse(status: number, code: string, extra: Record<string, unknown> = {}): ProblemResponse {
+  const body = { type: `urn:drivy:problem:${code.toLowerCase()}`, title: 'Refus', status, code,
+    requestId: '40900000-0000-4000-8000-000000000409', ...extra };
+  return { statusCode: status, body: JSON.stringify(body), json: () => body };
+}
 
 async function openPrivate(): Promise<string> {
   const opened = await call('demo-instructor', 'PUT', `/private/${id.alice}`);
@@ -302,15 +328,37 @@ describe('messaging media PostgreSQL, opaque encrypted bytes only', () => {
     expect(nonParticipant.statusCode, nonParticipant.body).toBe(404);
     expect(nonParticipant.json().code).toBe('MEDIA_NOT_FOUND');
     const foreignSchool = await download('demo-foreign', conversationId, mediaId, deviceForeign);
-    expect(foreignSchool.statusCode).toBe(403);
-    expect(foreignSchool.body).not.toMatch(/sha256|byteSize/);
+    expectProblem(foreignSchool, 403, 'ACCESS_DENIED');
     // Un identifiant déjà pris par un média invisible reste un 404 uniforme, jamais un conflit de clé.
     const generalId = await openGeneral('demo-bob');
     const collision = await upload('demo-bob', generalId, mediaId, bytes, deviceC);
-    expect(collision.statusCode, collision.body).toBe(404);
-    expect(collision.json().code).toBe('MEDIA_NOT_FOUND');
-    expect(collision.body).not.toMatch(/sha256|byteSize|409/);
+    expectProblem(collision, 404, 'MEDIA_NOT_FOUND');
     expect((await mediaRow(mediaId)).state).toBe('ATTACHED');
+  });
+
+  it('ne confond pas une sous-chaîne du requestId avec un conflit ou une fuite de métadonnées', async () => {
+    const conversationId = await openPrivate();
+    const mediaId = randomUUID();
+    const bytes = cipherBytes(64);
+    expect((await upload('demo-instructor', conversationId, mediaId, bytes)).statusCode).toBe(200);
+    const generalId = await openGeneral('demo-bob');
+    // requestId imposé par la fixture : contient « 409 » comme l'identifiant réel observé en intégration I2.
+    const forced = '40900000-0000-4000-8000-000000000409';
+    const collision = await app.inject({ method: 'PUT',
+      url: `${path}/conversations/${generalId}/media/${mediaId}`,
+      headers: { ...headers('demo-bob', deviceC), 'content-type': 'application/octet-stream', 'x-test-request-id': forced },
+      payload: bytes });
+    expectProblem(collision, 404, 'MEDIA_NOT_FOUND');
+    expect(collision.json().requestId).toBe(forced);
+    // Un vrai conflit (409) reste refusé par le vérificateur d'un 404 MEDIA_NOT_FOUND.
+    const conflict = await upload('demo-instructor', conversationId, mediaId, cipherBytes(64, 99));
+    expect(conflict.statusCode, conflict.body).toBe(409);
+    expect(() => expectProblem(conflict, 404, 'MEDIA_NOT_FOUND')).toThrow();
+    // Un code erroné avec le bon statut est refusé.
+    expect(() => expectProblem(problemResponse(404, 'NOT_FOUND'), 404, 'MEDIA_NOT_FOUND')).toThrow();
+    // Des métadonnées média divulguées sont refusées même avec le bon statut et le bon code.
+    expect(() => expectProblem(problemResponse(404, 'MEDIA_NOT_FOUND', { sha256: 'a'.repeat(64) }), 404, 'MEDIA_NOT_FOUND')).toThrow();
+    expect(() => expectProblem(problemResponse(404, 'MEDIA_NOT_FOUND', { byteSize: 64 }), 404, 'MEDIA_NOT_FOUND')).toThrow();
   });
 
   it('cancels only before attachment, stays idempotent and never resurrects purged bytes', async () => {
