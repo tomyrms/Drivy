@@ -65,11 +65,20 @@ struct SchoolPlanningRecovery106Tests {
         let writes = await server.writes()
         #expect(writes.count == 1)
         let write = try #require(writes.first)
+        #expect(write.httpMethod == "POST")
+        #expect(write.url?.pathComponents.last == "lessons")
         #expect(write.httpBody == command.body)
         #expect(write.value(forHTTPHeaderField: "Idempotency-Key") == command.id.uuidString)
         #expect(write.value(forHTTPHeaderField: "Authorization") == "Bearer token-1")
         #expect(write.value(forHTTPHeaderField: "If-Match") == nil)
-        #expect(token.calls == 1)
+        // Une mutation POST, puis une lecture GET du reçu AP72 de cette même opération. Chacune demande un jeton ;
+        // `/me` utilise PinnedToken et n’incrémente pas ce compteur. Deux demandes de jeton ne font pas deux POST.
+        let receiptReads = await server.receiptReads()
+        #expect(receiptReads.count == 1)
+        let receiptRead = try #require(receiptReads.first)
+        #expect(receiptRead.pathComponents.dropLast().last == "operations")
+        #expect(receiptRead.pathComponents.last == command.id.uuidString)
+        #expect(token.calls == 2)
         #expect(clock.now == now)
     }
 
@@ -400,7 +409,7 @@ private actor RecoveryServer: SchoolHTTPTransport {
     private var holdNextMeRead = false
     private var pausedMe: CheckedContinuation<Void, Never>?
     private var meReads = 0
-    private var receiptReads = 0
+    private var receiptURLs: [URL] = []
 
     init(firstWriteStatus: Int? = nil) { self.firstWriteStatus = firstWriteStatus }
 
@@ -411,7 +420,8 @@ private actor RecoveryServer: SchoolHTTPTransport {
     func writes() -> [URLRequest] { recorded.filter { $0.httpMethod == "POST" } }
     func firstWriteWas401() -> Bool { refusedFirstWrite }
     func meReadCount() -> Int { meReads }
-    func receiptReadCount() -> Int { receiptReads }
+    func receiptReadCount() -> Int { receiptURLs.count }
+    func receiptReads() -> [URL] { receiptURLs }
 
     private func envelope(_ data: Any, status: Int, url: URL) throws -> SchoolHTTPResponse {
         SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: ["data": data,
@@ -443,8 +453,8 @@ private actor RecoveryServer: SchoolHTTPTransport {
             }
             return try envelope([:], status: parts.last == "lessons" ? 201 : 200, url: url)
         }
-        if parts.dropLast().last == "operations" {
-            receiptReads += 1
+        if request.httpMethod == "GET", parts.dropLast().last == "operations" {
+            receiptURLs.append(url)
             let operationID = (parts.last ?? "").isEmpty ? UUID() : UUID(uuidString: parts.last!) ?? UUID()
             let data: [String: Any] = ["operationId": operationID.uuidString, "commandType": lastOperationType,
                 "resourceType": "Lesson", "resourceId": HubFixture.lessonID.uuidString,

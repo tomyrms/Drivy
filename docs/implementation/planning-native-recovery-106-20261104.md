@@ -72,9 +72,9 @@ identifiant, des mêmes octets et de la même version en mémoire et dans le cof
 expiration ; confirmation tardive depuis la feuille ; aucun retrait au refus local ; en-têtes, corps et
 `If-Match` du cas nominal futur.
 
-Aucune compilation, aucun RED/GREEN et aucune exécution Apple ne sont revendiqués depuis Windows : le
-worktree ne contient ni `swift`, ni `swiftc`, ni `xcodebuild`. Aucun test Python de substitution n’a été
-inventé.
+Sur ce poste Windows, aucune compilation, aucun RED/GREEN et aucune exécution Swift ne sont revendiqués :
+le worktree ne contient ni `swift`, ni `swiftc`, ni `xcodebuild`. Aucun test Python de substitution n’a
+été inventé. Le RED Apple réel est celui du candidat intégré décrit ci-dessous.
 
 ### Exécution Apple requise
 
@@ -93,7 +93,31 @@ Puis la suite `DrivyTests` complète, en particulier `SchoolPlanningBookingTests
 Les tests doivent être exécutés sur le même SHA que le candidat ; aucun résultat historique n’est
 réutilisé comme vert.
 
-## 5. Limites et restes
+## 5. Correction après la première exécution Apple
+
+Run `41962003316`, job `127030313656`, candidat intégré `62560a2e` : compilation réussie, tests réellement
+exécutés. Le seul échec de ce fichier était `aFutureCreationWritesOnceWithItsExactHeaders` à la ligne 72 :
+`token.calls` valait **2**, l’attente disait **1**. Le reçu, l’unique mutation, les octets et les en-têtes
+passaient.
+
+Cause vérifiée dans le source réel, pas une hypothèse : `SchoolPlanningClient.send` émet d’abord la
+mutation, puis appelle `receipt(for:)` pour la preuve AP72. Les deux requêtes demandent un jeton par
+`accessToken()` ; `/me` utilise `PinnedToken` et ne compte pas dans `RecoveryTokenSource`. Le second appel
+de jeton est donc la lecture `GET /operations/{id}` du reçu, pas un second POST. Ce comportement AP72
+existait avant la barrière L1b et n’est pas attribué à l’admission optionnelle N106.
+
+Correction apportée, limitée au test : l’attente exacte devient `token.calls == 2`, et la fixture
+enregistre désormais les URL des lectures `GET` de reçu. Le scénario vérifie séparément une seule mutation
+POST, une seule lecture du reçu pour l’identifiant de la commande, et les mêmes assertions de corps,
+`Idempotency-Key`, `Authorization`, `If-Match` et d’horloge. Aucun client, politique ou produit n’est
+modifié, et aucune assertion n’a été rendue permissive.
+
+Observation hors périmètre, non modifiée : `SchoolPlanningAdmission106Tests.swift:157` échoue sur
+`token.invalidations == 1 && token.calls == 2`. Le même mécanisme AP72 ajoute une demande de jeton après
+les deux POST du scénario 401 ; ce fichier appartient à l’intégration N106 et doit être corrigé par son
+propriétaire s’il est retenu. Le défaut n’est ni dans le client L1b ni dans la politique N106.
+
+## 6. Limites et restes
 
 - La règle ne qualifie pas une vraie transaction PostgreSQL ni un vrai réseau : les doubles sont
   synthétiques et ne remplacent pas la campagne Apple.
