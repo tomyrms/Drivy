@@ -312,14 +312,28 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         XCTAssertEqual(remaining.count, 1, "L'intention reste pour un renvoi explicite.")
         let encryptCount = await encryption.encryptionCount
         XCTAssertEqual(encryptCount, 1, "Aucun nouveau chiffrement après une réponse perdue.")
+        let beforeEntry = await outbox.all().first
+        let replacesBefore = await outbox.replaceCalls.count
+        let sendsBefore = await sender.sends.count
 
         let premature = await coordinator.recomposeAfterMembersChanged(clientMessageID: snapshot.clientMessageID)
         guard case .pending(let rejected) = premature else {
             XCTFail("Une réponse perdue n'ouvre pas la recomposition d'enveloppe."); return
         }
-        XCTAssertEqual(rejected, .membersChanged)
+        // Une réponse perdue n'établit pas un refus serveur MEMBERS_CHANGED : le
+        // contrat interdit la recomposition et rend un résultat inconnu.
+        XCTAssertEqual(rejected, .resultUnknown)
         let encryptAfterRecompose = await encryption.encryptionCount
         XCTAssertEqual(encryptAfterRecompose, 1, "Aucune recomposition n'est tentée sans refus avéré.")
+        let replacesAfter = await outbox.replaceCalls.count
+        let sendsAfter = await sender.sends.count
+        XCTAssertEqual(replacesAfter, replacesBefore, "Aucun nouveau CAS d'enveloppe.")
+        XCTAssertEqual(sendsAfter, sendsBefore, "Aucun nouveau POST après l'essai refusé.")
+        let afterEntry = await outbox.all().first
+        XCTAssertEqual(afterEntry?.mediaID, beforeEntry?.mediaID)
+        XCTAssertEqual(afterEntry?.createdAt, beforeEntry?.createdAt)
+        XCTAssertEqual(afterEntry?.messageCiphertext, beforeEntry?.messageCiphertext,
+                       "L'enveloppe conservée reste exactement la même.")
     }
 
     func testConfirmedServerReceiptWithCleanupFailureIsNotAFalseSendFailure() async throws {

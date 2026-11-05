@@ -66,3 +66,24 @@ cette déclaration (plus ce rapport), `git diff --check` est vide et l'arbre est
 Aucune compilation Apple locale : le RED est le compilateur cité, pas un port Python.
 **Correctif préparé, Apple à réexécuter.** Il ne garantit pas l'absence d'un autre
 diagnostic après compilation.
+
+## Q4 — attente de recomposition après réponse perdue
+
+Le run `41962003316` au SHA `62560a2e` exécute réellement
+`testSendKeepsTheIntentWhenTheServerAnswerIsLost` et n'échoue qu'à la ligne 320 : après
+une réponse POST perdue, `recomposeAfterMembersChanged` rend `.pending(.resultUnknown)`
+alors que le test attendait `.membersChanged`.
+
+Le produit est cohérent avec le contrat : sans entrée dans `membersChanged`, la garde
+`guard let refused = membersChanged[clientMessageID]` renvoie `.resultUnknown`. Une réponse
+perdue n'établit pas un refus serveur `MEMBERS_CHANGED` et n'autorise aucune recomposition.
+Le produit n'est pas modifié pour fabriquer un refus inexistant.
+
+L'attente du seul cas concerné est ajustée à `.resultUnknown`. Le même test vérifie
+désormais, après l'essai refusé : aucun nouveau chiffrement, aucun nouveau CAS
+(`replaceCalls` inchangé), aucun nouveau POST (`sends` inchangé), et l'intention conserve
+exactement le même `mediaID`, `createdAt` et `messageCiphertext`. Aucune autre assertion
+n'est retirée ni élargie.
+
+Limite : aucun Swift local, le RED est le run Apple cité ; aucun GREEN n'est revendiqué.
+Le helper `DeadlineBox` n'est pas rouvert.
