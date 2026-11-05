@@ -54,3 +54,15 @@ protocol MessagingMediaRuntime: Sendable {
     func open(_ message: MessagingWireMessage) async throws -> MessagingPreparedMedia
     func invalidate() async
 }
+
+/// Capacité additive **interne** (#97) : signaler au runtime les médias dont la
+/// référence serveur vient d'être supprimée, purgée ou rendue hors de la limite
+/// lisible. Elle n'est pas une méthode du protocole UI gelé : le workspace la
+/// découvre par cast optionnel et les compositions qui ne l'implémentent pas
+/// restent valides.
+protocol MessagingMediaRevocationReceiving: Sendable {
+    /// Purge les copies connues et bloque les lectures en vol de ces médias.
+    /// Ne supprime jamais les intentions encore à vérifier et ne promet aucun
+    /// effacement physique.
+    func revoke(mediaIDs: [UUID], conversationID: UUID) async
+}

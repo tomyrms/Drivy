@@ -4,9 +4,9 @@ Date : 5 novembre 2026. Branche locale : `tomyrms/issues-medias-parcours-97`.
 Base qualifiée : `e2edc85ed092237016620079d52d11eb7a2d02b5`.
 Point d'interface annoncé au coordinateur : `3297c84f7103e330dfd675c30f80cc8b2505dd2b`.
 Commit de réalisation : `211c949475ca550d38018cd0098b9c395a318066`, suivi du correctif de
-garde de recomposition dans l'historique local. Le commit qui ajoute ce rapport suit le
-commit de réalisation ; le SHA final exact est transmis avec le `worker_done`, sans réécrire
-l'historique.
+garde de recomposition dans l'historique local. La fusion U97 `3432066e` reste intacte ;
+la correction 1/2 est un commit local sur cette même branche, dont le SHA exact est transmis
+avec le `worker_done`, sans réécrire l'historique.
 
 Ce lot ferme le **raccord produit local** entre les primitives média déjà livrées et la
 messagerie de qualification. Il ne prouve ni l'exploitation suisse, ni la résidence, ni la
@@ -71,9 +71,9 @@ sondage existantes restent compatibles et ne changent pas de comportement.
    renvoi explicite.
 7. Un reçu serveur valide suivi d'un échec d'effacement local rend
    `confirmed(cleanupPending: true)`, jamais un faux échec d'envoi.
-8. Le même `clientMessageID` ne peut pas être envoyé deux fois en parallèle dans le
-   processus (`alreadyInFlight`) ; le CAS et le verrou statique de la file couvrent les
-   instances multiples.
+8. Le même `clientMessageID` ne peut pas être envoyé deux fois en parallèle dans la même
+   instance (`alreadyInFlight`) ; les instances multiples sont couvertes par le CAS et le
+   verrou statique de la file, sans promesse de zéro paquet répété.
 
 ### Lecture
 
@@ -118,29 +118,98 @@ dans le workspace. Si l'ouverture média échoue (Keychain, coffre, fichiers), l
 texte et les sondages continuent avec `mediaRuntime == nil`. Les conditions d'activation et
 les vues restent inchangées.
 
+## 3 bis. Correction 1/2 (revue du coordinateur)
+
+Cette correction reste sur la branche déjà assemblée avec U97 (`3432066e`, UI `b2290bfe`) ;
+elle ne réécrit ni les fichiers UI ni les branches sources.
+
+### F1 — reprise idempotente avant nouveau sceau
+
+`enqueue` relit d'abord les intentions du scope et compare le `clientMessageID`. Un record
+existant est accepté seulement si la conversation, le contenu original **déchiffré**, la
+légende normalisée, les mentions, la réponse et les métadonnées d'affichage correspondent ;
+le plaintext est comparé aux octets scellés existants, jamais à un nouveau sceau. Le record
+exact est ensuite reconfirmé par `put` (ou par le CAS équivalent) avant tout effet réseau.
+Un contenu différent sous le même identifiant échoue fermé (`invalidContent`). Les courses
+entre deux instances sont adoptées après `stateConflict`, sans écraser le record gagnant.
+`send` et `deliver` reconfirment aussi le record exact par `put` avant le dépôt : `entries`
+seul ne prouve pas une synchronisation durable. Le média n'est jamais re-scellé ni
+rechiffré pour une reprise.
+
+### F2 — autorisation de recomposition liée à l'enveloppe refusée
+
+`membersChanged` n'est plus un simple `Set` : il mémorise l'enveloppe exacte qui a reçu le
+refus. `recomposeAfterMembersChanged` exige que l'enveloppe courante soit celle-là, puis
+consomme l'autorisation au moment du CAS réussi, **avant** le POST. Une réponse perdue lors
+de ce POST ne laisse donc aucune autorisation : une seconde recomposition retourne
+`resultUnknown` sans nouveau chiffrement, CAS ni POST. Un nouveau refus `MEMBERS_CHANGED`
+lie une nouvelle autorisation à la nouvelle enveloppe. Le replay explicite réutilise
+exactement l'enveloppe conservée. `active` reste un verrou **par instance** ; la cohérence
+multi-instance vient du CAS et du verrou statique de la file, sans promesse de zéro paquet
+répété.
+
+### F3 — aucun clair ressuscité après une attente
+
+Le workspace capture une époque globale (changement de contexte) et une révision **par
+conversation** (tombstone, limite lisible, masquage). Après chaque attente de déchiffrement,
+il relit la dernière version connue du message, la limite lisible, le masquage et la
+révision ; il vérifie à nouveau les métadonnées serveur avant le cache, avant l'historique
+et après l'`upsert`. Un résultat périmé retire le clair et l'entrée d'historique au lieu de
+les réinscrire. Une révision d'une autre conversation ne rejette pas un déchiffrement isolé.
+Le garde initial de contexte passe par `recordFailure`, qui ferme bien la mémoire affichée
+au lieu de seulement poser `error`.
+
+### F4 — invalidation après les attentes et révocation serveur
+
+`isActive` et `ensureActive` revérifient l'invalidation **après** l'attente du contexte.
+`enqueue` a une barrière après `put` et avant le chiffrement. Les écritures de cache sont
+suivies d'une revalidation : une invalidation ou une révocation survenue pendant le `store`
+purge la copie tardive avant de rendre la main. Un reçu serveur déjà confirmé n'est jamais
+transformé en échec par un défaut de nettoyage local.
+
+Une capacité additive **interne** `MessagingMediaRevocationReceiving` permet au workspace de
+transmettre les `mediaIDs` dont la référence serveur est tombstonée, purgée ou hors de la
+limite lisible. Le runtime purge ces médias, bloque les lectures en vol et conserve les
+intentions encore à vérifier. Une suppression seulement optimiste (masquage local) ne purge
+pas le cache. Le protocole UI gelé n'est pas élargi et U97 n'est pas modifié.
+
+### F5 — tests exécutables et bornés
+
+Les treize mutations externes de propriétés d'acteurs sont remplacées par des méthodes
+isolées de configuration. Les fixtures de test sont synthétiques ; le PNG 1×1 a été régénéré
+et ses CRC IDAT/IEND ainsi que `zlib.decompress` ont été vérifiés avec Python standard.
+`Gate.waitUntilWaiting` et la terminaison des tâches retenues sont bornées par échéance, avec
+libération sur tous les chemins ; un test contrôle explicitement une entrée qui n'arrive pas.
+Aucun task group n'attend un enfant non coopératif.
+
 ## 4. Tests préparés (NON EXÉCUTÉS)
 
 Aucun outil Apple n'est présent sur ce poste Windows : `swift`, `swiftc`, `xcodebuild`,
 `xcrun` et `xcodegen` sont absents. **Aucune compilation, aucun RED/GREEN Swift et aucune
 suite XCTest ne sont revendiqués.**
 
-Deux fichiers neufs, 26 méthodes, écrites avant le coordinateur :
+Deux fichiers, 43 méthodes préparées (aucune exécutée Apple) :
 
-- `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (17)
+- `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (34)
   - préparation hors MainActor et mapping fermé ;
   - ordre `put` du sceau → chiffrement → CAS de l'enveloppe, avant tout dépôt ;
   - panne à la persistance, légende/mentions/nom bornés ;
-  - dépôt → POST → retrait, reçu sans nettoyage local, réponse perdue, refus de
-    recomposition après une réponse perdue ;
-  - double geste concurrent avec suspension contrôlée (`Gate`, aucun sommeil) ;
+  - reprise idempotente après échec de `put`, de chiffrement ou de CAS, même sceau,
+    même `createdAt`, même enveloppe ; contenu différent refusé ; adoption d'un record
+    concurrent ; deux instances ;
+  - dépôt → POST → retrait, reçu sans nettoyage local, réponse perdue ;
+  - `MEMBERS_CHANGED` : recomposition liée à l'enveloppe refusée, réponse perdue interdisant
+    une seconde recomposition, replay explicite de la même enveloppe ;
+  - double geste concurrent avec suspension contrôlée (`Gate` borné, aucun sommeil de preuve) ;
   - réouverture avec le même enregistrement et la même enveloppe ;
-  - `MEMBERS_CHANGED` : recomposition d'enveloppe seule, sans nouveau dépôt ;
   - métadonnées serveur, tombstone, autre média, autre taille, corruption, format divergent ;
-  - invalidation : cache purgé, intentions conservées, runtime fermé ;
-  - panne de coffre non rendue comme liste vide.
+  - invalidation ou changement de contexte pendant `put`, `store` et miniature, purge de la copie tardive, révocation
+    connue et blocage de lecture ;
+  - déchiffrement retenu puis tombstone ou limite lisible : aucun clair/historique tardif ;
+  - panne de coffre non rendue comme liste vide ; entrée de barrière qui n'arrive pas.
 - `apps/ios/DrivyTests/MessagingMediaJourneyIntegrationTests.swift` (9)
   - parcours émetteur avec file et cache **réels** sur répertoire temporaire, PNG 1×1
-    synthétique, primitives AES-CTR/SHA-256 réelles ; seuls Megolm/dépôt/POST sont doublés ;
+    synthétique valide, primitives AES-CTR/SHA-256 réelles ; seuls Megolm/dépôt/POST sont doublés ;
   - réouverture de la file avec le même sceau ;
   - réception : téléchargement unique, validation, cache, second rendu depuis le cache ;
   - invalidation du cache réel, intention conservée ;
@@ -180,8 +249,10 @@ lancée ici et aucun workflow n'a été modifié.
 | Script Python d'équilibre des délimiteurs (chaînes/commentaires ignorés) | équilibré sur les 7 fichiers touchés/neufs |
 | `Select-String 'XCTAssert\w+\([^)]*await'` | 0 occurrence dans les deux fichiers de tests |
 | `Select-String 'Task\.sleep|sleep\('` | 0 occurrence : suspensions par `Gate` |
-| Comptage des méthodes de test | 17 + 9 = 26 |
-| Codebase Memory `drivy-medias-parcours-97` | réindexé avant remise, `status: ready` ; les deux fichiers de tests et le coordinateur sont absents de `parse_partial` |
+| Comptage des méthodes de test | 34 + 9 = 43 |
+| `Select-String 'await\s+\w+\.\w+\s*='` dans les tests | 0 mutation externe de propriété d'acteur |
+| PNG 1×1 de test : CRC des chunks + `zlib.decompress(IDAT)` | valides (Python standard) |
+| Codebase Memory `drivy-medias-parcours-97` | réindexé avant remise, `status: ready` ; les deux fichiers de tests, le coordinateur et le workspace sont absents de `parse_partial` |
 | `Get-Command swift, swiftc, xcodebuild, xcrun, xcodegen` | 0 outil |
 | `git status --porcelain` final | uniquement les fichiers de réalisation, puis ce rapport |
 
@@ -200,9 +271,11 @@ remplace un test Swift.
   qualification.
 - **Le signalement média typé complet reste hors de ce premier raccord.** Aucun droit
   administrateur n'est élargi et aucune copie d'octets n'est ajoutée aux signalements.
-- **Pas de purge par média sur tombstone** : le workspace et le runtime refusent de servir
-  l'ancien contenu, et `invalidate` purge le cache du scope. Aucun hook de déconnexion
-  automatique n'est ajouté ; l'UI doit appeler `invalidate` à la sortie de contexte.
+- **Révocation serveur ciblée** : le workspace transmet au runtime les `mediaIDs` des
+  tombstones, purges et limites lisibles ; le runtime purge les copies connues et bloque
+  les lectures en vol. Une suppression seulement optimiste (masquage) ne purge pas le cache.
+  Aucun hook de déconnexion automatique n'est ajouté ; l'UI doit appeler `invalidate` à la
+  sortie de contexte.
 - **Pas d'effacement physique promis** : `unlink`, cache AES-GCM et invalidation ne
   garantissent ni zéroïsation mémoire ni effacement SSD.
 - **Pas de politique de conservation** : aucune TTL, aucune purge automatique, aucune
@@ -224,6 +297,8 @@ remplace un test Swift.
   - `test-driven-development` (base
     `C:\Users\jtoma\.config\opencode\node_modules\superpowers\skills\test-driven-development`) :
     tests écrits avant le coordinateur ; RED/GREEN non exécuté faute d'outil Apple ;
+  - `systematic-debugging` (même base) : chargé pour la correction 1/2 ; chaque constat F1–F5
+    a été lu dans le source réel avant modification ;
   - `verification-before-completion` (même base) : chargé avant les contrôles et la remise ;
     il interdit de présenter le lot comme compilé ou testé.
 - **Codebase Memory** : projet `drivy-medias-parcours-97`, racine

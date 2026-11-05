@@ -72,6 +72,21 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
             transportFactory: { transport }, currentScope: { scope })
     }
 
+    /// Terminaison bornée d'une tâche retenue par une barrière : l'échéance ouvre la
+    /// barrière puis annule la tâche, sans attendre un enfant non coopératif.
+    private func boundedValue<T>(_ task: Task<T, Never>, gate: Gate,
+                                 timeout: Duration = .seconds(2)) async -> T {
+        let deadline = Task {
+            try? await Task.sleep(for: timeout)
+            guard !Task.isCancelled else { return }
+            await gate.open()
+            task.cancel()
+        }
+        let value = await task.value
+        deadline.cancel()
+        return value
+    }
+
     // MARK: Préparation et mise en file
 
     func testPrepareCallsThePrimitiveAndMapsOnlyClosedFailures() async throws {
@@ -144,7 +159,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let scope = makeScope()
         let order = OrderRecorder()
         let outbox = FakeMediaOutbox(order: order)
-        await outbox.putFailure = .protectionUnavailable
+        await outbox.setPutFailure(.protectionUnavailable)
         let encryption = FakeMediaEncryption()
         let transport = FakeMediaTransport()
         let coordinator = makeCoordinator(scope: scope, outbox: outbox,
@@ -238,7 +253,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let outbox = FakeMediaOutbox()
         let encryption = FakeMediaEncryption()
         let sender = FakeMediaMessageSender()
-        await sender.error = MessagingFailure.unavailable
+        await sender.setError(MessagingFailure.unavailable)
         let transport = FakeMediaTransport()
         let coordinator = makeCoordinator(scope: scope, outbox: outbox,
             encryption: encryption, sender: sender, transport: transport)
@@ -268,7 +283,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
     func testConfirmedServerReceiptWithCleanupFailureIsNotAFalseSendFailure() async throws {
         let scope = makeScope()
         let outbox = FakeMediaOutbox()
-        await outbox.removeFailure = .protectionUnavailable
+        await outbox.setRemoveFailure(.protectionUnavailable)
         let coordinator = makeCoordinator(scope: scope, outbox: outbox,
             encryption: FakeMediaEncryption(), sender: FakeMediaMessageSender(),
             transport: FakeMediaTransport())
@@ -292,21 +307,28 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let sender = FakeMediaMessageSender()
         let transport = FakeMediaTransport()
         let gate = Gate()
-        await transport.uploadGate = gate
+        await transport.setUploadGate(gate)
         let coordinator = makeCoordinator(scope: scope, outbox: outbox,
             encryption: encryption, sender: sender, transport: transport)
         let snapshot = try await coordinator.enqueue(makePrepared(), clientMessageID: UUID(),
             conversationID: UUID(), caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
 
         let first = Task { await coordinator.send(clientMessageID: snapshot.clientMessageID) }
-        await gate.waitUntilWaiting()
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = await boundedValue(first, gate: gate)
+            XCTFail("Le premier envoi n'a pas atteint la frontière attendue."); return
+        }
         let second = await coordinator.send(clientMessageID: snapshot.clientMessageID)
         guard case .pending(let failure) = second else {
+            await gate.open()
+            _ = await boundedValue(first, gate: gate)
             XCTFail("Le second geste concurrent ne doit pas repartir."); return
         }
         XCTAssertEqual(failure, .alreadyInFlight)
         await gate.open()
-        let firstDelivery = await first.value
+        let firstDelivery = await boundedValue(first, gate: gate)
         guard case .confirmed = firstDelivery else {
             XCTFail("Le premier geste doit aboutir."); return
         }
@@ -353,7 +375,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let outbox = FakeMediaOutbox()
         let encryption = FakeMediaEncryption()
         let sender = FakeMediaMessageSender()
-        await sender.error = MessagingFailure.membersChanged
+        await sender.setError(MessagingFailure.membersChanged)
         let transport = FakeMediaTransport()
         let coordinator = makeCoordinator(scope: scope, outbox: outbox,
             encryption: encryption, sender: sender, transport: transport)
@@ -370,7 +392,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         XCTAssertEqual(firstUploads, 1)
         XCTAssertEqual(firstEncryptions, 1)
 
-        await sender.error = nil
+        await sender.setError(nil)
         let retried = await coordinator.recomposeAfterMembersChanged(clientMessageID: snapshot.clientMessageID)
 
         guard case .confirmed = retried else {
@@ -403,7 +425,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let encryption = FakeMediaEncryption()
         await encryption.setMatrixContent(bytes, for: messageID)
         let transport = FakeMediaTransport()
-        await transport.downloadData = sealed.ciphertext
+        await transport.setDownloadData(sealed.ciphertext)
         let coordinator = makeCoordinator(scope: scope,
             preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
             outbox: FakeMediaOutbox(), cache: cache, encryption: encryption,
@@ -438,7 +460,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let bytes = try matrixBytes(content)
         let encryption = FakeMediaEncryption()
         let transport = FakeMediaTransport()
-        await transport.downloadData = sealed.ciphertext
+        await transport.setDownloadData(sealed.ciphertext)
         let coordinator = makeCoordinator(scope: scope,
             preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
             outbox: FakeMediaOutbox(), encryption: encryption,
@@ -484,7 +506,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let transport = FakeMediaTransport()
         var corrupted = sealed.ciphertext
         corrupted[corrupted.startIndex] ^= 0xFF
-        await transport.downloadData = corrupted
+        await transport.setDownloadData(corrupted)
         let coordinator = makeCoordinator(scope: scope,
             preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
             outbox: FakeMediaOutbox(), cache: cache, encryption: encryption,
@@ -513,7 +535,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let encryption = FakeMediaEncryption()
         await encryption.setMatrixContent(bytes, for: messageID)
         let transport = FakeMediaTransport()
-        await transport.downloadData = sealed.ciphertext
+        await transport.setDownloadData(sealed.ciphertext)
         let coordinator = makeCoordinator(scope: scope,
             preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
             outbox: FakeMediaOutbox(), cache: cache, encryption: encryption,
@@ -559,7 +581,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
     func testPendingFailureIsNotAnEmptyList() async throws {
         let scope = makeScope()
         let outbox = FakeMediaOutbox()
-        await outbox.entriesFailure = .protectionUnavailable
+        await outbox.setEntriesFailure(.protectionUnavailable)
         let coordinator = makeCoordinator(scope: scope, outbox: outbox,
             encryption: FakeMediaEncryption(), sender: FakeMediaMessageSender(),
             transport: FakeMediaTransport())
@@ -588,26 +610,658 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         XCTAssertEqual(pending.count, 1)
         XCTAssertEqual(pending.first?.conversationID, firstConversation)
     }
+
+    // MARK: Reprise idempotente (F1)
+
+    func testEnqueueAfterEncryptionFailureReusesTheDurableSeal() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let clientMessageID = UUID()
+        let prepared = makePrepared()
+        let outbox = FakeMediaOutbox()
+        let encryption = FakeMediaEncryption()
+        await encryption.setEncryptFailure(.protectionUnavailable)
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+
+        do {
+            _ = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+                conversationID: conversation, caption: "Légende", mentionPersonIDs: [],
+                replyToMessageID: nil)
+            XCTFail("L'échec de chiffrement doit être rendu.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .protectionUnavailable)
+        }
+        let firstEntries = await outbox.all()
+        let first = try XCTUnwrap(firstEntries.first)
+        XCTAssertNil(first.messageCiphertext)
+
+        await encryption.setEncryptFailure(nil)
+        let snapshot = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+            conversationID: conversation, caption: "Légende", mentionPersonIDs: [],
+            replyToMessageID: nil)
+        XCTAssertEqual(snapshot.mediaID, first.mediaID, "La reprise réutilise le sceau durable.")
+        XCTAssertEqual(snapshot.createdAt, first.createdAt)
+        let encryptionAfterReenqueue = await encryption.encryptionCount
+        let entriesAfterReenqueue = await outbox.all()
+        let uploadsAfterReenqueue = await transport.uploadCount
+        XCTAssertEqual(encryptionAfterReenqueue, 1, "Aucun second chiffrement à la reprise.")
+        XCTAssertEqual(entriesAfterReenqueue.count, 1)
+        XCTAssertEqual(uploadsAfterReenqueue, 0)
+
+        let delivery = await coordinator.send(clientMessageID: clientMessageID)
+        guard case .confirmed = delivery else {
+            XCTFail("Le renvoi explicite doit aboutir."); return
+        }
+        let encryptionAfterSend = await encryption.encryptionCount
+        let uploadsAfterSend = await transport.uploadCount
+        let remaining = await outbox.all()
+        XCTAssertEqual(encryptionAfterSend, 2, "L'enveloppe manquante est créée par send, pas par la reprise.")
+        XCTAssertEqual(uploadsAfterSend, 1)
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testEnqueueAfterPutWriteFailureReusesTheDurableSeal() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let clientMessageID = UUID()
+        let prepared = makePrepared()
+        let outbox = FakeMediaOutbox()
+        await outbox.setPutFailureAfterWrite(.protectionUnavailable)
+        let encryption = FakeMediaEncryption()
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+
+        do {
+            _ = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+                conversationID: conversation, caption: nil, mentionPersonIDs: [],
+                replyToMessageID: nil)
+            XCTFail("L'échec de synchronisation après put doit être rendu.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .protectionUnavailable)
+        }
+        let firstEntries = await outbox.all()
+        let first = try XCTUnwrap(firstEntries.first)
+        let encryptionsBefore = await encryption.encryptionCount
+        XCTAssertEqual(encryptionsBefore, 0)
+
+        await outbox.setPutFailureAfterWrite(nil)
+        let snapshot = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+            conversationID: conversation, caption: nil, mentionPersonIDs: [],
+            replyToMessageID: nil)
+        XCTAssertEqual(snapshot.mediaID, first.mediaID)
+        XCTAssertEqual(snapshot.createdAt, first.createdAt)
+        let encryptionsAfterReenqueue = await encryption.encryptionCount
+        let entriesAfterReenqueue = await outbox.all()
+        XCTAssertEqual(encryptionsAfterReenqueue, 0)
+        XCTAssertEqual(entriesAfterReenqueue.count, 1)
+
+        let delivery = await coordinator.send(clientMessageID: clientMessageID)
+        guard case .confirmed = delivery else {
+            XCTFail("Le renvoi explicite doit aboutir."); return
+        }
+        let encryptionsAfterSend = await encryption.encryptionCount
+        let uploads = await transport.uploadCount
+        XCTAssertEqual(encryptionsAfterSend, 1)
+        XCTAssertEqual(uploads, 1)
+    }
+
+    func testEnqueueAfterEnvelopeWriteFailureReusesTheDurableEnvelope() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let clientMessageID = UUID()
+        let prepared = makePrepared()
+        let outbox = FakeMediaOutbox()
+        await outbox.setReplaceFailureAfterWrite(.protectionUnavailable)
+        let encryption = FakeMediaEncryption()
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+
+        do {
+            _ = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+                conversationID: conversation, caption: nil, mentionPersonIDs: [],
+                replyToMessageID: nil)
+            XCTFail("L'échec après remplacement doit être rendu.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .protectionUnavailable)
+        }
+        let firstEntries = await outbox.all()
+        let first = try XCTUnwrap(firstEntries.first)
+        let firstEnvelope = try XCTUnwrap(first.messageCiphertext,
+            "Le CAS a écrit l'enveloppe avant l'échec de synchronisation.")
+
+        await outbox.setReplaceFailureAfterWrite(nil)
+        let snapshot = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+            conversationID: conversation, caption: nil, mentionPersonIDs: [],
+            replyToMessageID: nil)
+        XCTAssertEqual(snapshot.mediaID, first.mediaID)
+        let encryptionAfterReenqueue = await encryption.encryptionCount
+        let replacesAfterReenqueue = await outbox.replaceCalls.count
+        let entriesAfterReenqueue = await outbox.all()
+        XCTAssertEqual(encryptionAfterReenqueue, 1, "L'enveloppe durable n'est pas rechiffrée.")
+        XCTAssertEqual(replacesAfterReenqueue, 1, "La reprise reconfirme le record, sans nouveau CAS.")
+        XCTAssertEqual(entriesAfterReenqueue.first?.messageCiphertext, firstEnvelope)
+
+        let delivery = await coordinator.send(clientMessageID: clientMessageID)
+        guard case .confirmed = delivery else {
+            XCTFail("Le renvoi explicite doit aboutir."); return
+        }
+        let encryptionAfterSend = await encryption.encryptionCount
+        let uploads = await transport.uploadCount
+        XCTAssertEqual(encryptionAfterSend, 1)
+        XCTAssertEqual(uploads, 1)
+    }
+
+    func testEnqueueRefusesDifferentContentUnderTheSameGesture() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let clientMessageID = UUID()
+        let outbox = FakeMediaOutbox()
+        let encryption = FakeMediaEncryption()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: FakeMediaTransport())
+        let first = try await coordinator.enqueue(makePrepared(Data([1, 2, 3, 4])),
+            clientMessageID: clientMessageID, conversationID: conversation, caption: "Légende",
+            mentionPersonIDs: [], replyToMessageID: nil)
+
+        do {
+            _ = try await coordinator.enqueue(makePrepared(Data([9, 9, 9, 9])),
+                clientMessageID: clientMessageID, conversationID: conversation, caption: "Légende",
+                mentionPersonIDs: [], replyToMessageID: nil)
+            XCTFail("Un autre contenu sous le même geste doit être refusé.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .invalidContent)
+        }
+        let entries = await outbox.all()
+        let encryptionCount = await encryption.encryptionCount
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.mediaID, first.mediaID)
+        XCTAssertEqual(encryptionCount, 1, "Aucun nouveau sceau ni chiffrement n'est créé.")
+    }
+
+    func testEnqueueAdoptsAConcurrentRecordAfterPutConflict() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let clientMessageID = UUID()
+        let prepared = makePrepared()
+        let (sealed, content) = try makeSealedContent()
+        let existing = MessagingPendingMedia(clientMessageID: clientMessageID,
+            conversationID: conversation, sealed: sealed, content: content,
+            mentionPersonIDs: [], replyToMessageID: nil, createdAt: Date())
+        let outbox = FakeMediaOutbox()
+        await outbox.setConflictOnPut(existing)
+        let encryption = FakeMediaEncryption()
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+
+        let snapshot = try await coordinator.enqueue(prepared, clientMessageID: clientMessageID,
+            conversationID: conversation, caption: "Légende", mentionPersonIDs: [],
+            replyToMessageID: nil)
+        XCTAssertEqual(snapshot.mediaID, sealed.mediaID)
+        let entries = await outbox.all()
+        let encryptions = await encryption.encryptionCount
+        let uploads = await transport.uploadCount
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(encryptions, 0, "Aucun second chiffrement après adoption du record concurrent.")
+        XCTAssertEqual(uploads, 0)
+    }
+
+    func testSecondInstanceReusesTheSameDurableIntent() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let clientMessageID = UUID()
+        let outbox = FakeMediaOutbox()
+        let encryption = FakeMediaEncryption()
+        let sender = FakeMediaMessageSender()
+        let transport = FakeMediaTransport()
+        let first = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: sender, transport: transport)
+        let second = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: sender, transport: transport)
+
+        let original = try await first.enqueue(makePrepared(), clientMessageID: clientMessageID,
+            conversationID: conversation, caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+        let reused = try await second.enqueue(makePrepared(), clientMessageID: clientMessageID,
+            conversationID: conversation, caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+        XCTAssertEqual(reused.mediaID, original.mediaID)
+        XCTAssertEqual(reused.createdAt, original.createdAt)
+        let entries = await outbox.all()
+        let encryptionCount = await encryption.encryptionCount
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(encryptionCount, 1)
+    }
+
+    // MARK: Réponse perdue après recomposition (F2)
+
+    func testLostRecomposeResponseForbidsSecondRecomposeAndReplaysSameEnvelope() async throws {
+        let scope = makeScope()
+        let clientMessageID = UUID()
+        let outbox = FakeMediaOutbox()
+        let encryption = FakeMediaEncryption()
+        let sender = FakeMediaMessageSender()
+        await sender.setQueuedErrors([MessagingFailure.membersChanged,
+                                      MessagingFailure.unavailable, nil])
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: sender, transport: transport)
+        _ = try await coordinator.enqueue(makePrepared(), clientMessageID: clientMessageID,
+            conversationID: UUID(), caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+
+        let refused = await coordinator.send(clientMessageID: clientMessageID)
+        guard case .pending(let refusedFailure) = refused else {
+            XCTFail("MEMBERS_CHANGED est un refus explicite."); return
+        }
+        XCTAssertEqual(refusedFailure, .membersChanged)
+
+        let recomposed = await coordinator.recomposeAfterMembersChanged(clientMessageID: clientMessageID)
+        guard case .pending(let lostFailure) = recomposed else {
+            XCTFail("Une réponse perdue doit rester inconnue."); return
+        }
+        XCTAssertEqual(lostFailure, .resultUnknown)
+        let afterLost = await outbox.all()
+        let envelope = try XCTUnwrap(afterLost.first?.messageCiphertext)
+        let encryptionsAfterLost = await encryption.encryptionCount
+        let replacesAfterLost = await outbox.replaceCalls.count
+        let sendsAfterLost = await sender.sends.count
+        XCTAssertEqual(encryptionsAfterLost, 2)
+        XCTAssertEqual(replacesAfterLost, 2)
+        XCTAssertEqual(sendsAfterLost, 2)
+
+        let secondRecompose = await coordinator.recomposeAfterMembersChanged(clientMessageID: clientMessageID)
+        guard case .pending(let secondFailure) = secondRecompose else {
+            XCTFail("Une enveloppe émise au résultat inconnu ne se recompose pas."); return
+        }
+        XCTAssertEqual(secondFailure, .resultUnknown)
+        let encryptionsAfterSecond = await encryption.encryptionCount
+        let replacesAfterSecond = await outbox.replaceCalls.count
+        let sendsAfterSecond = await sender.sends.count
+        XCTAssertEqual(encryptionsAfterSecond, 2, "Aucun nouveau chiffrement.")
+        XCTAssertEqual(replacesAfterSecond, 2, "Aucun nouveau CAS.")
+        XCTAssertEqual(sendsAfterSecond, 2, "Aucun nouveau POST.")
+
+        let replay = await coordinator.send(clientMessageID: clientMessageID)
+        guard case .confirmed = replay else {
+            XCTFail("Le renvoi explicite de la même enveloppe doit aboutir."); return
+        }
+        let finalSends = await sender.sends
+        let finalEncryptions = await encryption.encryptionCount
+        let finalReplaces = await outbox.replaceCalls.count
+        XCTAssertEqual(finalSends.count, 3)
+        XCTAssertEqual(finalSends.last?.pending.ciphertext, envelope,
+                       "Le replay réutilise exactement l'enveloppe émise.")
+        XCTAssertEqual(finalEncryptions, 2)
+        XCTAssertEqual(finalReplaces, 2)
+        let remaining = await outbox.all()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testNewMembersChangedRefusalReopensRecomposition() async throws {
+        let scope = makeScope()
+        let clientMessageID = UUID()
+        let outbox = FakeMediaOutbox()
+        let encryption = FakeMediaEncryption()
+        let sender = FakeMediaMessageSender()
+        await sender.setQueuedErrors([MessagingFailure.membersChanged,
+                                      MessagingFailure.membersChanged, nil])
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: sender, transport: transport)
+        _ = try await coordinator.enqueue(makePrepared(), clientMessageID: clientMessageID,
+            conversationID: UUID(), caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+
+        let firstSend = await coordinator.send(clientMessageID: clientMessageID)
+        guard case .pending(.membersChanged) = firstSend else {
+            XCTFail("Premier refus membres attendu."); return
+        }
+        let firstRecompose = await coordinator.recomposeAfterMembersChanged(clientMessageID: clientMessageID)
+        guard case .pending(.membersChanged) = firstRecompose else {
+            XCTFail("Un nouveau refus membres doit rouvrir le chemin."); return
+        }
+        let secondRecompose = await coordinator.recomposeAfterMembersChanged(clientMessageID: clientMessageID)
+        guard case .confirmed = secondRecompose else {
+            XCTFail("La seconde recomposition, fondée sur le nouveau refus, doit aboutir."); return
+        }
+        let encryptions = await encryption.encryptionCount
+        let replaces = await outbox.replaceCalls.count
+        let sends = await sender.sends.count
+        XCTAssertEqual(encryptions, 3)
+        XCTAssertEqual(replaces, 3)
+        XCTAssertEqual(sends, 3)
+    }
+
+    func testSendReconfirmsTheExactRecordBeforeUpload() async throws {
+        let scope = makeScope()
+        let order = OrderRecorder()
+        let outbox = FakeMediaOutbox(order: order)
+        let encryption = FakeMediaEncryption(order: order)
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: FakeMediaTransport())
+        let snapshot = try await coordinator.enqueue(makePrepared(), clientMessageID: UUID(),
+            conversationID: UUID(), caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+        let before = await order.steps
+        let delivery = await coordinator.send(clientMessageID: snapshot.clientMessageID)
+        guard case .confirmed = delivery else {
+            XCTFail("Envoi attendu confirmé."); return
+        }
+        let after = await order.steps
+        guard after.count > before.count else {
+            XCTFail("Aucune reconfirmation avant le dépôt."); return
+        }
+        XCTAssertEqual(after[before.count], "put:env",
+                       "Le record exact est reconfirmé durablement avant le dépôt réseau.")
+    }
+
+    // MARK: Invalidation pendant les attentes (F4)
+
+    func testInvalidateDuringPutDoesNotEncryptOrUpload() async throws {
+        let scope = makeScope()
+        let outbox = FakeMediaOutbox()
+        let gate = Gate()
+        await outbox.setPutGate(gate)
+        let encryption = FakeMediaEncryption()
+        let transport = FakeMediaTransport()
+        let coordinator = makeCoordinator(scope: scope, outbox: outbox, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+        let task = Task {
+            try await coordinator.enqueue(makePrepared(), clientMessageID: UUID(),
+                conversationID: UUID(), caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+        }
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = try? await task.value
+            XCTFail("La mise en file n'a pas atteint le put attendu."); return
+        }
+        await coordinator.invalidate()
+        await gate.open()
+        do {
+            _ = try await task.value
+            XCTFail("Une invalidation pendant le put doit fermer le geste.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .contextChanged)
+        }
+        let encryptions = await encryption.encryptionCount
+        let uploads = await transport.uploadCount
+        let entries = await outbox.all()
+        XCTAssertEqual(encryptions, 0, "Aucun chiffrement après l'invalidation.")
+        XCTAssertEqual(uploads, 0)
+        XCTAssertEqual(entries.count, 1, "L'intention déjà admise reste durable.")
+    }
+
+    func testContextChangeDuringPutClosesTheGesture() async throws {
+        let scope = makeScope()
+        let box = ScopeBox(scope)
+        let outbox = FakeMediaOutbox()
+        let gate = Gate()
+        await outbox.setPutGate(gate)
+        let encryption = FakeMediaEncryption()
+        let transport = FakeMediaTransport()
+        let coordinator = MessagingMediaCoordinator(scope: scope, preparer: StubPreparer(),
+            cryptography: AESCTRMediaCryptography(), outbox: outbox, cache: FakeMediaCache(),
+            encryption: encryption, sending: FakeMediaMessageSender(),
+            transportFactory: { transport }, currentScope: { box.value })
+        let task = Task {
+            try await coordinator.enqueue(makePrepared(), clientMessageID: UUID(),
+                conversationID: UUID(), caption: nil, mentionPersonIDs: [], replyToMessageID: nil)
+        }
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = try? await task.value
+            XCTFail("La mise en file n'a pas atteint le put attendu."); return
+        }
+        box.value = nil
+        await gate.open()
+        do {
+            _ = try await task.value
+            XCTFail("Un changement de contexte pendant le put doit fermer le geste.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .contextChanged)
+        }
+        let encryptions = await encryption.encryptionCount
+        let uploads = await transport.uploadCount
+        let entries = await outbox.all()
+        XCTAssertEqual(encryptions, 0)
+        XCTAssertEqual(uploads, 0)
+        XCTAssertEqual(entries.count, 1, "L'intention déjà admise reste durable.")
+    }
+
+    func testInvalidateDuringCacheStorePurgesTheLateWrite() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let messageID = UUID()
+        let (sealed, content) = try makeSealedContent()
+        let bytes = try matrixBytes(content)
+        let reference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: false)
+        let message = makeWire(messageID, conversationID: conversation, media: reference)
+        let cache = FakeMediaCache()
+        let gate = Gate()
+        await cache.setStoreGate(gate)
+        let encryption = FakeMediaEncryption()
+        await encryption.setMatrixContent(bytes, for: messageID)
+        let transport = FakeMediaTransport()
+        await transport.setDownloadData(sealed.ciphertext)
+        let coordinator = makeCoordinator(scope: scope,
+            preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
+            outbox: FakeMediaOutbox(), cache: cache, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+        let task = Task { try await coordinator.open(message) }
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = try? await task.value
+            XCTFail("L'ouverture n'a pas atteint l'écriture de cache."); return
+        }
+        await coordinator.invalidate()
+        await gate.open()
+        do {
+            _ = try await task.value
+            XCTFail("Une invalidation pendant l'écriture doit purger la copie tardive.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .contextChanged)
+        }
+        let originals = await cache.originals
+        let purges = await cache.purgeCount
+        let downloads = await transport.downloadCount
+        XCTAssertNil(originals[sealed.mediaID], "Aucune copie tardive ne survit à l'invalidation.")
+        XCTAssertGreaterThanOrEqual(purges, 1)
+        XCTAssertEqual(downloads, 1)
+    }
+
+    func testInvalidateDuringThumbnailStorePurgesTheLateWrite() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let messageID = UUID()
+        let (sealed, content) = try makeSealedContent()
+        let bytes = try matrixBytes(content)
+        let reference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: false)
+        let message = makeWire(messageID, conversationID: conversation, media: reference)
+        let plaintext = try AESCTRMediaCryptography().open(sealed.ciphertext, info: sealed.info)
+        let cache = FakeMediaCache()
+        await cache.putOriginal(plaintext, for: sealed.mediaID)
+        let gate = Gate()
+        await cache.setThumbnailGate(gate)
+        let encryption = FakeMediaEncryption()
+        await encryption.setMatrixContent(bytes, for: messageID)
+        let transport = FakeMediaTransport()
+        await transport.setDownloadData(sealed.ciphertext)
+        let coordinator = makeCoordinator(scope: scope,
+            preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
+            outbox: FakeMediaOutbox(), cache: cache, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+        let task = Task { try await coordinator.open(message) }
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = try? await task.value
+            XCTFail("L'ouverture n'a pas atteint l'écriture de miniature."); return
+        }
+        await coordinator.invalidate()
+        await gate.open()
+        do {
+            _ = try await task.value
+            XCTFail("Une invalidation pendant la miniature doit purger la copie tardive.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .contextChanged)
+        }
+        let thumbnails = await cache.thumbnails
+        let downloads = await transport.downloadCount
+        XCTAssertNil(thumbnails[sealed.mediaID])
+        XCTAssertEqual(downloads, 0, "Le cache original évite le téléchargement.")
+    }
+
+    func testRevokePurgesKnownMediaAndBlocksOpen() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let messageID = UUID()
+        let (sealed, content) = try makeSealedContent()
+        let bytes = try matrixBytes(content)
+        let reference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: false)
+        let message = makeWire(messageID, conversationID: conversation, media: reference)
+        let cache = FakeMediaCache()
+        await cache.putOriginal(Data([1, 2, 3, 4]), for: sealed.mediaID)
+        let encryption = FakeMediaEncryption()
+        await encryption.setMatrixContent(bytes, for: messageID)
+        let transport = FakeMediaTransport()
+        await transport.setDownloadData(sealed.ciphertext)
+        let coordinator = makeCoordinator(scope: scope,
+            preparer: StubPreparer(mime: .png, width: 2, height: 2, thumbnail: Data([9])),
+            outbox: FakeMediaOutbox(), cache: cache, encryption: encryption,
+            sender: FakeMediaMessageSender(), transport: transport)
+
+        await coordinator.revoke(mediaIDs: [sealed.mediaID], conversationID: conversation)
+        let originals = await cache.originals
+        XCTAssertNil(originals[sealed.mediaID], "La copie connue est purgée.")
+        do {
+            _ = try await coordinator.open(message)
+            XCTFail("Un média révoqué ne doit plus être servi.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .removed)
+        }
+        let downloads = await transport.downloadCount
+        XCTAssertEqual(downloads, 0)
+    }
+
+    // MARK: Contenu périmé après une attente (F3)
+
+    func testDelayedDecryptCannotResurrectContentAfterTombstonePage() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let messageID = UUID()
+        let (sealed, content) = try makeSealedContent()
+        let reference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: false)
+        let live = makeWire(messageID, conversationID: conversation, media: reference)
+        let deletedReference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: true)
+        let tombstone = makeWire(messageID, conversationID: conversation, media: deletedReference,
+                                 deletedForEveryone: true)
+        let crypto = HeldWorkspaceCrypto(payload: try matrixBytes(content))
+        let service = WorkspacePageService(page: MessagingPage<MessagingWireMessage>(items: [live], nextCursor: nil))
+        let history = RecordingHistory()
+        let revocation = RevocationRecordingRuntime()
+        let workspace = MessagingWorkspace(scope: scope, service: service, cryptography: crypto,
+            history: history, mediaRuntime: revocation, currentScope: { scope })
+        await workspace.loadMessages(conversation)
+
+        let task = Task { await workspace.content(for: live) }
+        let arrived = await crypto.gate.waitUntilWaiting()
+        guard arrived else {
+            await crypto.gate.open()
+            _ = await task.value
+            XCTFail("Le déchiffrement n'a pas atteint la barrière."); return
+        }
+        await service.setPage(MessagingPage<MessagingWireMessage>(items: [tombstone], nextCursor: nil))
+        await workspace.loadMessages(conversation)
+        await crypto.gate.open()
+        let value = await task.value
+
+        XCTAssertNil(value, "Un tombstone reçu pendant le déchiffrement ne ressuscite pas le clair.")
+        XCTAssertNil(workspace.contents[messageID])
+        let upserts = await history.upserted
+        XCTAssertTrue(upserts.isEmpty, "Aucun historique tardif n'est réinscrit.")
+        let revoked = await revocation.revoked
+        XCTAssertEqual(revoked, [sealed.mediaID])
+    }
+
+    func testDelayedDecryptCannotResurrectContentAfterLowerReadLimit() async throws {
+        let scope = makeScope()
+        let conversation = UUID()
+        let messageID = UUID()
+        let (sealed, content) = try makeSealedContent()
+        let reference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: false)
+        let live = makeWire(messageID, conversationID: conversation, media: reference)
+        let crypto = HeldWorkspaceCrypto(payload: try matrixBytes(content))
+        let service = WorkspacePageService(page: MessagingPage<MessagingWireMessage>(items: [live], nextCursor: nil))
+        let history = RecordingHistory()
+        let revocation = RevocationRecordingRuntime()
+        let workspace = MessagingWorkspace(scope: scope, service: service, cryptography: crypto,
+            history: history, mediaRuntime: revocation, currentScope: { scope })
+        await workspace.loadMessages(conversation)
+
+        let task = Task { await workspace.content(for: live) }
+        let arrived = await crypto.gate.waitUntilWaiting()
+        guard arrived else {
+            await crypto.gate.open()
+            _ = await task.value
+            XCTFail("Le déchiffrement n'a pas atteint la barrière."); return
+        }
+        let access = MessagingConversationAccess(canWrite: false,
+            readableUntilSequence: live.meta.sequence - 1, isGroupAdmin: false)
+        await service.setPage(MessagingPage<MessagingWireMessage>(items: [live], nextCursor: nil, access: access))
+        await workspace.loadMessages(conversation)
+        await crypto.gate.open()
+        let value = await task.value
+
+        XCTAssertNil(value, "Une limite lisible abaissée ne ressuscite pas le clair.")
+        XCTAssertNil(workspace.contents[messageID])
+        let upserts = await history.upserted
+        XCTAssertTrue(upserts.isEmpty)
+        let revoked = await revocation.revoked
+        XCTAssertEqual(revoked, [sealed.mediaID])
+    }
+
+    func testGateArrivalTimeoutDoesNotHang() async {
+        let gate = Gate()
+        let arrived = await gate.waitUntilWaiting(timeout: .milliseconds(50))
+        XCTAssertFalse(arrived)
+        await gate.open()
+    }
 }
 
 // MARK: - Doubles contrôlés
+
+@MainActor
+private final class ScopeBox {
+    var value: MessagingScope?
+    init(_ value: MessagingScope?) { self.value = value }
+}
 
 private actor OrderRecorder {
     private(set) var steps: [String] = []
     func append(_ step: String) { steps.append(step) }
 }
 
-/// Suspension contrôlée : le test ouvre explicitement la barrière, aucun sommeil.
+/// Suspension contrôlée : le test ouvre explicitement la barrière. L'arrivée est
+/// bornée par une échéance et l'ouverture libère tous les chemins, sans task group
+/// attendant un enfant non coopératif.
 private actor Gate {
     private var isOpen = false
     private var isWaiting = false
     private var waiters: [CheckedContinuation<Void, Never>] = []
-    private var arrivalWaiters: [CheckedContinuation<Void, Never>] = []
+    private var arrivals: [UUID: CheckedContinuation<Bool, Never>] = [:]
 
     func wait() async {
         isWaiting = true
-        for waiter in arrivalWaiters { waiter.resume() }
-        arrivalWaiters.removeAll()
+        resumeArrivals(true)
         if isOpen {
             isWaiting = false
             return
@@ -618,13 +1272,32 @@ private actor Gate {
 
     func open() {
         isOpen = true
+        resumeArrivals(true)
         for waiter in waiters { waiter.resume() }
         waiters.removeAll()
     }
 
-    func waitUntilWaiting() async {
-        if isWaiting { return }
-        await withCheckedContinuation { arrivalWaiters.append($0) }
+    func waitUntilWaiting(timeout: Duration = .seconds(2)) async -> Bool {
+        if isWaiting { return true }
+        let id = UUID()
+        return await withCheckedContinuation { continuation in
+            arrivals[id] = continuation
+            Task { [weak self] in
+                try? await Task.sleep(for: timeout)
+                await self?.expireArrival(id)
+            }
+        }
+    }
+
+    private func resumeArrivals(_ value: Bool) {
+        let pending = arrivals
+        arrivals.removeAll()
+        for continuation in pending.values { continuation.resume(returning: value) }
+    }
+
+    private func expireArrival(_ id: UUID) {
+        guard let continuation = arrivals.removeValue(forKey: id) else { return }
+        continuation.resume(returning: false)
     }
 }
 
@@ -662,12 +1335,31 @@ private actor FakeMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxEnvelop
     var entriesFailure: MessagingFailure?
     var removeFailure: MessagingFailure?
     var replaceFailure: MessagingFailure?
+    var replaceFailureAfterWrite: MessagingFailure?
+    var putFailureAfterWrite: MessagingFailure?
+    var putGate: Gate?
+    var conflictOnPut: MessagingPendingMedia?
     private(set) var replaceCalls: [(expected: MessagingCiphertext?, replacement: MessagingCiphertext)] = []
 
     init(order: OrderRecorder? = nil) { self.order = order }
 
+    func setPutFailure(_ failure: MessagingFailure?) { putFailure = failure }
+    func setEntriesFailure(_ failure: MessagingFailure?) { entriesFailure = failure }
+    func setRemoveFailure(_ failure: MessagingFailure?) { removeFailure = failure }
+    func setReplaceFailure(_ failure: MessagingFailure?) { replaceFailure = failure }
+    func setReplaceFailureAfterWrite(_ failure: MessagingFailure?) { replaceFailureAfterWrite = failure }
+    func setPutFailureAfterWrite(_ failure: MessagingFailure?) { putFailureAfterWrite = failure }
+    func setPutGate(_ gate: Gate?) { putGate = gate }
+    func setConflictOnPut(_ pending: MessagingPendingMedia?) { conflictOnPut = pending }
+
     func put(_ pending: MessagingPendingMedia, scope: MessagingScope) async throws {
         await order?.append("put:" + (pending.messageCiphertext == nil ? "nil" : "env"))
+        if let conflictOnPut {
+            self.conflictOnPut = nil
+            records[conflictOnPut.mediaID] = conflictOnPut
+            throw MessagingFailure.stateConflict
+        }
+        if let putGate { await putGate.wait() }
         if let putFailure { throw putFailure }
         if records.values.contains(where: {
             $0.clientMessageID == pending.clientMessageID && $0.mediaID != pending.mediaID
@@ -676,6 +1368,10 @@ private actor FakeMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxEnvelop
             throw MessagingFailure.stateConflict
         }
         records[pending.mediaID] = pending
+        if let failure = putFailureAfterWrite {
+            self.putFailureAfterWrite = nil
+            throw failure
+        }
     }
 
     func entries(scope: MessagingScope) async throws -> [MessagingPendingMedia] {
@@ -704,6 +1400,10 @@ private actor FakeMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxEnvelop
             createdAt: record.createdAt, messageCiphertext: replacement)
         records[mediaID] = updated
         replaceCalls.append((expected: expected, replacement: replacement))
+        if let failure = replaceFailureAfterWrite {
+            self.replaceFailureAfterWrite = nil
+            throw failure
+        }
     }
 
     func all() -> [MessagingPendingMedia] {
@@ -716,11 +1416,20 @@ private actor FakeMediaCache: MessagingMediaCache {
     var thumbnails: [UUID: Data] = [:]
     var dataError: Error?
     var storeError: Error?
+    var storeGate: Gate?
+    var thumbnailGate: Gate?
     private(set) var storeCount = 0
     private(set) var thumbnailStoreCount = 0
     private(set) var purgeAllCount = 0
+    private(set) var purgeCount = 0
+
+    func setDataError(_ error: Error?) { dataError = error }
+    func setStoreError(_ error: Error?) { storeError = error }
+    func setStoreGate(_ gate: Gate?) { storeGate = gate }
+    func setThumbnailGate(_ gate: Gate?) { thumbnailGate = gate }
 
     func store(_ data: Data, mediaID: UUID, scope: MessagingScope) async throws {
+        if let storeGate { await storeGate.wait() }
         if let storeError { throw storeError }
         storeCount += 1
         originals[mediaID] = data
@@ -738,11 +1447,13 @@ private actor FakeMediaCache: MessagingMediaCache {
     }
 
     func storeThumbnail(_ data: Data, mediaID: UUID, scope: MessagingScope) async throws {
+        if let thumbnailGate { await thumbnailGate.wait() }
         thumbnailStoreCount += 1
         thumbnails[mediaID] = data
     }
 
     func purge(mediaIDs: [UUID], scope: MessagingScope) async throws {
+        purgeCount += 1
         for id in mediaIDs {
             originals.removeValue(forKey: id)
             thumbnails.removeValue(forKey: id)
@@ -767,11 +1478,14 @@ private actor FakeMediaEncryption: MessagingMatrixContentEncryption, MessagingCo
 
     init(order: OrderRecorder? = nil) { self.order = order }
 
+    func setEncryptFailure(_ failure: MessagingFailure?) { encryptFailure = failure }
+    func setDecryptFailure(_ failure: Error?) { decryptFailure = failure }
+
     func encryptMatrixContent(_ content: MessagingMediaContentV3, mentions: [UUID],
                               scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
         await order?.append("encrypt")
-        if let encryptFailure { throw encryptFailure }
         encryptionCount += 1
+        if let encryptFailure { throw encryptFailure }
         encryptedContents.append(content)
         envelopeIndex += 1
         return MessagingCiphertext(scheme: "test.megolm", keyID: "cle-\(envelopeIndex)",
@@ -793,12 +1507,20 @@ private actor FakeMediaEncryption: MessagingMatrixContentEncryption, MessagingCo
 
 private actor FakeMediaMessageSender: MessagingMediaMessageSending {
     var error: Error?
+    var queuedErrors: [Error?] = []
     private(set) var sends: [(pending: MessagingPending, media: MessagingMediaMessageIntent)] = []
+
+    func setError(_ error: Error?) { self.error = error }
+    func setQueuedErrors(_ errors: [Error?]) { queuedErrors = errors }
 
     func sendMedia(scope: MessagingScope, pending: MessagingPending,
                    media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgement {
         sends.append((pending: pending, media: media))
-        if let error { throw error }
+        if !queuedErrors.isEmpty {
+            if let queued = queuedErrors.removeFirst() { throw queued }
+        } else if let error {
+            throw error
+        }
         return MessagingAcknowledgement(clientMessageID: pending.clientMessageID,
             serverMessageID: UUID(), conversationID: pending.conversationID,
             schoolID: scope.schoolID, acceptedAt: Date(), senderID: scope.accountID)
@@ -814,6 +1536,12 @@ private actor FakeMediaTransport: MessagingMediaTransport {
     private(set) var uploadCount = 0
     private(set) var downloadCount = 0
     private(set) var uploaded: [MessagingSealedMedia] = []
+
+    func setUploadGate(_ gate: Gate?) { uploadGate = gate }
+    func setUploadError(_ error: Error?) { uploadError = error }
+    func setUploadReceipt(_ receipt: MessagingMediaReceipt?) { uploadReceipt = receipt }
+    func setDownloadData(_ data: Data?) { downloadData = data }
+    func setDownloadError(_ error: Error?) { downloadError = error }
 
     func upload(_ sealed: MessagingSealedMedia, scope: MessagingScope,
                 conversationID: UUID) async throws -> MessagingMediaReceipt {
@@ -836,4 +1564,95 @@ private actor FakeMediaTransport: MessagingMediaTransport {
     }
 
     func cancel(mediaID: UUID, scope: MessagingScope, conversationID: UUID) async throws {}
+}
+
+/// Déchiffrement retenu pour prouver qu'un résultat tardif ne réinscrit rien.
+private final class HeldWorkspaceCrypto: MessagingCryptography, MessagingContentProvenanceDecryption, @unchecked Sendable {
+    let gate = Gate()
+    let payload: Data
+
+    init(payload: Data) { self.payload = payload }
+
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope,
+                 conversationID: UUID) async throws -> MessagingCiphertext {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope,
+                 conversationID: UUID) async throws -> Data {
+        ciphertext.payload
+    }
+    func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decryptContent(_ message: MessagingWireMessage,
+                        scope: MessagingScope) async throws -> MessagingDecryptedContent {
+        await gate.wait()
+        return .matrixContent(payload)
+    }
+}
+
+/// Page serveur contrôlée : le test remplace la page pendant un déchiffrement retenu.
+private actor WorkspacePageService: MessagingService {
+    private var page: MessagingPage<MessagingWireMessage>
+
+    init(page: MessagingPage<MessagingWireMessage>) { self.page = page }
+    func setPage(_ page: MessagingPage<MessagingWireMessage>) { self.page = page }
+
+    func conversations(scope: MessagingScope,
+                       cursor: String?) async throws -> MessagingPage<MessagingConversation> {
+        MessagingPage(items: [], nextCursor: nil)
+    }
+    func messages(scope: MessagingScope, conversationID: UUID,
+                  before: String?) async throws -> MessagingPage<MessagingWireMessage> {
+        page
+    }
+    func send(scope: MessagingScope,
+              pending: MessagingPending) async throws -> MessagingAcknowledgement {
+        throw MessagingFailure.unavailable
+    }
+}
+
+/// Historique de test : prouve qu'aucune entrée tardive n'est réinscrite.
+private actor RecordingHistory: MessagingHistoryStore {
+    private(set) var upserted: [UUID] = []
+    private(set) var removed: [UUID] = []
+
+    func upsert(_ entries: [MessagingHistoryEntry], scope: MessagingScope) async throws {
+        upserted.append(contentsOf: entries.map(\.messageID))
+    }
+    func entries(conversationID: UUID, scope: MessagingScope) async throws -> [MessagingHistoryEntry] {
+        []
+    }
+    func remove(messageIDs: [UUID], scope: MessagingScope) async throws {
+        removed.append(contentsOf: messageIDs)
+    }
+    func truncate(conversationID: UUID, after sequence: Int,
+                  scope: MessagingScope) async throws {}
+}
+
+/// Runtime de workspace qui enregistre les médias révoqués par une page serveur.
+private actor RevocationRecordingRuntime: MessagingMediaRuntime, MessagingMediaRevocationReceiving {
+    private(set) var revoked: [UUID] = []
+
+    func revoke(mediaIDs: [UUID], conversationID: UUID) async {
+        revoked.append(contentsOf: mediaIDs)
+    }
+    func prepare(_ data: Data, suggestedName: String) async throws -> MessagingPreparedMedia {
+        throw MessagingMediaRuntimeFailure.unavailable
+    }
+    func enqueue(_ prepared: MessagingPreparedMedia, clientMessageID: UUID,
+                 conversationID: UUID, caption: String?, mentionPersonIDs: [UUID],
+                 replyToMessageID: UUID?) async throws -> MessagingMediaPendingSnapshot {
+        throw MessagingMediaRuntimeFailure.unavailable
+    }
+    func pending(conversationID: UUID) async throws -> [MessagingMediaPendingSnapshot] { [] }
+    func send(clientMessageID: UUID) async -> MessagingMediaDelivery { .pending(.unavailable) }
+    func recomposeAfterMembersChanged(clientMessageID: UUID) async -> MessagingMediaDelivery {
+        .pending(.unavailable)
+    }
+    func open(_ message: MessagingWireMessage) async throws -> MessagingPreparedMedia {
+        throw MessagingMediaRuntimeFailure.unavailable
+    }
+    func invalidate() async {}
 }

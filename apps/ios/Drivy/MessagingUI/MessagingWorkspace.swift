@@ -39,6 +39,12 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private(set) var receipts: [UUID: [MessagingReadReceipt]] = [:]
     /// Contenu déchiffré en mémoire, recopié dans l'historique scellé quand il est disponible.
     private(set) var contents: [UUID: MessagingPlainContent] = [:]
+    /// Époque globale (changement de contexte) et révisions par conversation (tombstone,
+    /// limite lisible, masquage). Un déchiffrement en vol ne peut réinscrire son clair que
+    /// si les deux valeurs sont inchangées ; une invalidation d'une autre conversation ne
+    /// rejette pas un déchiffrement isolé.
+    private var contentEpoch = UUID()
+    private var conversationRevisions: [UUID: UUID] = [:]
     /// Raison non sensible d'un déchiffrement impossible, affichée à la place du contenu.
     private(set) var decryptionCodes: [UUID: String] = [:]
     private(set) var hiddenForMe: Set<UUID> = []
@@ -219,8 +225,18 @@ struct MessagingInboxPreview: Equatable, Sendable {
                 messageCursors[conversationID] = page.nextCursor
             }
             if let pageAccess = page.access {
+                let previousLimit = accessByConversation[conversationID]?.readableUntilSequence
                 accessByConversation[conversationID] = pageAccess
                 if let limit = pageAccess.readableUntilSequence {
+                    if previousLimit != limit {
+                        bumpContentRevision(for: conversationID)
+                        let beyond = (messages[conversationID] ?? []).filter { $0.meta.sequence > limit }
+                        let mediaIDs = beyond.compactMap {
+                            contents[$0.id]?.media?.id ?? $0.meta.media?.mediaID
+                        }
+                        for item in beyond { contents.removeValue(forKey: item.id) }
+                        await revokeMedia(mediaIDs, conversationID: conversationID)
+                    }
                     try? await history.truncate(conversationID: conversationID, after: limit, scope: scope)
                 }
             }
@@ -229,8 +245,14 @@ struct MessagingInboxPreview: Equatable, Sendable {
             if !more { receipts[conversationID] = page.readReceipts }
             let deleted = page.items.filter(\.meta.deletedForEveryone).map(\.id)
             if !deleted.isEmpty {
+                bumpContentRevision(for: conversationID)
+                let mediaIDs = deleted.compactMap { id in
+                    contents[id]?.media?.id
+                        ?? messages[conversationID]?.first(where: { $0.id == id })?.meta.media?.mediaID
+                }
                 for id in deleted { contents.removeValue(forKey: id) }
                 try? await history.remove(messageIDs: deleted, scope: scope)
+                await revokeMedia(mediaIDs, conversationID: conversationID)
             }
             loadedMessages.insert(conversationID)
             error = nil
@@ -253,27 +275,28 @@ struct MessagingInboxPreview: Equatable, Sendable {
     /// doit correspondre au contenu authentifié, et un tombstone/contexte retiré ne laisse
     /// jamais resurgir l'ancienne bulle en clair.
     func content(for message: MessagingWireMessage) async -> MessagingPlainContent? {
-        guard currentScope() == scope else { error = .contextChanged; return nil }
-        guard message.schoolID == scope.schoolID else { error = .contextChanged; return nil }
-        guard message.ciphertext != nil, !message.meta.deletedForEveryone,
-              readable(message.meta.sequence, in: message.conversationID) else {
-            contents.removeValue(forKey: message.id)
-            decryptionCodes[message.id] = nil
+        guard currentScope() == scope else { recordFailure(.contextChanged); return nil }
+        guard message.schoolID == scope.schoolID else { recordFailure(.contextChanged); return nil }
+        guard let latest = reusableMessage(message) else {
+            await discardContent(messageID: message.id, conversationID: message.conversationID)
             return nil
         }
         if let known = contents[message.id] {
-            guard Self.serverMediaMatches(known, message: message) else {
-                contents.removeValue(forKey: message.id)
-                decryptionCodes[message.id] = nil
+            guard Self.serverMediaMatches(known, message: latest) else {
+                await discardContent(messageID: message.id, conversationID: message.conversationID)
                 return nil
             }
             return known
         }
+        let epoch = contentEpoch
+        let revision = contentRevision(for: message.conversationID)
         do {
             let value: MessagingPlainContent
             if let provenance = crypto as? any MessagingContentProvenanceDecryption {
-                let decrypted = try await provenance.decryptContent(message, scope: scope)
-                guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+                let decrypted = try await provenance.decryptContent(latest, scope: scope)
+                guard currentScope() == scope else { recordFailure(.contextChanged); return nil }
+                guard epoch == contentEpoch,
+                      revision == contentRevision(for: message.conversationID) else { return nil }
                 switch decrypted.provenance {
                 case .matrixContent:
                     guard let decoded = MessagingPlainContent.decodeMatrixContent(decrypted.bytes) else {
@@ -288,25 +311,49 @@ struct MessagingInboxPreview: Equatable, Sendable {
                 }
             } else {
                 // Doubles existants sans provenance : le décodeur legacy reste inchangé.
-                let bytes = try await crypto.decrypt(message, scope: scope)
-                guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+                let bytes = try await crypto.decrypt(latest, scope: scope)
+                guard currentScope() == scope else { recordFailure(.contextChanged); return nil }
+                guard epoch == contentEpoch,
+                      revision == contentRevision(for: message.conversationID) else { return nil }
                 guard let decoded = MessagingPlainContent.decode(bytes) else {
                     throw MessagingFailure.invalidResponse
                 }
                 value = decoded
             }
-            guard currentScope() == scope else { throw MessagingFailure.contextChanged }
+            // La dernière version connue peut avoir changé pendant l'attente (tombstone,
+            // limite abaissée, masquage). Un ancien snapshot ne doit ni cacher ni historiser.
+            guard currentScope() == scope else { recordFailure(.contextChanged); return nil }
+            guard let current = reusableMessage(message), epoch == contentEpoch,
+                  revision == contentRevision(for: message.conversationID) else {
+                await discardContent(messageID: message.id, conversationID: message.conversationID)
+                return nil
+            }
             if value.media != nil {
-                guard Self.serverMediaMatches(value, message: message) else {
+                guard Self.serverMediaMatches(value, message: current) else {
                     decryptionCodes[message.id] = "D-MEDIA"
+                    await discardContent(messageID: message.id, conversationID: message.conversationID)
                     return nil
                 }
             }
+            try? await history.upsert([MessagingHistoryEntry(messageID: current.id,
+                conversationID: current.conversationID, sequence: current.meta.sequence,
+                senderID: current.senderID, acceptedAt: current.acceptedAt, content: value)], scope: scope)
+            // L'upsert lui-même peut avoir été dépassé par un tombstone. On retire alors
+            // l'entrée tardive avant de rendre la main : aucun clair ne ressuscite.
+            guard currentScope() == scope else {
+                await discardContent(messageID: message.id, conversationID: message.conversationID)
+                recordFailure(.contextChanged)
+                return nil
+            }
+            guard epoch == contentEpoch,
+                  revision == contentRevision(for: message.conversationID),
+                  let final = reusableMessage(message),
+                  Self.serverMediaMatches(value, message: final) else {
+                await discardContent(messageID: message.id, conversationID: message.conversationID)
+                return nil
+            }
             contents[message.id] = value
             decryptionCodes[message.id] = nil
-            try? await history.upsert([MessagingHistoryEntry(messageID: message.id, conversationID: message.conversationID,
-                sequence: message.meta.sequence, senderID: message.senderID, acceptedAt: message.acceptedAt,
-                content: value)], scope: scope)
             return value
         } catch let failure as MessagingDecryptionFailure {
             // Un message illisible n'est pas une panne de la conversation : code sur la bulle seulement.
@@ -320,6 +367,50 @@ struct MessagingInboxPreview: Equatable, Sendable {
         }
         catch let failure as MessagingFailure { recordFailure(failure); return nil }
         catch { recordFailure(.protectionUnavailable); return nil }
+    }
+
+    /// Dernière version connue du message, ou le snapshot isolé quand il n'a pas été chargé.
+    /// Un tombstone, un masquage ou une limite lisible retire immédiatement le droit de servir
+    /// le clair, y compris depuis le cache d'objet.
+    private func reusableMessage(_ message: MessagingWireMessage) -> MessagingWireMessage? {
+        let latest = messages[message.conversationID]?.first { $0.id == message.id } ?? message
+        guard latest.schoolID == scope.schoolID,
+              latest.ciphertext != nil,
+              !latest.meta.deletedForEveryone,
+              readable(latest.meta.sequence, in: latest.conversationID),
+              !hiddenForMe.contains(latest.id),
+              !isHiddenLocally(latest.id, in: latest.conversationID) else { return nil }
+        return latest
+    }
+
+    private func contentRevision(for conversationID: UUID) -> UUID {
+        if let value = conversationRevisions[conversationID] { return value }
+        let value = UUID()
+        conversationRevisions[conversationID] = value
+        return value
+    }
+
+    private func bumpContentRevision(for conversationID: UUID) {
+        conversationRevisions[conversationID] = UUID()
+    }
+
+    /// Retire le clair de la mémoire et de l'historique scellé local pour un message
+    /// devenu supprimé, masqué ou hors limite. Ne touche jamais aux intentions durables.
+    private func discardContent(messageID: UUID, conversationID: UUID) async {
+        _ = conversationID
+        contents.removeValue(forKey: messageID)
+        decryptionCodes[messageID] = nil
+        try? await history.remove(messageIDs: [messageID], scope: scope)
+    }
+
+    /// Transmet au runtime les médias dont une information serveur a retiré la référence.
+    /// La capacité est optionnelle : les compositions qui ne la fournissent pas restent
+    /// valides, sans élargir le protocole UI gelé.
+    private func revokeMedia(_ mediaIDs: [UUID], conversationID: UUID) async {
+        let unique = Array(Set(mediaIDs))
+        guard !unique.isEmpty,
+              let receiver = mediaRuntime as? any MessagingMediaRevocationReceiving else { return }
+        await receiver.revoke(mediaIDs: unique, conversationID: conversationID)
     }
 
     /// Une pièce jointe n'est servie que si la référence média du serveur désigne exactement
@@ -482,6 +573,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private func recordFailure(_ failure: MessagingFailure) {
         if failure == .accessChanged || failure == .contextChanged {
             // Effacer uniquement la mémoire affichée. La file et les brouillons scellés restent intacts.
+            contentEpoch = UUID()
+            conversationRevisions = [:]
             contacts = []
             generalMembers = []
             members = []
@@ -1064,12 +1157,20 @@ struct MessagingInboxPreview: Equatable, Sendable {
     }
 
     private func applyDeletion(_ key: MessagingMutationKey) async {
+        bumpContentRevision(for: key.conversationID)
         if key.kind == .hideForMe {
             hiddenForMe.insert(key.messageID)
             if let clock = pendingMutations[key]?.clock { _ = await removeMutation(key, expectedClock: clock) }
         }
+        let mediaID = contents[key.messageID]?.media?.id
+            ?? messages[key.conversationID]?.first(where: { $0.id == key.messageID })?.meta.media?.mediaID
         contents.removeValue(forKey: key.messageID)
         try? await history.remove(messageIDs: [key.messageID], scope: scope)
+        // Une suppression confirmée pour tout le monde retire la référence média côté
+        // serveur ; un simple masquage local ne purge jamais le cache.
+        if key.kind == .deleteForEveryone, let mediaID {
+            await revokeMedia([mediaID], conversationID: key.conversationID)
+        }
     }
 
     /// Après relecture : une intention hors vol que le serveur reflète est retirée (pas de double compte).
@@ -1083,6 +1184,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                 satisfied = base.mutedUntil == until
             } else if key.kind == .hideForMe, mutation.status == .confirmed, !readMute {
                 hiddenForMe.insert(key.messageID)
+                bumpContentRevision(for: key.conversationID)
                 satisfied = true
             } else {
                 guard !readMute, let base = messages[conversationID]?.first(where: { $0.id == key.messageID }) else { continue }

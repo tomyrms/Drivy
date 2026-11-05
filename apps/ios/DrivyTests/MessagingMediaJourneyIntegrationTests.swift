@@ -19,7 +19,7 @@ final class MessagingMediaJourneyIntegrationTests: XCTestCase {
 
     /// PNG synthétique 1×1, sans métadonnée personnelle.
     private var tinyPNG: Data {
-        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nWQAAAAASUVORK5CYII=")!
+        Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPQyp7/HwAEKwI0XQE+5AAAAABJRU5ErkJggg==")!
     }
 
     private func makeRoot() throws -> URL {
@@ -133,7 +133,7 @@ final class MessagingMediaJourneyIntegrationTests: XCTestCase {
         await encryption.setMatrixContent(
             try MessagingMediaContent.messageContent(content, mentions: nil), for: messageID)
         let transport = JourneyTransport()
-        await transport.downloadData = sealed.ciphertext
+        await transport.setDownloadData(sealed.ciphertext)
         let cache = try makeCache(scope: scope, anchor: root, keys: keys)
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
         let coordinator = MessagingMediaCoordinator(scope: scope, preparer: MessagingMediaPreparer(),
@@ -174,7 +174,7 @@ final class MessagingMediaJourneyIntegrationTests: XCTestCase {
         await encryption.setMatrixContent(
             try MessagingMediaContent.messageContent(content, mentions: nil), for: messageID)
         let transport = JourneyTransport()
-        await transport.downloadData = sealed.ciphertext
+        await transport.setDownloadData(sealed.ciphertext)
         let cache = try makeCache(scope: scope, anchor: root, keys: keys)
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
         let coordinator = MessagingMediaCoordinator(scope: scope, preparer: MessagingMediaPreparer(),
@@ -392,6 +392,8 @@ private actor JourneyTransport: MessagingMediaTransport {
     var downloadData: Data?
     private(set) var uploads: [MessagingSealedMedia] = []
     private(set) var downloads = 0
+
+    func setDownloadData(_ data: Data?) { downloadData = data }
 
     func upload(_ sealed: MessagingSealedMedia, scope: MessagingScope,
                 conversationID: UUID) async throws -> MessagingMediaReceipt {
