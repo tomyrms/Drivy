@@ -182,15 +182,60 @@ et ses CRC IDAT/IEND ainsi que `zlib.decompress` ont été vérifiés avec Pytho
 libération sur tous les chemins ; un test contrôle explicitement une entrée qui n'arrive pas.
 Aucun task group n'attend un enfant non coopératif.
 
+## 3 ter. Correction 2/2 (R1–R4)
+
+Cette seconde passe reste sur la branche assemblée avec U97 (`3432066e`) et ne touche aucun
+fichier UI, coffre, cache, transport, workflow ou lock.
+
+### R1 — admissions après les attentes et annulation
+
+`deliver` vérifie l'admission juste après `reconfirmed` avant tout chiffrement ; `open`
+revérifie après `cache.data`, même quand le cache renvoie `nil`, avant toute factory ou
+tout téléchargement. `reconfirmed` et `encryptEnvelope` vérifient avant et après leurs
+attentes, y compris le second `put` après conflit. `currentTransport` revalide aussi son
+chemin rapide. `Task.checkCancellation` est présent aux frontières avant les nouveaux
+effets et après les attentes. Une annulation remonte comme `CancellationError` dans les
+méthodes qui lèvent, et comme `resultUnknown` dans `send`/`recompose` sans vider le suivi
+ni supprimer l'intention durable. Un POST annulé consomme l'ancienne autorisation
+`MEMBERS_CHANGED` ; après un reçu serveur validé, le nettoyage local n'est jamais empêché
+par l'annulation.
+
+### R2 — révocation ciblée sans fermer les autres médias
+
+`revoke` ne modifie plus la révision globale du scope : il ajoute uniquement les IDs à
+`revokedMedia` et purge ces copies. `ensureCacheStillValid` distingue l'invalidation de
+scope (`contextChanged`) de la révocation ciblée (`removed`). Révoquer A pendant son store
+purge A et rend `removed` ; B, y compris dans une autre conversation du même scope, reste
+ouvrable et reste en cache. Seul `invalidate` ferme le contexte et purge tout le cache.
+
+### R3 — retraits serveur complets et priorité au fait négatif
+
+`loadMessages` capture les références connues avant d'écraser la projection, puis transmet
+au runtime les IDs des `deletedForEveryone`, des `media.deleted=true` et des références
+média disparues ou remplacées. Les contenus et entrées d'historique concernés sont retirés.
+`reusableMessage` vérifie d'abord les faits négatifs de l'argument (tombstone, référence
+purgée, absence de chiffré) : une projection antérieure encore live ne les contourne pas.
+`content(for:)` transmet aussi un retrait serveur connu avant de servir le cache et purge
+le média en cas de référence serveur non concordante. Un masquage purement optimiste ne
+déclenche ni révocation ni purge.
+
+### R4 — preuves du harnais
+
+Le rapport ne prétend plus « zéro Task.sleep » : les trois `Task.sleep` restants sont des
+échéances bornées pour l'arrivée dans `Gate` et pour la terminaison des opérations
+retenues. Toutes les attentes de tâches retenues passent par `boundedValue` (surcharges
+throwing et non throwing) ou par une barrière ouverte sur tous les chemins ; aucun groupe
+structuré n'attend un enfant non coopératif.
+
 ## 4. Tests préparés (NON EXÉCUTÉS)
 
 Aucun outil Apple n'est présent sur ce poste Windows : `swift`, `swiftc`, `xcodebuild`,
 `xcrun` et `xcodegen` sont absents. **Aucune compilation, aucun RED/GREEN Swift et aucune
 suite XCTest ne sont revendiqués.**
 
-Deux fichiers, 43 méthodes préparées (aucune exécutée Apple) :
+Deux fichiers, 52 méthodes préparées (aucune exécutée Apple) :
 
-- `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (34)
+- `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (43)
   - préparation hors MainActor et mapping fermé ;
   - ordre `put` du sceau → chiffrement → CAS de l'enveloppe, avant tout dépôt ;
   - panne à la persistance, légende/mentions/nom bornés ;
@@ -200,12 +245,20 @@ Deux fichiers, 43 méthodes préparées (aucune exécutée Apple) :
   - dépôt → POST → retrait, reçu sans nettoyage local, réponse perdue ;
   - `MEMBERS_CHANGED` : recomposition liée à l'enveloppe refusée, réponse perdue interdisant
     une seconde recomposition, replay explicite de la même enveloppe ;
-  - double geste concurrent avec suspension contrôlée (`Gate` borné, aucun sommeil de preuve) ;
+  - double geste concurrent avec suspension contrôlée (`Gate` borné par échéance) ;
   - réouverture avec le même enregistrement et la même enveloppe ;
   - métadonnées serveur, tombstone, autre média, autre taille, corruption, format divergent ;
   - invalidation ou changement de contexte pendant `put`, `store` et miniature, purge de la copie tardive, révocation
     connue et blocage de lecture ;
   - déchiffrement retenu puis tombstone ou limite lisible : aucun clair/historique tardif ;
+  - reconfirmation retenue puis invalidation : zéro chiffrement/upload/POST ;
+    cache `nil` retenu puis invalidation : zéro factory/téléchargement ;
+    annulation pendant la lecture de cache : arrêt avant transport ;
+    POST annulé : autorisation `MEMBERS_CHANGED` consommée, intention conservée ;
+  - révocation de A pendant son store : A en `removed` et absent du cache, B aboutit et
+    reste en cache ; invalidation de scope : autres médias purgés ;
+  - workspace : tombstone fourni contre un live chargé, `media.deleted` seul, référence
+    média disparue, ancien live après tombstone ; IDs transmis et cache purgé ;
   - panne de coffre non rendue comme liste vide ; entrée de barrière qui n'arrive pas.
 - `apps/ios/DrivyTests/MessagingMediaJourneyIntegrationTests.swift` (9)
   - parcours émetteur avec file et cache **réels** sur répertoire temporaire, PNG 1×1
@@ -248,8 +301,8 @@ lancée ici et aucun workflow n'a été modifié.
 | `git diff --check` | aucune erreur d'espacement |
 | Script Python d'équilibre des délimiteurs (chaînes/commentaires ignorés) | équilibré sur les 7 fichiers touchés/neufs |
 | `Select-String 'XCTAssert\w+\([^)]*await'` | 0 occurrence dans les deux fichiers de tests |
-| `Select-String 'Task\.sleep|sleep\('` | 0 occurrence : suspensions par `Gate` |
-| Comptage des méthodes de test | 34 + 9 = 43 |
+| `Select-String 'Task\.sleep|sleep\('` | 3 occurrences bornées (`Gate` et les deux surcharges `boundedValue`), aucun sommeil de preuve |
+| Comptage des méthodes de test | 43 + 9 = 52 |
 | `Select-String 'await\s+\w+\.\w+\s*='` dans les tests | 0 mutation externe de propriété d'acteur |
 | PNG 1×1 de test : CRC des chunks + `zlib.decompress(IDAT)` | valides (Python standard) |
 | Codebase Memory `drivy-medias-parcours-97` | réindexé avant remise, `status: ready` ; les deux fichiers de tests, le coordinateur et le workspace sont absents de `parse_partial` |

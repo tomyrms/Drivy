@@ -118,6 +118,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         // existant est relu, comparé au contenu original, puis reconfirmé durablement
         // avant de rendre la main (un `entries` seul ne prouve pas la synchronisation).
         let existing = try await existingEntry(clientMessageID: clientMessageID)
+        try Task.checkCancellation()
         if let existing {
             let same = try matches(existing, prepared: prepared, caption: normalizedCaption,
                                    conversationID: conversationID, mentions: mentionPersonIDs,
@@ -142,6 +143,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         try await ensureActive()
         do {
             // Le sceau et le contenu sont durables avant tout dépôt, et avant le chiffrement.
+            try Task.checkCancellation()
             try await outbox.put(intent, scope: scope)
         } catch let failure as MessagingFailure where failure == .stateConflict {
             // Course entre deux instances : adopter le record déjà admis, jamais un second.
@@ -158,6 +160,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             try await reconfirm(existing)
             try await ensureActive()
             return Self.snapshot(existing)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
         } catch {
@@ -186,6 +190,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
 
         do {
             // CAS explicite : l'enveloppe Megolm est durable avant toute émission.
+            try Task.checkCancellation()
             try await outbox.replaceEnvelope(mediaID: sealed.mediaID, expected: nil,
                 replacement: envelope, scope: scope)
         } catch let failure as MessagingFailure where failure == .stateConflict {
@@ -204,6 +209,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             try await reconfirm(existing)
             try await ensureActive()
             return Self.snapshot(existing)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
         } catch {
@@ -216,15 +223,9 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
 
     func pending(conversationID: UUID) async throws -> [MessagingMediaPendingSnapshot] {
         try await ensureActive()
-        let entries: [MessagingPendingMedia]
-        do {
-            entries = try await outbox.entries(scope: scope)
-        } catch let failure as MessagingFailure {
-            throw Self.map(failure)
-        } catch {
-            // Une panne de coffre n'est jamais une liste vide : elle est rendue au consommateur.
-            throw MessagingMediaRuntimeFailure.protectionUnavailable
-        }
+        // Une panne de coffre n'est jamais une liste vide : elle est rendue au consommateur.
+        let entries = try await loadEntries()
+        try Task.checkCancellation()
         try await ensureActive()
         return entries.filter { $0.conversationID == conversationID }.map(Self.snapshot)
     }
@@ -232,6 +233,9 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     // MARK: Envoi
 
     func send(clientMessageID: UUID) async -> MessagingMediaDelivery {
+        // Une annulation n'est pas un changement de compte : l'intention durable reste
+        // et le résultat honnête est « inconnu », jamais un contexte fermé.
+        if Task.isCancelled { return .pending(.resultUnknown) }
         guard await isActive() else { return .pending(.contextChanged) }
         guard !active.contains(clientMessageID) else { return .pending(.alreadyInFlight) }
         active.insert(clientMessageID)
@@ -243,6 +247,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             let delivery = try await deliver(entry, upload: true)
             if case .confirmed = delivery { membersChanged.removeValue(forKey: clientMessageID) }
             return delivery
+        } catch is CancellationError {
+            return .pending(.resultUnknown)
         } catch let failure as MessagingMediaRuntimeFailure {
             // `deliver` a déjà lié l'autorisation à l'enveloppe refusée, ou l'a
             // consommée si le POST a un résultat inconnu.
@@ -253,6 +259,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     }
 
     func recomposeAfterMembersChanged(clientMessageID: UUID) async -> MessagingMediaDelivery {
+        if Task.isCancelled { return .pending(.resultUnknown) }
         guard await isActive() else { return .pending(.contextChanged) }
         guard !active.contains(clientMessageID) else { return .pending(.alreadyInFlight) }
         // Une recomposition n'a de sens qu'après un refus MEMBERS_CHANGED réellement
@@ -294,6 +301,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
                 throw MessagingMediaRuntimeFailure.resultUnknown
             }
             return try await deliver(updated, upload: false)
+        } catch is CancellationError {
+            return .pending(.resultUnknown)
         } catch let failure as MessagingMediaRuntimeFailure {
             return .pending(failure)
         } catch {
@@ -309,9 +318,12 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         // `entries` ne prouve pas la synchronisation : le record exact est reconfirmé
         // par le `put` idempotent de la file avant tout effet réseau.
         var current = try await reconfirmed(entry)
+        try Task.checkCancellation()
+        try await ensureActive()
 
         if current.messageCiphertext == nil {
             let envelope = try await encryptEnvelope(for: current)
+            try Task.checkCancellation()
             try await ensureActive()
             do {
                 try await outbox.replaceEnvelope(mediaID: current.mediaID, expected: nil,
@@ -325,6 +337,8 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
                     throw MessagingMediaRuntimeFailure.resultUnknown
                 }
                 current = try await reconfirmed(latest)
+                try Task.checkCancellation()
+                try await ensureActive()
             } catch let failure as MessagingFailure {
                 throw Self.map(failure)
             } catch {
@@ -335,6 +349,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             }
         }
 
+        try Task.checkCancellation()
         try await ensureActive()
         if upload {
             let transport = try await currentTransport()
@@ -356,6 +371,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             }
         }
 
+        try Task.checkCancellation()
         try await ensureActive()
         guard let envelope = current.messageCiphertext else {
             throw MessagingMediaRuntimeFailure.protectionUnavailable
@@ -398,6 +414,9 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             }
             throw mapped
         } catch is CancellationError {
+            // Un POST interrompu a peut-être été émis : l'ancienne autorisation ne doit
+            // pas rester réutilisable pour recomposer l'enveloppe.
+            membersChanged.removeValue(forKey: current.clientMessageID)
             throw CancellationError()
         } catch {
             membersChanged.removeValue(forKey: current.clientMessageID)
@@ -468,19 +487,23 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         }
 
         var cached: Data?
+        try Task.checkCancellation()
         do {
             cached = try await cache.data(mediaID: media.id, scope: scope)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             // Un cache fermé n'autorise aucun repli clair : on retente le téléchargement
             // authentifié. Aucune donnée non validée n'est rendue depuis ce cache.
             cached = nil
         }
-        if cached != nil {
-            try await ensureActive()
-            guard !revokedMedia.contains(media.id) else {
-                try? await cache.purge(mediaIDs: [media.id], scope: scope)
-                throw MessagingMediaRuntimeFailure.removed
-            }
+        // La lecture de cache est une attente : une invalidation survenue pendant celle-ci
+        // doit fermer le chemin avant toute nouvelle factory ou tout téléchargement.
+        try Task.checkCancellation()
+        try await ensureActive()
+        guard !revokedMedia.contains(media.id) else {
+            try? await cache.purge(mediaIDs: [media.id], scope: scope)
+            throw MessagingMediaRuntimeFailure.removed
         }
 
         let plaintext: Data
@@ -499,6 +522,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             } catch {
                 throw MessagingMediaRuntimeFailure.unavailable
             }
+            try Task.checkCancellation()
             try await ensureActive()
             guard !revokedMedia.contains(media.id) else {
                 throw MessagingMediaRuntimeFailure.removed
@@ -511,6 +535,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
                 throw MessagingMediaRuntimeFailure.integrity
             }
         }
+        try Task.checkCancellation()
         guard plaintext.count == media.size else {
             throw MessagingMediaRuntimeFailure.integrity
         }
@@ -524,6 +549,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             try? await cache.purge(mediaIDs: [media.id], scope: scope)
             throw failure
         }
+        try Task.checkCancellation()
         guard prepared.mime == media.mime else {
             try? await cache.purge(mediaIDs: [media.id], scope: scope)
             throw MessagingMediaRuntimeFailure.invalidFormat
@@ -540,6 +566,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             }
         }
 
+        try Task.checkCancellation()
         try await ensureActive()
         guard !revokedMedia.contains(media.id) else {
             try? await cache.purge(mediaIDs: [media.id], scope: scope)
@@ -555,6 +582,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         // Dernière barrière après les écritures : une invalidation survenue entre le
         // dernier store et ce point purge encore la copie avant de rendre la main.
         try await ensureCacheStillValid(mediaID: media.id, revision: writeRevision)
+        try Task.checkCancellation()
         return prepared
     }
 
@@ -564,7 +592,10 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         transport = nil
         // Les intentions encore à vérifier restent dans la file : seule la lecture
         // déchiffrée du scope est fermée et purgée. Aucun effacement physique n'est promis.
-        do { try await cache.purgeAll(scope: scope) } catch {}
+        // La purge explicite s'exécute hors de l'annulation de l'appelant.
+        let cache = self.cache
+        let scope = self.scope
+        _ = await Task.detached { try? await cache.purgeAll(scope: scope) }.value
     }
 
     /// Information serveur : ces médias ne sont plus servis. Les copies connues sont
@@ -576,8 +607,12 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         let unique = Array(Set(mediaIDs))
         guard !unique.isEmpty else { return }
         for id in unique { revokedMedia.insert(id) }
-        cacheRevision = UUID()
-        do { try await cache.purge(mediaIDs: unique, scope: scope) } catch {}
+        // La révocation est ciblée : elle ne touche pas la révision du scope. Seule
+        // `invalidate` ferme tout le contexte et purge l'ensemble du cache.
+        // La purge explicite s'exécute hors de l'annulation de l'appelant.
+        let cache = self.cache
+        let scope = self.scope
+        _ = await Task.detached { try? await cache.purge(mediaIDs: unique, scope: scope) }.value
     }
 
     // MARK: Interne
@@ -591,16 +626,23 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     }
 
     private func ensureActive() async throws {
+        try Task.checkCancellation()
         guard !invalidated else { throw MessagingMediaRuntimeFailure.contextChanged }
         let current = await currentScope()
+        try Task.checkCancellation()
         guard !invalidated, current == scope else {
             throw MessagingMediaRuntimeFailure.contextChanged
         }
     }
 
     private func loadEntries() async throws -> [MessagingPendingMedia] {
+        try Task.checkCancellation()
         do {
-            return try await outbox.entries(scope: scope)
+            let entries = try await outbox.entries(scope: scope)
+            try Task.checkCancellation()
+            return entries
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
         } catch {
@@ -629,6 +671,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     private func matches(_ existing: MessagingPendingMedia, prepared: MessagingPreparedMedia,
                          caption: String?, conversationID: UUID, mentions: [UUID],
                          replyToMessageID: UUID?) throws -> Bool {
+        try Task.checkCancellation()
         guard existing.conversationID == conversationID,
               existing.content.text == caption,
               existing.content.media.mime == prepared.mime,
@@ -657,22 +700,38 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     }
 
     private func reconfirmed(_ entry: MessagingPendingMedia) async throws -> MessagingPendingMedia {
+        try Task.checkCancellation()
+        try await ensureActive()
         do {
             try await outbox.put(entry, scope: scope)
+            try Task.checkCancellation()
+            try await ensureActive()
             return entry
         } catch let failure as MessagingFailure where failure == .stateConflict {
+            try Task.checkCancellation()
+            try await ensureActive()
             let latest = try await reload(mediaID: entry.mediaID)
+            try Task.checkCancellation()
+            try await ensureActive()
             guard let latest, latest.clientMessageID == entry.clientMessageID else {
                 throw MessagingMediaRuntimeFailure.resultUnknown
             }
+            try Task.checkCancellation()
+            try await ensureActive()
             do {
                 try await outbox.put(latest, scope: scope)
+                try Task.checkCancellation()
+                try await ensureActive()
+                return latest
+            } catch is CancellationError {
+                throw CancellationError()
             } catch let failure as MessagingFailure {
                 throw Self.map(failure)
             } catch {
                 throw MessagingMediaRuntimeFailure.protectionUnavailable
             }
-            return latest
+        } catch is CancellationError {
+            throw CancellationError()
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
         } catch {
@@ -683,17 +742,32 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     /// Écriture de cache suivie d'une revalidation : une invalidation ou une révocation
     /// survenue pendant l'attente purge la copie tardive avant de rendre la main.
     private func storeCache(_ data: Data, mediaID: UUID, revision: UUID) async throws {
-        do { try await cache.store(data, mediaID: mediaID, scope: scope) } catch {}
+        try Task.checkCancellation()
+        do {
+            try await cache.store(data, mediaID: mediaID, scope: scope)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {}
         try await ensureCacheStillValid(mediaID: mediaID, revision: revision)
+        try Task.checkCancellation()
     }
 
     private func storeThumbnailCache(_ data: Data, mediaID: UUID, revision: UUID) async throws {
-        do { try await cache.storeThumbnail(data, mediaID: mediaID, scope: scope) } catch {}
+        try Task.checkCancellation()
+        do {
+            try await cache.storeThumbnail(data, mediaID: mediaID, scope: scope)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {}
         try await ensureCacheStillValid(mediaID: mediaID, revision: revision)
+        try Task.checkCancellation()
     }
 
     private func ensureCacheStillValid(mediaID: UUID, revision: UUID) async throws {
         let active = await isActive()
+        // Une invalidation de scope ferme tout ; une révocation ciblée ne concerne que
+        // ses propres IDs et ne doit jamais transformer l'ouverture d'un autre média
+        // en changement de contexte.
         if invalidated || revision != cacheRevision || !active {
             try? await cache.purge(mediaIDs: [mediaID], scope: scope)
             throw MessagingMediaRuntimeFailure.contextChanged
@@ -702,12 +776,18 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
             try? await cache.purge(mediaIDs: [mediaID], scope: scope)
             throw MessagingMediaRuntimeFailure.removed
         }
+        try Task.checkCancellation()
     }
 
     private func encryptEnvelope(for entry: MessagingPendingMedia) async throws -> MessagingCiphertext {
+        try Task.checkCancellation()
+        try await ensureActive()
         do {
-            return try await encryption.encryptMatrixContent(entry.content,
+            let result = try await encryption.encryptMatrixContent(entry.content,
                 mentions: entry.mentionPersonIDs, scope: scope, conversationID: entry.conversationID)
+            try Task.checkCancellation()
+            try await ensureActive()
+            return result
         } catch let failure as MessagingFailure {
             throw Self.map(failure)
         } catch is CancellationError {
@@ -718,7 +798,11 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
     }
 
     private func currentTransport() async throws -> any MessagingMediaTransport {
+        try Task.checkCancellation()
+        try await ensureActive()
         if let transport { return transport }
+        try Task.checkCancellation()
+        try await ensureActive()
         let created: any MessagingMediaTransport
         do {
             created = try await transportFactory()
@@ -729,14 +813,14 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         } catch {
             throw MessagingMediaRuntimeFailure.unavailable
         }
-        guard await isActive() else {
-            throw MessagingMediaRuntimeFailure.contextChanged
-        }
+        try Task.checkCancellation()
+        try await ensureActive()
         transport = created
         return created
     }
 
     private func seal(_ data: Data) throws -> MessagingSealedMedia {
+        try Task.checkCancellation()
         do {
             return try cryptography.seal(data)
         } catch let failure as MessagingMediaCryptographyFailure {
@@ -748,6 +832,7 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
 
     private func mediaContent(prepared: MessagingPreparedMedia, sealed: MessagingSealedMedia,
                               name: String, caption: String?) throws -> MessagingMediaContentV3 {
+        try Task.checkCancellation()
         do {
             let attachment = try MessagingMediaAttachment(id: sealed.mediaID, size: sealed.byteSize,
                 mime: prepared.mime, name: name, width: prepared.width, height: prepared.height,

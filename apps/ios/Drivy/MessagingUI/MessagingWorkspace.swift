@@ -219,6 +219,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
             guard (cursor == nil || page.nextCursor != cursor),
                   page.items.allSatisfy({ $0.schoolID == scope.schoolID && $0.conversationID == conversationID }),
                   Set(page.items.map(\.id)).count == page.items.count else { throw MessagingFailure.invalidResponse }
+            let previousByID = Dictionary((messages[conversationID] ?? []).map { ($0.id, $0) },
+                                          uniquingKeysWith: { _, latest in latest })
             messages[conversationID] = Self.mergedMessages(messages[conversationID] ?? [], page.items)
             // Un rechargement initial ne doit pas faire oublier la suite des pages anciennes déjà parcourues.
             if more || !loadedMessages.contains(conversationID) {
@@ -243,16 +245,41 @@ struct MessagingInboxPreview: Equatable, Sendable {
             await reconcileMutations(conversationID)
             resumeMutations()
             if !more { receipts[conversationID] = page.readReceipts }
-            let deleted = page.items.filter(\.meta.deletedForEveryone).map(\.id)
-            if !deleted.isEmpty {
-                bumpContentRevision(for: conversationID)
-                let mediaIDs = deleted.compactMap { id in
-                    contents[id]?.media?.id
-                        ?? messages[conversationID]?.first(where: { $0.id == id })?.meta.media?.mediaID
+            // Préserver les références connues AVANT que la page ne remplace la projection :
+            // un tombstone, une référence média purgée ou une référence disparue doivent
+            // transmettre l'ancien ID au runtime, même sans `deletedForEveryone`.
+            var removedIDs: Set<UUID> = []
+            var removedMediaIDs: Set<UUID> = []
+            for item in page.items {
+                let previous = previousByID[item.id]
+                let knownMediaID = item.meta.media?.mediaID
+                    ?? previous?.meta.media?.mediaID
+                    ?? contents[item.id]?.media?.id
+                if item.meta.deletedForEveryone {
+                    removedIDs.insert(item.id)
+                    if let knownMediaID { removedMediaIDs.insert(knownMediaID) }
                 }
-                for id in deleted { contents.removeValue(forKey: id) }
-                try? await history.remove(messageIDs: deleted, scope: scope)
-                await revokeMedia(mediaIDs, conversationID: conversationID)
+                if item.meta.media?.deleted == true {
+                    removedIDs.insert(item.id)
+                    if let knownMediaID { removedMediaIDs.insert(knownMediaID) }
+                }
+                if let old = previous?.meta.media, item.meta.media?.mediaID != old.mediaID {
+                    removedIDs.insert(item.id)
+                    removedMediaIDs.insert(old.mediaID)
+                } else if item.meta.media == nil, let cached = contents[item.id]?.media?.id {
+                    // Référence disparue sans version précédente en mémoire : l'ID connu
+                    // du contenu chargé est encore une référence à retirer.
+                    removedIDs.insert(item.id)
+                    removedMediaIDs.insert(cached)
+                }
+            }
+            if !removedIDs.isEmpty || !removedMediaIDs.isEmpty {
+                bumpContentRevision(for: conversationID)
+                for id in removedIDs { contents.removeValue(forKey: id) }
+                if !removedIDs.isEmpty {
+                    try? await history.remove(messageIDs: Array(removedIDs), scope: scope)
+                }
+                await revokeMedia(Array(removedMediaIDs), conversationID: conversationID)
             }
             loadedMessages.insert(conversationID)
             error = nil
@@ -277,12 +304,21 @@ struct MessagingInboxPreview: Equatable, Sendable {
     func content(for message: MessagingWireMessage) async -> MessagingPlainContent? {
         guard currentScope() == scope else { recordFailure(.contextChanged); return nil }
         guard message.schoolID == scope.schoolID else { recordFailure(.contextChanged); return nil }
+        // Une référence serveur déjà retirée dans l'argument ou dans la dernière
+        // projection doit être transmise au runtime avant tout retour de cache.
+        await revokeServerRemoval(of: message)
+        if let loaded = messages[message.conversationID]?.first(where: { $0.id == message.id }) {
+            await revokeServerRemoval(of: loaded)
+        }
         guard let latest = reusableMessage(message) else {
             await discardContent(messageID: message.id, conversationID: message.conversationID)
             return nil
         }
         if let known = contents[message.id] {
             guard Self.serverMediaMatches(known, message: latest) else {
+                if let mediaID = known.media?.id {
+                    await revokeMedia([mediaID], conversationID: message.conversationID)
+                }
                 await discardContent(messageID: message.id, conversationID: message.conversationID)
                 return nil
             }
@@ -325,13 +361,20 @@ struct MessagingInboxPreview: Equatable, Sendable {
             guard currentScope() == scope else { recordFailure(.contextChanged); return nil }
             guard let current = reusableMessage(message), epoch == contentEpoch,
                   revision == contentRevision(for: message.conversationID) else {
+                if let loaded = messages[message.conversationID]?.first(where: { $0.id == message.id }) {
+                    await revokeServerRemoval(of: loaded)
+                }
                 await discardContent(messageID: message.id, conversationID: message.conversationID)
                 return nil
             }
             if value.media != nil {
                 guard Self.serverMediaMatches(value, message: current) else {
-                    decryptionCodes[message.id] = "D-MEDIA"
+                    if let mediaID = value.media?.id {
+                        await revokeMedia([mediaID], conversationID: message.conversationID)
+                    }
                     await discardContent(messageID: message.id, conversationID: message.conversationID)
+                    // Le marqueur reste utile après le retrait du clair.
+                    decryptionCodes[message.id] = "D-MEDIA"
                     return nil
                 }
             }
@@ -349,6 +392,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
                   revision == contentRevision(for: message.conversationID),
                   let final = reusableMessage(message),
                   Self.serverMediaMatches(value, message: final) else {
+                if let loaded = messages[message.conversationID]?.first(where: { $0.id == message.id }) {
+                    await revokeServerRemoval(of: loaded)
+                }
                 await discardContent(messageID: message.id, conversationID: message.conversationID)
                 return nil
             }
@@ -373,10 +419,18 @@ struct MessagingInboxPreview: Equatable, Sendable {
     /// Un tombstone, un masquage ou une limite lisible retire immédiatement le droit de servir
     /// le clair, y compris depuis le cache d'objet.
     private func reusableMessage(_ message: MessagingWireMessage) -> MessagingWireMessage? {
+        // Un fait négatif connu sur l'argument (tombstone, référence purgée) ne peut
+        // jamais être contourné par une projection antérieure encore live.
+        if message.meta.deletedForEveryone
+            || message.meta.media?.deleted == true
+            || message.ciphertext == nil {
+            return nil
+        }
         let latest = messages[message.conversationID]?.first { $0.id == message.id } ?? message
         guard latest.schoolID == scope.schoolID,
               latest.ciphertext != nil,
               !latest.meta.deletedForEveryone,
+              latest.meta.media?.deleted != true,
               readable(latest.meta.sequence, in: latest.conversationID),
               !hiddenForMe.contains(latest.id),
               !isHiddenLocally(latest.id, in: latest.conversationID) else { return nil }
@@ -399,8 +453,21 @@ struct MessagingInboxPreview: Equatable, Sendable {
     private func discardContent(messageID: UUID, conversationID: UUID) async {
         _ = conversationID
         contents.removeValue(forKey: messageID)
-        decryptionCodes[messageID] = nil
         try? await history.remove(messageIDs: [messageID], scope: scope)
+    }
+
+    /// Un retrait serveur avéré (tombstone, référence purgée, limite lisible) transmet
+    /// l'ID connu au runtime. Un masquage local ou une référence simplement absente d'un
+    /// ancien snapshot ne déclenche aucune purge.
+    private func revokeServerRemoval(of message: MessagingWireMessage) async {
+        let mediaID = message.meta.media?.mediaID ?? contents[message.id]?.media?.id
+        guard let mediaID else { return }
+        let removed = message.meta.deletedForEveryone
+            || message.meta.media?.deleted == true
+            || message.ciphertext == nil
+            || !readable(message.meta.sequence, in: message.conversationID)
+        guard removed else { return }
+        await revokeMedia([mediaID], conversationID: message.conversationID)
     }
 
     /// Transmet au runtime les médias dont une information serveur a retiré la référence.
