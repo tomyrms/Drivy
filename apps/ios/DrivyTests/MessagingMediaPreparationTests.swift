@@ -35,7 +35,8 @@ final class MessagingMediaPreparationTests: XCTestCase {
 
     private func imageBytes(_ type: UTType, width: Int, height: Int, alpha: Bool,
                             noisy: Bool = false, orientation: Int? = nil,
-                            gps: Bool = false, seed: UInt64 = 0x5EED_0097) throws -> Data {
+                            gps: Bool = false, quality: Double? = nil,
+                            seed: UInt64 = 0x5EED_0097) throws -> Data {
         let bytesPerRow = width * 4
         var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
         var noise = Noise(seed: seed)
@@ -56,20 +57,36 @@ final class MessagingMediaPreparationTests: XCTestCase {
         if let orientation {
             properties[kCGImagePropertyOrientation] = orientation
         }
+        // Sans cette propriété, ImageIO encode au maximum de qualité : un bruit de
+        // 2 400 × 1 800 dépassait alors le plafond produit de 4 Mio (constat Apple Q4).
+        if let quality {
+            properties[kCGImageDestinationLossyCompressionQuality] = quality
+        }
         if gps {
             properties[kCGImagePropertyGPSDictionary] = [
                 kCGImagePropertyGPSLatitude: 0.0,
                 kCGImagePropertyGPSLongitude: 0.0
             ]
             properties[kCGImagePropertyTIFFDictionary] = [
-                kCGImagePropertyTIFFMake: "SyntheticCamera"
+                kCGImagePropertyTIFFMake: "MARQUEUR-PERSONNEL-APPAREIL-97",
+                kCGImagePropertyTIFFArtist: "MARQUEUR-PERSONNEL-AUTEUR-97"
             ]
             properties[kCGImagePropertyExifDictionary] = [
-                kCGImagePropertyExifUserComment: "synthetic"
+                kCGImagePropertyExifUserComment: "MARQUEUR-PERSONNEL-EXIF-97",
+                kCGImagePropertyExifDateTimeOriginal: "1999:12:31 23:59:58"
             ]
         }
         return try encodeImage(pixels: pixels, width: width, height: height, type: type,
                                properties: properties)
+    }
+
+    /// Précondition explicite des fixtures soumises à la limite produit : un dépassement doit
+    /// se lire comme une erreur de fixture, jamais comme un comportement de la primitive.
+    private func assertFixtureFits(_ data: Data, file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertLessThanOrEqual(data.count, MessagingMediaAttachment.maximumByteSize,
+                                 "fixture au-delà du plafond produit de 4 Mio", file: file, line: line)
+        XCTAssertGreaterThanOrEqual(data.count, MessagingMediaAttachment.minimumByteSize,
+                                    "fixture vide", file: file, line: line)
     }
 
     private func encodeImage(pixels: [UInt8], width: Int, height: Int, type: UTType,
@@ -101,55 +118,92 @@ final class MessagingMediaPreparationTests: XCTestCase {
         return Data(bytes: bytes, count: CFDataGetLength(buffer))
     }
 
-    /// PNG monochrome 1 bit dont le flux zlib est en blocs « stored » : fichier valide et
-    /// complet de très grandes dimensions, sans jamais allouer ni encoder un bitmap RGBA
-    /// de plusieurs centaines de mégaoctets pour le test.
+    /// PNG monochrome 1 bit réellement compressé (deflate Huffman fixe, distance 1) : fichier
+    /// valide et complet de très grandes dimensions, sous le plafond produit, sans jamais
+    /// allouer ni encoder un bitmap RGBA de plusieurs centaines de mégaoctets pour le test.
+    /// « Stored » ne suffisait pas : 5 103 853 octets pour 12 000 × 3 400 dépassaient 4 Mio
+    /// (constat Apple Q4, `invalidSize` avant la borne de dimensions).
     private func monochromePNG(width: Int, height: Int) throws -> Data {
         guard width >= 1, height >= 1 else { throw SyntheticFixtureError() }
         let rowBytes = (width + 7) / 8
-        var raw = [UInt8]()
-        raw.reserveCapacity((rowBytes + 1) * height)
-        for _ in 0..<height {
-            raw.append(0)
-            raw.append(contentsOf: [UInt8](repeating: 0, count: rowBytes))
-        }
+        let rawCount = (rowBytes + 1) * height
         var png = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
         var header = Data(bigEndian(UInt32(width)))
         header.append(contentsOf: bigEndian(UInt32(height)))
         header.append(contentsOf: [1, 0, 0, 0, 0])
         png.append(chunk("IHDR", header))
-        png.append(chunk("IDAT", deflateStored(raw)))
+        png.append(chunk("IDAT", deflateZeroRun(count: rawCount)))
         png.append(chunk("IEND", Data()))
         return png
     }
 
-    private func deflateStored(_ raw: [UInt8]) -> Data {
-        var stream = Data([0x78, 0x01])
-        var offset = 0
-        repeat {
-            let length = min(65_535, raw.count - offset)
-            let isFinal: UInt8 = offset + length >= raw.count ? 1 : 0
-            stream.append(isFinal)
-            stream.append(UInt8(length & 0xFF))
-            stream.append(UInt8((length >> 8) & 0xFF))
-            let complement = UInt16(~UInt16(length))
-            stream.append(UInt8(complement & 0xFF))
-            stream.append(UInt8((complement >> 8) & 0xFF))
-            stream.append(contentsOf: raw[offset..<(offset + length)])
-            offset += length
-        } while offset < raw.count
-        stream.append(contentsOf: bigEndian(adler32(raw)))
-        return stream
+    /// Flux zlib dont l'inflation est `count` octets nuls : un littéral, puis des copies de
+    /// 258 octets à distance 1, puis les littéraux restants. Huffman fixe (RFC 1951 §3.2.6).
+    private func deflateZeroRun(count: Int) -> Data {
+        var writer = BitWriter()
+        writer.write(0b011, length: 3, mostSignificantFirst: false)   // BFINAL=1, BTYPE=01
+        writer.write(0x30, length: 8, mostSignificantFirst: true)     // littéral 0
+        var remaining = count - 1
+        while remaining >= 258 {
+            writer.write(0xC5, length: 8, mostSignificantFirst: true) // longueur 258 (code 285)
+            writer.write(0x00, length: 5, mostSignificantFirst: true) // distance 1 (code 0)
+            remaining -= 258
+        }
+        while remaining > 0 {
+            writer.write(0x30, length: 8, mostSignificantFirst: true) // littéral 0
+            remaining -= 1
+        }
+        writer.write(0x00, length: 7, mostSignificantFirst: true)     // fin de bloc (code 256)
+        return Data([0x78, 0x01]) + writer.finish() + Data(bigEndian(adler32Zeros(count)))
     }
 
-    private func adler32(_ bytes: [UInt8]) -> UInt32 {
-        var low: UInt32 = 1
-        var high: UInt32 = 0
-        for byte in bytes {
-            low = (low + UInt32(byte)) % 65_521
-            high = (high + low) % 65_521
+    /// Écrivain de bits conforme au déflateur : bits remplis du poids faible vers le poids fort,
+    /// codes Huffman émis du poids fort vers le poids faible.
+    private struct BitWriter {
+        private var bytes: [UInt8] = []
+        private var accumulator: UInt32 = 0
+        private var count = 0
+
+        mutating func write(_ value: UInt32, length: Int, mostSignificantFirst: Bool) {
+            if mostSignificantFirst {
+                var shift = length - 1
+                while shift >= 0 {
+                    push((value >> UInt32(shift)) & 1)
+                    shift -= 1
+                }
+            } else {
+                var shift = 0
+                while shift < length {
+                    push((value >> UInt32(shift)) & 1)
+                    shift += 1
+                }
+            }
         }
-        return (high << 16) | low
+
+        mutating func finish() -> Data {
+            if count > 0 {
+                bytes.append(UInt8(accumulator & 0xFF))
+                accumulator = 0
+                count = 0
+            }
+            return Data(bytes)
+        }
+
+        private mutating func push(_ bit: UInt32) {
+            accumulator |= bit << UInt32(count)
+            count += 1
+            if count == 8 {
+                bytes.append(UInt8(accumulator & 0xFF))
+                accumulator = 0
+                count = 0
+            }
+        }
+    }
+
+    /// Adler-32 d'un flux entièrement nul, sans matérialiser les octets : `a` reste 1 et `b`
+    /// vaut le nombre d'octets, modulo 65521.
+    private func adler32Zeros(_ count: Int) -> UInt32 {
+        (UInt32(count % 65_521) << 16) | 1
     }
 
     private func chunk(_ type: String, _ payload: Data) -> Data {
@@ -347,19 +401,34 @@ final class MessagingMediaPreparationTests: XCTestCase {
 
     // MARK: - Parseur d'image
 
+    /// Régression Q4 : ImageIO rendait `.statusComplete` sur un JPEG réduit à la moitié de ses
+    /// octets et la préparation réussissait. Le conteneur doit être **terminé** (EOI `0xFFD9`).
     func testTruncatedJPEGIsRefused() throws {
-        let jpeg = try imageBytes(.jpeg, width: 800, height: 600, alpha: false, noisy: true)
+        let jpeg = try imageBytes(.jpeg, width: 800, height: 600, alpha: false, noisy: true, quality: 0.6)
+        assertFixtureFits(jpeg)
+        // Contrôle : la fixture complète est bien acceptée, seule la coupure fait la différence.
+        XCTAssertNoThrow(try preparer.prepare(jpeg, suggestedName: "photo.jpg"))
 
         assertFailure(.unreadable) {
             _ = try preparer.prepare(jpeg.prefix(jpeg.count / 2), suggestedName: "photo.jpg")
         }
+        assertFailure(.unreadable) {
+            _ = try preparer.prepare(jpeg.dropLast(2), suggestedName: "photo.jpg")
+        }
     }
 
+    /// Régression Q4 : même constat pour un PNG ; le conteneur doit atteindre `IEND` en fin de
+    /// flux, sans quoi la miniature serait produite à partir d'une image incomplète.
     func testTruncatedPNGIsRefused() throws {
         let png = try imageBytes(.png, width: 800, height: 600, alpha: false, noisy: true)
+        assertFixtureFits(png)
+        XCTAssertNoThrow(try preparer.prepare(png, suggestedName: "plan.png"))
 
         assertFailure(.unreadable) {
             _ = try preparer.prepare(png.prefix(png.count / 2), suggestedName: "plan.png")
+        }
+        assertFailure(.unreadable) {
+            _ = try preparer.prepare(png.dropLast(4), suggestedName: "plan.png")
         }
     }
 
@@ -404,6 +473,7 @@ final class MessagingMediaPreparationTests: XCTestCase {
     func testAxisLimitIsEnforcedWithoutAGiantBitmap() throws {
         let beyond = try imageBytes(.png, width: MessagingMediaAttachment.maximumPixelsPerAxis + 1, height: 1,
                                     alpha: false)
+        assertFixtureFits(beyond)
 
         assertFailure(.invalidDimensions) {
             _ = try preparer.prepare(beyond, suggestedName: "large.png")
@@ -411,10 +481,12 @@ final class MessagingMediaPreparationTests: XCTestCase {
     }
 
     /// Refus au-delà de 40 millions de pixels, la largeur restant sous 12 000 px : l'en-tête
-    /// porte les dimensions, aucun bitmap de 40 millions de pixels n'est créé pour le test.
+    /// porte les dimensions, aucun bitmap de 40 millions de pixels n'est créé pour le test, et
+    /// les octets de la fixture restent **sous** le plafond produit (compression réelle).
     func testPixelCountLimitIsEnforcedWithoutAGiantBitmap() throws {
         let beyond = try monochromePNG(width: 12_000, height: 3_400)
         XCTAssertGreaterThan(12_000 * 3_400, MessagingMediaAttachment.maximumPixels)
+        assertFixtureFits(beyond)
 
         assertFailure(.invalidDimensions) {
             _ = try preparer.prepare(beyond, suggestedName: "large.png")
@@ -425,6 +497,7 @@ final class MessagingMediaPreparationTests: XCTestCase {
     func testAxisBoundaryIsAccepted() throws {
         let atLimit = try imageBytes(.png, width: MessagingMediaAttachment.maximumPixelsPerAxis, height: 1,
                                      alpha: false)
+        assertFixtureFits(atLimit)
 
         let prepared = try preparer.prepare(atLimit, suggestedName: "bandeau.png")
 
@@ -463,8 +536,12 @@ final class MessagingMediaPreparationTests: XCTestCase {
         XCTAssertLessThanOrEqual(abs(Double(size.width) - 300.0 * 512.0 / 900.0), 1.0)
     }
 
+    /// Bruit opaque : sans qualité explicite, ImageIO encode au maximum et dépassait le
+    /// plafond produit (constat Apple Q4 : `invalidSize` au lieu de la miniature testée).
     func testNoisyOpaqueJPEGThumbnailStaysWithinTheBounds() throws {
-        let noisy = try imageBytes(.jpeg, width: 2_400, height: 1_800, alpha: false, noisy: true)
+        let noisy = try imageBytes(.jpeg, width: 1_200, height: 900, alpha: false,
+                                   noisy: true, quality: 0.6)
+        assertFixtureFits(noisy)
 
         let thumbnail = try XCTUnwrap(try preparer.prepare(noisy, suggestedName: "bruit.jpg").thumbnail)
 
@@ -474,7 +551,8 @@ final class MessagingMediaPreparationTests: XCTestCase {
     }
 
     func testNoisyTransparentPNGThumbnailStaysWithinTheBounds() throws {
-        let noisy = try imageBytes(.png, width: 1_024, height: 1_024, alpha: true, noisy: true)
+        let noisy = try imageBytes(.png, width: 800, height: 800, alpha: true, noisy: true)
+        assertFixtureFits(noisy)
 
         let thumbnail = try XCTUnwrap(try preparer.prepare(noisy, suggestedName: "bruit.png").thumbnail)
 
@@ -486,19 +564,50 @@ final class MessagingMediaPreparationTests: XCTestCase {
         XCTAssertLessThanOrEqual(max(size.width, size.height), MessagingMediaPreparer.maximumThumbnailAxis)
     }
 
-    /// La miniature est reconstruite depuis les pixels : aucune métadonnée personnelle recopiée.
+    /// La miniature est reconstruite depuis les pixels : les valeurs personnelles de l'original
+    /// (position, date de prise de vue, appareil, auteur, commentaire) ne sont jamais recopiées.
+    ///
+    /// ImageIO **recrée** des propriétés techniques dans le JPEG produit (EXIF de dimensions,
+    /// espace colorimétrique, version EXIF) : l'exécution Apple Q4 l'a prouvé, le dictionnaire
+    /// EXIF existe alors même qu'aucune donnée de l'original n'y figure. Le contrat porte donc
+    /// sur les **valeurs personnelles**, pas sur l'absence de toute propriété technique.
     func testThumbnailCarriesNoPersonalMetadataFromTheOriginal() throws {
         let withMetadata = try imageBytes(.jpeg, width: 800, height: 600, alpha: false, gps: true)
         let original = try XCTUnwrap(sourceProperties(withMetadata))
         XCTAssertNotNil(original.object(forKey: kCGImagePropertyGPSDictionary),
-                        "la fixture doit réellement porter des métadonnées")
+                        "la fixture doit réellement porter une position")
+        let originalDump = flattenedProperties(original)
+        XCTAssertTrue(originalDump.contains("MARQUEUR-PERSONNEL-APPAREIL-97"),
+                      "la fixture doit réellement porter l'appareil")
+        XCTAssertTrue(originalDump.contains("1999:12:31"),
+                      "la fixture doit réellement porter la date de prise de vue")
 
         let thumbnail = try XCTUnwrap(try preparer.prepare(withMetadata, suggestedName: "lieu.jpg").thumbnail)
         let properties = try XCTUnwrap(sourceProperties(thumbnail))
+        let dump = flattenedProperties(properties)
 
+        // Position : jamais recopiée, ni le dictionnaire ni les coordonnées.
         XCTAssertNil(properties.object(forKey: kCGImagePropertyGPSDictionary))
-        XCTAssertNil(properties.object(forKey: kCGImagePropertyExifDictionary))
-        XCTAssertNil(properties.object(forKey: kCGImagePropertyTIFFDictionary))
+        XCTAssertFalse(dump.contains(kCGImagePropertyGPSLatitude as String))
+        // Valeurs personnelles textuelles : aucune ne survit au ré-encodage.
+        XCTAssertFalse(dump.contains("MARQUEUR-PERSONNEL-EXIF-97"))
+        XCTAssertFalse(dump.contains("MARQUEUR-PERSONNEL-APPAREIL-97"))
+        XCTAssertFalse(dump.contains("MARQUEUR-PERSONNEL-AUTEUR-97"))
+        XCTAssertFalse(dump.contains("1999:12:31"))
+    }
+
+    /// Toutes les valeurs d'une arborescence de propriétés, aplaties en texte comparable.
+    private func flattenedProperties(_ value: Any) -> String {
+        if let dictionary = value as? NSDictionary {
+            return dictionary.allKeys.map { key in
+                let child = dictionary.object(forKey: key)
+                return String(describing: key) + "=" + (child.map { flattenedProperties($0) } ?? "nil")
+            }.joined(separator: "|")
+        }
+        if let array = value as? NSArray {
+            return array.map { flattenedProperties($0) }.joined(separator: "|")
+        }
+        return String(describing: value)
     }
 
     func testThumbnailIsNeverTheOriginalBytes() throws {

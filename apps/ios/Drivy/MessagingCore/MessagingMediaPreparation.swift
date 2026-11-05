@@ -131,6 +131,73 @@ private enum MessagingMediaPreparationFormat {
     }
 }
 
+/// Terminaison du conteneur (#97, T2b6) : lecture bornée des octets, sans décodage, sans
+/// allocation de bitmap, sans fichier ni réseau.
+///
+/// Justification mesurée : `CGImageSourceGetStatusAtIndex` ne prouve rien sur un fichier
+/// coupé — l'exécution Apple du 5 novembre 2026 (run 41962003316 / job 127030313656) a
+/// accepté un JPEG et un PNG réduits à la moitié de leurs octets alors que le statut valait
+/// `.statusComplete`. Ce contrôle lit donc la structure minimale que tout fichier complet
+/// porte :
+/// - JPEG : le marqueur EOI (`0xFFD9`, ITU-T T.81) termine le fichier, un remplissage nul
+///   final étant toléré ;
+/// - PNG : la marche des chunks atteint `IEND` et rien ne le suit (W3C PNG 3e édition,
+///   §4.8.2 et §5.2 : le flux commence par `IHDR` et se termine par `IEND`).
+///
+/// Ce que ce contrôle ne prouve pas : il atteste la **terminaison** du conteneur, pas
+/// l'intégrité des pixels ni celle des CRC. Une corruption interne laissant EOI/IEND intacts
+/// peut encore produire une miniature partiellement grise ; la seule preuve exhaustive serait
+/// un décodage pleine résolution, refusé par construction (aucun bitmap de 40 Mpx alloué).
+private enum MessagingMediaPreparationContainer {
+    /// `IEND` comparé sur ses quatre octets ASCII.
+    private static let endChunk: UInt32 = 0x4945_4E44
+
+    static func isTerminated(_ data: Data, mime: MessagingMediaAttachment.MIME) -> Bool {
+        switch mime {
+        case .jpeg:
+            return endsWithEndOfImage(data)
+        case .png:
+            return endsWithEndChunk(data)
+        case .pdf:
+            return true
+        }
+    }
+
+    /// EOI en fin de fichier. Les zéros de remplissage finaux sont tolérés ; toute autre
+    /// donnée après l'EOI fait refuser le fichier (choix fermé, documenté dans le rapport).
+    private static func endsWithEndOfImage(_ data: Data) -> Bool {
+        let base = data.startIndex
+        var end = data.count
+        while end > 0, data[base + end - 1] == 0x00 {
+            end -= 1
+        }
+        guard end >= 2 else { return false }
+        return data[base + end - 2] == 0xFF && data[base + end - 1] == 0xD9
+    }
+
+    /// Marche des chunks : chaque longueur annoncée doit tenir dans les octets reçus, et le
+    /// dernier chunk doit être `IEND` exactement en fin de tampon. Aucune allocation.
+    private static func endsWithEndChunk(_ data: Data) -> Bool {
+        let base = data.startIndex
+        var offset = 8   // signature PNG
+        while offset <= data.count - 8 {
+            let length = Int(readUInt32(data, at: base + offset))
+            let chunkEnd = offset + length + 12
+            guard chunkEnd >= offset, chunkEnd <= data.count else { return false }
+            if readUInt32(data, at: base + offset + 4) == endChunk {
+                return chunkEnd == data.count
+            }
+            offset = chunkEnd
+        }
+        return false
+    }
+
+    private static func readUInt32(_ data: Data, at index: Data.Index) -> UInt32 {
+        (UInt32(data[index]) << 24) | (UInt32(data[index + 1]) << 16)
+            | (UInt32(data[index + 2]) << 8) | UInt32(data[index + 3])
+    }
+}
+
 /// Images : dimensions lues dans l'en-tête, puis miniature produite par sous-échantillonnage
 /// borné d'ImageIO. Le bitmap pleine résolution n'est jamais alloué pour la miniature.
 private enum MessagingMediaPreparationImage {
@@ -148,6 +215,11 @@ private enum MessagingMediaPreparationImage {
         }
         guard (containerType as String) == expected.identifier else {
             throw MessagingMediaPreparationFailure.invalidFormat
+        }
+        // Terminaison du conteneur, avant toute lecture de dimensions : un fichier coupé
+        // n'est jamais une image exploitable, même si le décodeur remplirait le manque.
+        guard MessagingMediaPreparationContainer.isTerminated(data, mime: mime) else {
+            throw MessagingMediaPreparationFailure.unreadable
         }
         // Dimensions et orientation avant toute création de bitmap.
         guard let rawProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) else {
