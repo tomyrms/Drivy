@@ -1,0 +1,18 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+'"2"' !== '2'
+
+    at <anonymous> (C:\Users\jtoma\orca\workspaces\Drivy\issues-reprise-native-106\scripts\dev\check-reconciliation-ui-106.ts:75:9) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: '"2"',
+  expected: '2',
+  operator: 'strictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.22.1

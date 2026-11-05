@@ -1,0 +1,1 @@
+{"result":"PASS","checks":["Réponse différée: normalisation autre champ, saisie et focus conservés, aucun faux succès ni renvoi","Même champ: conflit persistant au refresh, résolution clavier puis édition, If-Match/CSRF, changement de portée pendant envoi","Reçu réel body=null, relecture 503 sans corps fabriqué, retry lecture et fusion sans renvoi"]}
