@@ -746,3 +746,30 @@ La seule paire ajoutée est **updateProfile ↔ saveOnboarding, dans les deux or
 Source serveur relue dans apps/api/src/profiles.ts : l'écriture du profil vérifie et avance learner_profile et person ; SAVE_ONBOARDING vérifie et avance onboarding_progress. Sa réponse appelle progressDTO, qui relit bien le dossier et ses champs manquants, sans vérifier ni avancer la version du dossier et sans refuser l'enregistrement pour ce motif. COMPLETE_ONBOARDING consulte au contraire progressDTO avant d'écrire et refuse si pendingActions n'est pas vide. Des lignes écrites distinctes ne justifient donc pas d'étendre l'exception à la finalisation.
 
 Les tests préparés couvrent les deux ordres, l'exclusion de la finalisation et les barrières de portée. Leur présence n'est pas une preuve native ; voir [rapport I1](integration-issues-20261104.md) et [rapport R6](native-regressions-131-20261104.md).
+
+## 5 novembre 2026 — actualisation du candidat I2
+
+Ce complément s'applique au code assemblé `9b50c597` (rapport `4eb6ed42`). Il ne réécrit pas
+l'inventaire historique des 141 routes ; aucune nouvelle route métier n'est introduite par N106.
+
+| Chemin de commande | Comportement intégré | Portée de preuve |
+|---|---|---|
+| Web `createLesson` / `moveLesson` | Le renvoi utilise la règle partagée de créneau et garde un résultat à vérifier ; le magasin expose sa durabilité réelle | Suites web exécutées sur I2, source inchangée au gel |
+| Natif `createLesson` / `moveLesson` | `SchoolPlanningRecoveryPolicy` refuse le créneau absent, illisible ou déjà commencé avant jeton et juste avant transport, y compris après `/me` et renouvellement 401 | L1b intégré, tests Apple non exécutés sur ce candidat |
+| Premier geste natif `createLesson` / `moveLesson` | Admission liée à la commande complète ; fermeture synchrone avant retrait local ; remise au transport juste avant la mutation | N106 `54060efd`, UI `5c3c378a`, revus statiquement, Apple non exécuté |
+| Annulation locale refusée par le stockage | Admission maintenue fermée, même record conservé, réessai du retrait ; aucun corps/version/horodatage réécrit | Tests préparés, Apple non exécuté |
+| Demande déjà remise au transport ou restaurée | Pas de promesse d'annulation locale ; suivi et même identifiant conservés ; lecture AP72 et abandon existant inchangés | Pilote limité, pas de généralisation à toutes les familles |
+| Sortie d'accueil | Purge des brouillons connus du compte/API et des adhésions courantes, protection contre les écritures tardives et contre une nouvelle connexion | U106 `9e5748b6` intégré, Apple non exécuté ; anciennes portées inconnues non couvertes |
+
+La paire R6 `updateProfile` ↔ `saveOnboarding` est exemptée de sérialisation dans les deux ordres,
+après les gardes d'identité et de portée ; `completeOnboarding` reste exclu de cette exception.
+`SAVE_ONBOARDING` avance `onboarding_progress` et sa réponse relit le profil sans en vérifier ni
+avancer la version ; `COMPLETE_ONBOARDING` refuse au contraire si les actions requises ne sont pas
+terminées. Cette différence n'autorise aucune levée générale des barrières. Les fichiers produit
+R6 restent identiques à `e2edc85e`, dont les cinq cas ont été réellement requalifiés dans le run
+Apple `41906356835`. Cela ne transfère pas ce verdict aux nouveaux tests L1b/N106/U106.
+
+Les mécanismes de rebase par champ déjà présents ne sont pas déclarés absents. Leur couverture
+complète des parcours et les familles hors pilote restent à établir dans #106/#131. Voir les
+rapports `planning-native-recovery-106-20261104.md`, `planning-send-admission-106-20261105.md`,
+`planning-cancellation-ui-106-20261105.md` et `onboarding-exit-106-20261105.md`.

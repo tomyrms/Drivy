@@ -1642,3 +1642,50 @@ Les neuf branches de l'orchestration ont été fusionnées localement sans confl
 - Swift/Apple :nouveaux contenus/transports médias, attente5/10secondes, cinq correctifs métier et diagnostics relais **NON COMPILÉS/NON EXÉCUTÉS sur ce candidat**. Le run41861281984 porte uniquement sur883581ad : crypto15/15 verte mais campagne globale6échecs. Aucune preuve physique GPS/batterie/VoiceOver, aucun IPA ou Safari déduit des tests locaux.
 
 Le coordinateur a vérifié les ancêtres,76blobs initiaux sans divergence, l'identité des sources produit après phase2, les JSON et journaux d'exécution, les diffs et un échantillon de captures. Cela ne termine pas les issues : coordinateur média/coffre/cache, préparation et UI natives, mediaRef serveur et consommateurs typés restent à réaliser, ainsi que les autres restes de reprise, d'exploitation et d'audit. Aucun push, PR, merge master, CI distante supplémentaire ou déploiement n'est effectué à ce bilan ; l'accord reçu couvre l'intégration et les tests locaux seulement.
+
+## 5 novembre 2026 — candidat I2 assemblé, qualification distante à autoriser
+
+Branche locale `tomyrms/integration-issues-20261105`. Code assemblé :
+`9b50c597b8a0d511954735fff1dff830097204d3` ; rapport d'intégration :
+`4eb6ed42d1344a0ee4702e528747634b3d08ad8d`. Cette actualisation documentaire
+ne modifie aucun produit ni test. [Rapport et preuves détaillées](integration-issues-20261105.md).
+
+Onze têtes sources ont été fusionnées sans conflit. Le coordinateur a contrôlé les douze
+ancêtres attendus (ancien HEAD compris), les treize chemins des trois derniers lots avec leur
+propriétaire final, l'absence de divergence et le maintien exact du produit API/web, de l'infra,
+des workflows et des dépendances par rapport à `58121dcb`.
+
+- **Exécuté localement pendant I2 :** API, typage et build verts, 94 fichiers avec 1048 tests
+  réussis et un SIGTERM POSIX ignoré sous Windows ; web, typage et build verts, 81 fichiers avec
+  880 réussites et un échec attendu historique. Le produit API/web est resté identique après ces
+  exécutions. La correction S131 ultérieure change un test API : sa preuve propre est de 23 tests
+  PostgreSQL verts et typage vert au SHA `921eafc3`, pas une nouvelle campagne API entière.
+- **Exécuté sur Apple auparavant :** 1515/1515 au candidat `e2edc85e`, run `41906356835` ; Linux
+  `41906366352` vert. Ces résultats ne qualifient pas les nouveaux fichiers Swift du présent candidat.
+- **Nouveau natif non compilé/non exécuté :** parcours média assemblé M97/U97, coffre/cache,
+  préparation, relais média réel Q97, garde de créneau L1b, sortie d'accueil U106 et annulation
+  avant transport N106/U106-L2. Les revues sont statiques ; Apple est nécessaire pour établir le verdict.
+- **Mesures Q131 :** 39 échantillons hors chauffe, Chromium/Windows synthétique, source web
+  figée sur `e2edc85e`. Elles restent attachées à cette source ; aucune mesure physique ou du candidat
+  I2 n'est revendiquée.
+- **Limites conservées :** trois diagnostics historiques `tsc infra/dev`, échec attendu de l'heure
+  doublée côté web, dépassement de délai Chromium à froid observé puis rejoué vert, sans cause établie.
+  Le faux échec sur `409` présent dans un UUID est corrigé par S131 et intégré.
+
+| Issue | Réalisé dans les lots intégrés | Restant avant une clôture justifiée |
+|---|---|---|
+| #37 | Cœur des cours présent ; processus réel du worker exercé sur PostgreSQL | SIGTERM Linux, compléments de parcours/UI iPad et preuves APNs réelles |
+| #50 | Récupération synthétique des trois rôles ; garde directe Keycloak qualifiée localement | SMTP réel, cloisonnement/routage et activation, parcours iOS et Face ID physique |
+| #65 | Socle de messagerie, recherche, sondages et relais existants ; médias assemblés séparément | Qualification complète liée à #78 et preuves d'exploitation #68 |
+| #68 | Contrats et kit d'exploitation documentés | Résidence suisse, conservation approuvée, sauvegarde indépendante, restauration et non-résurrection démontrées |
+| #78 | Preuves locales et campagnes antérieures du socle | Qualification complète multi-appareils, charge, sécurité et usages physiques selon la matrice |
+| #97 | Serveur, crypto, contenu, transport, coffre/cache, préparation, coordinateur et UI assemblés | Apple et relais média réel du candidat ; raccord typé du signalement média ; critères d'exploitation #68 |
+| #105 | Lots de réactivité existants et compléments intégrés | Restes partagés #106 et qualification #131, sans clôture globale par simple compilation |
+| #106 | Reprise web, garde native de créneau, pilote create/move d'annulation et sortie du brouillon d'accueil connu | Apple, autres familles d'annulation et matrice de réconciliation par champ ; pas de purge exhaustive de portées historiques inconnues |
+| #120 | Issue déjà fermée par le lot E d'un autre intervenant ; focus/notice corrigés dans les lots complémentaires | Aucun travail A7/A8/A9 à refaire ; qualification Apple/Safari des compléments distincte |
+| #131 | Mesures web synthétiques, régressions et tests de stabilité ajoutés | Matrice complète sur le candidat, environnements serveur et appareils réels |
+
+Aucune issue n'a été fermée par cette orchestration. La suite proposée est une publication de cette
+seule branche puis trois campagnes distinctes : métier Apple `all`, UI média/annulation iPhone et
+iPad, et vérifications Linux. Aucun lancement distant, push, merge master, IPA ou déploiement ne
+découle de ce document. Les preuves physiques restent séparées des tests sur simulateur.
