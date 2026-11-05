@@ -217,7 +217,18 @@ import XCTest
         XCTAssertTrue(amount.waitForExistence(timeout: 10))
         amount.tap(); amount.typeText("80")
         XCTAssertEqual(amount.value as? String, "80")
-        app.buttons["course-payment-submit"].tap()
+        // Sur iPad, fermer explicitement le clavier avant que la feuille se recentre :
+        // le premier toucher d'enregistrement de la campagne 42105462976 n'a fait que le masquer.
+        let hideKeyboard = app.keyboards.buttons["Masquer le clavier"]
+        if hideKeyboard.exists && hideKeyboard.isHittable {
+            hideKeyboard.tap()
+            let hidden = expectation(for: NSPredicate(format: "hittable == false"), evaluatedWith: hideKeyboard)
+            XCTAssertEqual(XCTWaiter.wait(for: [hidden], timeout: 5), .completed)
+        }
+        XCTAssertEqual(amount.value as? String, "80")
+        let submit = app.buttons["course-payment-submit"]
+        XCTAssertTrue(submit.isEnabled && submit.isHittable)
+        submit.tap()
         XCTAssertTrue(app.navigationBars["Règlement sur place"].waitForNonExistence(timeout: 5))
         assertWitness("mutations=1; events=payment; unexpected=0; mail=0; messages=0", in: app)
         let paid = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Payé :")).firstMatch
