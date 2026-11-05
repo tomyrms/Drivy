@@ -5,7 +5,7 @@ import { freshDatabase, issuer } from './support/harness.js';
 import { seedFixtures, fixtureIds as id } from '../scripts/fixtures.js';
 import { buildApp } from '../src/app.js';
 import { ApiError } from '../src/errors.js';
-import { ARCHIVE_FORMAT, ArchiveError, DatabaseCollisionError, collectScope, exportArchive, planDatabaseNames, readArchiveFile,
+import { ARCHIVE_FORMAT, ArchiveError, DatabaseCollisionError, assertArchiveShape, cleanupDatabases, collectScope, exportArchive, planDatabaseNames, readArchiveFile,
   replayArchive, validateArchive, verifyRestoredState, writeArchiveFile, type ArchiveEntry, type RestoreArchive,
   type ReservedConnection } from '../scripts/messaging-restore-replay.js';
 
@@ -449,6 +449,90 @@ describe('restauration de sauvegarde : rejeu d’une source indépendante avant 
     expect(await versions()).toEqual(versionsBefore);
   });
 
+  it('ne rapporte que les bases réellement supprimées et signale un échec de nettoyage', async () => {
+    const attempts: string[] = [];
+    const report = await cleanupDatabases(['synth_a1', 'synth_b2', 'synth_c3'], async name => {
+      attempts.push(name);
+      if (name === 'synth_b2') {
+        const error = new Error('busy') as Error & { code?: string };
+        error.code = '55006';
+        throw error;
+      }
+      if (name === 'synth_c3') throw new Error('sans code');
+    });
+    // Ordre inverse, poursuite après échec, seules les suppressions réussies sont rapportées.
+    expect(attempts).toEqual(['synth_c3', 'synth_b2', 'synth_a1']);
+    expect(report.dropped).toEqual(['synth_a1']);
+    expect(report.failed).toEqual([{ name: 'synth_c3', code: 'UNKNOWN' }, { name: 'synth_b2', code: '55006' }]);
+  });
+
+  it('refuse une fin d’affectation dont les identités liées ne correspondent pas à la cible', async () => {
+    const snapshot = async () => (await pool.query<{ assignmentVersion: number; validUntil: Date | null;
+      instructorVersion: number; instructorEpoch: number; learnerVersion: number; learnerEpoch: number }>(
+      `SELECT a.version AS "assignmentVersion",a.valid_until AS "validUntil",
+        mi.version AS "instructorVersion",mi.access_epoch AS "instructorEpoch",
+        ml.version AS "learnerVersion",ml.access_epoch AS "learnerEpoch"
+       FROM drivy.instructor_assignment a
+       JOIN drivy.membership mi ON mi.school_id=a.school_id AND mi.id=a.instructor_membership_id
+       JOIN drivy.membership ml ON ml.school_id=a.school_id AND ml.id=$3
+       WHERE a.school_id=$1 AND a.id=$2`, [id.schoolA, id.assignment, id.aliceMember])).rows[0]!;
+    const before = await snapshot();
+    const base: Extract<ArchiveEntry, { kind: 'ASSIGNMENT_ENDED' }> = { sequence: 1, kind: 'ASSIGNMENT_ENDED',
+      schoolId: id.schoolA, assignmentId: id.assignment, trainingId: id.aliceTraining,
+      instructorMembershipId: id.instructorMember, instructorPersonId: id.instructor, learnerPersonId: id.alice,
+      validFrom: '2026-01-01T00:00:00.000Z', validUntil: '2026-11-05T09:00:00.000Z', version: before.assignmentVersion,
+      membershipVersion: 1, membershipAccessEpoch: 1 };
+    const archiveOf = (entry: ArchiveEntry): RestoreArchive => ({ format: ARCHIVE_FORMAT, createdAt: '2026-11-05T09:30:00.000Z',
+      scope: { schoolIds: [id.schoolA, id.schoolB].sort(), conversationCount: 0, messageCount: 0, mediaCount: 0,
+        deviceCount: 2, memberLinkCount: 0, generalRemovalCount: 0 },
+      source: { mediaPurgeThrough: 0, mediaPurgeCount: 0 }, archivedThrough: 1, entries: [entry], digest: digestOf([entry]) });
+    // Identifiants individuellement valides mais incompatibles : adhésion étrangère, autre formation, autre personne.
+    for (const forged of [{ ...base, instructorMembershipId: id.aliceMember }, { ...base, trainingId: id.bobTraining },
+      { ...base, learnerPersonId: id.bob }] as ArchiveEntry[]) {
+      await expect(reserved(db => replayArchive(db, archiveOf(forged)))).rejects.toMatchObject({ name: 'RestoreStateError',
+        code: 'ASSIGNMENT_IDENTITY_MISMATCH' });
+    }
+    // Aucune mutation conservée : affectation et les deux adhésions restent à l'état restauré.
+    expect(await snapshot()).toEqual(before);
+    expect(before.validUntil).toBeNull();
+  });
+
+  it('n’exporte pas une fin planifiée future et refuse une fin non acquise', async () => {
+    // Affectation encore active avec une échéance future : ce n'est pas une fin acquise, et le droit reste légitime.
+    await pool.query(`UPDATE drivy.instructor_assignment SET valid_until=now()+interval '1 day',version=version+1
+      WHERE school_id=$1 AND id=$2`, [id.schoolA, id.assignment]);
+    const future = await reserved(db => exportArchive(db));
+    expect(future.entries.some(entry => entry.kind === 'ASSIGNMENT_ENDED')).toBe(false);
+    const eligible = await (async () => {
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)", [id.schoolA, id.instructor]);
+        const row = (await client.query<{ eligible: boolean }>('SELECT drivy.messaging_pair_eligible($1,$2,$3) AS eligible',
+          [id.schoolA, id.alice, id.instructor])).rows[0]!;
+        await client.query('COMMIT');
+        return row.eligible;
+      } finally { client.release(); }
+    })();
+    expect(eligible).toBe(true);
+    // Une entrée forgée avec une fin postérieure à l'instant du snapshot est refusée explicitement.
+    const forged: ArchiveEntry = { sequence: 1, kind: 'ASSIGNMENT_ENDED', schoolId: id.schoolA, assignmentId: id.assignment,
+      trainingId: id.aliceTraining, instructorMembershipId: id.instructorMember, instructorPersonId: id.instructor,
+      learnerPersonId: id.alice, validFrom: '2026-01-01T00:00:00.000Z', validUntil: '2099-01-01T00:00:00.000Z',
+      version: 2, membershipVersion: 2, membershipAccessEpoch: 2 };
+    const archive: RestoreArchive = { format: ARCHIVE_FORMAT, createdAt: '2026-11-05T09:30:00.000Z',
+      scope: { schoolIds: [id.schoolA, id.schoolB].sort(), conversationCount: 0, messageCount: 0, mediaCount: 0,
+        deviceCount: 2, memberLinkCount: 0, generalRemovalCount: 0 },
+      source: { mediaPurgeThrough: 0, mediaPurgeCount: 0 }, archivedThrough: 1, entries: [forged], digest: digestOf([forged]) };
+    let refusalCode = 'ACCEPTED';
+    try { assertArchiveShape(archive); } catch (error) { refusalCode = error instanceof ArchiveError ? error.code : 'UNKNOWN'; }
+    expect(refusalCode).toBe('ARCHIVE_UNACQUIRED_END');
+    // Fin acquise : exportée normalement.
+    await pool.query(`UPDATE drivy.instructor_assignment SET valid_until=now()-interval '1 minute',version=version+1
+      WHERE school_id=$1 AND id=$2`, [id.schoolA, id.assignment]);
+    const acquired = await reserved(db => exportArchive(db));
+    expect(acquired.entries.some(entry => entry.kind === 'ASSIGNMENT_ENDED')).toBe(true);
+  });
   it('refuse une cible contradictoire au lieu de l’écraser', async () => {
     const version = (await pool.query<{ version: number }>('SELECT version FROM drivy.instructor_assignment WHERE school_id=$1 AND id=$2',
       [id.schoolA, id.assignment])).rows[0]!.version;

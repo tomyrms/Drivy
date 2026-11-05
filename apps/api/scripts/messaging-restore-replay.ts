@@ -73,7 +73,7 @@ export interface RestoreArchive {
 
 export type ArchiveErrorCode = 'ARCHIVE_ABSENT' | 'ARCHIVE_UNREADABLE' | 'ARCHIVE_FORMAT' | 'ARCHIVE_TRUNCATED'
   | 'ARCHIVE_SEQUENCE_GAP' | 'ARCHIVE_DUPLICATE' | 'ARCHIVE_DIGEST_MISMATCH' | 'ARCHIVE_SCOPE_DIVERGENT'
-  | 'ARCHIVE_SOURCE_INCONSISTENT';
+  | 'ARCHIVE_SOURCE_INCONSISTENT' | 'ARCHIVE_UNACQUIRED_END';
 
 export class ArchiveError extends Error {
   constructor(readonly code: ArchiveErrorCode, message: string) { super(message); this.name = 'ArchiveError'; }
@@ -81,7 +81,7 @@ export class ArchiveError extends Error {
 
 /** Cible contradictoire ou plus récente : aucune écriture, la réouverture doit rester bloquée. */
 export class RestoreStateError extends Error {
-  constructor(readonly code: 'ASSIGNMENT_STATE_AMBIGUOUS') { super(code); this.name = 'RestoreStateError'; }
+  constructor(readonly code: 'ASSIGNMENT_STATE_AMBIGUOUS' | 'ASSIGNMENT_IDENTITY_MISMATCH') { super(code); this.name = 'RestoreStateError'; }
 }
 
 const entryKinds: readonly ArchiveEntryKind[] = ['MEDIA_PURGED', 'MESSAGE_DELETED', 'DEVICE_REVOKED', 'MEMBER_LINK_CUT', 'GENERAL_REMOVAL', 'ASSIGNMENT_ENDED'];
@@ -155,7 +155,7 @@ async function readArchiveSnapshot(db: ReservedConnection): Promise<RestoreArchi
     JOIN drivy.membership m ON m.school_id=a.school_id AND m.id=a.instructor_membership_id
     JOIN drivy.training t ON t.school_id=a.school_id AND t.id=a.training_id
     JOIN drivy.learner_profile lp ON lp.school_id=t.school_id AND lp.id=t.learner_id
-    WHERE a.valid_until IS NOT NULL ORDER BY a.school_id,a.id`);
+    WHERE a.valid_until IS NOT NULL AND a.valid_until <= now() ORDER BY a.school_id,a.id`);
   const payloads: ArchivePayload[] = [];
   for (const row of purges.rows) payloads.push({ kind: 'MEDIA_PURGED', schoolId: row.schoolId, mediaId: row.mediaId,
     messageId: row.messageId, reason: row.reason, purgedAt: iso(row.purgedAt), mediaPurgeSequence: Number(row.sequence) });
@@ -259,6 +259,9 @@ export function assertArchiveShape(raw: unknown): RestoreArchive {
           || !integerAtLeast(entry.version, 1) || !integerAtLeast(entry.membershipVersion, 1)
           || !integerAtLeast(entry.membershipAccessEpoch, 1))
           throw new ArchiveError('ARCHIVE_UNREADABLE', 'Fin d’affectation invalide.');
+        // Une fin planifiée après l'instant du snapshot n'est pas une fin acquise : elle n'est jamais présentée comme telle.
+        if (new Date(entry.validUntil).getTime() > new Date(candidate.createdAt as string).getTime())
+          throw new ArchiveError('ARCHIVE_UNACQUIRED_END', 'Fin d’affectation non acquise à l’instant du snapshot.');
         break;
     }
     const identity = identityOf(entry);
@@ -360,16 +363,30 @@ export async function replayArchive(db: ReservedConnection, archive: RestoreArch
           [entry.schoolId, entry.conversationId, entry.personId, entry.linkNumber, entry.cutSequence, entry.cutAt]);
         changed = link.rowCount ?? 0;
       } else if (entry.kind === 'ASSIGNMENT_ENDED') {
-        // Fin d'affectation réellement constatée à la source : le fait est rejoué avant toute synchronisation.
-        const current = await db.query<{ validFrom: Date; validUntil: Date | null; version: number }>(
-          `SELECT valid_from AS "validFrom",valid_until AS "validUntil",version FROM drivy.instructor_assignment
+        // Fin d'affectation réellement constatée à la source : les relations de la cible sont résolues et verrouillées,
+        // puis comparées à l'entrée avant toute mutation. Une identité liée discordante annule tout le rejeu.
+        const assignmentRow = await db.query<{ validFrom: Date; validUntil: Date | null; version: number;
+          trainingId: string; membershipId: string }>(
+          `SELECT valid_from AS "validFrom",valid_until AS "validUntil",version,training_id AS "trainingId",
+            instructor_membership_id AS "membershipId" FROM drivy.instructor_assignment
            WHERE school_id=$1 AND id=$2 FOR UPDATE`, [entry.schoolId, entry.assignmentId]);
-        const row = current.rows[0];
-        if (row) {
-          const validFrom = iso(row.validFrom);
-          const validUntil = row.validUntil ? iso(row.validUntil) : null;
+        const current = assignmentRow.rows[0];
+        if (current) {
+          const relations = await db.query<{ instructorPersonId: string; learnerPersonId: string }>(
+            `SELECT m.person_id AS "instructorPersonId",lp.person_id AS "learnerPersonId"
+             FROM drivy.training t
+             JOIN drivy.learner_profile lp ON lp.school_id=t.school_id AND lp.id=t.learner_id
+             JOIN drivy.membership m ON m.school_id=$1 AND m.id=$3
+             WHERE t.school_id=$1 AND t.id=$2 FOR UPDATE OF t,m`,
+            [entry.schoolId, current.trainingId, current.membershipId]);
+          const linked = relations.rows[0];
+          if (!linked || current.trainingId !== entry.trainingId || current.membershipId !== entry.instructorMembershipId
+            || linked.instructorPersonId !== entry.instructorPersonId || linked.learnerPersonId !== entry.learnerPersonId)
+            throw new RestoreStateError('ASSIGNMENT_IDENTITY_MISMATCH');
+          const validFrom = iso(current.validFrom);
+          const validUntil = current.validUntil ? iso(current.validUntil) : null;
           // Cible contradictoire ou plus récente : aucune écriture, la décision revient à l'exploitant.
-          if (validFrom !== entry.validFrom || row.version > entry.version
+          if (validFrom !== entry.validFrom || current.version > entry.version
             || (validUntil !== null && new Date(validUntil).getTime() > new Date(entry.validUntil).getTime()))
             throw new RestoreStateError('ASSIGNMENT_STATE_AMBIGUOUS');
           const assignment = await db.query(`UPDATE drivy.instructor_assignment
@@ -483,7 +500,20 @@ export async function verifyRestoredState(db: ReservedConnection, archive: Resto
       WHERE drivy.messaging_pair_eligible(expected.school_id,expected.learner_person_id,expected.instructor_person_id)`,
       [assignments.map(entry => entry.schoolId), assignments.map(entry => entry.learnerPersonId),
         assignments.map(entry => entry.instructorPersonId)])).rows[0]!;
-    report.violations.ASSIGNMENT_ENDED = ends.count + eligible.count;
+    const identity = (await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM
+      unnest($1::uuid[],$2::uuid[],$3::uuid[],$4::uuid[],$5::uuid[],$6::uuid[])
+        AS expected(school_id,assignment_id,training_id,membership_id,instructor_person_id,learner_person_id)
+      JOIN drivy.instructor_assignment a ON a.school_id=expected.school_id AND a.id=expected.assignment_id
+      LEFT JOIN drivy.training t ON t.school_id=a.school_id AND t.id=a.training_id
+      LEFT JOIN drivy.learner_profile lp ON lp.school_id=t.school_id AND lp.id=t.learner_id
+      LEFT JOIN drivy.membership m ON m.school_id=a.school_id AND m.id=a.instructor_membership_id
+      WHERE a.training_id<>expected.training_id OR a.instructor_membership_id<>expected.membership_id
+        OR m.person_id IS DISTINCT FROM expected.instructor_person_id
+        OR lp.person_id IS DISTINCT FROM expected.learner_person_id`,
+      [assignments.map(entry => entry.schoolId), assignments.map(entry => entry.assignmentId),
+        assignments.map(entry => entry.trainingId), assignments.map(entry => entry.instructorMembershipId),
+        assignments.map(entry => entry.instructorPersonId), assignments.map(entry => entry.learnerPersonId)])).rows[0]!;
+    report.violations.ASSIGNMENT_ENDED = ends.count + eligible.count + identity.count;
   }
   for (const kind of entryKinds) {
     if (report.violations[kind] > 0) report.problems.push(`${kind}:${report.violations[kind]}`);
@@ -525,6 +555,24 @@ export function planDatabaseNames(existing: readonly string[], suffix: string): 
   const collision = [plan.source, plan.target, plan.sentinel].find(name => existing.includes(name));
   if (collision) throw new DatabaseCollisionError(collision);
   return plan;
+}
+
+export interface CleanupReport { dropped: string[]; failed: { name: string; code: string }[] }
+
+/**
+ * Supprime les seules ressources créées par la tentative, dans l'ordre inverse, et ne rapporte que les
+ * suppressions réellement réussies. Un échec est conservé avec un code fermé et le nom synthétique de la
+ * ressource, sans interrompre le nettoyage des autres.
+ */
+export async function cleanupDatabases(created: readonly string[], drop: (name: string) => Promise<void>): Promise<CleanupReport> {
+  const report: CleanupReport = { dropped: [], failed: [] };
+  for (const name of [...created].reverse()) {
+    try { await drop(name); report.dropped.push(name); } catch (error) {
+      const raw = typeof error === 'object' && error !== null && 'code' in error ? String((error as { code?: unknown }).code) : '';
+      report.failed.push({ name, code: /^[A-Z0-9]{5}$/.test(raw) ? raw : 'UNKNOWN' });
+    }
+  }
+  return report;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -692,6 +740,8 @@ async function scenarioMain(): Promise<number> {
   const refusals = summary.refusals as Record<string, string>;
   const created: string[] = [];
   let pool: Pool | undefined;
+  let adminApp: ReturnType<typeof buildApp> | undefined;
+  let outcome = 1;
   const workdir = await mkdtemp(join(tmpdir(), 'drivy-restore-'));
   const createDatabase = async (name: string) => { await maintenance.query(`CREATE DATABASE ${name}`); created.push(name); };
   try {
@@ -717,7 +767,7 @@ async function scenarioMain(): Promise<number> {
     summary.dumpBytes = dump.length;
     summary.dumpDigestPrefix = createHash('sha256').update(dump).digest('hex').slice(0, 12);
     steps.push('snapshot-taken');
-    const adminApp = buildApp({ pool, cursorSecret: 'restore-replay-scenario-secret-32ch!',
+    adminApp = buildApp({ pool, cursorSecret: 'restore-replay-scenario-secret-32ch!',
       verifyToken: async authorization => {
         if (!authorization?.startsWith('Bearer demo-')) throw new Error('AUTHENTICATION_REQUIRED');
         return { issuer, subject: authorization.slice(7) };
@@ -725,6 +775,7 @@ async function scenarioMain(): Promise<number> {
     summary.appReady = true;
     await applyPostSnapshotMutations(pool, adminApp);
     await adminApp.close();
+    adminApp = undefined;
     const exporter = await pool.connect();
     let archive: RestoreArchive;
     try { archive = await exportArchive(exporter); } finally { exporter.release(); }
@@ -828,24 +879,36 @@ async function scenarioMain(): Promise<number> {
       if (!proven && !afterSync.ok) summary.blocker = 'MEMBER_LINK_REOPENED';
       steps.push('replay-verified');
       summary.ok = proven;
-      return proven ? 0 : 3;
+      outcome = proven ? 0 : 3;
     } finally { restoredDb.release(); await restored.end(); }
   } catch (error) {
     summary.error = error instanceof Error ? error.message.slice(0, 80) : 'Error';
     const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : undefined;
     if (code) summary.errorCode = code;
     if (error instanceof ArchiveError) summary.errorCode = error.code;
-    return 1;
-  } finally {
-    if (pool) await pool.end();
-    // Nettoyage des seules bases effectivement créées par cette tentative ; une base préexistante n'est jamais visée.
-    for (const name of [...created].reverse()) await maintenance.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`).catch(() => undefined);
-    summary.databasesCreated = created;
-    summary.databasesDropped = [...created].reverse();
-    await maintenance.end();
-    await rm(workdir, { recursive: true, force: true }).catch(() => undefined);
-    console.log(JSON.stringify(summary, null, 2));
+    outcome = 1;
   }
+  // Nettoyage : seules les bases effectivement créées par cette tentative sont visées ; une base préexistante ne l'est jamais.
+  if (adminApp) await adminApp.close().catch(() => undefined);
+  if (pool) await pool.end().catch(() => undefined);
+  const cleanup = await cleanupDatabases(created, async name => {
+    await maintenance.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+  });
+  summary.databasesCreated = created;
+  summary.databasesDropped = cleanup.dropped;
+  summary.databasesNotDropped = cleanup.failed;
+  const remaining = created.length > 0
+    ? (await maintenance.query<{ datname: string }>('SELECT datname FROM pg_database WHERE datname = ANY($1::text[])', [created]))
+      .rows.map(row => row.datname)
+    : [];
+  summary.remainingDatabases = remaining;
+  summary.cleanupComplete = cleanup.failed.length === 0 && remaining.length === 0;
+  await maintenance.end();
+  await rm(workdir, { recursive: true, force: true }).catch(() => undefined);
+  // Un nettoyage requis non achevé est un échec observable, jamais un succès silencieux.
+  if (!summary.cleanupComplete) outcome = 4;
+  console.log(JSON.stringify(summary, null, 2));
+  return outcome;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

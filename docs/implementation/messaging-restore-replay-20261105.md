@@ -1,7 +1,7 @@
 # Restauration sans réapparition des retraits — scénario local (#68/#78/#97)
 
 Date : 5 novembre 2026. Worktree `issues-medias-97`. Base de la livraison initiale : `1778ed7d90ec12a4c7de5163ac9b343c5076684e`
-(commit `4bbad45243fc3714e232847570d72854e6a7d5cf`), puis **correction 1/2** de la revue groupée
+(commit `4bbad45243fc3714e232847570d72854e6a7d5cf`), **correction 1/2** puis **correction 2/2** de la revue groupée
 (`sandperch/artifacts/orchestration/revue-restauration-4bbad452.md`) : commit additionnel indiqué en fin de document.
 Problème distinct des correctifs média déjà verts. Aucun accès à la production, au homelab ou à un service distant.
 
@@ -84,6 +84,25 @@ Deux preuves sont conservées :
   puis export/rejeu avant synchronisation ; synchronisation répétée, aucun lien rouvert, aucune plage postérieure,
   écriture refusée, second rejeu sans effet, versions/époques stables.
 
+### 2.4 Corrections R1-R3 du dernier retour (2/2)
+
+- **R1 — identités liées contrôlées dans la cible.** Le rejeu d'une fin d'affectation résout et **verrouille** dans la
+  même transaction l'affectation (`FOR UPDATE`), puis la formation et l'adhésion du moniteur (`FOR UPDATE OF t,m`). Il
+  compare école, formation, adhésion et personnes (moniteur via l'adhésion, élève via la formation) à l'entrée ; toute
+  discordance lève `ASSIGNMENT_IDENTITY_MISMATCH` et **annule tout le rejeu** (rollback global), sans toucher
+  l'adhésion nommée ni aucune autre. Une affectation absente de la cible reste une absence légitime (aucune mise à jour
+  d'adhésion). Le vérificateur contrôle aussi ces identités dans la cible.
+- **R2 — nettoyage observé, pas annoncé.** `cleanupDatabases` ne rapporte que les `DROP` réellement réussis, conserve
+  les échecs avec un code fermé (`55006`, `UNKNOWN`…) et le nom synthétique, et poursuit les autres ressources. Le
+  scénario vérifie ensuite par requête indépendante les bases restantes (`remainingDatabases`), expose
+  `cleanupComplete` et renvoie un **code 4** si le nettoyage requis n'est pas achevé. Les listes de `run6` ne
+  prouvaient que ce que le script annonçait ; `run7` les remplace par une vérification indépendante.
+- **R3 — seule une fin acquise est exportée.** L'export ne retient que `valid_until <= now()` à l'instant cohérent du
+  snapshot ; une affectation encore active avec une échéance future n'est **pas** présentée comme une fin acquise et
+  conserve son droit légitime. La validation refuse en outre une entrée dont `validUntil` est postérieure au `createdAt`
+  de la source (`ARCHIVE_UNACQUIRED_END`). Aucune affectation future n'est coupée pour faire passer un contrôle.
+  Limite explicite : une cible dont l'ancienne échéance est encore future n'est pas prise en charge par cette variante.
+
 ## 3. Scénario local exécuté (PostgreSQL réel)
 
 Commande (Node 24 portable, conteneur jetable `drivy-t1-97-pg`, PostgreSQL 17.11, boucle locale 55497) :
@@ -99,13 +118,13 @@ annulation de média, révocation d'appareil, **fin d'affectation par `END_ASSIG
 export → `pg_restore` dans une base **isolée** → constat de résurrection → validation (dont sources falsifiées) →
 rejeu → synchronisation répétée → vérification → second rejeu → nettoyage des seules bases créées.
 
-Résultat réel (`artifacts/restauration-correction1/scenario-run6.log`, **exit 0**) :
+Résultat réel de la correction 2/2 (`artifacts/restauration-correction1/scenario-run7.log`, **exit 0**) :
 
 | Étape | Résultat observé |
 |---|---|
 | cluster | identité identique entre la connexion SQL et le conteneur (`clusterChecked: true`) |
-| bases | 3 créées, 3 supprimées (sentinelle comprise) ; aucune base préexistante touchée |
-| snapshot | 1 001 434 octets, empreinte `be00a6a7bd35…` |
+| bases | 3 créées ; `databasesDropped` = 3, `databasesNotDropped` = 0, `remainingDatabases` = 0 (requête indépendante), `cleanupComplete: true` ; aucune base préexistante touchée |
+| snapshot | 999 999 octets, empreinte `74574329fc34…` |
 | base restaurée **avant** rejeu | 2 médias avec octets, 1 message non supprimé, 1 appareil actif, 1 lien ouvert |
 | sources falsifiées | `ARCHIVE_ABSENT`, `TRUNCATED`, `SEQUENCE_GAP`, `SCOPE_DIVERGENT`, `SOURCE_INCONSISTENT`, `UNREADABLE` (fin de lien sans conversation) |
 | rejeu | 2 purges média, 1 message, 1 appareil, 2 fins de lien, 1 fin d'affectation ; 2 entrées de journal |
@@ -114,10 +133,18 @@ Résultat réel (`artifacts/restauration-correction1/scenario-run6.log`, **exit 
 | accès après rejeu | `openLinks: 0`, `canWrite: false`, `readableLast: false`, `pairEligible: false` |
 | décision | `reopenAllowed: true` |
 
-Tests PostgreSQL (`npx vitest run test/messaging-restore-replay.integration.test.ts`) : **7 tests réussis**, exit 0
+Tests PostgreSQL (`npx vitest run test/messaging-restore-replay.integration.test.ts`) : **10 tests réussis**, exit 0
 (`artifacts/restauration-correction1/tests.log`). `npx tsc --noEmit` : exit 0. Ils couvrent en plus le rollback complet
 après une erreur au milieu sous concurrence, la preuve par `pg_blocking_pids` que le rejeu s'exécute sur la connexion
-réservée, la preuve négative de réactivation, la preuve positive avec appareil distinct et l'ambiguïté de cible.
+réservée, la preuve négative de réactivation, la preuve positive avec appareil distinct, l'ambiguïté de cible,
+les **identités liées discordantes** (adhésion étrangère, autre formation, autre personne : refus et aucune mutation),
+le **nettoyage observé** (échec injecté : seules les suppressions réussies rapportées, code fermé) et la **borne
+future non acquise** (non exportée, entrée forgée refusée).
+
+Les six journaux historiques sont conservés (`scenario-run1` à `run6`) : run1 erreur SQL 42501 (rôle absent dans la
+base restaurée), run2 témoin de lien rouvert, run3 erreur non détaillée, run4 `END_ASSIGNMENT` 404 (admin non membre de
+l'école du scénario), run5 `readableLast` nul (contexte d'acteur non posé), run6 succès. Ils ne sont pas rejoués ;
+leurs noms ne permettent pas de compter les cycles locaux, et seuls les résultats de `run7` et `tests.log` font foi ici.
 
 **Distinction des preuves** : le test simule la restauration en rétablissant les valeurs du snapshot dans la base de
 test (pas de `pg_dump`) ; le `pg_restore` réel n'existe que dans le scénario ci-dessus.
@@ -141,7 +168,7 @@ du général ne sont pas couvertes.
 | Critère | État |
 |---|---|
 | RES04 — sauvegarde chiffrée puis restauration isolée | **Sauvegarde/restauration synthétique exécutée** (exit 0) ; **critère chiffré NON QUALIFIÉ** |
-| RES05 — non-résurrection des droits et données après restauration | **Qualifié pour le scénario couvert** (médias, messages, appareil, fin de lien, fin d'affectation, retrait du général ; 0 violation, réouverture autorisée) ; **non fourni** pour les autres causes et pour la production |
+| RES05 — non-résurrection des droits et données après restauration | **Qualifié pour le scénario couvert** (médias, messages, appareil, fin de lien, fin d'affectation contrôlée par identités liées, retrait du général ; 0 violation, réouverture autorisée) ; **non fourni** pour les autres causes, pour une cible à échéance future encore planifiée et pour la production |
 | MED68-07/08/09 | Mécanisme local prouvé pour le scénario couvert ; **NON FOURNI** en production (archive indépendante continue, signée, supervisée absente) |
 | #97 — médias purgés jamais resservis après restauration | **Local : prouvé** (SQL `ciphertext = NULL`, HTTP `404`) ; production non exécuté |
 | #78 — qualification | Scénario local reproductible ; aucune qualification produit, appareil ou production |
@@ -162,4 +189,7 @@ du général ne sont pas couvertes.
 - Données strictement synthétiques, base jetable locale ; aucun homelab, aucune production, aucun secret.
 - Le scénario restaure dans une base isolée du même cluster et vérifie en SQL ; il ne redémarre pas l'API sur la base
   restaurée et ne prouve pas une bascule de service.
+- **Limite R3** : une cible dont l'affectation porte encore une échéance future (planifiée) n'est pas prise en charge par
+  cette variante ; elle n'est ni coupée ni présentée comme une fin acquise, et la réouverture reste alors bloquée.
+- Le rejeu suppose des rôles et ACL restaurés (`pg_dump` sans `--no-privileges`) pour exécuter les fonctions de droits.
 - Aucun changement produit : ni migration, ni politique de conservation, ni purge automatique, ni second journal en base.
