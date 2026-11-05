@@ -1765,3 +1765,12 @@ Ces changements sont **préparés et revus, pas encore verts sur Apple**. La pro
 rejouera le métier complet et les deux suites UI sur iPhone/iPad. Le porteur a confirmé son feu vert
 pour fusionner et déployer dès validation ; sauvegarde préalable obligatoire, procédure opérateur
 préparée et contrôlée par 12 tests locaux. Aucune fusion master ni bascule homelab n'a encore eu lieu.
+
+### Q5 — correction d'un appel de helper dans le test d'époque 0
+
+Les runs `41970556766` et `41970556901` au `d4a675d7` sont rouges en compilation, avec un
+seul diagnostic : `scopeFolder(scope:root:)` appelé alors que son premier argument n'est pas
+étiqueté. Aucun test n'a été exécuté. Le correctif `52686e84` change cette seule ligne en
+`scopeFolder(scope, root: root)` ; le coordinateur a confronté les 13 usages de `scopeFolder`
+et les 14 de `folderContents` à leurs déclarations distinctes. Produit et assertions inchangés.
+La campagne Apple doit reconstruire et requalifier les correctifs Q4/E0 sur ce nouvel assemblage.

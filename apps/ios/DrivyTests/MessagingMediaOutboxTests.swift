@@ -485,7 +485,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
         XCTAssertEqual(replaced[0].replyToMessageID, pending.replyToMessageID)
         XCTAssertEqual(replaced[0].createdAt, pending.createdAt, "Seule l'enveloppe change")
 
-        let file = try scopeFolder(scope: scope, root: root)
+        let file = try scopeFolder(scope, root: root)
             .appendingPathComponent(try recordDigest(pending.mediaID, scope: scope) + ".sealed")
         let before = try Data(contentsOf: file)
         try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: zero,
