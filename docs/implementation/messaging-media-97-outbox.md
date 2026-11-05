@@ -150,6 +150,10 @@ Vingt intentions pleine taille (≈ 5,6 Mio d'archive) dépassent 64 Mio : le pl
 
 Les assertions portent sur l'ordre des appels journalisés et sur les effets réels sur disque, jamais sur une recherche de texte dans la source. Aucune clé de l'hôte ni Keychain système n'est utilisée.
 
+### Fixture de borne corrigée (5 novembre 2026)
+
+`testMatrixContentCeilingUsesCanonicalUserIDs` mesure et construit désormais **le même contenu** : même sceau, mêmes 8 mentions canoniques et même légende explicite `Légende` que l'intention admise. Le cas `+1` réutilise ce sceau et n'ajoute qu'un `a` ASCII au nom ; aucun autre champ ne change. La fixture vérifie que le nom reste strictement sous 255 graphèmes, donc l'assainissement ne tronque pas l'octet ajouté. Le plafond étant validé avant le conflit d'identité, le second `put` échoue en `.invalidResponse` sur 6 001 octets, sans créer un nouveau média. Aucun RED/GREEN natif n'est revendiqué : le poste de correction ne dispose ni de Swift ni de Xcode.
+
 ### Preuve attendue sur runner Apple
 
 ```bash

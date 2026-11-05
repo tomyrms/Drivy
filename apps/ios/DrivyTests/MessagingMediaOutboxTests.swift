@@ -491,19 +491,23 @@ final class MessagingMediaOutboxTests: XCTestCase {
         XCTAssertTrue(canonical.allSatisfy { $0.hasPrefix("@") && $0.hasSuffix(":drivy") },
                       "La mesure doit utiliser la forme réellement émise, pas l'UUID nu")
 
+        let caption = "Légende"
         let sealed = try sealMedia(plaintext: Data("BOUNDARY".utf8), keyByte: 0x71)
-        let boundary = try boundaryName(sealed: sealed, mentions: canonical)
+        let boundary = try boundaryName(sealed: sealed, text: caption, mentions: canonical)
         XCTAssertEqual(boundary.measurement, MessagingPlainContent.maximumV3ByteCount,
                        "Le nom est mesuré avec 8 mentions canoniques, à la borne exacte")
-        XCTAssertLessThanOrEqual(boundary.name.count, MessagingMediaAttachment.maximumNameLength)
+        XCTAssertLessThan(boundary.name.count, MessagingMediaAttachment.maximumNameLength,
+                          "Le nom garde la place du 'a' ASCII du cas +1, sans troncature par l'assainissement")
 
-        let atLimit = try makePending(sealed, name: boundary.name, mentions: mentions)
+        let atLimit = try makePending(sealed, name: boundary.name, text: caption, mentions: mentions)
         let measured = try MessagingMediaContent.messageContent(atLimit.content, mentions: canonical).count
         XCTAssertEqual(measured, MessagingPlainContent.maximumV3ByteCount)
         try await outbox.put(atLimit, scope: scope)
 
-        let overSeal = try sealMedia(plaintext: Data("OVER".utf8), keyByte: 0x72)
-        let over = try makePending(overSeal, name: boundary.name + "a", mentions: mentions)
+        // Même sceau, mêmes mentions, même légende : seul le nom gagne un `a` ASCII.
+        // La taille est validée avant le conflit d'identité, donc ce contenu trop long
+        // est refusé sans créer un nouveau média.
+        let over = try makePending(sealed, name: boundary.name + "a", text: caption, mentions: mentions)
         let overMeasured = try MessagingMediaContent.messageContent(over.content, mentions: canonical).count
         XCTAssertEqual(overMeasured, MessagingPlainContent.maximumV3ByteCount + 1,
                        "Un octet ASCII de plus sur le nom produit exactement un octet de contenu de plus")
@@ -1127,16 +1131,17 @@ final class MessagingMediaOutboxTests: XCTestCase {
     }
 
     /// Nom dont la mesure canonique atteint exactement la borne de 6 000 octets,
-    /// avec les 8 mentions réelles. Les grafèmes apportent le volume, puis des
-    /// `a` ASCII ajustent au byte près : l'ajout d'un seul `a` produit donc
-    /// exactement un octet de contenu supplémentaire.
-    private func boundaryName(sealed: MessagingSealedMedia,
+    /// avec les 8 mentions réelles et **le contenu exact** de l'intention mesurée
+    /// (même sceau, même légende explicite). Les grafèmes apportent le volume,
+    /// puis des `a` ASCII ajustent au byte près : l'ajout d'un seul `a` produit
+    /// donc exactement un octet de contenu supplémentaire.
+    private func boundaryName(sealed: MessagingSealedMedia, text: String?,
                               mentions: [String]) throws -> (name: String, measurement: Int) {
         func measurement(_ name: String) throws -> Int {
             let attachment = try MessagingMediaAttachment(id: sealed.mediaID, size: sealed.byteSize,
                                                           mime: .jpeg, name: name, width: 64, height: 64,
                                                           file: sealed.info)
-            let content = try MessagingMediaContentV3(text: nil, media: attachment)
+            let content = try MessagingMediaContentV3(text: text, media: attachment)
             return try MessagingMediaContent.messageContent(content, mentions: mentions).count
         }
         let family = "👨‍👩‍👧‍👦"
