@@ -307,8 +307,36 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let once = try await outbox.entries(scope: scope)
         XCTAssertEqual(once.count, 1, "Deux fois la même intention reste une seule archive")
 
-        let sameIDOtherBytes = try makePending(try sealMedia(plaintext: Data("OTHER_BYTES".utf8), keyByte: 0x44),
-                                               mediaIDOverride: pending.mediaID)
+        let otherBytes = try sealMedia(plaintext: Data("OTHER_BYTES".utf8), keyByte: 0x44)
+        let sameIDOtherSealed = MessagingSealedMedia(mediaID: pending.mediaID,
+                                                     ciphertext: otherBytes.ciphertext,
+                                                     info: otherBytes.info)
+        let sameIDOtherBytes = try makePending(sameIDOtherSealed,
+                                               clientMessageID: pending.clientMessageID,
+                                               conversationID: pending.conversationID,
+                                               name: pending.content.media.name,
+                                               text: pending.content.text,
+                                               mentions: pending.mentionPersonIDs,
+                                               replyTo: pending.replyToMessageID,
+                                               createdAt: pending.createdAt,
+                                               envelope: pending.messageCiphertext)
+        XCTAssertEqual(sameIDOtherBytes.sealed.mediaID, pending.mediaID,
+                       "Le conflit porte sur le même média")
+        XCTAssertEqual(sameIDOtherBytes.content.media.id, pending.mediaID,
+                       "Le descripteur garde l'identité du média")
+        XCTAssertNotEqual(sameIDOtherBytes.sealed.ciphertext, pending.sealed.ciphertext,
+                          "Les octets scellés diffèrent réellement")
+        XCTAssertNotEqual(sameIDOtherBytes.sealed.info, pending.sealed.info,
+                          "La clé, l'IV et le hash proviennent du nouveau sceau")
+        XCTAssertEqual(sameIDOtherBytes.sealed.byteSize, sameIDOtherBytes.content.media.size,
+                       "Le descripteur annonce la taille du nouveau sceau")
+        XCTAssertEqual(sameIDOtherBytes.sealed.info, sameIDOtherBytes.content.media.file,
+                       "Le descripteur annonce les informations du nouveau sceau")
+        XCTAssertEqual(sameIDOtherBytes.clientMessageID, pending.clientMessageID)
+        XCTAssertEqual(sameIDOtherBytes.conversationID, pending.conversationID)
+        XCTAssertEqual(sameIDOtherBytes.mentionPersonIDs, pending.mentionPersonIDs)
+        XCTAssertEqual(sameIDOtherBytes.replyToMessageID, pending.replyToMessageID)
+        XCTAssertEqual(sameIDOtherBytes.messageCiphertext, pending.messageCiphertext)
         await expectFailure(.stateConflict) { try await outbox.put(sameIDOtherBytes, scope: scope) }
 
         let sameIDOtherClient = try makePending(sealed, clientMessageID: UUID())
