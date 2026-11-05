@@ -809,3 +809,21 @@ l'action de résolution étant de relire la valeur confirmée ou de modifier pui
 `SchoolSettingsPilot` appelle encore `markSaved(normalized, sent)` avec une normalisation locale, pas le
 corps confirmé par l'école : le raccord UI devra lui transmettre la réponse réelle et afficher l'alerte.
 Aucun TSX produit n'est modifié par ce lot.
+
+
+### Présentation école de la réconciliation (5 novembre 2026)
+
+Le raccord restant ci-dessus est réalisé dans SchoolSettingsPilot : réponse réelle validée par
+schoolSchema, fusion de la saisie concurrente et alerte persistante des champs en conflit avec
+résolution explicite. Une saisie postérieure n’est pas annoncée enregistrée. Le reçu sans corps
+entraîne une relecture ; son échec conserve le local et bloque un nouvel envoi jusqu’à relecture
+réussie, sans corps confirmé inventé. La portée de l’éditeur comprend personne, école, membership
+et epoch, avec invalidation des callbacks tardifs.
+
+RÉUSSI localement : harnais Chromium du vrai écran (réponse différée/autre champ, conflit même
+champ, refresh, résolution clavier puis édition, changement d’epoch pendant envoi, reçu body=null
+et GET 503 puis reprise sans renvoi), 29 tests ciblés, typage et build web ; captures desktop/390 px
+inspectées. Rapport, commandes, codes et échecs de mise au point conservés dans
+`artifacts/reconciliation-ui-106/report.md`. Aucun changement de logique partagée, backend ou
+dépendance ; aucun push, CI, déploiement, PostgreSQL réel ou qualification physique Apple.
+Le budget logique précédent 2/2 n’est pas réinitialisé par ce lot de présentation.
