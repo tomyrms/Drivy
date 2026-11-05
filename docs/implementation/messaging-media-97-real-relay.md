@@ -231,3 +231,37 @@ ni configuration déployée modifié.
 `tsc --noEmit` sans erreur, suites média API **26/26** (inchangées, aucun fichier produit touché).
 Swift toujours **NON COMPILÉ / NON EXÉCUTÉ** ; S5 reste strict et attend le candidat M97
 correction2 sur un runner Apple.
+
+## 8. Diagnostic Q4 — échec réel `IMAGE / RUNTIME-CONTENT` au candidat `62560a2e`
+
+Le scénario a compilé et s'est exécuté au SHA `62560a2ed8c55326f73c512c9ac9dfaa08a5382b`
+(run 41962003316 / job 127030313656) et échoue à l'étape `IMAGE` avec la catégorie
+`RUNTIME-CONTENT` (`invalidContent`). Le parcours texte du même relais reste vert.
+
+**Cause établie** (source du candidat + mesure réelle du bootstrap Node) :
+
+1. une conversation privée neuve a `members_epoch = 0` (`20261023b_messaging_features.sql` :
+   `DEFAULT 0` et « Première arrivée : pas d'incrément ») ; `conversationMembers` le renvoie
+   tel quel et le routeur accepte `expectedMembersEpoch: 0` (`z.number().int().min(0)`) ;
+2. la crypto réelle pose `expectedMembersEpoch: listed.membersEpoch`, donc `0` ;
+3. `MessagingProtectedMediaOutbox.validateEnvelope` exige `epoch > 0` et jette
+   `MessagingFailure.invalidResponse` sur le remplacement d'enveloppe ;
+4. `MessagingMediaCoordinator.map(_:)` traduit `.invalidResponse` en `.invalidContent` ;
+5. l'ordre `put` → `encryptMatrixContent` → `replaceEnvelope` fait échouer le CAS, donc l'étape
+   `IMAGE`, avant tout dépôt.
+
+Mesure jointe (hors Git, `artifacts/q4-media-relay-diagnostic/`) : `membersEpoch = 0` sur la
+route, colonne `0`, et un POST avec `expectedMembersEpoch: 0` répond `200`. La fixture suit donc
+le contrat serveur ; la garde produit est plus stricte que lui. **Correctif proposé, non
+appliqué** (hors lot) : accepter `epoch >= 0` dans `validateEnvelope` ; variante serveur
+(époque initiale 1) plus lourde et non recommandée en premier.
+
+**Instrumentation ajoutée au seul test** : sonde fermée `PREPARE`/`SEAL`/`PUT`/`ENCRYPT`/`CAS`
+et classes d'époque `ABSENTE`/`ZERO`/`POSITIVE`/`INVALIDE`, via des décorateurs de protocole qui
+relaient exactement retours et erreurs. Aucune assertion ni mapping modifié ; le message d'échec
+gagne `sonde=phase=… enveloppe=…`. Attendu au prochain run si la cause est la bonne :
+`phase=CAS enveloppe=ZERO`.
+
+Limites : aucune exécution Apple ici ; les autres échecs du même run (cache, préparation,
+`stateConflict` attendu par `MessagingMediaOutboxTests`) sont des défauts distincts du candidat,
+non instruits par ce lot. Aucun fichier M97/UI/coffre/crypto/CI n'est modifié.
