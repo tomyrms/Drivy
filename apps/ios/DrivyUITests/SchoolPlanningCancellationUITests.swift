@@ -9,22 +9,28 @@ import XCTest
     private func exercise(mode: String, failsRemoval: Bool = false, largeText: Bool = false) throws {
         continueAfterFailure = false
         let app = XCUIApplication()
+        // Nettoyage régulier même après une assertion : ne pas laisser launch() du cas suivant
+        // être le seul responsable de terminer cette instance. Aucun retry ne masque un incident.
+        addTeardownBlock { @MainActor in
+            if app.state != .notRunning { app.terminate() }
+        }
         app.launchEnvironment["DRIVY_VISUAL_SCREEN"] = "planning"
         app.launchArguments = ["-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH", "-planning-l2-cancellation-" + mode]
         if failsRemoval { app.launchArguments.append("-planning-l2-cancellation-storage-failure") }
         if largeText { app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"] }
         app.launch()
+        XCTAssertTrue(app.navigationBars["Planifier une leçon"].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.collectionViews.firstMatch.waitForExistence(timeout: 5))
         let plan = app.buttons["planning-confirm"]
-        XCTAssertTrue(plan.waitForExistence(timeout: 20))
         let details = app.buttons["Détails du rendez-vous"]
         reveal(details, app: app, up: true)
         details.tap() // Un balayage ne développe pas le DisclosureGroup.
-        let place = app.descendants(matching: .any).matching(NSPredicate(
-            format: "(elementType == %d OR elementType == %d) AND label == %@",
-            XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue,
-            "Lieu du rendez-vous, facultatif")).firstMatch
-        XCTAssertTrue(place.waitForExistence(timeout: 5))
+        let places = app.descendants(matching: .any).matching(identifier: "planning-meeting-point")
+            .matching(NSPredicate(format: "elementType == %d OR elementType == %d",
+                XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue))
+        let place = places.firstMatch
         reveal(place, app: app, up: true)
+        XCTAssertEqual(places.count, 1, "L’identifiant doit désigner un seul champ de saisie")
         let originalPlace = try XCTUnwrap(place.value as? String)
         let entered = " L2-" + mode + (failsRemoval ? "-retrait" : "-saisie")
         focusForTyping(place)
@@ -43,7 +49,6 @@ import XCTest
         XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: plan)], timeout: 5), .completed)
         plan.tap()
         let cancel = app.buttons["planning-cancel-send"]
-        XCTAssertTrue(cancel.waitForExistence(timeout: 5))
         reveal(cancel, app: app, up: false)
         XCTAssertEqual(cancel.label, "Annuler l’envoi")
         XCTAssertFalse(app.buttons["Annuler la leçon"].exists)
@@ -71,6 +76,7 @@ import XCTest
         // La section explicitement ouverte doit rendre le vrai champ visible, pas seulement
         // une occurrence AX cachée ou le texte préchargé dans le modèle de fixture.
         reveal(place, app: app, up: false)
+        XCTAssertEqual(places.count, 1)
         XCTAssertEqual(place.value as? String, editedPlace)
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "L2 saisie conservée — fixture synthétique"
@@ -83,10 +89,10 @@ import XCTest
         // le champ peut donc se trouver de part ou d'autre du viewport au retour.
         for direction in [up, !up] {
             for _ in 0..<10 {
-                if element.isHittable { return }
+                if element.exists && element.isHittable { return }
                 if direction { app.swipeUp() } else { app.swipeDown() }
             }
         }
-        XCTAssertTrue(element.isHittable)
+        XCTAssertTrue(element.exists && element.isHittable, "Le contrôle doit être matérialisé et atteignable après défilement borné")
     }
 }
