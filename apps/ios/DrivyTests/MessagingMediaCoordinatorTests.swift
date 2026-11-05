@@ -107,7 +107,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let watcher = Task { @MainActor in
             switch await task.result {
             case .success(let value): box.finish(.value(value))
-            case .failure(let error): box.finish(.error(ErrorBox(error)))
+            case .failure(let error): box.finish(.error(ErrorBox(error: error)))
             }
         }
         let deadline = Task { @MainActor in
