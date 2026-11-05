@@ -255,6 +255,10 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
 /// Keychain (file, cache, chiffrement) porte un service propre à l'exécution, nettoyé et
 /// contrôlé absent en fin de parcours — jamais le service global du produit.
 ///
+/// La suppression passe par la chaîne réelle : le workspace du destinataire relaie le retrait
+/// serveur au runtime média (`MessagingMediaRevocationReceiving`), puis le cache ciblé doit être
+/// absent et l'ancien contenu refusé. Aucun point interne n'est contourné ni inventé.
+///
 /// Bornes : chaque échange réseau est borné par les délais URLSession du transport média
 /// (20 s par requête, 30 s par ressource) et par la durée de vie bornée du relais jetable ;
 /// aucune attente de condition sans échéance n'est utilisée.
@@ -584,12 +588,28 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         XCTAssertEqual(receivedPDF.name, "fixture-document.pdf")
         XCTAssertNil(receivedPDF.width)
 
-        // 6. Suppression pour tous : tombstone serveur, ouverture refusée, purge ciblée du cache.
+        // 6. Suppression pour tous : le workspace relaie le retrait serveur au runtime média,
+        // le cache ciblé est purgé et l'ancien contenu n'est plus jamais resservi.
         enter(MediaRelayStage.deletion)
         let cachedBeforeDeletion = try await bCache.data(mediaID: imageSnapshot.mediaID, scope: bScope)
         XCTAssertNotNil(cachedBeforeDeletion, "La pièce reçue a été mise en cache scellé après validation.")
+
+        // Le workspace du destinataire est la chaîne réelle : il connaît le message et son
+        // contenu déchiffré, et relaie les retraits serveur par la capacité interne
+        // `MessagingMediaRevocationReceiving` du coordinateur. Le protocole UI reste inchangé.
+        let workspace = MessagingWorkspace(scope: bScope, service: apiB, cryptography: bCrypto,
+                                           mediaRuntime: bMedia, currentScope: { bScope })
+        // Séquence réelle : le fil charge la page, puis ouvre le contenu déjà reçu.
+        await workspace.loadMessages(conversation)
+        let knownContent = await workspace.content(for: imageMessage)
+        XCTAssertEqual(knownContent?.media?.id, imageSnapshot.mediaID)
+
         try await aHTTP.delete(scope: aScope, conversationID: conversation,
                                messageID: imageAck.serverMessageID, for: .everyone)
+        // Relecture de la page par le workspace : il voit le tombstone, en déduit le média et
+        // appelle `revoke` sur le vrai coordinateur. C'est ce chemin qui doit purger, pas
+        // `open(tombstone)` seul.
+        await workspace.loadMessages(conversation)
         let tombstonePage = try await apiB.messages(scope: bScope, conversationID: conversation, before: nil)
         guard let tombstone = tombstonePage.items.first(where: { $0.id == imageAck.serverMessageID }) else {
             XCTFail("Le destinataire doit relire le tombstone du message supprimé."); return
@@ -597,6 +617,20 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         XCTAssertTrue(tombstone.meta.deletedForEveryone)
         XCTAssertNil(tombstone.ciphertext, "Aucune enveloppe n'est servie après suppression pour tous.")
         XCTAssertEqual(tombstone.meta.media?.deleted, true)
+
+        // Après la révocation relayée par le workspace : cache ciblé absent, ancien snapshot
+        // refusé. Ces deux attentes sont mesurées AVANT tout `open`, pour ne pas attribuer à
+        // une lecture ce que la notification de révocation doit produire.
+        let cachedAfterRevocation = try await bCache.data(mediaID: imageSnapshot.mediaID, scope: bScope)
+        XCTAssertNil(cachedAfterRevocation, "La révocation relayée par le workspace purge le cache ciblé.")
+        do {
+            _ = try await bMedia.open(imageMessage)
+            XCTFail("Un ancien snapshot ne doit pas resservir un média révoqué.")
+        } catch {
+            XCTAssertTrue(error as? MessagingMediaRuntimeFailure == .removed,
+                          "Le média révoqué n'est plus servi, même depuis un snapshot antérieur.")
+        }
+        // Le tombstone lui-même reste refusé au point d'entrée.
         do {
             _ = try await bMedia.open(tombstone)
             XCTFail("Un message supprimé ne doit jamais rendre son ancien contenu.")
@@ -604,20 +638,6 @@ final class MessagingMediaRealRelayTests: XCTestCase {
             XCTAssertTrue(error as? MessagingMediaRuntimeFailure == .removed,
                           "Le refus vient du tombstone serveur.")
         }
-        // Un ancien snapshot (objet d'avant suppression, référence non marquée) ne doit plus
-        // rendre les octets non plus : le cache ne contourne jamais une suppression connue.
-        do {
-            _ = try await bMedia.open(imageMessage)
-            XCTFail("Un ancien snapshot ne doit pas resservir un média supprimé.")
-        } catch {
-            XCTAssertTrue(error as? MessagingMediaRuntimeFailure == .removed,
-                          "Le média purgé n'est plus servi, même depuis un snapshot antérieur.")
-        }
-        // Exigence du contrat corrigé (#97 correction1) : la suppression connue purge l'entrée
-        // de cache ciblée. Cette attente peut rester rouge sur la base 62850171 et sera
-        // qualifiée au candidat corrigé ; elle n'est pas abaissée pour autant.
-        let cachedAfterDeletion = try await bCache.data(mediaID: imageSnapshot.mediaID, scope: bScope)
-        XCTAssertNil(cachedAfterDeletion, "La purge ciblée après suppression retire l'entrée de cache.")
         let downloadAfterDeletion = MessagingHTTPMediaTransport(baseURL: base,
             deviceID: try await bCrypto.currentDeviceID(scope: bScope), token: { bToken },
             invalidate: { _ in false }, currentScope: { bScope })

@@ -149,12 +149,15 @@ Déroulé :
 6. Destinataire : relecture serveur, provenance `matrixContent` explicite (contenu v3), référence
    `meta.media` concordante, puis ouverture par son vrai coordinateur : octets originaux, MIME,
    nom, dimensions et légende comparés exactement ; image et PDF.
-7. Suppression réelle pour tous via l'API autorisée, relecture du tombstone : `open` refuse
-   `.removed`. Un **ancien snapshot** (objet d'avant suppression) est également refusé, le cache
-   ciblé doit être **absent** après la suppression connue (contrat corrigé M97 correction1), et
+7. Suppression réelle pour tous via l'API autorisée. Le **workspace du destinataire** relaie
+   ensuite le retrait serveur : `loadMessages` voit le tombstone, en déduit le média et appelle
+   la capacité interne `MessagingMediaRevocationReceiving.revoke` du vrai coordinateur (protocole
+   UI inchangé). Après cette notification — et **avant** tout `open` — le cache ciblé doit être
+   absent et l'ancien snapshot refusé ; le tombstone lui-même reste refusé au point d'entrée, et
    le téléchargement purgé répond `.notFound` ; même compte hors de son école → `.accessChanged`
-   (droits serveur, aucun élargissement). Cette double attente de purge peut rester **rouge sur
-   la base 62850171** et sera qualifiée au candidat corrigé ; elle n'est pas abaissée.
+   (droits serveur, aucun élargissement). Cette chaîne est calée sur M97 `dd9c1a5b`, **non
+   qualifié** : l'assertion du contrat final reste stricte, sans exception pour une base
+   intermédiaire.
 8. Nettoyage **vérifié** des racines temporaires et des espaces Keychain créés par l'exécution, y
    compris sur échec (`defer`) : services dédiés au run (file, cache, chiffrement), suppression
    par service+compte, statut contrôlé et absence constatée. Le service global du produit
@@ -176,6 +179,11 @@ citer ce nom de test et ce SHA, et non le seul relais texte déjà vert sur `e2e
 - **Dépendance M97 correction1** : le coordinateur peut encore évoluer ; ce test est écrit sur
   les signatures présentes, le SHA de correction sera fourni par le coordinateur pour
   l'intégration. Aucun défaut produit n'a été masqué et aucune attente n'a été abaissée.
+- **Chaîne de révocation calée sur `dd9c1a5b`, non qualifiée** : le scénario suppression/cache
+  exerce `Workspace.loadMessages` → `MessagingMediaRevocationReceiving.revoke` du coordinateur,
+  lus localement à ce SHA sans éditer M97. La correction2 finale complète encore des gardes et
+  les retraits de référence : l'assertion finale (cache absent, ancien snapshot refusé) reste
+  stricte et pourra échouer sur une base intermédiaire, sans être rendue permissive.
 - La machine Megolm n'est pas rouverte en parallèle du même magasin scellé (deux écrivains sur un
   même store SQLCipher ne sont pas ouverts simultanément) : la réouverture porte sur le coffre
   média (file + cache + Keychain), pas sur un second magasin crypto concurrent.
@@ -203,7 +211,7 @@ crypto/workflow/harness global n'est touché.
 | S2 | PNG de fixture avec CRC IDAT invalide ; appareil B publié après le premier chiffrement A | PNG 1×1 régénéré (CRC et zlib vérifiés à l'exécution Node) ; les deux appareils sont enregistrés avant toute mise en file/chiffrement | Test Node « PNG réellement valide » ; ordre du scénario Swift revu, sans partage rétroactif supposé |
 | S3 | Après confirmation et nettoyage, le test relisait une intention déjà retirée | Enveloppe durable mesurée après la perte et avant la reprise ; enveloppes réellement transmises comparées ; absence de l'intention exigée après confirmation | Assertions réordonnées, aucune attente de nettoyage affaiblie |
 | S4 | `KeychainMediaOutboxKeyStore` utilise le service de production fixe : le nettoyage visait des services jamais utilisés | Store de test avec service dédié au run, vraie Keychain, attributs attendus ; suppression service+compte, statut contrôlé, absence constatée ; cache et chiffrement également isolés | Bloc de nettoyage vérifié dans le scénario Swift |
-| S5 | Le test figeait la rétention du cache après suppression | Attente corrigée : tombstone refusé, ancien snapshot refusé, cache ciblé absent, suppression serveur confirmée | Attente **rouge sur la base 62850171**, à qualifier sur le candidat M97 correction1 ; aucune API inventée |
+| S5 | Le test figeait la rétention du cache après suppression | Chaîne réelle exercée : le workspace relaie le retrait serveur (`MessagingMediaRevocationReceiving.revoke` du coordinateur), puis cache ciblé absent et ancien snapshot refusé ; tombstone et suppression serveur toujours vérifiés | Attente stricte, calée sur M97 `dd9c1a5b` ; **non qualifiée** tant que la correction2 et un runner Apple n'ont pas parlé |
 
 État de vérification après correction : `node --test` média **22/22**, relais historique **9/9**,
 `tsc --noEmit` sans erreur, suites média API **26/26**. Swift toujours **NON COMPILÉ / NON
