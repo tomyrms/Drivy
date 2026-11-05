@@ -44,6 +44,13 @@ final class MessagingMediaCacheTests: XCTestCase {
 
         let files = try fixture.allFiles()
         XCTAssertFalse(files.isEmpty)
+        // L'index a un nom contractuel fixe (`index.sealed`, cf. `indexURL`) : il est vérifié à
+        // son chemin exact. Seuls les fichiers de charge ont un nom opaque de 64 hexadécimaux.
+        let index = try fixture.indexURL()
+        XCTAssertEqual(index.lastPathComponent, "index.sealed", "Nom d'index contractuel")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: index.path), "L'index est présent à son chemin")
+        let payloads = files.filter { $0.lastPathComponent != index.lastPathComponent }
+        XCTAssertEqual(payloads.count, 2, "Un original et une miniature, tous deux opaques")
         let forbidden = [sentinel, Data(fixture.mediaID.uuidString.utf8),
                          Data(fixture.mediaID.uuidString.lowercased().utf8),
                          Data("original".utf8), Data("thumbnail".utf8),
@@ -51,9 +58,11 @@ final class MessagingMediaCacheTests: XCTestCase {
                          Data("SYNTHETIC".utf8)]
         for file in files {
             XCTAssertEqual(file.pathExtension, "sealed", "Seul un artefact scellé est admis : \(file.lastPathComponent)")
-            let name = file.deletingPathExtension().lastPathComponent
-            XCTAssertEqual(name.count, 64, "Nom opaque attendu (empreinte), pas un identifiant")
-            XCTAssertTrue(name.allSatisfy { $0.isHexDigit })
+            if file.lastPathComponent != index.lastPathComponent {
+                let name = file.deletingPathExtension().lastPathComponent
+                XCTAssertEqual(name.count, 64, "Nom opaque attendu (empreinte), pas un identifiant")
+                XCTAssertTrue(name.allSatisfy { $0.isHexDigit })
+            }
             let bytes = try Data(contentsOf: file)
             for marker in forbidden {
                 XCTAssertNil(bytes.range(of: marker), "Aucune sentinelle ni identifiant en clair dans \(file.lastPathComponent)")
@@ -379,7 +388,10 @@ final class MessagingMediaCacheTests: XCTestCase {
         let foreign = otherDirectory.appendingPathComponent("orphan.sealed")
         try Data([9, 9, 9]).write(to: foreign)
 
-        let existingOnly = KeyFixture(refusesCreation: true)
+        // Le vérificateur refuse toute création et représente **la même clé** que celle qui a
+        // scellé l'index : un `protectionUnavailable` ne peut donc venir que d'un refus de
+        // création, jamais d'une clé étrangère.
+        let existingOnly = KeyFixture(key: fixture.key.material, refusesCreation: true)
         let reopened = try fixture.makeCache(scope: fixture.scope, keyProvider: existingOnly.provider)
         let second = UUID()
         let secondPayload = sentinel + Data(repeating: 0x42, count: 256)
@@ -391,10 +403,14 @@ final class MessagingMediaCacheTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: foreign), Data([9, 9, 9]),
                        "Le scope incohérent n'est ni nettoyé ni adopté")
 
-        let blocked = try fixture.makeCache(scope: otherScope, keyProvider: existingOnly.provider)
+        // Phase distincte : le scope incohérent échoue **avant** toute demande de clé.
+        let blockedVerifier = KeyFixture(key: fixture.key.material, refusesCreation: true)
+        let blocked = try fixture.makeCache(scope: otherScope, keyProvider: blockedVerifier.provider)
         await fixture.expectFailure(.protectionUnavailable) {
             _ = try await blocked.data(mediaID: fixture.mediaID, scope: otherScope)
         }
+        XCTAssertTrue(blockedVerifier.requests.isEmpty,
+                      "L'index absent avec fichiers scellés échoue avant toute demande de clé")
     }
 
     func testOrphanCleanupFailureFailsClosed() async throws {
@@ -956,6 +972,8 @@ final class MessagingMediaCacheTests: XCTestCase {
     func testOwnedRootAsRegularFileBeforeInitIsRefused() throws {
         let base = uniqueTemporaryDirectory("drivy-media-cache-owned-file")
         addTeardownBlock { try? FileManager.default.removeItem(at: base) }
+        // L'ancre existe réellement ; seul le composant possédé « cache » est un fichier.
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
         try Data([7, 8, 9]).write(to: base.appendingPathComponent("cache"))
 
         let scope = MessagingScope(accountID: UUID(), schoolID: UUID(), accessEpoch: 2,
@@ -1201,13 +1219,19 @@ private final class KeyFixture: @unchecked Sendable {
     private let failure: Error?
     private let refusesCreation: Bool
 
-    init(failure: Error? = nil, refusesCreation: Bool = false) {
-        self.key = SymmetricKey(size: .bits256)
+    /// `key` permet de représenter **le même matériau** de clé qu'une instance existante, pour
+    /// distinguer un refus de création d'un simple refus de clé étrangère. Défaut : clé neuve.
+    init(key: SymmetricKey? = nil, failure: Error? = nil, refusesCreation: Bool = false) {
+        self.key = key ?? SymmetricKey(size: .bits256)
         self.failure = failure
         self.refusesCreation = refusesCreation
     }
 
     var requests: [Bool] { lock.withLock { recorded } }
+
+    /// Vue **lecture seule** du matériau de clé, pour les vérificateurs qui doivent réutiliser la
+    /// même clé sans jamais en créer une nouvelle.
+    var material: SymmetricKey { key }
 
     var provider: @Sendable (Bool) throws -> SymmetricKey {
         { mayCreate in
