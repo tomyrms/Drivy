@@ -1689,3 +1689,26 @@ Aucune issue n'a été fermée par cette orchestration. La suite proposée est u
 seule branche puis trois campagnes distinctes : métier Apple `all`, UI média/annulation iPhone et
 iPad, et vérifications Linux. Aucun lancement distant, push, merge master, IPA ou déploiement ne
 découle de ce document. Les preuves physiques restent séparées des tests sur simulateur.
+
+## 5 novembre 2026 — résultats Q2 et correctifs de compilation Apple
+
+Au candidat `62875344`, Linux `41957174316` a réellement exécuté **1050/1050 tests API**,
+avec PostgreSQL et Mailpit, dont les sept tests de processus C37 et le SIGTERM POSIX (aucun skip).
+Le web compte **880 réussites et un échec attendu historique** ; docs, typage, build et Chromium
+sont verts. Les identités des artefacts ont été contrôlées au SHA exact.
+
+Apple métier `41957174251` et UI `41957174662` sont rouges en compilation (exit 65),
+avec 21 diagnostics dans trois fichiers de tests ; aucun test natif, aucun parcours UI ni aucune
+capture n'a été exécuté. Les erreurs sont documentées dans les trois rapports
+`qualification-compilation-62875344-{cache,coordinator,outbox}.md`.
+
+Les auteurs ont livré `ccbdf7e2`, `ff670ec6` et `4ef0a311`, tous intégrés sans conflit :
+`ErrorBox(error:)`, `try` sur `indexURL()`, étiquette du helper `folderContents` et déballage
+explicite de l'enveloppe du scénario idempotent. Les assertions et le produit sont inchangés.
+Le coordinateur a relu les diffs et confirmé l'identité du produit API/web/iOS, de l'infrastructure,
+des workflows et des dépendances avec `62875344`. Apple doit reconstruire et exécuter ce candidat
+corrigé ; aucun GREEN n'est déduit des seules signatures désormais cohérentes.
+
+Le porteur a explicitement autorisé la fusion dans `master` et le déploiement homelab.
+La fusion attend le verdict Apple ; le déploiement attend ensuite les contrôles du SHA master
+et la sauvegarde préalable vérifiée. Aucune bascule ni installation physique n'est annoncée ici.
