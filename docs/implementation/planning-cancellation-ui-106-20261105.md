@@ -326,3 +326,84 @@ malgré la sortie d'une lecture concurrente, puis removed/compteurs stricts. La 
 la lecture annulée en Q6 reste une hypothèse ; aucune augmentation du délai ni assouplissement du
 verdict n'a été utilisée. Aucun client/admission/workspace/coffre/serveur/droit/layout produit modifié.
 Pas de push, CI, fusion, déploiement, installation, changement de modèle ou sous-agent par ce worker.
+
+## Finalisation des gestes après Q8 — 5 novembre 2026
+
+Dispatch `ctx_79f2eb95037b`, arbitrage conservé dans
+`sandperch/docs/implementation/reprise-q8-arbitrage-20261105.md`. Base locale
+`621da6a27447a59a9ffc81f36590de16f85fb8e4`, aucun merge. Le source pertinent du candidat
+Q8 `0e2edd65470ee5f5212341e420409a5b6bb287a3` est identique à cette base : test UI,
+vue, workspace et fixture comparés avant édition. Budgets historiques conservés.
+
+RED déjà exécuté : run 42025530498, iPhone 7/8 et iPad 6/8. Le diagnostic ignoré
+`artifacts/q8-large-text-diagnostic/RAPPORT.md` conserve logs, vidéos, événements et images.
+Sur iPhone, Planifier est recherché avant l'envoi ; le premier geste montant dans la zone du
+champ actif n'avance pas, puis l'ancien helper inverse le sens. Sur iPad, Annuler est atteint
+à +31,1 s après Planifier ; environ 19,6 s de préparations AX contribuent à dépasser les 25 s.
+Le rouge média iPad est distinct. Ni le Set d'attentes ni le métier ne sont remis en cause.
+
+Seuls le test UI et ce rapport changent :
+
+- `reveal` prend un instantané AX initial de l'application, puis un après chaque geste, réutilisé
+  pour l'étape suivante. Ses descendants sont parcourus en mémoire : plus de trois requêtes
+  `allElementsBoundByIndex` ni de lectures distantes répétées pour chaque repère. Les fenêtres
+  clavier sont incluses ; la géométrie reste l'intersection du Form et de la fenêtre, hors
+  navigation, témoin, clavier et footer. La confirmation fixe est exclue, celle dans le Form
+  en grand texte demeure du contenu défilant.
+- Le départ et tout le trajet sont vérifiés hors frames des contrôles interactifs, avec marge.
+  Les gouttières gauche/droite sont essayées alternativement ; aucune zone sûre entraîne un
+  échec explicite. Le geste utilise presque toute la hauteur disponible. Un non-mouvement
+  n'inverse plus immédiatement le sens ; la limite reste dix gestes par direction, vingt au plus.
+- Un repère de contenu unique, proche du centre, est comparé avant/après chaque geste ; sa
+  disparition par virtualisation ou son déplacement est consigné. Après des gestes, le contrôle
+  hittable exige qu'un mouvement ait été observé. Coordonnées, zone, repère et frames sont
+  journalisés uniquement dans cette scène synthétique pour rendre le prochain verdict vérifiable.
+- Le rendez-vous `waiting-token` ou `waiting-me` est attendu immédiatement après Planifier.
+  Annuler est ensuite recherché ; le dernier instantané conserve les assertions du libellé français,
+  de l'absence d'Annuler la leçon et de Fermer actif, avant le clic. Une lecture fraîche exige encore
+  le témoin exact juste avant le retrait. Temps monotones tap → waiting → hittable → clic/retour
+  et réessai journalisés ; appel du premier clic exigé à moins de 25 s depuis l'appel Planifier.
+  Ce relevé ne prétend pas mesurer seul l'instant de livraison du toucher : le log XCTest et
+  les événements natifs complètent la preuve, et `removed` demeure obligatoire.
+
+Saisie réelle visible avant/après, unicité du champ, accord par UI, nombres de lectures et zéro
+mutation, refus explicite puis réessai, absence d'erreur après retrait et retour à la saisie restent
+exigés. Aucun délai augmenté, sleep, état forcé, skip, admission d'expired/admitted comme waiting,
+nouveau test redondant ou infrastructure ajouté. Aucun changement produit, fixture/Set ni tests métier.
+
+Préflight : reçu initial `ctx_03e2318e5896` relu, effective Codex gpt-6-astra/high,
+incarnation `structured:1bfdfca6-7879-485f-8a8c-426c16376122`. Skills rechargés sous
+`C:/Users/jtoma/.codex/skills/` : `systematic-debugging/SKILL.md`,
+`verification-before-completion/SKILL.md`, `test-driven-development/SKILL.md`,
+`impeccable/SKILL.md` (4.8.0), `uncodixfy/SKILL.md` ; craft-floor Impeccable relu.
+Profil B du skill actuel `C:/Users/jtoma/.agents/skills/orchestre-go/SKILL.md` appliqué :
+RED Apple existant réutilisé, pas de revendication de cycle TDD GREEN exécuté sous Windows.
+Contexte AGENTS/COMMENCER_ICI/DESIGN/R11–13/AP40–42–72/T019–20/contrat L2 conservé et relu
+de manière ciblée. Impeccable et Uncodixfy appliqués à l'interaction native et aux preuves :
+clavier, grand texte, contrôles réellement accessibles, aucune nouvelle décoration ni modification
+de typographie/couleurs/composants. Leurs recettes CSS ne remplacent pas les conventions Apple.
+
+MCP : projet `C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-planification-ui-106`,
+racine exacte, HEAD 621da6a, index ready/watched, génération 2026-11-05T11:56:57Z ;
+`search_graph` reveal/scrollViewport/Gate, `check_index_coverage` des quatre sources metadata_match.
+La vue a deux plages de parsing partiel hors helper ; le source réel prime. Pas de réindexation.
+Déclarations publiques vérifiées dans la documentation Apple :
+[snapshot()](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshotproviding/snapshot())
+retourne un instantané et peut lever une erreur ;
+[XCUIElementSnapshot](https://developer.apple.com/documentation/xcuiautomation/xcuielementsnapshot)
+expose les descendants. Tous les appels `reveal` portent `try` et les erreurs remontent au cas XCTest.
+
+Contrôles locaux : `git diff --check` exit 0 ; comparaison de tous les chemins non autorisés
+contre 621da6a par `git diff --exit-code` exit 0 ; revue complète du diff, des déclarations/appels,
+des verdicts et des bornes. Les preuves de commande et le SHA local sont conservés sous
+`artifacts/q8-planning-gesture-finalisation/`. Q6 et Q8 sont préservés. Images Q8 `phone-49.png`
+et `ipad-contact.png` inspectées à nouveau ; elles documentent le rouge antérieur, pas ce delta.
+
+**NON COMPILÉ / NON EXÉCUTÉ sur Apple pour ce delta.** Aucun GREEN Swift/UI, nouvelle capture,
+qualification sombre ou VoiceOver physique revendiqué. À exécuter sur candidat intégré par le
+coordinateur : métier all, dont les trois tests d'attentes, puis les huit cas des deux suites UI
+sur iPhone/iPad. iPhone XXXL : mouvement montant réel hors champ, Planifier atteint et saisie intacte.
+iPad XXXL : waiting-token 0/0, Annuler hittable et touché avant expiration, premier retrait refusé,
+second réussi, removed et saisie intacte. Standards token/me préservés ; vérifier les traces temporelles
+et les zones de chaque geste. Le coût réel du nouvel instantané et la réception des gestes restent
+à mesurer sur Apple ; aucune exécution distante ni autre correction automatique par ce worker.
