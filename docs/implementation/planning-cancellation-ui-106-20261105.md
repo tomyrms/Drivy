@@ -217,3 +217,52 @@ du diff et comparaison des chemins produit avec la base sans changement. Swift/X
 absents : **NON COMPILÉ / NON EXÉCUTÉ**, aucun RED/GREEN, screenshot ou vert inventé.
 Restent l'exécution et le rendu Apple du candidat, dont la représentation AX du champ multiligne,
 le clavier, iPhone/iPad et grandes tailles ; le témoin de fixture ne qualifie pas le rendu produit.
+
+
+## Correction 2/2 — RED Apple Q4 et contrôles AX (5 novembre 2026)
+
+Base locale préservée : `5c3c378a7b60a1bb2877c5521dd2e41edd3a48f8`.
+Preuve runtime relue : dispatch initial `ctx_03e2318e5896`, effective Codex
+`gpt-6-astra/high`, incarnation `structured:1bfdfca6-7879-485f-8a8c-426c16376122`.
+Les champs null des suivis ne remplacent pas cette preuve ; aucun changement de modèle.
+
+RED réellement exécuté par Q4, run `41962003523`, job `127030313497`, candidat
+`62560a2ed8c55326f73c512c9ac9dfaa08a5382b` : les summary.json/tests.json de
+Tests et iPadTests montrent chacun 8 cas exécutés, 5 MessagingMedia réussis et 3 Planning
+échoués, aucun ignoré. Appareils : iPhone 17 Pro et iPad Air 11-inch (M4), OS 26.4.1.
+Sources réellement lues sous
+`C:/Users/jtoma/orca/workspaces/Drivy/integration-issues-20261105/artifacts/qualification-62560a2e/artifacts-41962003523/Drivy-native-results-62560a2ed8c55326f73c512c9ac9dfaa08a5382b/ios/` :
+
+- `test-reports/{Tests,iPadTests}/{summary,tests}.json`, manifeste des pièces jointes Tests.
+- `Tests/attachments/7E2CBA64-DA4A-462E-A3CE-BC839FF2DBC2.txt`, ligne 140 : TextField présent, label composé « Lieu (facultatif), Lieu du rendez-vous, facultatif », valeur synthétique Gare de Cernier.
+- `Tests/attachments/B4B5DC9F-E6B5-4418-B734-19591097652C.txt` : requête AX erronée par égalité exacte du label.
+- `Tests/attachments/F30A21F7-29DB-4971-8291-69DABC324A43.txt` : navigation et CollectionView présentes, premières cellules seulement, témoin idle ; le bouton inférieur n'est pas encore matérialisé.
+- `simulator-test.log`, lignes 428–436 : lancement du cas token iPhone après l'échec précédent, tentative de terminaison du pid 29144 puis « Failed to terminate » ; aucun défaut produit déduit de cet incident. Le manifeste associe à ce cas la vidéo `2153ED73-7125-4436-BC07-78D9BFC7BAF4.mp4`, sans arbre AX supplémentaire ; aucun visionnage vidéo ni nouvelle capture n'est revendiqué.
+
+Préflight conservé et réappliqué : systematic-debugging, test-driven-development,
+verification-before-completion, Impeccable et Uncodixfy, aux cinq chemins SKILL.md réels
+`C:/Users/jtoma/.codex/skills/` déjà consignés ; instructions pertinentes relues, avec
+`impeccable/reference/craft-floor.md`. Le contexte Impeccable de cette session reste chargé.
+Application native : préserver labels, typo, couleurs, géométrie, navigation et interactions ;
+aucune prescription CSS ne remplace DESIGN. Seul ajout produit autorisé : identifiant AX.
+Codebase Memory : index_status ready de cette racine exacte, projet
+`C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-planification-ui-106`, puis recherche
+`SchoolMeetingPointField|SchoolPlanningCancellationUITests` et lecture directe du champ/test.
+
+Correction ciblée :
+
+- Identifiant `planning-meeting-point` posé une seule fois sur le vrai TextField de SchoolMeetingPointField ; test filtré par identifiant et type, avec exactement un champ attendu avant/après saisie.
+- Lancement : attendre la barre « Planifier une leçon » et le formulaire ; aucune attente initiale sur le bouton inférieur virtualisé. Les contrôles sont atteints par défilement borné avant leurs assertions ; aucune hausse du timeout de lancement.
+- Saisie visible, valeur avant/après, accord par UI si nécessaire, waiting-token/waiting-me, compteurs, retrait refusé/réessayé et grande taille conservés.
+- `addTeardownBlock` MainActor termine normalement l'app encore active, y compris après assertion, comme le modèle existant AppearanceSettingsTests. Aucun retry, délai ajouté, suppression de cas ou affirmation de réparation de l'incident simulateur.
+
+Fichiers changés : SchoolPlanningCancellationUITests.swift, SchoolPlanningView.swift (une seule
+ligne d'accessibilityIdentifier), ce rapport. Aucun workspace/client/admission/coffre/N106/gate/25s
+modifié. Vérifications locales : diff-check et comparaison des chemins métier avec la base exit 0 ;
+contrôle du delta de vue limité à l'identifiant, et unicité de sa déclaration source. Les preuves AX
+existantes sont relues, pas remplacées par une hypothèse Windows.
+
+**GREEN restant à exécuter sur Apple** : compiler ce delta et rejouer les trois cas sur les deux
+simulateurs, en contrôlant saisie hittable, unicité AX, grand texte et rendez-vous ; vérifier aussi la
+terminaison du processus entre cas. Aucun build/test Apple local, aucun nouveau rendu ou résultat
+VoiceOver physique disponible. Pas de CI/push/fusion/déploiement par ce worker.

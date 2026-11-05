@@ -611,6 +611,7 @@ struct SchoolMeetingPointField: View {
         TextField("Lieu du rendez-vous", text: $text, axis: .vertical)
             .lineLimit(1...3)
             .accessibilityLabel("Lieu du rendez-vous, facultatif")
+            .accessibilityIdentifier("planning-meeting-point")
     }
 }
 
