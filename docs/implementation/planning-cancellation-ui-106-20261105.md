@@ -266,3 +266,63 @@ existantes sont relues, pas remplacées par une hypothèse Windows.
 simulateurs, en contrôlant saisie hittable, unicité AX, grand texte et rendez-vous ; vérifier aussi la
 terminaison du processus entre cas. Aucun build/test Apple local, aucun nouveau rendu ou résultat
 VoiceOver physique disponible. Pas de CI/push/fusion/déploiement par ce worker.
+
+
+## Exception ciblée approuvée après Q6 — 5 novembre 2026
+
+Accord explicite du porteur « Oui, appliquer cette passe ciblée », dispatch `ctx_7178dbe3df44`.
+Base `8da3a4110bd9cc62865499aca6bbd0b1d4466171` préservée ; aucune nouvelle demande d'approbation.
+Le diagnostic ignoré Q6, ses vidéos inspectées et les deux causes de harnais restent la preuve RED
+Apple : retour waiting-token → admitted sans émission avant 25 s ; gestes grand texte dans le clavier.
+Le résultat métier 1806/1806 au candidat 0c447ae7 est communiqué par le coordinateur, pas réexécuté ici.
+
+Préflight vérifié : reçu `ctx_03e2318e5896` = Codex gpt-6-astra/high, incarnation inchangée
+`structured:1bfdfca6-7879-485f-8a8c-426c16376122`. Skills déjà chargés intégralement dans cette session,
+références pertinentes relues sous `C:/Users/jtoma/.codex/skills/` : systematic-debugging,
+test-driven-development, verification-before-completion, impeccable (4.8.0), uncodixfy, chacun via
+son SKILL.md ; craft-floor Impeccable relu avant édition. Le contexte Impeccable/DESIGN reste chargé.
+Sobriété native appliquée en préservant strictement rendu/labels/layout produit ; aucune règle CSS
+ne remplace les composants Apple. Aucun nouveau panneau de fixture ajouté.
+MCP index_status ready et racine exacte du worktree confirmés, projet
+`C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-planification-ui-106` ; search_graph sur
+SchoolPlanningL2FixtureGate/SchoolPlanningCancellationUITests, source et conventions compilées
+SchoolCommandSendAdmissionTests/LayoutContinuityTests relues. Aucune réindexation générale.
+
+Changements limités aux quatre chemins autorisés :
+
+- SchoolOfficeVisualReview.swift : Set<UUID> d'attentes actives ; chaque defer ne retire que son
+  identifiant, waiting dérivé du set. Helper interne uniquement sous le garde DEBUG/simulateur
+  existant pour @testable ; compteur en lecture seule, horloge MainActor injectable avec Date()
+  par défaut. Expiration toujours à +25 s ; retrait, armement, compteurs et refus inchangés.
+- SchoolPlanningFixtureWaitTests.swift : trois contrôles sur le vrai helper, écrits avant sa correction :
+  deux attentes puis annulation B laissant A visible et retrait libérant A ; annulation de l'unique
+  attente ; échéance exacte de 25 s via horloge synthétique, résultat expired et retrait toujours refusé.
+  Rendez-vous de trois secondes avec require explicite ; tâches annulées et rejointes dans chaque
+  chemin d'erreur, résultats async matérialisés avant assertions. Aucun helper générique de timeout,
+  continuation, tâche de minuteur ou horloge de fond ajouté.
+- SchoolPlanningCancellationUITests.swift : gestes dans l'intersection CollectionView/fenêtre,
+  coupée sous navigation/témoin et au-dessus clavier/footer/confirmation. Départ et arrivée dans cette
+  zone avec marges ; instantané immédiat de jusqu'à trois repères de contenu avant geste, comparaison
+  de leur identité/position après. Sans mouvement, arrêt dans cette direction ; jamais dix gestes
+  clavier présentés comme une exploration. Limite inchangée 10 gestes par direction, contrôle final
+  d'existence/hittabilité conservé. Saisie avant/après, unicité, accord UI, waiting-token/waiting-me,
+  zéro émission, panne/retrait réessayé et grand texte inchangés.
+- Le présent rapport.
+
+Relecture des déclarations/appels : init(mode:refusesRemoval:now:) garde les appels existants grâce
+au paramètre par défaut ; les trois tests utilisent arm/waitForRemoval/remove et activeWaitCount
+sur MainActor ; les tâches sont rejointes avant sortie. Les coordonnées XCTest utilisent la fenêtre
+comme origine et la zone visible comme bornes ; le contrôle ne force aucun état de modèle.
+
+Vérifications locales : git diff --check ; comparaison des chemins produit/métier et du reste de la
+fixture avec la base ; inspection des quatre chemins et des signatures. Swift/Xcode restent absents :
+**NON COMPILÉ / NON EXÉCUTÉ localement**, aucun GREEN nouveau ni nouvelle capture Apple revendiqué.
+Le set et les tests sont préparés pour compilation et exécution, pas déclarés passants depuis Windows.
+
+À rejouer sur Apple : les trois SchoolPlanningFixtureWaitTests, les suites métier all du candidat
+intégré, puis les deux suites UI média/planification iPhone et iPad. Sur iPhone XXXL/clavier ouvert,
+constater le déplacement du formulaire et l'accès à Planifier ; en token, observer waiting maintenu
+malgré la sortie d'une lecture concurrente, puis removed/compteurs stricts. La provenance exacte de
+la lecture annulée en Q6 reste une hypothèse ; aucune augmentation du délai ni assouplissement du
+verdict n'a été utilisée. Aucun client/admission/workspace/coffre/serveur/droit/layout produit modifié.
+Pas de push, CI, fusion, déploiement, installation, changement de modèle ou sous-agent par ce worker.

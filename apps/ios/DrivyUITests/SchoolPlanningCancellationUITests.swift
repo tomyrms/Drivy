@@ -85,14 +85,68 @@ import XCTest
     }
 
     private func reveal(_ element: XCUIElement, app: XCUIApplication, up: Bool) {
-        // La barre Planifier est fixe en taille standard mais dans le formulaire en grande taille :
-        // le champ peut donc se trouver de part ou d'autre du viewport au retour.
+        let form = app.collectionViews.firstMatch
+        let window = app.windows.firstMatch
         for direction in [up, !up] {
             for _ in 0..<10 {
                 if element.exists && element.isHittable { return }
-                if direction { app.swipeUp() } else { app.swipeDown() }
+                guard form.exists, window.exists else {
+                    XCTFail("Le formulaire et sa fenêtre doivent être présents pour défiler")
+                    return
+                }
+                let viewport = scrollViewport(form: form, window: window, app: app)
+                guard !viewport.isNull, viewport.width >= 44, viewport.height >= 80 else {
+                    XCTFail("Aucune zone de formulaire suffisante hors clavier et barres")
+                    return
+                }
+                // Plusieurs repères du contenu : un titre de section peut rester fixé pendant le geste.
+                let candidates = form.staticTexts.allElementsBoundByIndex
+                    + form.textFields.allElementsBoundByIndex + form.textViews.allElementsBoundByIndex
+                let anchors = Array(candidates.lazy.filter {
+                    $0.frame.intersects(viewport) && !$0.label.isEmpty
+                }.prefix(3)).map { (element: $0, label: $0.label, frame: $0.frame) }
+                guard !anchors.isEmpty else {
+                    XCTFail("Aucun repère de contenu visible pour vérifier le défilement")
+                    return
+                }
+                let x = viewport.minX + viewport.width * 0.85
+                let upper = viewport.minY + viewport.height * 0.2
+                let lower = viewport.minY + viewport.height * 0.8
+                let origin = window.coordinate(withNormalizedOffset: .zero)
+                let start = origin.withOffset(CGVector(dx: x - window.frame.minX,
+                    dy: (direction ? lower : upper) - window.frame.minY))
+                let end = origin.withOffset(CGVector(dx: x - window.frame.minX,
+                    dy: (direction ? upper : lower) - window.frame.minY))
+                start.press(forDuration: 0.05, thenDragTo: end)
+                if element.exists && element.isHittable { return }
+                let moved = anchors.contains { anchor in
+                    !anchor.element.exists || anchor.element.label != anchor.label
+                        || abs(anchor.element.frame.minY - anchor.frame.minY) > 1
+                }
+                // Bord atteint ou geste sans effet : ne pas compter dix gestes identiques comme un parcours.
+                if !moved { break }
             }
         }
-        XCTAssertTrue(element.exists && element.isHittable, "Le contrôle doit être matérialisé et atteignable après défilement borné")
+        XCTAssertTrue(element.exists && element.isHittable,
+            "Le contrôle doit être matérialisé et atteignable après un défilement effectif du formulaire")
+    }
+
+    private func scrollViewport(form: XCUIElement, window: XCUIElement, app: XCUIApplication) -> CGRect {
+        let bounds = form.frame.intersection(window.frame)
+        guard !bounds.isNull, !bounds.isEmpty else { return .null }
+        var top = bounds.minY
+        var bottom = bounds.maxY
+        for element in [app.navigationBars.firstMatch, app.staticTexts["planning-l2-rendezvous"]] {
+            if element.exists, element.frame.intersects(bounds) { top = max(top, element.frame.maxY) }
+        }
+        for element in [app.keyboards.firstMatch, app.staticTexts["Rendu de contrôle · données fictives"],
+                        app.buttons["planning-confirm"]] {
+            if element.exists, element.frame.intersects(bounds), element.frame.minY > top {
+                bottom = min(bottom, element.frame.minY)
+            }
+        }
+        guard bottom > top else { return .null }
+        // Marge de geste seulement, sans changer aucune dimension du produit.
+        return CGRect(x: bounds.minX, y: top, width: bounds.width, height: bottom - top).insetBy(dx: 8, dy: 8)
     }
 }

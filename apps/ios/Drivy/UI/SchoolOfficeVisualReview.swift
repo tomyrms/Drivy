@@ -376,16 +376,19 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     }
 }
 
-@MainActor @Observable private final class SchoolPlanningL2FixtureGate {
+/// Interne uniquement dans cette compilation DEBUG/simulateur, pour ses contrôles de qualification.
+@MainActor @Observable final class SchoolPlanningL2FixtureGate {
     let mode: String
     private var refusesRemoval: Bool
     private var command: PendingSchoolCommand?
     private var released = false
     private var expired = false
-    private var waiting = false
+    private var activeWaitIDs: Set<UUID> = []
+    var activeWaitCount: Int { activeWaitIDs.count }
+    @ObservationIgnored private let now: @MainActor () -> Date
     /// Les exigences de phase sont vérifiées par XCTest, jamais assimilées à une panne du retrait.
     var evidence: String {
-        let phase = expired ? "expired" : released ? "removed" : waiting ? "waiting-" + mode : command == nil ? "idle" : "admitted"
+        let phase = expired ? "expired" : released ? "removed" : !activeWaitIDs.isEmpty ? "waiting-" + mode : command == nil ? "idle" : "admitted"
         return "\(phase)|me=\(identityReads - identityReadsAtAdmission)|mutations=\(mutations)"
     }
     private(set) var identityReads = 0
@@ -396,18 +399,21 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
         guard let mode = ["token", "me"].first(where: { args.contains("-planning-l2-cancellation-" + $0) }) else { return nil }
         return SchoolPlanningL2FixtureGate(mode: mode, refusesRemoval: args.contains("-planning-l2-cancellation-storage-failure"))
     }
-    init(mode: String, refusesRemoval: Bool) { self.mode = mode; self.refusesRemoval = refusesRemoval }
+    init(mode: String, refusesRemoval: Bool, now: @escaping @MainActor () -> Date = { Date() }) {
+        self.mode = mode; self.refusesRemoval = refusesRemoval; self.now = now
+    }
     func arm(_ command: PendingSchoolCommand) {
         guard self.command == nil, command.kind == .createLesson || command.kind == .moveLesson else { return }
         self.command = command; identityReadsAtAdmission = identityReads
     }
     func waitForRemoval() async throws {
         guard command != nil, !released else { return }
-        waiting = true
-        defer { waiting = false }
-        let deadline = Date().addingTimeInterval(25)
+        let waitID = UUID()
+        activeWaitIDs.insert(waitID)
+        defer { activeWaitIDs.remove(waitID) }
+        let deadline = now().addingTimeInterval(25)
         while !released {
-            guard Date() < deadline else { expired = true; throw Failure.expired }
+            guard now() < deadline else { expired = true; throw Failure.expired }
             try await Task.sleep(for: .milliseconds(10))
         }
     }

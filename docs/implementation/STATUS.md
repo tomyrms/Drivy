@@ -1797,3 +1797,24 @@ dans leurs commits et ne font pas partie de ce candidat.
 La validation métier Apple peut avancer avec ces deux correctifs. Les deux scénarios UI iPhone
 restent rouges sur Q6 : la proposition de correction limitée au harnais n'a pas encore été appliquée.
 Aucun succès UI supplémentaire, fusion master ou déploiement n'est annoncé par cette actualisation.
+
+## 5 novembre 2026 — métier Q7 vert et exception de harnais UI intégrée
+
+Le run Apple métier `41985928085` au `0c447ae7` est réellement vert : **1806/1806 réussis,
+0 échec, 0 ignoré, 0 expected**, identité du candidat contrôlée. Le parcours média réel complet,
+l'annulation réseau, le témoin URLError exact et la persistance d'époque 0 passent. La garde FFI
+annonce `RELAY_EXECUTION_PASSED`. Cela ne remplaçait pas la qualification UI iPhone encore rouge.
+
+Le porteur a explicitement approuvé la passe ciblée du harnais UI. Le commit `621da6a2` apporte :
+
+- un ensemble d'attentes actives dans la fixture DEBUG/simulateur, chaque defer retirant seulement
+  sa propre attente ; la borne reste 25 secondes et les contrôles de mutation/retrait sont inchangés ;
+- trois tests bornés du vrai helper (concurrence, annulation unique, expiration), avec tâches rejointes ;
+- des gestes du test UI limités au formulaire visible hors clavier/barres et une vérification du
+  déplacement effectif du contenu, sans accès direct au modèle ni verdict assoupli.
+
+Le coordinateur a relu les quatre chemins, contrôlé les déclarations/appels, le périmètre DEBUG,
+les bornes et l'absence de changement métier/serveur. Cette exception est intégrée, mais ses
+nouveaux tests et les parcours iPhone/iPad doivent encore être compilés et exécutés sur Apple.
+La prochaine qualification porte sur le candidat complet ; aucune fusion master ou bascule
+homelab n'est encore annoncée. Leur autorisation est acquise, avec sauvegarde préalable vérifiée.
