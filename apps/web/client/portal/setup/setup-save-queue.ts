@@ -1,3 +1,4 @@
+import { rebaseConfirmedDraft } from '../../console/draft-model';
 import type { SetupContent, SetupStep } from '../../setup-model';
 
 /**
@@ -240,7 +241,32 @@ export class SetupSaveQueue {
     if (this.disposed || generation !== this.generation) return;
     this.flight = null;
     if (outcome.status === 'confirmed') {
-      this.held = { version: outcome.version, entry: entryOf(outcome.body) };
+      const confirmedEntry = entryOf(outcome.body);
+      this.held = { version: outcome.version, entry: confirmedEntry };
+      const next = this.pending;
+      // Une intention plus récente que l'envoi en vol est basée sur le brouillon parti, pas sur la réponse :
+      // seuls les champs qu'elle n'a pas retouchés prennent la valeur confirmée (normalisation ou changement externe).
+      if (next !== null && next.key !== pending.key) {
+        const rebased = rebaseConfirmedDraft(pending.body, outcome.body, next.body);
+        if (rebased.conflicts.length) {
+          // Même champ modifié localement et confirmé autrement : la saisie locale reste, l'écran de conflit existant
+          // demande une relecture. Rien n'est renvoyé automatiquement sur la valeur de l'école.
+          this.pending = null;
+          if (this.latest?.key === next.key) this.latest = entryOf(rebased.value);
+          this.phase = 'conflict'; this.conflictStep = next.body.currentStep;
+          this.message = 'La préparation a changé à l’école. Votre saisie est conservée : relisez l’étape avant d’enregistrer.';
+          this.publish();
+          this.options.conflict?.(next.body);
+          return;
+        }
+        const rebasedEntry = entryOf(rebased.value);
+        this.pending = rebasedEntry;
+        if (this.latest?.key === next.key) this.latest = rebasedEntry;
+      } else {
+        // Même intention que celle qui vient d'être confirmée, ou aucune intention en attente : elle ne repart pas.
+        this.pending = null;
+        if (this.latest?.key === pending.key) this.latest = confirmedEntry;
+      }
       if (this.pending?.contentKey === this.held.entry.contentKey) this.pending = null;
       this.phase = 'idle'; this.message = null; this.conflictStep = null;
       this.publish();

@@ -2,9 +2,9 @@ import { describe, expect, test, vi } from 'vitest';
 import { setupContentSchema, type SetupContent, type SetupStep } from '../../setup-model';
 import { SetupSaveQueue, saveOutcome, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
 
-const content = (name = 'École synthétique'): SetupContent => setupContentSchema.parse({
+const content = (name = 'École synthétique', contactEmail = 'ecole@example.invalid'): SetupContent => setupContentSchema.parse({
   selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE'],
-  identity: { name, contactEmail: 'ecole@example.invalid', contactPhone: null, timeZone: 'Europe/Zurich' },
+  identity: { name, contactEmail, contactPhone: null, timeZone: 'Europe/Zurich' },
   privacy: { noticeText: 'Texte propre à l’école.', retentionText: 'Conservation propre.', contactEmail: 'donnees@example.invalid', templateId: null, templateVersion: null },
   profile: { fields: [], effectiveFrom: null }, formations: [],
 });
@@ -271,5 +271,47 @@ describe('Enregistrement coalescé du brouillon (#123)', () => {
     const refused = await h.queue.flush(draft(content('École B'), 'PROFILE'));
     expect(refused).toMatchObject({ phase: 'refused' });
     expect(saveOutcome(refused, draft(content('École B'), 'PROFILE'))).toBe('failed');
+  });
+
+  test('une normalisation serveur sur un champ non retouché est reprise par l’intention suivante', async () => {
+    const h = harness();
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('École A');
+    const second = content('École B');
+    h.queue.enqueue(draft(first));
+    h.queue.enqueue(draft(second, 'PRICING'));
+
+    const confirmedFirst = content('École A');
+    confirmedFirst.identity = { ...confirmedFirst.identity, contactEmail: 'normalise@example.invalid' };
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    expect(h.send).toHaveBeenCalledTimes(2);
+    const next = h.send.mock.calls[1]![0];
+    // Le nom vient de la saisie postérieure, l'e-mail normalisé par l'école n'est pas écrasé par l'ancien brouillon.
+    expect(next.body.content.identity.name).toBe('École B');
+    expect(next.body.content.identity.contactEmail).toBe('normalise@example.invalid');
+  });
+
+  test('un même champ changé localement et normalisé par l’école reste à relire sans second envoi', async () => {
+    const h = harness();
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('École A');
+    const second = content('École B', 'local@example.invalid');
+    h.queue.enqueue(draft(first));
+    h.queue.enqueue(draft(second, 'PRICING'));
+
+    const confirmedFirst = content('École A', 'normalise@example.invalid');
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    // Même champ des deux côtés : aucune intention locale n'est renvoyée en silence sur la valeur normalisée.
+    expect(h.send).toHaveBeenCalledTimes(1);
+    expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', conflictStep: 'PRICING', synced: false, heldVersion: 2 });
+    expect(h.queue.getSnapshot().held?.content.identity.contactEmail).toBe('normalise@example.invalid');
   });
 });

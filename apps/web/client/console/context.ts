@@ -9,7 +9,7 @@ import type { Member, Me } from '../protocol';
 import type { School } from '../school-api';
 import type { NavigationQuery } from './route';
 import type { SectionKey } from './sections';
-import { resumableDraft } from './draft-model';
+import { rebaseConfirmedDraft, resumableDraft } from './draft-model';
 import { failedReadState, readStateFor, type ScopedReadState, type ScopedReadCache } from './load-model';
 export { sectionKeys, type SectionKey } from './sections';
 
@@ -152,6 +152,7 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], s
 export function useDraft<T>(baseline: T | null) {
   const [draft, setDraft] = useState<T | null>(baseline);
   const [acknowledged, setAcknowledged] = useState<string | null>(null);
+  const [conflicts, setConflicts] = useState<readonly string[]>([]);
   // Read after an await: the confirmation compares the latest typing, not the render that submitted.
   const latestDraft = useRef(draft);
   latestDraft.current = draft;
@@ -163,23 +164,28 @@ export function useDraft<T>(baseline: T | null) {
     setDraft(current => current === null || before === null || JSON.stringify(current) === before ? JSON.parse(serialized) as T : current);
     previous.current = serialized;
     setAcknowledged(null);
+    setConflicts([]);
   }, [serialized]);
   const saved = acknowledged ?? serialized;
   const edited = draft !== null && saved !== null && JSON.stringify(draft) !== saved;
   const releaseGuard = useUnsavedChanges(edited);
-  const reset = () => { releaseGuard(); if (saved !== null) setDraft(JSON.parse(saved) as T); };
+  const reset = () => { releaseGuard(); setConflicts([]); if (saved !== null) setDraft(JSON.parse(saved) as T); };
   /**
-   * `value` is what the school confirmed. With `sent`, typing continued since that submission stays on screen,
-   * still to be saved, instead of being replaced by the confirmation (#123).
+   * `value` is what the school confirmed. With `sent`, a local edit made since that submission is never replaced
+   * by the confirmation (#123), but a field left untouched locally adopts the confirmed value: normalisation or an
+   * external change on another field is not lost. A field changed on both sides differently stays local and is
+   * reported in `conflicts`, never overwritten silently (#106).
    */
   const markSaved = (value: T, sent?: T) => {
     setAcknowledged(JSON.stringify(value));
     const current = latestDraft.current;
-    const keptEdits = sent !== undefined && current !== null && JSON.stringify(current) !== JSON.stringify(sent);
-    if (!keptEdits) releaseGuard();
-    setDraft(previous => keptEdits && previous !== null ? previous : value);
+    const rebased = current === null || sent === undefined ? { value, conflicts: [] } : rebaseConfirmedDraft(sent, value, current);
+    setConflicts(rebased.conflicts);
+    if (JSON.stringify(rebased.value) === JSON.stringify(value)) releaseGuard();
+    // Functional update: a keystroke queued after the ref was read is merged too, not overwritten by an older view.
+    setDraft(previous => previous === null || sent === undefined ? value : rebaseConfirmedDraft(sent, value, previous).value);
   };
-  return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset, markSaved };
+  return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset, markSaved, conflicts };
 }
 
 export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; message: string; code?: string; needsLogin?: boolean } | null;
