@@ -151,12 +151,52 @@ rapport sont corrigés. Les retenues du jeton, de `/me` et de l'écriture ne son
   une libération arrivée avant l'attente n'est pas perdue et ne suspend rien.
 - Toutes les assertions métier et tous les compteurs lectures/mutations sont conservés.
 
+### Correction 2/2 (Q4) : attente exacte du compteur de jetons
 
-### Exécution Apple requise (NON EXÉCUTÉE)
+La première exécution native réelle (run `41962003316`, job `127030313656`, candidat `62560a2e`) a compilé et
+exécuté les tests. Un seul échec concerne cette suite :
+`aCancellationDuringTheRenewalAfter401CannotUndoTheHandedWrite` à la ligne 157, avec
+`(token.invalidations == 1 [true]) && (token.calls == 2 [false])`. Les contrôles de maintien de l'admission,
+les deux mutations aux mêmes octets/`Idempotency-Key` et le reçu passaient.
 
-Aucun `swift`, `swiftc` ni `xcodebuild` dans ce worktree Windows : aucun RED/GREEN, aucune compilation et
-aucun résultat Apple ne sont revendiqués. Le projet `apps/ios/Drivy.xcodeproj` est généré à partir de
-`apps/ios/project.yml` (sources par dossier, nouveaux fichiers pris en compte) et n'est pas versionné ici.
+Trace du code réel (`SchoolPlanningClient.send` → `request` → `perform`, puis `receipt(for:)`) :
+
+1. `request` de la mutation : premier `accessToken()` (jeton 1) ;
+2. `perform` : `/me` par `PinnedToken(token)`, qui ne repasse pas par la source comptée ;
+3. POST refusé 401 : `invalidateAccessToken` (une fois) puis second `accessToken()` (jeton 2) ;
+4. second POST accepté ;
+5. `receipt(for:)` AP72 : nouvel `request` sans commande, donc troisième `accessToken()` (jeton 3), puis GET
+   `/operations/{id}`.
+
+Le produit fait donc exactement trois demandes de jeton et un seul renouvellement : c'est l'attente du test
+(`calls == 2`) qui omettait la lecture AP72, pas un défaut du client ni de l'admission. La correction rend
+l'attente exacte (`calls == 3`, `invalidations == 1`) et prouve dans la fixture que le troisième appel sert la
+lecture du reçu :
+
+- la source rend un jeton distinct par appel ; les deux écritures portent `Bearer token-1` puis
+  `Bearer token-2`, et la seule lecture GET `/operations` porte `Bearer token-3` ;
+- `receiptReadCount == 1`, `receiptOperationIDs == [command.id]` (reçu exact, une fois) ;
+- `mutationCount == 2` (aucune troisième mutation) et `invalidations == 1` (aucun second renouvellement) ;
+- l'indice de la lecture du reçu suit celui de la dernière écriture.
+
+Restent conservés : `hold(onCall: 2)` pendant le renouvellement, `phase == handedToTransport`, refus
+`alreadyHandedToTransport`, record toujours dans le coffre, corps, `Idempotency-Key` et `If-Match` des deux
+écritures. Aucune assertion n'a été rendue permissive (`>= 2` n'est pas utilisé), aucun autre test ni code
+produit n'a changé.
+
+Défaut hors périmètre signalé, non corrigé : le même journal montre
+`SchoolPlanningRecovery106Tests.swift:72` (`aFutureCreationWritesOnceWithItsExactHeaders`) avec
+`token.calls [2] == 1`. La même trace l'explique (POST + lecture AP72), mais ce fichier appartient au lot L1b,
+hors des chemins autorisés ici : à traiter par son propriétaire avant de conclure que la suite complète est
+verte.
+
+### Exécution Apple de référence (Q4) et nouvelle exécution
+
+La compilation et l'exécution réelles ont eu lieu dans le run `41962003316` / job `127030313656` (candidat
+`62560a2e`), avec le rouge cité ci-dessus. Depuis ce worktree Windows, aucun `swift`, `swiftc` ni
+`xcodebuild` n'existe : la correction 2/2 reste non compilée et non exécutée localement, et aucun RED/GREEN
+n'est revendiqué ici. Le projet `apps/ios/Drivy.xcodeproj` est généré à partir de `apps/ios/project.yml`
+(sources par dossier, nouveaux fichiers pris en compte) et n'est pas versionné.
 
 ```sh
 xcodebuild test -project apps/ios/Drivy.xcodeproj -scheme Drivy \
@@ -181,6 +221,9 @@ Puis la suite `DrivyTests` complète au même SHA, en particulier `SchoolPlannin
 - VoiceOver, Dynamic Type, rendu, latence et comportement batterie ne sont ni modifiés ni vérifiés ici.
 - Les bornes du harnais (5 s retenue, 3 s arrivée, 10 s opération) ne s'appliquent qu'aux chemins d'échec ;
   un scénario nominal libère immédiatement. Elles restent non compilées et non exécutées sous Windows.
+- Signal hors périmètre, non corrigé ici : `SchoolPlanningRecovery106Tests.swift:72` attend
+  `token.calls == 1` alors que la même trace compte deux demandes (POST puis lecture AP72) ; ce fichier
+  appartient au lot L1b.
 - `STATUS.md`, le registre, la conception, l'OpenAPI et les workflows restent inchangés.
 
 Commit local : relevé après rédaction de ce document et rapporté au coordinateur avec le SHA exact.
