@@ -51,6 +51,20 @@ const base = {
 // qu'avec la même valeur que le harnais iOS, jamais en production.
 process.env.NODE_ENV = 'test';
 
+/** Certificat et clé éphémères de ce run, sous un répertoire temporaire appelant. */
+function makeEphemeralTls(directory) {
+  const extension = join(directory, 'tls.cnf');
+  writeFileSync(extension, '[server]\nsubjectAltName = DNS:localhost,IP:127.0.0.1\nextendedKeyUsage = serverAuth\n');
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1',
+    '-subj', '/CN=Drivy fixture qualification CA', '-keyout', join(directory, 'ca.key'), '-out', join(directory, 'ca.crt')]);
+  execFileSync('openssl', ['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-subj', '/CN=localhost',
+    '-keyout', join(directory, 'server.key'), '-out', join(directory, 'server.csr')]);
+  execFileSync('openssl', ['x509', '-req', '-sha256', '-days', '1', '-in', join(directory, 'server.csr'),
+    '-CA', join(directory, 'ca.crt'), '-CAkey', join(directory, 'ca.key'), '-CAcreateserial',
+    '-extfile', extension, '-extensions', 'server', '-out', join(directory, 'server.crt')]);
+  return { certificate: join(directory, 'server.crt'), key: join(directory, 'server.key') };
+}
+
 describe('gardes de configuration du relais média', () => {
   test('la configuration jetable reste acceptée à l’identique', () => {
     assert.equal(qualificationConfig(base).port, 18443);
@@ -151,6 +165,39 @@ describe('cible de reset réellement consommée', () => {
       }
     });
   }
+
+  test('refuse une mutation de l’environnement pendant la lecture TLS (alias process.env)', async () => {
+    // Chemin réel du CLI : c'est `process.env` lui-même qui est passé. La comparaison ne peut
+    // donc pas porter sur le même objet mutable ; la cible validée doit être figée avant les
+    // attentes puis comparée à la source consommée juste avant le reset.
+    const saved = Object.fromEntries([...watched, 'DRIVY_RELAY_TLS_CERT', 'DRIVY_RELAY_TLS_KEY']
+      .map(key => [key, process.env[key]]));
+    const directory = mkdtempSync(join(tmpdir(), 'drivy-msgrelay97-alias-'));
+    try {
+      const tls = makeEphemeralTls(directory);
+      process.env.TEST_DATABASE_URL = base.TEST_DATABASE_URL;
+      process.env.NODE_ENV = 'test';
+      process.env.DRIVY_RELAY_ALLOW_RESET = '1';
+      process.env.DRIVY_RELAY_TLS_CERT = tls.certificate;
+      process.env.DRIVY_RELAY_TLS_KEY = tls.key;
+      const operation = buildQualificationRelay(process.env);
+      // Mutation pendant la première suspension (lecture TLS) : sans snapshot figé, ce second
+      // contrôle comparerait l'objet à lui-même et laisserait atteindre freshDatabase.
+      delete process.env.TEST_DATABASE_URL;
+      await assert.rejects(operation, error => {
+        // Le helper échoue avant tout Pool : aucune base, aucun hôte distant n'est contacté.
+        assert.equal(error.message, 'RELAY_QUALIFICATION_ENVIRONMENT_DIVERGED');
+        return true;
+      });
+    } finally {
+      for (const key of [...watched, 'DRIVY_RELAY_TLS_CERT', 'DRIVY_RELAY_TLS_KEY']) {
+        const value = saved[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('bootstrap média sur PostgreSQL synthétique', () => {
@@ -182,21 +229,13 @@ describe('bootstrap média sur PostgreSQL synthétique', () => {
   before(async () => {
     if (!process.env.TEST_DATABASE_URL) throw new Error('TEST_DATABASE_URL_REQUIRED');
     directory = mkdtempSync(join(tmpdir(), 'drivy-msgrelay97-'));
-    const extension = join(directory, 'tls.cnf');
-    writeFileSync(extension, '[server]\nsubjectAltName = DNS:localhost,IP:127.0.0.1\nextendedKeyUsage = serverAuth\n');
-    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-days', '1',
-      '-subj', '/CN=Drivy fixture qualification CA', '-keyout', join(directory, 'ca.key'), '-out', join(directory, 'ca.crt')]);
-    execFileSync('openssl', ['req', '-new', '-newkey', 'rsa:2048', '-nodes', '-sha256', '-subj', '/CN=localhost',
-      '-keyout', join(directory, 'server.key'), '-out', join(directory, 'server.csr')]);
-    execFileSync('openssl', ['x509', '-req', '-sha256', '-days', '1', '-in', join(directory, 'server.csr'),
-      '-CA', join(directory, 'ca.crt'), '-CAkey', join(directory, 'ca.key'), '-CAcreateserial',
-      '-extfile', extension, '-extensions', 'server', '-out', join(directory, 'server.crt')]);
+    const tls = makeEphemeralTls(directory);
     // Le chemin positif doit être exactement celui du CLI : le relais reçoit l'environnement
     // qu'il consommera pour le reset, donc aucune cible validée ne peut différer de la cible réelle.
     process.env.NODE_ENV = 'test';
     process.env.DRIVY_RELAY_ALLOW_RESET = '1';
-    process.env.DRIVY_RELAY_TLS_CERT = join(directory, 'server.crt');
-    process.env.DRIVY_RELAY_TLS_KEY = join(directory, 'server.key');
+    process.env.DRIVY_RELAY_TLS_CERT = tls.certificate;
+    process.env.DRIVY_RELAY_TLS_KEY = tls.key;
     relay = await buildQualificationRelay(process.env);
     pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
     const membership = await pool.query('SELECT access_epoch FROM drivy.membership WHERE id=$1', [mediaFixtureIds.instructorMember]);

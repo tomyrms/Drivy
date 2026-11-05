@@ -24,16 +24,32 @@ export function qualificationConfig(env: Record<string, string | undefined>) {
   return { port, certificate: env.DRIVY_RELAY_TLS_CERT!, key: env.DRIVY_RELAY_TLS_KEY! };
 }
 
+/** Cible de reset figée : un snapshot indépendant, jamais l'objet `env` mutable (souvent `process.env`). */
+interface ResetTarget {
+  readonly database: string | undefined;
+  readonly mode: string | undefined;
+  readonly reset: string | undefined;
+}
+
 /**
  * La réinitialisation destructrice lit `process.env.TEST_DATABASE_URL` : la seule cible
- * effective est donc l'environnement du processus. Une configuration validée qui diverge,
- * même sur un seul champ de la porte (mode, opt-in, base), est refusée avant tout fichier
- * TLS et avant toute connexion, puis recontrôlée juste avant le reset.
+ * effective est donc l'environnement du processus. Les valeurs validées sont figées dans un
+ * snapshot immuable *avant* les attentes, puis comparées à cette source réellement consommée
+ * avant tout fichier TLS et de nouveau juste avant le reset. Comparer `env` à lui-même ne
+ * prouverait rien quand l'appelant passe `process.env`.
  */
-function assertEffectiveResetEnvironment(env: Record<string, string | undefined>) {
-  const diverged = env.TEST_DATABASE_URL !== process.env.TEST_DATABASE_URL
-    || env.NODE_ENV !== process.env.NODE_ENV
-    || env.DRIVY_RELAY_ALLOW_RESET !== process.env.DRIVY_RELAY_ALLOW_RESET;
+function captureResetTarget(env: Record<string, string | undefined>): ResetTarget {
+  return Object.freeze({
+    database: env.TEST_DATABASE_URL,
+    mode: env.NODE_ENV,
+    reset: env.DRIVY_RELAY_ALLOW_RESET
+  });
+}
+
+function assertEffectiveResetEnvironment(target: ResetTarget) {
+  const diverged = target.database !== process.env.TEST_DATABASE_URL
+    || target.mode !== process.env.NODE_ENV
+    || target.reset !== process.env.DRIVY_RELAY_ALLOW_RESET;
   if (diverged) throw new Error('RELAY_QUALIFICATION_ENVIRONMENT_DIVERGED');
 }
 
@@ -62,15 +78,18 @@ export async function startQualificationRelay() {
  */
 export async function buildQualificationRelay(env: Record<string, string | undefined>) {
   const config = qualificationConfig(env);
+  // Snapshot figé AVANT les lectures : un `env` mutable (alias de `process.env` dans le CLI)
+  // ne peut plus faire coïncider « validé » et « consommé ».
+  const target = captureResetTarget(env);
   // Aucune lecture de fichier ni connexion avant la preuve que la cible validée est bien celle
   // que le reset consommera réellement.
-  assertEffectiveResetEnvironment(env);
+  assertEffectiveResetEnvironment(target);
   // Read TLS inputs BEFORE the destructive, explicitly opted-in fixture reset.
   const cert = await readFile(config.certificate);
   const key = await readFile(config.key);
   // Contrôle répété dans la même passe synchrone que l'appel : `freshDatabase()` lit
   // `process.env` en tout premier, sans suspension intermédiaire.
-  assertEffectiveResetEnvironment(env);
+  assertEffectiveResetEnvironment(target);
   const pool = await freshDatabase();
   const issuer = 'https://messaging-relay.example.invalid';
   const app = Fastify({ logger: false, disableRequestLogging: true, https: { cert, key }, bodyLimit: 1_048_576 });

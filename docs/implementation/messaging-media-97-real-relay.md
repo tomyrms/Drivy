@@ -62,7 +62,7 @@ conteneur dédié `drivy-msgrelay97-pg` sur `127.0.0.1:15497`, base `drivy_test`
 
 ```bash
 node --test --import tsx scripts/messaging-media-relay-qualification.test.mjs
-# tests 22 · pass 22 · fail 0 (correction 1 incluse)
+# tests 23 · pass 23 · fail 0 (corrections 1 et 2 incluses)
 
 node --test --import tsx scripts/messaging-relay-qualification.test.mjs
 # tests 9 · pass 9 · fail 0 (relais historique : aucune régression)
@@ -213,6 +213,21 @@ crypto/workflow/harness global n'est touché.
 | S4 | `KeychainMediaOutboxKeyStore` utilise le service de production fixe : le nettoyage visait des services jamais utilisés | Store de test avec service dédié au run, vraie Keychain, attributs attendus ; suppression service+compte, statut contrôlé, absence constatée ; cache et chiffrement également isolés | Bloc de nettoyage vérifié dans le scénario Swift |
 | S5 | Le test figeait la rétention du cache après suppression | Chaîne réelle exercée : le workspace relaie le retrait serveur (`MessagingMediaRevocationReceiving.revoke` du coordinateur), puis cache ciblé absent et ancien snapshot refusé ; tombstone et suppression serveur toujours vérifiés | Attente stricte, calée sur M97 `dd9c1a5b` ; **non qualifiée** tant que la correction2 et un runner Apple n'ont pas parlé |
 
-État de vérification après correction : `node --test` média **22/22**, relais historique **9/9**,
-`tsc --noEmit` sans erreur, suites média API **26/26**. Swift toujours **NON COMPILÉ / NON
-EXÉCUTÉ**.
+État de vérification après correction 1 : `node --test` média **22/22**, relais historique **9/9**,
+`tsc --noEmit` sans erreur. Swift toujours **NON COMPILÉ / NON EXÉCUTÉ**.
+
+## 7. Correction 2 (revue finale, 2/2)
+
+Trois défauts précis, corrigés seuls ; aucun source M97/UI, helper global, workflow, dépendance
+ni configuration déployée modifié.
+
+| # | Défaut | Correction | Preuve |
+|---|---|---|---|
+| R1 | `startQualificationRelay` passe `process.env` : `assertEffectiveResetEnvironment(env)` comparait l'objet à lui-même, donc une mutation pendant la lecture TLS atteignait `freshDatabase` | Les trois valeurs validées sont figées dans un snapshot **immuable** (`captureResetTarget`) avant toute attente, puis comparées à `process.env` avant les fichiers TLS et de nouveau juste avant le reset | Test Node « alias `process.env` » : suppression de `TEST_DATABASE_URL` pendant le premier `await`. RED observé : `Base de recette drivy_test requise.` (le helper atteignait `freshDatabase`), GREEN : `RELAY_QUALIFICATION_ENVIRONMENT_DIVERGED` sans Pool ni hôte distant |
+| R2 | `MediaQualificationOutboxKeyStore.existingKey` demandait les attributs mais **pas** les octets (`kSecReturnData`), donc la relecture de la clé créée échouait fermé | `kSecReturnData` demandé explicitement pour cette seule clé de fixture ; attributs et erreurs fermés conservés | Contrôle Swift ciblé `MediaQualificationOutboxKeyStoreTests` : création, relecture **sans création** (mêmes octets), attributs attendus (non synchronisée, appareil déverrouillé), nettoyage et absence. **NON EXÉCUTÉ** (pas de runner Apple) |
+| R3 | Le décorateur de réponse perdue servait à l'image puis au PDF : `transmitted` contenait les trois enveloppes et le test exigeait `count == 2` avec la première = PDF | Mesure **par `clientMessageID`** : chaque `Transmission` porte geste, média et enveloppe ; l'image reste un scénario distinct (un POST), le PDF exige deux POST réels, même média et même enveloppe persistée | Assertions par geste, enveloppes comparées en mémoire sans jamais les imprimer |
+
+État de vérification après correction 2 : `node --test` média **23/23**, relais historique **9/9**,
+`tsc --noEmit` sans erreur, suites média API **26/26** (inchangées, aucun fichier produit touché).
+Swift toujours **NON COMPILÉ / NON EXÉCUTÉ** ; S5 reste strict et attend le candidat M97
+correction2 sur un runner Apple.

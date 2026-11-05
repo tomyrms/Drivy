@@ -190,6 +190,7 @@ private struct MediaQualificationOutboxKeyStore: MessagingMediaOutboxKeyStore {
 
     /// Une clé existante dont la classe d'accessibilité ou la synchronisation ne correspond
     /// pas à l'exigence échoue fermé : elle n'est ni utilisée, ni remplacée, ni élargie.
+    /// Les données de **cette seule** clé de fixture sont demandées explicitement.
     private func existingKey() throws -> SymmetricKey? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -197,6 +198,7 @@ private struct MediaQualificationOutboxKeyStore: MessagingMediaOutboxKeyStore {
             kSecAttrAccount as String: account,
             kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
             kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: CFTypeRef?
@@ -210,25 +212,59 @@ private struct MediaQualificationOutboxKeyStore: MessagingMediaOutboxKeyStore {
         }
         return SymmetricKey(data: bytes)
     }
+
+    /// Attributes réellement rendus pour cette clé de fixture : sert au contrôle ciblé du test.
+    func storedAttributesMatch() -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecAttrSynchronizable as String: kCFBooleanFalse as Any,
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var result: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let attributes = result as? [String: Any],
+              let accessible = attributes[kSecAttrAccessible as String] as? String,
+              accessible == (kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String),
+              let synchronizable = attributes[kSecAttrSynchronizable as String] as? Bool,
+              synchronizable == false,
+              let bytes = attributes[kSecValueData as String] as? Data else { return false }
+        return bytes.count == 32
+    }
 }
 
 /// Panne de **remise** contrôlée, jamais une panne du serveur : le POST réel est exécuté
 /// jusqu'à son accusé durable, puis exactement une réponse réussie est jetée. Aucun faux
 /// accusé n'est inventé et aucun effet serveur n'est simulé.
 private actor LostResponseMediaSender: MessagingMediaMessageSending {
+    /// Émission réellement transmise au serveur, par POST : geste, média et enveloppe.
+    struct Transmission: Sendable {
+        let clientMessageID: UUID
+        let mediaID: UUID
+        let ciphertext: MessagingCiphertext
+    }
+
     private let upstream: any MessagingMediaMessageSending
     private var discardNextSuccess = false
     private(set) var discarded = 0
-    /// Enveloppes réellement transmises au serveur, dans l'ordre des POST émis.
-    private(set) var transmitted: [MessagingCiphertext] = []
+    /// Toutes les émissions, tous gestes confondus : l'appelant filtre par `clientMessageID`.
+    private(set) var transmissions: [Transmission] = []
 
     init(upstream: any MessagingMediaMessageSending) { self.upstream = upstream }
 
     func armOneLostResponse() { discardNextSuccess = true }
 
+    func transmissions(for clientMessageID: UUID) -> [Transmission] {
+        transmissions.filter { $0.clientMessageID == clientMessageID }
+    }
+
     func sendMedia(scope: MessagingScope, pending: MessagingPending,
                    media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgement {
-        transmitted.append(pending.ciphertext)
+        transmissions.append(Transmission(clientMessageID: pending.clientMessageID,
+                                          mediaID: media.mediaID, ciphertext: pending.ciphertext))
         let acknowledgement = try await upstream.sendMedia(scope: scope, pending: pending, media: media)
         if discardNextSuccess {
             discardNextSuccess = false
@@ -536,12 +572,17 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         let afterResend = try await apiA.messages(scope: aScope, conversationID: conversation, before: nil)
         XCTAssertEqual(afterResend.items.filter { $0.meta.media?.mediaID == pdfSnapshot.mediaID }.count, 1,
                        "Un seul message serveur porte ce média après le renvoi.")
-        // Enveloppes réellement transmises par les deux POST du décorateur transparent.
-        let transmitted = await lostSender.transmitted
-        XCTAssertEqual(transmitted.count, 2, "Deux POST réels ont été émis : perdu puis renvoyé.")
-        XCTAssertTrue(transmitted.first == durableBefore.messageCiphertext
-                      && transmitted.last == durableBefore.messageCiphertext,
-                      "Les deux émissions portent l'enveloppe persistée, sans réchiffrement.")
+        // Émissions mesurées par geste : l'image (un POST) reste un scénario distinct du PDF.
+        let imageTransmissions = await lostSender.transmissions(for: imageClientID)
+        XCTAssertEqual(imageTransmissions.count, 1, "L'image garde un seul POST réel.")
+        XCTAssertTrue(imageTransmissions.allSatisfy { $0.mediaID == imageSnapshot.mediaID },
+                      "L'émission image porte bien le média de l'image.")
+        let pdfTransmissions = await lostSender.transmissions(for: pdfClientID)
+        XCTAssertEqual(pdfTransmissions.count, 2, "Le PDF a deux POST réels : perdu puis renvoyé.")
+        XCTAssertTrue(pdfTransmissions.allSatisfy { $0.mediaID == pdfSnapshot.mediaID },
+                      "Les deux émissions PDF portent le même média.")
+        XCTAssertTrue(pdfTransmissions.allSatisfy { $0.ciphertext == durableBefore.messageCiphertext },
+                      "Les deux émissions PDF portent l'enveloppe persistée, sans réchiffrement.")
         // Le reçu valide et le nettoyage prouvé ont retiré l'intention de la file.
         let entriesAfterResend = try await reopenedOutbox.entries(scope: aScope)
         XCTAssertTrue(entriesAfterResend.filter { $0.mediaID == pdfSnapshot.mediaID }.isEmpty,
@@ -688,5 +729,34 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         // La fixture média n'a jamais servi les identités canoniques du scénario texte.
         XCTAssertNotEqual(mediaSchool, UUID(uuidString: "10000000-0000-4000-8000-000000000001"))
         XCTAssertNotEqual(mediaLearner, UUID(uuidString: "20000000-0000-4000-8000-000000000003"))
+    }
+}
+
+/// Contrôle ciblé du store Keychain de fixture (#97, correction 2).
+///
+/// Il vérifie la création, la relecture **sans création** (mêmes octets), les attributs
+/// attendus, puis le nettoyage et l'absence. Aucune valeur de clé n'est imprimée par une
+/// assertion, et le service global du produit n'est ni lu, ni écrit, ni supprimé.
+final class MediaQualificationOutboxKeyStoreTests: XCTestCase {
+    func testFixtureKeyRoundTripsReadsWithoutCreatingAndCleansUp() throws {
+        let service = "ch.drivy.qualification.media.outbox-test.\(UUID().uuidString)"
+        let account = "media-outbox-key"
+        let store = MediaQualificationOutboxKeyStore(service: service, account: account)
+        defer { _ = MediaQualificationKeychainSpace.remove(service: service, account: account) }
+
+        // Une clé absente n'est jamais créée implicitement : le refus reste fermé.
+        XCTAssertThrowsError(try store.key(create: false), "Une clé absente n'est pas créée implicitement.")
+
+        let created = try store.key(create: true)
+        XCTAssertTrue(store.storedAttributesMatch(),
+                      "Attributs attendus : non synchronisée, lisible appareil déverrouillé uniquement.")
+        let readBack = try store.key(create: false)
+        XCTAssertTrue(created == readBack, "La relecture sans création rend exactement les mêmes octets.")
+
+        let status = MediaQualificationKeychainSpace.remove(service: service, account: account)
+        XCTAssertTrue(status == errSecSuccess || status == errSecItemNotFound,
+                      "Le nettoyage de la clé de fixture réussit ou constate son absence.")
+        XCTAssertTrue(MediaQualificationKeychainSpace.isAbsent(service: service, account: account),
+                      "L'espace Keychain de la fixture est nettoyé.")
     }
 }
