@@ -37,12 +37,14 @@ struct RelayReadinessPhaseTimes: Sendable, Equatable {
     var responseStart: Date?
     var responseEnd: Date?
     var reusedConnection: Bool
+    /// Nombre de transactions publiées pour la tâche ; seule la première est détaillée.
+    var transactionCount: Int
 
     init(fetchStart: Date? = nil, connectStart: Date? = nil, connectEnd: Date? = nil,
          secureConnectionStart: Date? = nil, secureConnectionEnd: Date? = nil,
          requestStart: Date? = nil, requestEnd: Date? = nil,
          responseStart: Date? = nil, responseEnd: Date? = nil,
-         reusedConnection: Bool = false) {
+         reusedConnection: Bool = false, transactionCount: Int = 1) {
         self.fetchStart = fetchStart
         self.connectStart = connectStart
         self.connectEnd = connectEnd
@@ -53,6 +55,7 @@ struct RelayReadinessPhaseTimes: Sendable, Equatable {
         self.responseStart = responseStart
         self.responseEnd = responseEnd
         self.reusedConnection = reusedConnection
+        self.transactionCount = transactionCount
     }
 
     /// Première transaction de la tâche ; `nil` si le système n’en publie aucune.
@@ -67,7 +70,8 @@ struct RelayReadinessPhaseTimes: Sendable, Equatable {
                   requestEnd: transaction.requestEndDate,
                   responseStart: transaction.responseStartDate,
                   responseEnd: transaction.responseEndDate,
-                  reusedConnection: transaction.isReusedConnection)
+                  reusedConnection: transaction.isReusedConnection,
+                  transactionCount: metrics.transactionMetrics.count)
     }
 }
 
@@ -90,9 +94,12 @@ enum RelayReadinessPhaseGuard {
 /// Aucun seuil n’est qualifié de « lent » : la mesure ne conclut pas à la place du diagnostic.
 enum RelayReadinessPhaseMarkers {
     static let maximumMilliseconds = 600_000
+    /// Au-delà, le nombre de transactions est saturé : 9 signifie « 9 ou plus ».
+    static let maximumTransactions = 9
 
     static func make(_ times: RelayReadinessPhaseTimes?) -> [String] {
-        guard let times else { return ["R-METRICS-MISSING"] }
+        // Métriques reçues mais aucune transaction : distinct de « pas encore de callback ».
+        guard let times else { return ["R-TRANSACTION-NONE"] }
         var markers: [String] = []
         if times.reusedConnection {
             markers.append("R-CONN-REUSED")
@@ -103,6 +110,7 @@ enum RelayReadinessPhaseMarkers {
         markers.append(phase("REQUEST", from: times.requestStart, to: times.requestEnd))
         markers.append(phase("RESPONSE", from: times.responseStart, to: times.responseEnd))
         markers.append(total(times))
+        markers.append("R-TXN-\(min(max(times.transactionCount, 0), maximumTransactions))")
         return markers
     }
 
@@ -115,39 +123,52 @@ enum RelayReadinessPhaseMarkers {
     }
 
     private static func phase(_ name: String, from start: Date?, to end: Date?) -> String {
-        guard let start else { return "R-\(name)-ABSENT" }
-        guard let end else { return "R-\(name)-INCOMPLETE" }
-        let interval = end.timeIntervalSince(start)
-        guard interval.isFinite, interval >= 0 else { return "R-\(name)-INVALID" }
-        return "R-\(name)-MS-\(milliseconds(interval))"
+        if start == nil, end == nil { return "R-\(name)-ABSENT" }
+        guard let start else { return "R-\(name)-INVALID" }   // fin publiée sans début
+        guard start.timeIntervalSinceReferenceDate.isFinite else { return "R-\(name)-INVALID" }
+        guard let end else { return "R-\(name)-INCOMPLETE" }  // début fini seul
+        guard end.timeIntervalSinceReferenceDate.isFinite, end >= start else { return "R-\(name)-INVALID" }
+        return "R-\(name)-MS-\(milliseconds(end.timeIntervalSince(start)))"
     }
 
     private static func total(_ times: RelayReadinessPhaseTimes) -> String {
-        guard let start = times.fetchStart else { return "R-TOTAL-ABSENT" }
-        guard let end = times.responseEnd else { return "R-TOTAL-INCOMPLETE" }
-        let interval = end.timeIntervalSince(start)
-        guard interval.isFinite, interval >= 0 else { return "R-TOTAL-INVALID" }
-        return "R-TOTAL-MS-\(milliseconds(interval))"
+        phase("TOTAL", from: times.fetchStart, to: times.responseEnd)
     }
 }
 
+/// Résultat d’une lecture immédiate : « pas encore de callback » n’est pas « aucune métrique reçue ».
+enum RelayReadinessPhaseObservation: Sendable, Equatable {
+    case pending
+    case received([String])
+}
+
 /// Observateur opt-in d’une seule sonde : la première requête éligible est retenue, les autres ignorées.
-/// État protégé par verrou ; aucune attente, aucun singleton, aucun partage entre sondes.
+/// Le sink ne reçoit que des marqueurs fermés, une seule fois, appelé hors verrou ; aucun état partagé.
 final class RelayReadinessPhaseProbe: @unchecked Sendable {
     private let lock = NSLock()
     private var observation: [String]?
+    private let sink: (@Sendable ([String]) -> Void)?
 
-    var hasObservation: Bool { lock.withLock { observation != nil } }
+    init(sink: (@Sendable ([String]) -> Void)? = nil) {
+        self.sink = sink
+    }
 
-    /// Marqueurs fermés, ou l’absence explicite de métriques : une mesure manquante n’est pas un succès.
-    var report: [String] { lock.withLock { observation ?? ["R-METRICS-MISSING"] } }
+    /// Lecture immédiate, sans attente : `pending` n’affirme pas qu’aucun callback ne viendra.
+    var immediate: RelayReadinessPhaseObservation {
+        lock.withLock { observation.map { .received($0) } ?? .pending }
+    }
 
     func record(_ times: RelayReadinessPhaseTimes?, request: URLRequest?) {
         guard RelayReadinessPhaseGuard.accepts(request) else { return }
         let markers = RelayReadinessPhaseMarkers.make(times)
-        lock.withLock {
-            if observation == nil { observation = markers }
+        let accepted: [String]? = lock.withLock {
+            guard observation == nil else { return nil }
+            observation = markers
+            return markers
         }
+        // Première observation seulement, et jamais sous verrou : un callback répété ne réémet rien.
+        guard let accepted else { return }
+        sink?(accepted)
     }
 }
 #endif

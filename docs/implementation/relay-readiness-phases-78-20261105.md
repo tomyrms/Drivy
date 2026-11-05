@@ -1,12 +1,11 @@
 # Phases de readiness du relais — instrumentation opt-in (#78)
 
-Date : 5 novembre 2026. Base : `0e1aa871935f3d2a904011ea2f4732a968c67c41`, worktree
-`integration-issues-20261105`. Suite du diagnostic `artifacts/q9-relay-readiness-diagnostic/RAPPORT.md`
-(deux occurrences `READINESS` à ~25 s, phase exacte inconnue) et de l'arbitrage de placement du
-coordinateur (option A, section « Arbitrage de placement »).
+Date : 5 novembre 2026. Branche `tomyrms/integration-issues-20261105`.
+Première passe : `0e1aa871` → `f0ade133` (revue indépendante `ctx_7ea7b6ce5478`).
+Seconde passe corrective : voir §10.
 
 Objet : **mesurer** les phases d'une seule requête de readiness, sans corriger le timeout, sans
-changer le transport, les bornes, le TLS, le verdict ni introduire de réessai ou de préchauffage.
+changer le transport, les bornes, le TLS, le verdict, et sans réessai ni préchauffage.
 
 ## 1. Contrat
 
@@ -18,113 +17,128 @@ créée par la sonde :
 - La configuration de session est factorisée mais **inchangée** : `ephemeral`, cache et cookies nuls,
   `reloadIgnoringLocalCacheData`, `timeoutIntervalForRequest = 20`, `timeoutIntervalForResource = 30`,
   délégué qui refuse toute redirection.
-- Aucun observer en Release ni sur appareil physique : la condition exclut les deux.
+- Aucun observer en Release ni sur appareil physique.
 
 ## 2. Corrélation à une seule sonde
 
-Trois verrous indépendants, aucun partagé :
+Trois verrous indépendants :
 
-1. **Session dédiée** : le test crée une instance de transport par sonde ; le délégué de cette
-   session ne connaît que son `readinessPhaseProbe`.
+1. **Session dédiée** : une instance de transport par sonde ; son délégué ne connaît que cette sonde.
 2. **Filtre de requête** (`RelayReadinessPhaseGuard.accepts`) : méthode absente ou `GET`, schéma
    `https`, hôte `localhost` ou `127.0.0.1`, port 1024–65535, chemin exact `/qualification/ready`,
-   sans user/password/query/fragment et sans en-tête `Authorization`. Toute autre requête est ignorée.
-3. **Première observation seulement** : `RelayReadinessPhaseProbe.record` ignore les observations
-   suivantes ; une sonde ne peut pas être réécrite par une requête tardive.
+   sans user/password/query/fragment, sans en-tête `Authorization`. Toute autre requête est ignorée.
+3. **Première observation seulement** : `record` ignore toute observation ultérieure ; un callback
+   répété ne réémet rien et n'écrase pas la mesure.
 
-Le délégué lit `task.originalRequest` (jamais une URL reconstruite) et transmet les métriques sans
-les stocker.
+## 3. Vocabulaire fermé et états distincts
 
-## 3. Vocabulaire fermé
-
-Seuls des marqueurs `R-…` passant `MessagingDiagnostics.isSafe` (`A-Z`, `0-9`, `-`, ≤ 40 caractères)
-sortent. Le singleton `MessagingDiagnostics.shared` n'est **jamais** modifié : la sonde a son propre
-stockage, protégé par `NSLock`.
+Seuls des marqueurs `R-…` passant `MessagingDiagnostics.isSafe` (`A-Z`, `0-9`, `-`, ≤ 40) sortent.
+Le singleton `MessagingDiagnostics.shared` n'est jamais modifié.
 
 | Marqueur | Sens |
 |---|---|
-| `R-CONNECT-MS-<n>` / `R-TLS-MS-<n>` | durée mesurée de la phase, en millisecondes entières bornées 0–600 000 |
+| `R-CONNECT-MS-<n>` / `R-TLS-MS-<n>` | durée de la phase, millisecondes entières bornées 0–600 000 |
 | `R-REQUEST-MS-<n>` / `R-RESPONSE-MS-<n>` | idem pour l'envoi et la réception |
 | `R-TOTAL-MS-<n>` | `fetchStartDate` → `responseEndDate` |
-| `R-<PHASE>-ABSENT` | le système n'a pas publié le début de la phase |
-| `R-<PHASE>-INCOMPLETE` | début publié, fin absente (cas attendu d'un timeout de réponse) |
-| `R-<PHASE>-INVALID` | fin antérieure au début, ou date non finie |
-| `R-CONN-REUSED` | connexion réutilisée : ni CONNECT ni TLS mesurés |
-| `R-METRICS-MISSING` | aucune métrique reçue : **limite explicite**, jamais un succès de mesure |
+| `R-<PHASE>-ABSENT` | **aucune** des deux extrémités publiée |
+| `R-<PHASE>-INCOMPLETE` | début fini publié seul |
+| `R-<PHASE>-INVALID` | fin seule, dates inversées, ou date non finie |
+| `R-CONN-REUSED` | connexion réutilisée : ni CONNECT ni TLS mesurés (choix M1) |
+| `R-TXN-<n>` | nombre de transactions, borné à 9 (« 9 ou plus ») ; seule la première est détaillée |
+| `R-TRANSACTION-NONE` | callback reçu, **zéro** transaction publiée |
+| `R-METRICS-PENDING` | lecture immédiate : **aucun callback à cet instant** (état temporel) |
 
-Aucun seuil n'est qualifié de « lent » : la mesure ne conclut pas à la place du diagnostic.
-Aucune date absolue, URL, adresse, certificat, corps, en-tête, `userInfo` ni description libre
-n'est émise ou journalisée.
+Les trois derniers états ne sont jamais confondus : `PENDING` (rien reçu à cet instant),
+`TRANSACTION-NONE` (métriques reçues, aucune transaction), phases (transaction présente).
+Aucun seuil n'est qualifié de « lent » ; aucune date absolue, URL, adresse, certificat, corps,
+en-tête, `userInfo` ni description libre n'est émise.
 
-## 4. Cycle de vie et synchronisation
+## 4. Cycle de vie, synchronisation, émission
 
-- Le délégué est appelé sur la file de délégué de la session (hors MainActor) ; l'écriture est
-  protégée par verrou, la lecture aussi. Aucune course avec le `catch` du test.
-- Le test attend **au plus 2 s** (boucle de 20 ms) l'arrivée du callback, puis imprime
-  `L2 readiness phases : …`. Cette attente est bornée, ne retarde jamais le transport et ne change
-  ni le résultat ni l'erreur : `URLError` et le verdict `READINESS`/FFI sont conservés tels quels.
-- Si le callback n'arrive pas dans la fenêtre, la sortie affiche `R-METRICS-MISSING` : c'est une
-  mesure manquante annoncée comme telle.
-- Aucune continuation pendante, aucune tâche de fond, aucun état global.
+- Le délégué est appelé sur la file de délégué de la session ; l'écriture et la lecture de la sonde
+  sont protégées par `NSLock`. Aucune course avec le test.
+- **Aucune attente** : ni boucle, ni `Task.sleep`, ni échéance, ni horloge. Le transport n'est jamais
+  retardé et aucune annulation n'est absorbée.
+- À la **première** observation éligible, la sonde retient les marqueurs puis appelle son `sink`
+  **hors verrou**, une seule fois ; le sink ne reçoit que des marqueurs fermés (aucune requête,
+  erreur, URL ou objet du test).
+- Immédiatement après le `send`, en succès comme en échec, le test lit l'état courant et imprime
+  soit les marqueurs reçus, soit `R-METRICS-PENDING`. Ce `PENDING` est **temporel** : il n'affirme
+  pas qu'aucun callback ne viendra.
+- Un callback **tardif** émet encore sa ligne : la preuve n'est pas supprimée parce qu'un `PENDING`
+  a déjà été imprimé. Conséquence assumée : la même mesure peut apparaître deux fois (ligne
+  `(callback)` puis ligne immédiate), et une ligne tardive peut arriver après la fin du cas.
 
-## 5. Tests (synthétiques, sans réseau)
-
-Quatre cas ajoutés à `RelayReadinessDiagnosticTests` (classe existante, même fichier autorisé) :
+## 5. Tests (synthétiques, sans réseau, sans sleep)
 
 | Cas | Vérifie |
 |---|---|
-| `testReadinessPhaseMarkersStayClosedAndBounded` | marqueurs exacts pour des phases synthétiques, tous sûrs, aucun dépassement |
-| `testReadinessPhaseMarkersCoverMissingPartialAndInvalidTimestamps` | métriques absentes, phases absentes, fin manquante, dates inversées ou infinies, connexion réutilisée sans TLS |
-| `testReadinessPhaseFilterAcceptsOnlyTheQualificationProbe` | accepte GET HTTPS loopback `/qualification/ready` ; rejette http, hôte distant, chemin voisin, query, fragment, userinfo, POST, en-tête `Authorization`, port hors plage |
-| `testReadinessPhaseProbesKeepSeparateObservations` | deux sondes ne partagent rien, la seconde observation d'une sonde est ignorée, une requête hors périmètre est ignorée, `R-METRICS-MISSING` avant toute observation |
+| `testReadinessPhaseMarkersStayClosedAndBounded` | marqueurs exacts (dont `R-TXN-1`), tous sûrs ; borne exercée (`milliseconds(700)` → 600 000, négatif → 0, infini → 600 000) ; saturation `R-TXN-9` |
+| `testReadinessPhaseMarkersCoverMissingPartialAndInvalidTimestamps` | `TRANSACTION-NONE` ; tout absent → `ABSENT` ; fin sans début → `INVALID` (phase et total) ; début seul → `INCOMPLETE` ; inversé/non fini → `INVALID` ; réutilisé sans TLS ; total incomplet |
+| `testReadinessPhaseFilterAcceptsOnlyTheQualificationProbe` | accepte GET HTTPS loopback `/qualification/ready` ; rejette http, hôte distant, chemin voisin, `/extra`, query, fragment, userinfo, POST, `Authorization`, port 80 |
+| `testReadinessPhaseProbeStaysPendingUntilCallbackAndKeepsLateObservation` | `immediate == .pending` avant callback ; callback tardif conservé et émis **une fois** ; callback répété sans réémission ni écrasement |
+| `testReadinessPhaseProbesKeepSeparateObservations` | deux sondes avec sinks distincts ; requête hors périmètre → ni observation ni émission ; aucun partage |
 
-Aucun de ces cas n'émet de requête : ils construisent des `URLRequest` et des valeurs de phase
-synthétiques.
+Le sink des tests est un capteur local qui ne garde que des tableaux de marqueurs.
 
 ## 6. Sélection
 
-La garde FFI (`scripts/messaging-relay-qualification.py`) exige **exactement un** cas dans
-`MatrixMessagingRelayIntegrationTests` : ajouter des cas à cette suite aurait fait échouer la garde
-même sur une campagne verte. Les tests vivent donc dans `RelayReadinessDiagnosticTests`, et la
-sélection `messaging` est étendue d'une classe, sans retirer ni réordonner les dix existantes :
+La garde FFI exige **exactement un** cas dans `MatrixMessagingRelayIntegrationTests` : les tests
+vivent donc dans `RelayReadinessDiagnosticTests`, et la sélection `messaging` compte onze classes
+(`scripts/ios/test-selection.sh`, `MESSAGING_SUITES`). Les deux scripts sont inchangés depuis
+`f0ade133`.
 
-- `scripts/ios/test-selection.sh` : `RelayReadinessDiagnosticTests` ajoutée en fin de liste.
-- `scripts/ios/test_test_selection.py` : `MESSAGING_SUITES` aligné sur cette onzième classe.
-
-Sélection réelle relevée : **11 classes**, `MatrixMessagingRelayIntegrationTests` toujours présente,
-`RelayReadinessDiagnosticTests` en dernier, garde FFI inchangée.
-
-## 7. Contrôles réellement exécutés (Windows, sans Xcode)
+## 7. Contrôles réellement exécutés
 
 | Commande | Résultat | Code |
 |---|---|---|
-| `python -I scripts/ios/test_test_selection.py` | `Ran 25 tests … OK` | 0 |
-| `python -I scripts/qualification/test_relay_plan.py` | `Ran 8 tests … OK` | 0 |
-| relevé de sélection (Git Bash, `DRIVY_IOS_UNIT_SCOPE=messaging`) | `count=11`, liste conforme | 0 |
+| `python -I scripts/ios/test_test_selection.py` (revue indépendante, scripts inchangés depuis) | `Ran 25 tests … OK` | 0 |
+| `python -I scripts/qualification/test_relay_plan.py` (idem) | `Ran 8 tests … OK` | 0 |
+| relevé de sélection `messaging` | `count=11`, ordre conservé | 0 |
 | `git diff --check` | aucune erreur | 0 |
-| `git diff --exit-code HEAD -- scripts/messaging-relay-qualification.py … workflows … MessagingMediaRealRelayTests.swift MessagingCore MessagingAPI` | identique au HEAD | 0 |
+| `git diff --exit-code` sur garde FFI, workflow, scripts hors sélection, métier, crypto, fixtures | identique | 0 |
 
-**Non exécuté** : compilation Swift, tests XCTest, exécution Apple. Aucun Xcode ni Swift sur ce
-poste ; aucun cycle RED/GREEN Swift n'est revendiqué.
+**Non exécuté** : compilation Swift, XCTest, exécution Apple. Aucun Xcode ni Swift sur ce poste ;
+aucun cycle RED/GREEN Swift n'est revendiqué. Les deux suites Python n'ont pas été relancées dans
+cette passe : les scripts de sélection sont inchangés depuis la revue qui les a exécutées.
 
 ## 8. Limites
 
-- Une mesure absente n'est pas une mesure : `R-METRICS-MISSING` documente le manque.
-- Le premier échantillon retenu par sonde est unique ; un second envoi sur la même sonde est ignoré.
-- Les métriques système ne disent pas ce que le relais a reçu : elles situent la phase côté client.
-- Cette instrumentation **ne corrige pas** le timeout de readiness ; elle ne fait que rendre la
-  phase observable lors de la prochaine occurrence.
-- Aucun préchauffage, réessai, sleep ajouté au transport, relèvement de délai ni relâchement TLS.
+- `R-METRICS-PENDING` à la lecture immédiate ne prouve pas l'absence de callback : seule une ligne
+  `(callback)` ultérieure établit une mesure.
+- Une **émission tardive** est observable dans les journaux du processus de test / le résultat de
+  campagne ; son attribution au même cas XCTest n'est pas garantie sans preuve supplémentaire.
+- L'absence de toute ligne ne prouve **pas** un build Release : elle peut venir d'un arrêt avant la
+  sonde, d'une lacune de collecte des journaux, ou d'un build hors `DEBUG`/simulateur. La prochaine
+  campagne doit constater la configuration, la découverte des cas et la présence des marqueurs.
+- Seule la première transaction est détaillée ; `R-TXN-<n>` signale qu'il y en a eu d'autres sans
+  les décrire, et ne prouve rien sur l'incident historique.
+- La session et son délégué ne sont jamais invalidés (limite **préexistante**, non refactorée) : une
+  sonde peut recevoir un callback après la fin du cas.
+- M1 : sur connexion réutilisée, CONNECT et TLS sont omis ; choix conservé et documenté.
+- Les métriques système ne prouvent pas ce que le relais a reçu.
+- L'instrumentation **ne corrige pas** le timeout ; elle le rend observable.
 
 ## 9. Fichiers
 
-- `apps/ios/Drivy/SchoolAPI/DrivyAPIClient.swift` : types de phase, filtre, marqueurs, sonde,
-  second initialiseur du transport, configuration factorisée à l'identique.
+- `apps/ios/Drivy/SchoolAPI/DrivyAPIClient.swift` : types de phase, filtre, marqueurs, sonde avec
+  sink, second initialiseur du transport, configuration inchangée.
 - `apps/ios/DrivyTests/MatrixMessagingRelayIntegrationTests.swift` : opt-in de la sonde dans
-  `exerciseRealRelay` (une seule requête readiness), impression bornée, quatre cas de test dans
-  `RelayReadinessDiagnosticTests`.
-- `scripts/ios/test-selection.sh`, `scripts/ios/test_test_selection.py` : onzième classe.
+  `exerciseRealRelay`, lecture immédiate sans attente, cinq cas dans `RelayReadinessDiagnosticTests`.
+- `scripts/ios/test-selection.sh`, `scripts/ios/test_test_selection.py` : onzième classe (inchangés
+  depuis `f0ade133`).
 - Le présent document.
 
-Aucun changement du client métier, des tests UI, de la fixture Fastify, du workflow, des locks,
-de la crypto/FFI, du décodeur, des droits ou de la persistance.
+## 10. Corrections après la revue indépendante
+
+| Point | Correction |
+|---|---|
+| **C1** isolation Swift 6 | `sendReadiness` et `printReadinessPhaseObservation` sont `@MainActor`, comme leur appelant ; aucune méthode d'instance nonisolated `async` n'est plus appelée depuis le MainActor ; la classe n'est pas annotée et Sendable n'est pas relâché. |
+| **I1** attente | attente de 2 s supprimée (plus de `printReadinessPhases`, plus de `Date`/`Task.sleep`) ; émission depuis le callback via le sink, lecture immédiate `PENDING`/reçue, callback tardif conservé. |
+| **I2** fin sans début | `phase`/`total` distinguent `ABSENT` (aucune extrémité), `INCOMPLETE` (début fini seul) et `INVALID` (fin seule, inversée, non finie). |
+| **I3** états confondus | `R-TRANSACTION-NONE` (callback, zéro transaction) et `R-METRICS-PENDING` (pas encore de callback) remplacent `R-METRICS-MISSING`. |
+| **I4** transactions multiples | `R-TXN-<n>` borné à 9, à côté des phases de la première transaction ; aucune conclusion sur la tâche entière. |
+| **I5** tests | borne 600 000 exercée, fin sans début, `TRANSACTION-NONE`, `PENDING` puis callback tardif, callback répété, isolation des sondes. |
+| **M3** doc | plus d'attente annoncée, plus de promesse d'absence définitive ; `PENDING` explicitement temporel. |
+| **M4** signal éteint | absence de ligne ≠ build Release ; la campagne doit constater configuration, découverte et marqueurs. |
+| **M2** durée de vie | documentée comme limite préexistante, sans refactor du transport. |

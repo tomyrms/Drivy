@@ -116,15 +116,20 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
     }
 
     /// Sonde de readiness : transport réel inchangé, seul l'observateur de phases est activé.
+    /// Même MainActor que son appelant : aucune valeur non Sendable ne traverse de frontière.
+    @MainActor
     private func sendReadiness(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         #if DEBUG && targetEnvironment(simulator)
-        let probe = RelayReadinessPhaseProbe()
+        let probe = RelayReadinessPhaseProbe { markers in
+            // Sink fermé : uniquement des marqueurs, jamais une requête, une erreur ou un objet du test.
+            print("L2 readiness phases (callback) : " + markers.joined(separator: " "))
+        }
         do {
             let response = try await SchoolURLSessionTransport(readinessPhaseProbe: probe).send(request)
-            await printReadinessPhases(probe)
+            printReadinessPhaseObservation(probe)
             return response
         } catch {
-            await printReadinessPhases(probe)
+            printReadinessPhaseObservation(probe)
             throw error
         }
         #else
@@ -133,14 +138,15 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
     }
 
     #if DEBUG && targetEnvironment(simulator)
-    /// Attente bornée du callback de métriques (2 s au plus) : ne retarde pas le transport
-    /// et ne modifie ni le verdict ni l'erreur réelle.
-    private func printReadinessPhases(_ probe: RelayReadinessPhaseProbe) async {
-        let deadline = Date().addingTimeInterval(2)
-        while !probe.hasObservation, Date() < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
+    /// Lecture immédiate après le send, sans attente : `pending` reste temporel, jamais « jamais reçu ».
+    @MainActor
+    private func printReadinessPhaseObservation(_ probe: RelayReadinessPhaseProbe) {
+        switch probe.immediate {
+        case .pending:
+            print("L2 readiness phases : R-METRICS-PENDING")
+        case .received(let markers):
+            print("L2 readiness phases : " + markers.joined(separator: " "))
         }
-        print("L2 readiness phases : " + probe.report.joined(separator: " "))
     }
     #endif
 
@@ -479,6 +485,14 @@ final class RelayReadinessDiagnosticTests: XCTestCase {
     #if DEBUG && targetEnvironment(simulator)
     // MARK: Phases de readiness (instrumentation opt-in, sans réseau)
 
+    /// Sink synthétique : ne garde que des marqueurs fermés, jamais une requête, une erreur ou un objet du test.
+    private final class ReadinessMarkerSink: @unchecked Sendable {
+        private let lock = NSLock()
+        private var lines: [[String]] = []
+        var captured: [[String]] { lock.withLock { lines } }
+        func receive(_ markers: [String]) { lock.withLock { lines.append(markers) } }
+    }
+
     func testReadinessPhaseMarkersStayClosedAndBounded() {
         let start = Date(timeIntervalSinceReferenceDate: 1_000)
         let times = RelayReadinessPhaseTimes(
@@ -495,20 +509,41 @@ final class RelayReadinessDiagnosticTests: XCTestCase {
         let markers = RelayReadinessPhaseMarkers.make(times)
 
         XCTAssertEqual(markers, ["R-CONNECT-MS-10", "R-TLS-MS-8", "R-REQUEST-MS-1",
-                                 "R-RESPONSE-MS-7", "R-TOTAL-MS-40"])
+                                 "R-RESPONSE-MS-7", "R-TOTAL-MS-40", "R-TXN-1"])
         // Le vocabulaire fermé interdit dates absolues, URL, hôte et ponctuation.
         for marker in markers {
             XCTAssertTrue(MessagingDiagnostics.isSafe(marker), "Marqueur hors vocabulaire : \(marker)")
         }
+
+        // Borne réellement exercée : saturation, négatif et non fini.
+        XCTAssertEqual(RelayReadinessPhaseMarkers.milliseconds(700), 600_000)
+        XCTAssertEqual(RelayReadinessPhaseMarkers.milliseconds(-1), 0)
+        XCTAssertEqual(RelayReadinessPhaseMarkers.milliseconds(.infinity), 600_000)
+
+        // Nombre de transactions borné : 9 signifie « 9 ou plus », jamais une valeur brute.
+        let many = RelayReadinessPhaseTimes(fetchStart: start, transactionCount: 42)
+        XCTAssertEqual(RelayReadinessPhaseMarkers.make(many).last, "R-TXN-9")
     }
 
     func testReadinessPhaseMarkersCoverMissingPartialAndInvalidTimestamps() {
-        XCTAssertEqual(RelayReadinessPhaseMarkers.make(nil), ["R-METRICS-MISSING"])
+        // Métriques reçues sans transaction : distinct de « pas encore de callback ».
+        XCTAssertEqual(RelayReadinessPhaseMarkers.make(nil), ["R-TRANSACTION-NONE"])
         XCTAssertEqual(RelayReadinessPhaseMarkers.make(RelayReadinessPhaseTimes()),
                        ["R-CONNECT-ABSENT", "R-TLS-ABSENT", "R-REQUEST-ABSENT",
-                        "R-RESPONSE-ABSENT", "R-TOTAL-ABSENT"])
+                        "R-RESPONSE-ABSENT", "R-TOTAL-ABSENT", "R-TXN-1"])
 
         let start = Date(timeIntervalSinceReferenceDate: 2_000)
+
+        // Fin publiée sans début : incohérence annoncée, jamais une absence.
+        let orphanConnect = RelayReadinessPhaseMarkers.make(
+            RelayReadinessPhaseTimes(fetchStart: start, connectEnd: start.addingTimeInterval(0.005)))
+        XCTAssertTrue(orphanConnect.contains("R-CONNECT-INVALID"))
+        XCTAssertTrue(orphanConnect.contains("R-TOTAL-INCOMPLETE"))
+
+        let orphanTotal = RelayReadinessPhaseMarkers.make(
+            RelayReadinessPhaseTimes(responseEnd: start.addingTimeInterval(0.005)))
+        XCTAssertTrue(orphanTotal.contains("R-TOTAL-INVALID"))
+
         let inverted = RelayReadinessPhaseTimes(
             fetchStart: start,
             connectStart: start.addingTimeInterval(0.050),
@@ -523,12 +558,22 @@ final class RelayReadinessDiagnosticTests: XCTestCase {
             XCTAssertTrue(MessagingDiagnostics.isSafe(marker), "Marqueur hors vocabulaire : \(marker)")
         }
 
-        // Une date non finie ne produit jamais de durée : elle est annoncée invalide.
-        let infinite = RelayReadinessPhaseTimes(
-            fetchStart: start,
-            connectStart: start,
-            connectEnd: start.addingTimeInterval(.infinity))
-        XCTAssertTrue(RelayReadinessPhaseMarkers.make(infinite).contains("R-CONNECT-INVALID"))
+        // Un début seul et fini reste incomplet ; une date non finie est invalide.
+        let startedOnly = RelayReadinessPhaseMarkers.make(
+            RelayReadinessPhaseTimes(fetchStart: start, requestStart: start))
+        XCTAssertTrue(startedOnly.contains("R-REQUEST-INCOMPLETE"))
+
+        let infiniteStart = RelayReadinessPhaseMarkers.make(
+            RelayReadinessPhaseTimes(fetchStart: start,
+                                     connectStart: start.addingTimeInterval(.infinity),
+                                     connectEnd: start.addingTimeInterval(0.001)))
+        XCTAssertTrue(infiniteStart.contains("R-CONNECT-INVALID"))
+
+        let infiniteEnd = RelayReadinessPhaseMarkers.make(
+            RelayReadinessPhaseTimes(fetchStart: start,
+                                     connectStart: start,
+                                     connectEnd: start.addingTimeInterval(.infinity)))
+        XCTAssertTrue(infiniteEnd.contains("R-CONNECT-INVALID"))
 
         let reused = RelayReadinessPhaseTimes(
             fetchStart: start,
@@ -569,10 +614,11 @@ final class RelayReadinessDiagnosticTests: XCTestCase {
         XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:80/qualification/ready")))
     }
 
-    func testReadinessPhaseProbesKeepSeparateObservations() throws {
-        let acceptedRequest = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/qualification/ready")))
-        let otherRequest = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/other")))
-        let start = Date(timeIntervalSinceReferenceDate: 3_000)
+    func testReadinessPhaseProbeStaysPendingUntilCallbackAndKeepsLateObservation() throws {
+        let sink = ReadinessMarkerSink()
+        let probe = RelayReadinessPhaseProbe { sink.receive($0) }
+        let accepted = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/qualification/ready")))
+        let start = Date(timeIntervalSinceReferenceDate: 4_000)
         let first = RelayReadinessPhaseTimes(
             fetchStart: start,
             requestStart: start,
@@ -588,20 +634,44 @@ final class RelayReadinessDiagnosticTests: XCTestCase {
             responseEnd: start.addingTimeInterval(0.200),
             reusedConnection: true)
 
-        let probeA = RelayReadinessPhaseProbe()
-        let probeB = RelayReadinessPhaseProbe()
-        XCTAssertFalse(probeA.hasObservation)
-        XCTAssertEqual(probeA.report, ["R-METRICS-MISSING"], "Une absence de métriques reste explicite")
+        // Aucun callback à cet instant : temporel, jamais une absence définitive.
+        XCTAssertEqual(probe.immediate, .pending)
+        XCTAssertTrue(sink.captured.isEmpty)
 
-        probeA.record(first, request: acceptedRequest)
-        probeB.record(second, request: acceptedRequest)
-        probeA.record(second, request: acceptedRequest) // seconde observation de la même sonde : ignorée
-        probeA.record(first, request: otherRequest)     // requête hors périmètre : ignorée
+        // Callback tardif : la mesure est conservée et émise une seule fois.
+        probe.record(first, request: accepted)
+        XCTAssertEqual(probe.immediate, .received(RelayReadinessPhaseMarkers.make(first)))
+        XCTAssertEqual(sink.captured, [RelayReadinessPhaseMarkers.make(first)])
 
-        XCTAssertTrue(probeA.hasObservation)
-        XCTAssertEqual(probeA.report, RelayReadinessPhaseMarkers.make(first))
-        XCTAssertEqual(probeB.report, RelayReadinessPhaseMarkers.make(second))
-        XCTAssertNotEqual(probeA.report, probeB.report)
+        // Callback répété : ni réémission, ni écrasement de la première observation.
+        probe.record(second, request: accepted)
+        XCTAssertEqual(sink.captured.count, 1)
+        XCTAssertEqual(probe.immediate, .received(RelayReadinessPhaseMarkers.make(first)))
+    }
+
+    func testReadinessPhaseProbesKeepSeparateObservations() throws {
+        let sinkA = ReadinessMarkerSink()
+        let sinkB = ReadinessMarkerSink()
+        let probeA = RelayReadinessPhaseProbe { sinkA.receive($0) }
+        let probeB = RelayReadinessPhaseProbe { sinkB.receive($0) }
+        let accepted = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/qualification/ready")))
+        let other = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/other")))
+        let start = Date(timeIntervalSinceReferenceDate: 5_000)
+        let times = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            requestStart: start,
+            requestEnd: start.addingTimeInterval(0.003),
+            responseStart: start.addingTimeInterval(0.003),
+            responseEnd: start.addingTimeInterval(0.006),
+            reusedConnection: true)
+
+        probeA.record(times, request: accepted)
+        probeB.record(times, request: other) // requête hors périmètre : ni observation, ni émission
+
+        XCTAssertEqual(sinkA.captured.count, 1)
+        XCTAssertTrue(sinkB.captured.isEmpty)
+        XCTAssertEqual(probeB.immediate, .pending)
+        XCTAssertNotEqual(probeA.immediate, probeB.immediate)
     }
     #endif
 }
