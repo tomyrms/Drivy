@@ -6,7 +6,7 @@ dispatch `ctx_0fe4874cde03`, worker `orca_session_id:e0bc243a-f5ce-4614-81d8-a7d
 - Worktree : `C:/Users/jtoma/orca/workspaces/Drivy/integration-issues-20261105`
 - Branche : `tomyrms/integration-issues-20261105`
 - Base vérifiée avant toute opération : `b91e173b2e41f414a553d315fac17a0b6c82c508`, arbre propre
-- **SHA produit** des huit fusions, avant cette mise à jour : `59b33ea5a8900638086ba247e58e6b037e40ce9a`
+- **SHA produit** des onze fusions, avant cette mise à jour : `9b50c597b8a0d511954735fff1dff830097204d3`
 - **SHA final** complet : celui du commit de ce rapport, indiqué dans `git log -1` et dans la
   livraison Orca (un fichier ne peut pas citer son propre SHA avant d'être créé).
 - Aucune publication, PR, CI distante, fusion `master`, activation ni déploiement.
@@ -18,7 +18,7 @@ dispatch `ctx_0fe4874cde03`, worker `orca_session_id:e0bc243a-f5ce-4614-81d8-a7d
 |---|---|
 | Modèle | `opencode-go/deepseek-v4.1-flash` (OpenCode Go, identifiant relevé par l'outil `models`) ; variantes `low/high/max` existantes mais **aucun effort demandé ni exposé**. Aucun changement de modèle ou de fournisseur. |
 | Superpowers | `verification-before-completion` effectivement chargé depuis `C:\Users\jtoma\.config\opencode\node_modules\superpowers\skills\verification-before-completion`. `test-driven-development` et `systematic-debugging` **non applicables** : aucune ligne de produit ni de test produite, aucun défaut corrigé ici. |
-| Codebase Memory | Projet propre à la racine exacte du worktree : `C-Users-jtoma-orca-workspaces-Drivy-integration-issues-20261105`, indexé **par chemin absolu** avant fusion (40 632 nœuds / 178 856 arêtes) puis laissé à jour après chaque fusion par le watcher du projet : **54 790 nœuds / 214 945 arêtes**, `status: ready`, dernier scan `2026-11-05T01:28:50Z`. Aucun index de worktree parent utilisé comme preuve. |
+| Codebase Memory | Projet propre à la racine exacte du worktree : `C-Users-jtoma-orca-workspaces-Drivy-integration-issues-20261105`, indexé **par chemin absolu** avant fusion (40 632 nœuds / 178 856 arêtes) puis laissé à jour après chaque fusion par le watcher du projet : **55 045 nœuds / 216 667 arêtes**, `status: ready`. Aucun index de worktree parent utilisé comme preuve. |
 | Node | 24.22.2 portable (`C:/Users/jtoma/AppData/Local/Temp/drivy-orchestration-20261104/node-v24.22.2-win-x64`), injecté dans le `PATH` du processus seulement ; npm 11.19.1. |
 | Docker | Inventaire avant création : 6 conteneurs actifs (`idrive-*`, projet sans rapport) et 25 au total, tous laissés intacts. Aucun arrêt, aucune purge. |
 | Apple | Xcode/Swift/simctl **absents** de ce poste : aucune compilation, aucun XCTest, aucun simulateur, aucun relais Apple exécuté. |
@@ -80,13 +80,69 @@ Lecture de source avant fusion (contrôle d'identité, sans éditer) :
   « tâche non coopérative » ajouté ; aucune assertion métier retirée (seuls des `_ = try?` sur des
   valeurs non utilisées).
 
-Conséquence pour les validations : `git diff --name-only fd626687..HEAD -- apps/api apps/web infra
-package.json package-lock.json .github` est **vide** (seuls des scripts et documents neufs s'ajoutent
-ensuite avec Q131, aucun fichier produit ni existant). Les campagnes API, web et scripts exécutées sur
-l'arbre `fd626687` restent donc valides **par identité de source** pour le candidat final ; aucune n'a
-été rejouée, et aucun résultat Swift n'est transféré.
+Conséquence pour les validations : `git diff --name-only fd626687..HEAD -- apps/api/src apps/web
+infra package.json package-lock.json .github` est **vide** (seuls des scripts et documents neufs
+s'ajoutent avec Q131, puis un fichier de test API avec S131 — voir le gel final). Les campagnes API,
+web et scripts exécutées sur l'arbre `fd626687` restent donc valides **par identité de source** pour le
+produit du candidat final ; aucune n'a été rejouée, et aucun résultat Swift n'est transféré. Le fichier
+`apps/api/test/messaging-media.integration.test.ts`, modifié par S131 après ces campagnes, dispose de sa
+propre preuve ciblée héritée (23 tests PostgreSQL verts, `tsc` exit 0 au SHA source).
 
-Delta total `b91e173b..HEAD` (hors rapport) : **39 fichiers, +5415 / −72**.
+Delta total `b91e173b..HEAD` (hors rapport) : **49 fichiers, +7274 / −97** (après le gel final ci-dessous).
+
+## Gel final — trois fusions autorisées (S131, N106, U106-L2)
+
+Fusions locales `--no-ff` dans l'ordre imposé, sur l'arbre `58121dcb` vérifié propre.
+
+| Ordre | Lot | Tête fusionnée | Merge local | Fichiers |
+|---|---|---|---|---|
+| 9 | S131 — stabilité du test média 409 | `921eafc39cd1daeccbb0ec3938aec2f0e50057f7` | `e79658244954634987a34dfce911dcef8ed7b65a` | 2 : test API + rapport |
+| 10 | N106 — admission d'envoi bornée | `54060efd786dc8a3126f1733af7acc418da8b7f7` | `a2c73f2b51f5a1b084311ad2a67e61e289813c06` | 5 : client, nouvelle admission, 2 tests, rapport |
+| 11 | U106-L2 — annulation avant transport | `5c3c378a7b60a1bb2877c5521dd2e41edd3a48f8` | `9b50c597b8a0d511954735fff1dff830097204d3` | 6 : vue, workspace, revue visuelle, 2 tests, rapport |
+
+**Aucun conflit** sur les trois fusions, aucune résolution manuelle. Le troisième merge est propre parce
+que N106 (`54060efd`, dont le parent est `d5c9dee0`) est entré avant U106-L2 : la base de fusion devient
+`d5c9dee0`, si bien que les deux branches ne modifient plus les mêmes chemins.
+
+### Identité des sources et chevauchement expliqué
+
+| Contrôle | Résultat |
+|---|---|
+| Chemins importés (union des trois deltas) | **18 entrées / 15 chemins uniques** |
+| Blob de chaque chemin comparé à son propriétaire final | **15 identiques** ; **3 écarts expliqués** ci-dessous |
+| Correction N106 (`54060efd`) sur ses trois fichiers | **intacte** (`SchoolCommandSendAdmissionTests.swift`, `SchoolPlanningAdmission106Tests.swift`, `planning-send-admission-106-20261105.md` = blobs de `54060efd`) |
+| `git diff --check` / arbre | exit 0 / propre |
+| Workflows, lockfiles, `package.json`, `infra/**` | inchangés |
+| `apps/api/src`, `apps/web` (produit) | **aucun delta** par rapport à `58121dcb` |
+| Ancien HEAD et têtes sources | **13 ancêtres vérifiés, 0 manquant** (base, `58121dcb`, 8 têtes antérieures, 3 nouvelles) |
+
+Les **trois écarts** sont ceux que la consigne nomme : U106-L2 porte encore la version *antérieure* à la
+correction de N106 des deux fichiers de tests et du rapport d'admission. Après la fusion ordonnée,
+c'est **`54060efd` qui fait foi** sur ces trois chemins, exactement comme demandé (« la correction
+`54060efd` doit rester intacte ») ; aucun autre chemin n'est touché par cette superposition. Ce n'est
+donc pas une divergence silencieuse mais la conséquence attendue de l'ordre des fusions.
+
+### Preuves héritées et nouveau test
+
+- **Aucune campagne globale relancée** : le produit API (`apps/api/src`) et tout `apps/web` sont
+  byte-identiques à l'arbre des campagnes I2 (`58121dcb`), donc les résultats API 1048/1049 exit 0 et
+  web 880 + 1 attendu exit 0 restent valides **par identité de source**, pas comme nouvelles exécutions.
+- **Seul `apps/api/test/messaging-media.integration.test.ts` change** (S131). Sa preuve est ciblée et
+  héritée du lot : **23 tests PostgreSQL verts et `tsc` exit 0** au SHA source, exécutés par son auteur
+  avec une PostgreSQL jetable. Le correctif est déterministe et conforme à ce qui avait été constaté
+  dans le rapport I2 : vérification par `status`/`type`/`code` et liste fermée de champs, `requestId`
+  imposé par une instrumentation de **fixture** uniquement (`app.addHook('onRequest')`), plus des cas
+  négatifs (409 réel, code erroné, `sha256`/`byteSize` divulgués) qui doivent échouer.
+- **Aucun Docker ni service lancé** pour ce gel : trois fusions mécaniques et des contrôles `git`.
+- **Q131 n'a pas été lancé** contre I2 ; son benchmark reste figé sur `e2edc85e`.
+
+### Limite Apple de ce gel
+
+Les nouveaux tests Swift et UI (`SchoolCommandSendAdmissionTests`,
+`SchoolPlanningAdmission106Tests`, `SchoolPlanningCancellation106Tests`,
+`SchoolPlanningCancellationUITests`) sont **NON COMPILÉS et NON EXÉCUTÉS** sous Windows : aucun Xcode
+disponible. Leur présence dans les répertoires suffit à la découverte par `unit_test_scope=all`, et
+`SchoolPlanningCancellationUITests` exige un lancement UI distinct ; aucune preuve n'est transférée.
 
 ## Ajout Q131 — harnais de mesures web (8e fusion, autorisée après les têtes fixées)
 
@@ -181,8 +237,8 @@ Received: {"type":"urn:drivy:problem:media_not_found",…,"code":"MEDIA_NOT_FOUN
   complète relancée donne **exit 0** sans modification quelconque.
 
 C'est un **défaut de test existant, probabiliste (~0,8 % par exécution)**, pas un défaut produit et
-pas un artefact d'intégration. Il n'est ni corrigé ni contourné ici : la correction appartient à son
-auteur, avec une assertion portant sur le champ `status` plutôt que sur une sous-chaîne du corps.
+pas un artefact d'intégration. Il n'a pas été corrigé par I2 ; son auteur l'a corrigé ensuite dans
+S131 (fusionné au gel final), en vérifiant le statut et le code plutôt qu'une sous-chaîne du corps.
 
 ### Ce que l'exécution 1 du web a révélé (dépassement de délai transitoire)
 
@@ -239,6 +295,10 @@ possibles sont des comptes de méthodes dans les fichiers, pas des résultats.
 | `apps/ios/DrivyTests/MessagingMediaOutboxTests.swift` (fixture T2b3) | `MessagingMediaOutboxTests` | 40 XCTest (2 scénarios modifiés) |
 | `apps/ios/DrivyTests/MessagingMediaCoordinatorTests.swift` (exception M97) | `MessagingMediaCoordinatorTests` | 44 XCTest (1 scénario d'échéance ajouté) |
 | `apps/ios/DrivyUITests/MessagingMediaUITests.swift` (base U97) | `MessagingMediaUITests` | 5 XCTest |
+| `apps/ios/DrivyTests/SchoolCommandSendAdmissionTests.swift` (N106) | `SchoolCommandSendAdmissionTests` | 7 `@Test` (swift-testing) |
+| `apps/ios/DrivyTests/SchoolPlanningAdmission106Tests.swift` (N106) | `SchoolPlanningAdmission106Tests` | 17 `@Test` (swift-testing) |
+| `apps/ios/DrivyTests/SchoolPlanningCancellation106Tests.swift` (U106-L2) | `SchoolPlanningCancellation106Tests` | 9 `@Test` (swift-testing) |
+| `apps/ios/DrivyUITests/SchoolPlanningCancellationUITests.swift` (U106-L2) | `SchoolPlanningCancellationUITests` | 3 XCTest |
 
 Sélections préparées pour une future campagne distante autorisée, **sans rien lancer ni modifier** :
 
@@ -295,13 +355,14 @@ de passe PostgreSQL synthétique a été supprimé ; aucun secret, jeton ni donn
   runner Linux.
 - **Recette R50** : preuve **héritée** du SHA source par identité de fichiers, pas une exécution de
   cette tâche.
-- Le défaut de test `/409/` de `messaging-media.integration.test.ts:312` et le dépassement de délai à
-  froid du harnais `pending-recovery-106` restent **non corrigés** : hors périmètre d'un intégrateur,
-  ils appartiennent à leurs auteurs.
+- Le défaut `/409/` de `messaging-media.integration.test.ts` est désormais **corrigé par son auteur**
+  dans S131 (fusionné) ; il n'était pas corrigé par I2. Le dépassement de délai à froid du harnais
+  `pending-recovery-106` reste **non corrigé** : hors périmètre d'un intégrateur.
 - Aucun push, PR, CI distante, `merge master`, déploiement, activation ni clôture d'issue ; `STATUS.md`
   et le registre restent au coordinateur. Le harnais Q131 est désormais **fusionné** comme lot
   documentaire/harnais, mais ses mesures restent des preuves ciblées sur `e2edc85e` et ne sont **pas**
   rejouables sur I2 sans contourner sa garde `apps/web`.
-- Les lots **N106** et **U106-L2** sont encore en cours : aucune de leurs têtes n'est entrée dans I2,
-  faute de SHA final relu transmis.
+- Les lots **N106** et **U106-L2** sont désormais intégrés (gel final), mais leurs tests Swift restent
+  **non compilés/non exécutés** sous Windows et la décision de les qualifier sur Apple revient au
+  coordinateur.
 - Zéro retour correctif consommé pour cette tâche ; les plafonds des lots sources sont inchangés.
