@@ -1774,3 +1774,26 @@ seul diagnostic : `scopeFolder(scope:root:)` appelé alors que son premier argum
 `scopeFolder(scope, root: root)` ; le coordinateur a confronté les 13 usages de `scopeFolder`
 et les 14 de `folderContents` à leurs déclarations distinctes. Produit et assertions inchangés.
 La campagne Apple doit reconstruire et requalifier les correctifs Q4/E0 sur ce nouvel assemblage.
+
+## 5 novembre 2026 — corrections après Q6, validation métier indépendante de l'UI
+
+Q6 (`3f20ce1b`) a réellement compilé et exécuté : métier **1802/1804**, UI iPhone **6/8**,
+UI iPad **8/8**. Douze des treize anciens cas Q4 passent ; le scénario média réel reste échoué
+à une étape ultérieure, et un défaut intermittent d'annulation de flux est apparu.
+
+Le lot transport `389882c0` inclut `c5eb59b4` : l'ouverture `session.bytes(for:)` et la lecture
+normalisent désormais l'annulation sans changer les autres erreurs. Le harnais muet signale sa
+préparation atomiquement avec l'enregistrement de sa poignée ; le témoin vérifie le type URLError
+et son code exact. Les limites/délais/auth restent intacts. Ces tests Swift attendent Apple.
+
+Le lot R-ID `d47503f6` aligne la seule factory de qualification sur la production : génération
+UUID de `request.id`. La sonde initiale avait contrôlé data/contexte mais pas ce raffinement :
+le client média décode requestId en UUID, tandis que le relais émettait auparavant un compteur.
+Le correctif garde le client strict ; les contrôles locaux réellement exécutés donnent **23/23
+médias, 9/9 relais historique, typage exit 0 et readiness HTTPS 200**. Le fichier Swift de scénario
+réel est identique au candidat Q6 déjà compilé ; les décorateurs de diagnostic restent préservés
+dans leurs commits et ne font pas partie de ce candidat.
+
+La validation métier Apple peut avancer avec ces deux correctifs. Les deux scénarios UI iPhone
+restent rouges sur Q6 : la proposition de correction limitée au harnais n'a pas encore été appliquée.
+Aucun succès UI supplémentaire, fusion master ou déploiement n'est annoncé par cette actualisation.

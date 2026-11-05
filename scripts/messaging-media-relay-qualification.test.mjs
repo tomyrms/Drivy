@@ -28,6 +28,20 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+/** Forme UUID (8-4-4-4-12 hex), sans épingler la version : `randomUUID()` de la production. */
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Parité de forme avec la production (`genReqId: () => randomUUID()` dans `app.ts`) : le
+ * décodeur Swift décode `requestId` en `UUID` pour les enveloppes média (PUT et DELETE).
+ * Le contrôle n'imprime que le libellé et un booléen, jamais l'identifiant.
+ */
+function expectUuidRequestId(envelope, label) {
+  const value = envelope?.requestId;
+  assert.equal(typeof value === 'string' && uuidPattern.test(value), true,
+    `${label} : requestId UUID attendu, comme la production`);
+}
+
 
 /**
  * Qualification Node du bootstrap média (#97, Q97).
@@ -338,12 +352,15 @@ describe('bootstrap média sur PostgreSQL synthétique', () => {
     assert.equal(uploaded.json().data.byteSize, ciphertext.length);
     assert.match(uploaded.json().data.sha256, /^[0-9a-f]{64}$/);
     uploadedSha = uploaded.json().data.sha256;
+    // Forme de production : `requestId` UUID (le décodeur Swift le décode en `UUID`).
+    expectUuidRequestId(uploaded.json(), 'PUT média');
 
     const replayed = await relay.app.inject({ method: 'PUT', url: url(mediaFixtureIds.school, mediaPath + mediaId),
       headers: { ...instructor(), 'content-type': 'application/octet-stream', 'x-drivy-device-id': deviceId },
       payload: ciphertext });
     assert.equal(replayed.statusCode, 200);
     assert.equal(replayed.json().data.sha256, uploaded.json().data.sha256);
+    expectUuidRequestId(replayed.json(), 'PUT média rejoué');
 
     const conflicting = await relay.app.inject({ method: 'PUT', url: url(mediaFixtureIds.school, mediaPath + mediaId),
       headers: { ...instructor(), 'content-type': 'application/octet-stream', 'x-drivy-device-id': deviceId },
@@ -379,6 +396,7 @@ describe('bootstrap média sur PostgreSQL synthétique', () => {
     assert.equal(accepted.media.byteSize, ciphertext.length);
     assert.equal(accepted.media.deleted, false);
     assert.equal(JSON.stringify(accepted).includes('synthetic-envelope'), false);
+    expectUuidRequestId(sent.json(), 'POST message média');
 
     const page = await relay.app.inject({ method: 'GET',
       url: url(mediaFixtureIds.school, `/conversations/${conversationId}/messages`), headers: learner() });
@@ -410,9 +428,12 @@ describe('bootstrap média sur PostgreSQL synthétique', () => {
       headers: { ...instructor(), 'x-drivy-device-id': deviceId } });
     assert.equal(cancelled.statusCode, 200);
     assert.equal(cancelled.json().data.deleted, true);
+    // L'enveloppe d'annulation est aussi décodée en `UUID` côté Swift.
+    expectUuidRequestId(cancelled.json(), 'DELETE annulation');
     const again = await relay.app.inject({ method: 'DELETE', url: cancelPath,
       headers: { ...instructor(), 'x-drivy-device-id': deviceId } });
     assert.equal(again.statusCode, 200);
+    expectUuidRequestId(again.json(), 'DELETE annulation idempotente');
     const gone = await relay.app.inject({ method: 'GET', url: cancelPath,
       headers: { ...instructor(), 'x-drivy-device-id': deviceId } });
     assert.equal(gone.statusCode, 404);

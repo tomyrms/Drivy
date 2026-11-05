@@ -231,3 +231,108 @@ ni configuration déployée modifié.
 `tsc --noEmit` sans erreur, suites média API **26/26** (inchangées, aucun fichier produit touché).
 Swift toujours **NON COMPILÉ / NON EXÉCUTÉ** ; S5 reste strict et attend le candidat M97
 correction2 sur un runner Apple.
+
+## 8. Diagnostic Q4 — échec réel `IMAGE / RUNTIME-CONTENT` au candidat `62560a2e`
+
+Le scénario a compilé et s'est exécuté au SHA `62560a2ed8c55326f73c512c9ac9dfaa08a5382b`
+(run 41962003316 / job 127030313656) et échoue à l'étape `IMAGE` avec la catégorie
+`RUNTIME-CONTENT` (`invalidContent`). Le parcours texte du même relais reste vert.
+
+**Cause établie** (source du candidat + mesure réelle du bootstrap Node) :
+
+1. une conversation privée neuve a `members_epoch = 0` (`20261023b_messaging_features.sql` :
+   `DEFAULT 0` et « Première arrivée : pas d'incrément ») ; `conversationMembers` le renvoie
+   tel quel et le routeur accepte `expectedMembersEpoch: 0` (`z.number().int().min(0)`) ;
+2. la crypto réelle pose `expectedMembersEpoch: listed.membersEpoch`, donc `0` ;
+3. `MessagingProtectedMediaOutbox.validateEnvelope` exige `epoch > 0` et jette
+   `MessagingFailure.invalidResponse` sur le remplacement d'enveloppe ;
+4. `MessagingMediaCoordinator.map(_:)` traduit `.invalidResponse` en `.invalidContent` ;
+5. l'ordre `put` → `encryptMatrixContent` → `replaceEnvelope` fait échouer le CAS, donc l'étape
+   `IMAGE`, avant tout dépôt.
+
+Mesure jointe (hors Git, `artifacts/q4-media-relay-diagnostic/`) : `membersEpoch = 0` sur la
+route, colonne `0`, et un POST avec `expectedMembersEpoch: 0` répond `200`. La fixture suit donc
+le contrat serveur ; la garde produit est plus stricte que lui. **Correctif proposé, non
+appliqué** (hors lot) : accepter `epoch >= 0` dans `validateEnvelope` ; variante serveur
+(époque initiale 1) plus lourde et non recommandée en premier.
+
+**Instrumentation ajoutée au seul test** : sonde fermée `PREPARE`/`SEAL`/`PUT`/`ENCRYPT`/`CAS`
+et classes d'époque `ABSENTE`/`ZERO`/`POSITIVE`/`INVALIDE`, via des décorateurs de protocole qui
+relaient exactement retours et erreurs. Aucune assertion ni mapping modifié ; le message d'échec
+gagne `sonde=phase=… enveloppe=…`. Attendu au prochain run si la cause est la bonne :
+`phase=CAS enveloppe=ZERO`.
+
+Limites : aucune exécution Apple ici ; les autres échecs du même run (cache, préparation,
+`stateConflict` attendu par `MessagingMediaOutboxTests`) sont des défauts distincts du candidat,
+non instruits par ce lot. Aucun fichier M97/UI/coffre/crypto/CI n'est modifié.
+## 9. Diagnostic Q6 — `RUNTIME-UNKNOWN` au premier envoi image (`3f20ce1b`)
+
+Le candidat `3f20ce1be2c692ace8bfb3f35d7b100e306c05a4` (run 41971981391 / job 127062112371)
+franchit `enqueue` (défaut d'époque 0 corrigé) puis rend `.pending(.resultUnknown)` à l'envoi
+image : `Envoi image non confirmé : catégorie=RUNTIME-UNKNOWN`. Le décorateur de perte de
+réponse n'est pas armé pour l'image.
+
+**Mesure réelle** (`artifacts/q6-media-send-diagnostic/`, bootstrap Node validé, PostgreSQL 17
+jetable, même fixture, corps conforme à l'encodage Swift, époque 0) : `PUT` média → 200 avec
+`{mediaId, byteSize, sha256(64 hex), state=UPLOADED}` et contexte concordant ; `POST` porteur →
+200 avec `media` présent et concordant, `ciphertext` écho identique, `acceptedAt` ISO
+millisecondes ; la page liste le message avec son média. **La forme HTTP et la fixture sont donc
+compatibles** : le défaut est côté client.
+
+> **Rectification R-ID (§10)** : cette mesure ne portait **pas** sur la forme de `requestId`.
+> Le relais émettait un identifiant de compteur (`req-N`) au lieu de l'UUID de production, ce que
+> le décodeur média Swift refuse. La phrase ci-dessus est donc trop large : `data`/`context`
+> étaient compatibles, `requestId` ne l'était pas. Les §10 et suivants portent le correctif de
+> parité et sa régression ; la cause client invoquée ici n'est pas établie.
+
+Côté client, `.resultUnknown` ne peut venir que de : erreur non typée échappant à `deliver`
+(notamment le `outbox.put` de re-conformation, seul appel non ramené aux catégories runtime),
+erreur brute du dépôt, échec typé traduit en inconnu (PUT/POST), ou annulation de tâche.
+
+**Instrumentation fermée ajoutée au seul test** : phases `PREPARE`/`SEAL`/`OUTBOX-PUT`/`ENCRYPT`/
+`CAS`/`UPLOAD`/`RECEIPT`/`POST`/`CLEANUP`, classe d'époque, **détail typé**
+(`TRANSPORT-*`, `MESSAGING-*`, `RUNTIME`, `CANCELLED`, `RAW`), et dernier code de diagnostic
+borné (`MEDIA-PUT-*`, `H-*`). Les décorateurs relaient exactement retours, octets et erreurs ;
+aucune assertion ni mapping produit n'est modifié. Le prochain run nommera la branche exacte
+(table de lecture dans le README des artefacts).
+
+Aucun fichier M97/T2b2/T2b5/backend/CI n'est modifié.
+## 10. R-ID — parité `requestId` du relais avec la production
+
+**Rectification de la conclusion Q6 (§9).** La mesure Q6 n'avait vérifié que les clés et types de
+`data`, `context`, l'écho de `ciphertext`, la présence de `media` et `acceptedAt` : elle n'avait
+**pas** regardé la forme de `requestId`. La phrase « la forme HTTP et la fixture sont compatibles
+avec les décodeurs Swift » était donc trop large.
+
+**Cause mesurée.** `scripts/messaging-relay-qualification.mts` créait Fastify **sans** `genReqId` :
+l'identifiant par défaut est un compteur (`req-N`). La production (`apps/api/src/app.ts`) utilise
+`genReqId: () => randomUUID()`. `registerMessaging`/`execute` recopient `request.id` dans
+l'enveloppe, et `MessagingHTTPMediaTransport.UploadEnvelope.requestId` (comme `CancelEnvelope`)
+est un `UUID` : le décodage échoue fermé, puis le transport rend `invalidResponse`, que le
+coordinateur traduit en `.resultUnknown`. C'est une **incohérence de fixture**, pas un défaut du
+client ni du serveur produit.
+
+**Correctif de parité (fixture seulement).** Le bootstrap de qualification construit désormais
+Fastify avec `genReqId: () => randomUUID()`, exactement comme la production ; aucune autre option,
+route, garde, authentification, certificat ni reset n'est modifié. Le backend, T2b2, M97, T2b5 et
+l'API canonique restent intacts.
+
+**Régression exécutée (Node 24, PostgreSQL 17 synthétique).** Le test média exige désormais un
+`requestId` de forme UUID sur les réponses **PUT média**, **PUT rejoué**, **POST message média**,
+**DELETE annulation** et **DELETE idempotent** (booléen et libellé seulement, aucun identifiant
+imprimé) :
+
+| État | Constat |
+|---|---|
+| Avant correctif (RED) | `23` tests, `20` passés, **3 échoués** : `PUT média`, `POST message média`, `DELETE annulation` — `requestId UUID attendu` |
+| Après correctif (GREEN) | `23` tests, **23 passés**, `0` échec |
+| Relais texte historique | `9` tests, **9 passés** |
+| Typage | `tsc --noEmit` sur les deux `.mts` du lot : aucune erreur |
+| Démarrage réel HTTPS | `probe-listen.mjs` : écoute sur port dédié, readiness `200`, `ready=true`, `fixture` conforme |
+
+**Swift.** `apps/ios/DrivyTests/MessagingMediaRealRelayTests.swift` est remis **exactement au blob
+du candidat `3f20ce1b`** (`a5d759056c8504b33db76af57c78417dff506968`, identique à `ce6bafdf`), déjà
+compilé et exécuté. L'instrumentation Q4/Q6 reste inspectable dans ses commits d'origine
+(`97306ef9`, `04631689`) ; aucune assertion ni scénario du harnais qualifié n'est retiré. Le
+parcours média réel reste **NON EXÉCUTÉ** après ce correctif : il doit être rejoué au prochain
+candidat intégrant la parité `requestId`, et ne peut pas être annoncé vert depuis Windows.
