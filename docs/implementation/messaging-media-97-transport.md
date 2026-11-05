@@ -146,14 +146,14 @@ Aucun écran, aucun libellé et aucune activation produit ne sont ajoutés par c
 - flux sans longueur déclarée au-delà du plafond média → refus pendant la lecture ;
 - en-têtes nommés lus (école, époque, hash, type), `Set-Cookie` non conservé ;
 - **flux laissé ouvert** (en-têtes + prélude, aucun `didFinishLoading`) : en-tête refusé, dépassement pendant la lecture et annulation appelante produisent chacun une issue observée **avant** nettoyage, puis `stopLoading` ; succès normal lu et rendu ;
-- **annulation pendant la lecture** : barrière sur le prélude **réellement délivré** (`deliveredCount`), et non sur la seule ouverture, pour que l'annulation tombe bien dans la boucle de lecture ;
-- **annulation pendant l'ouverture** (stub muet : aucun en-tête envoyé, `bytes(for:)` suspendu) → `cancelled`, `stopLoading` observé. `raw-cancel` est le verdict de régression : il signale une `URLError(.cancelled)` brute, donc une frontière non normalisée ;
-- **témoin non annulé** : échec d'ouverture injecté (`URLError(.timedOut)`) → verdict `transport`, l'erreur garde son type d'origine et n'est pas requalifiée ;
+- **annulation après prélude remis** : barrière sur le prélude **remis à Foundation** (`deliveredCount`, mis à jour après `didLoad` du `URLProtocol`). Cela ne prouve **pas** que la routine du wire a repris `bytes(for:)` ni consommé un premier octet : le cas est donc « annulation après prélude remis » ;
+- **annulation pendant l'ouverture** (stub muet : aucun en-tête envoyé, `bytes(for:)` suspendu) → `cancelled`, `stopLoading` observé ; le signal `readyCount` n'avance qu'avec l'enregistrement de la poignée d'abandon, dans la même section critique, donc l'échec ou l'annulation ne peut pas être injecté avant que le chargement soit prêt à le recevoir. `rawCancel` est le verdict de régression : il signale une `URLError(.cancelled)` brute, donc une frontière non normalisée ;
+- **témoin non annulé** : échec d'ouverture injecté (`URLError(.timedOut)`) → verdict `transport(code)`, avec le **code exact** de l'erreur (`URLError.timedOut.rawValue`) exigé par l'assertion ; ni URL, ni description libre, ni `userInfo` ne sont conservés ;
 - **contrôle du harnais** : une opération volontairement retenue n'est jamais attendue par `await` sur une tâche non coopérative — l'échéance expire, le test échoue proprement, puis le flux est libéré (`abortAll` / `failAll`) ;
 - configuration injectée hostile (cache, cookies, politique de cache) : les garanties sont rétablies par `harden` ;
 - la délégate de redirection répond toujours `nil`.
 
-**Limites de méthode, explicitement assumées :** un `URLProtocol` remet le corps depuis la mémoire locale. Ces tests prouvent la boucle de lecture bornée, l'appel d'annulation de la tâche et le refus de redirection ; ils ne mesurent **ni** le débit réseau réel **ni** une fuite mémoire, et `stopLoading` n'est pas une preuve de fermeture de socket : c'est le seul signal observable. Le nettoyage `abortAll` libère une tâche suspendue après constat, il ne sert jamais de preuve. Les deux cas de borne acceptée lisent réellement ~4 Mio octet par octet : coût assumé pour des réponses cohérentes.
+**Limites de méthode, explicitement assumées :** un `URLProtocol` remet le corps depuis la mémoire locale. Ces tests prouvent la boucle de lecture bornée, l'appel d'annulation de la tâche et le refus de redirection ; ils ne mesurent **ni** le débit réseau réel **ni** une fuite mémoire, et `stopLoading` n'est pas une preuve de fermeture de socket : c'est le seul signal observable. `deliveredCount` atteste seulement que le prélude a été **remis à Foundation** après `didLoad`, pas que la routine du wire a repris `bytes(for:)` ni consommé un premier octet. Le nettoyage `abortAll` / `failAll` libère une tâche suspendue après constat, il ne sert jamais de preuve. Les deux cas de borne acceptée lisent réellement ~4 Mio octet par octet : coût assumé pour des réponses cohérentes.
 
 ## 8. Ce qui n'a PAS été exécuté
 
@@ -306,15 +306,15 @@ Correctif, strictement limité au wire :
 - aucun changement de délai, de plafond, d'authentification, de redirection, de cookie, de l'adaptateur ni du transport ordinaire de 2 Mio ;
 - la tâche réseau reste arrêtée par les chemins existants (`stream.cancel()` sur sortie prématurée, `withTaskCancellationHandler` à la lecture) ; pour l'attente d'ouverture, il n'existe aucun handle de tâche avant le retour de `bytes(for:)`, et c'est `stopLoading` qui atteste, côté `URLProtocol`, que le chargement a été clos — ce n'est **pas** une preuve de fermeture de socket.
 
-Preuves préparées (aucune n'est exécutée ici) :
+Preuves préparées (aucune n'est exécutée ici). La colonne « avant correctif » est une **prévision par lecture de source, pas un verdict observé** : le seul RED Apple réel est le verdict `other` de l'ancien classifieur sur `testCancellingTheCallerStopsTheOpenStream` (run 41971981391). Le cas silencieux et le classifieur actuel n'ont jamais tourné sur Apple.
 
-| Test | Ce qu'il prouve | Verdict avant correctif |
+| Test | Ce qu'il prouve | Prévision avant correctif (non exécutée) |
 |---|---|---|
-| `testCancellingBeforeHeadersIsACancellation` (stub **muet**, aucun en-tête) | annulation pendant l'**ouverture** → `cancelled`, `stopLoading` observé | `raw-cancel` (erreur Foundation brute) — c'est le défaut |
-| `testTransportErrorBeforeHeadersIsPreserved` (témoin non annulé, `URLError(.timedOut)` injecté) | une panne d'ouverture garde son type, pas de requalification | `transport` (déjà correct, non-régression) |
-| `testCancellingTheCallerStopsTheOpenStream` (barrière renforcée sur `deliveredCount >= prélude`) | annulation pendant la **lecture** → `cancelled` | était intermittent sur une barrière d'ouverture |
+| `testCancellingBeforeHeadersIsACancellation` (stub **muet**, aucun en-tête, signal `readyCount` atomique) | annulation pendant l'**ouverture** → `.cancelled`, `stopLoading` observé | erreur Foundation brute : `rawCancel` si `URLError(.cancelled)`, sinon `other` |
+| `testTransportErrorBeforeHeadersIsPreserved` (témoin non annulé, `URLError(.timedOut)` injecté) | une panne d'ouverture garde son **type et son code exacts** (`.transport(URLError.timedOut.rawValue)`), sans requalification | `.transport(code)` : déjà correct, non-régression exigée |
+| `testCancellingTheCallerStopsTheOpenStream` (barrière sur le prélude **remis**, pas sur l'ouverture) | annulation **après prélude remis** → `.cancelled` | intermittent quand l'annulation tombait pendant l'attente d'ouverture |
 
-Le classifieur du harnais distingue désormais `cancelled`, `raw-cancel`, `transport` et `other` : une régression de normalisation se lit sans ambiguïté au lieu de se confondre avec une panne quelconque.
+Le classifieur du harnais distingue `.cancelled`, `.rawCancel`, `.transport(code)` et `.other` : une régression de normalisation se lit sans ambiguïté, et le témoin ne peut pas se satisfaire d'une autre erreur que `timedOut`.
 
 Commandes réellement exécutées pour Q6 (Windows, sans Swift) :
 
@@ -329,3 +329,27 @@ Commandes réellement exécutées pour Q6 (Windows, sans Swift) :
 | 7 | `git diff --stat` + `git status --porcelain` | 3 fichiers (wire, tests, ce rapport), aucun autre | 0 |
 
 Les 47 tests restent **NON EXÉTÉS** sur Apple : le seul RED réel est celui de la CI Q6 cité plus haut, et la vérification du correctif appartient au prochain run Apple.
+
+### Correctif du harnais (retour 1/2 sur le défaut Q6, tests et rapport seulement)
+
+Le correctif produit du §16 n'est pas modifié dans ce suivi. Deux écarts de **preuve** sont corrigés, plus les affirmations qui les présentaient.
+
+| # | Écart | Cause | Correctif |
+|---|---|---|---|
+| 1 | course réelle du témoin non annulé : `MediaSilentRegistry.take()` incrémentait `opened` dans une section critique, puis `startLoading` appelait `register` dans une autre. Le test pouvait voir `openCount >= 1` et appeler `failAll()` **avant** que la poignée figure dans `live` : `failAll` ne trouvait rien, `register` arrivait trop tard et la requête restait suspendue | deux sections critiques distinctes pour un même signal | `take()` ne compte plus ; `register(_:)` ajoute la poignée **et** incrémente `opened` dans la même section critique. Le compteur est renommé `readyCount()` : il signifie « poignée d'abandon enregistrée, l'échec injecté sera réellement remis à ce chargement ». Aucune pause ni délai ajouté ; les nettoyages restent bornés |
+| 2 | le classifieur ne prouvait pas que l'erreur `timedOut` injectée était conservée : un simple libellé `transport` acceptait n'importe quelle `URLError` | verdict réduit à une chaîne | `MediaOutcome` typé : `.returned`, `.failure(cas)`, `.cancelled`, `.rawCancel`, `.transport(code)`. Le témoin exige `.transport(URLError.timedOut.rawValue)`, donc le type **et** le code exacts ; `cancelled` et `rawCancel` restent distincts, et aucune autre erreur n'est acceptée. Ni URL, ni description libre, ni `userInfo` ne sont conservés |
+| 3 | le rapport présentait l'annulation après `deliveredCount` comme « pendant la lecture », et le tableau des verdicts comme observés | surinterprétation de `didLoad` et d'une prévision | `recordDelivered` est documenté comme « prélude remis à Foundation, après `didLoad` » — pas une reprise de `bytes(for:)` ni un premier octet consommé ; le cas est présenté comme **annulation après prélude remis**, la frontière d'ouverture restant couverte par le stub muet déterministe. Le tableau des verdicts est explicitement qualifié de **prévision non exécutée** : le seul RED Apple observé reste `other` dans l'ancien classifieur |
+
+Commandes réellement exécutées pour ce retour (Windows, sans Swift) :
+
+| # | Commande | Résultat | Code |
+|---|---|---|---|
+| 1 | `index_status` + `index_repository` (MCP, chemin absolu) | `ready`, `indexed_at 2026-11-05T06:04:53Z`, 39 248 nœuds | 0 |
+| 2 | `Select-String` des comparaisons textuelles (`"tooLarge"`, `"cancelled"`, `"transport"`, `"raw-cancel"`, `"returned"`) | aucune ne subsiste : tout passe par `MediaOutcome` | 0 |
+| 3 | `Select-String 'MediaSilentRegistry.shared.openCount'` | aucun usage résiduel : le signal est `readyCount()` | 0 |
+| 4 | `Select-String 'take\|register\|opened \+= 1\|readyCount'` | `opened` n'avance plus que dans `register`, même section critique | 0 |
+| 5 | Python jetable : équilibre des délimiteurs des 4 fichiers | 4 × `balanced` | 0 |
+| 6 | Comptage des tests + `XCTAssert…await` | 47 tests (33 + 14), aucun `await` dans une autoclosure | 0 |
+| 7 | `git diff --stat` + `git status --porcelain` | 2 fichiers (tests wire + ce rapport), wire intouché | 0 |
+
+Les 47 tests restent **NON EXÉTÉS** Apple : ce retour ne produit aucun RED/GREEN nouveau et ne prétend aucune exécution Swift locale.
