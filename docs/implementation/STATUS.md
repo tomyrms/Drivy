@@ -1712,3 +1712,15 @@ corrigé ; aucun GREEN n'est déduit des seules signatures désormais cohérente
 Le porteur a explicitement autorisé la fusion dans `master` et le déploiement homelab.
 La fusion attend le verdict Apple ; le déploiement attend ensuite les contrôles du SHA master
 et la sauvegarde préalable vérifiée. Aucune bascule ni installation physique n'est annoncée ici.
+
+### Q3 — concurrence du helper de test
+
+Au candidat `3ad58197`, les runs Apple métier `41960681911` et UI `41960681798` ont tous deux
+échoué en compilation avec un seul diagnostic identique : la valeur générique de `DeadlineBox`
+n'était pas contrainte à `Sendable`. Les 21 diagnostics précédents ont disparu, mais aucun test
+natif ni parcours UI n'a pu s'exécuter. Les deux journaux et identités ont été relus indépendamment.
+
+Le correctif `643589fa` ajoute uniquement `Value: Sendable` au helper privé de test, en conservant
+son isolation MainActor et ses continuations. Il est intégré après revue ; aucun contournement de
+la concurrence, changement produit ou assertion affaiblie. La qualification Apple doit encore
+être exécutée sur ce nouvel assemblage avant fusion master et déploiement déjà autorisés.
