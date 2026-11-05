@@ -459,28 +459,89 @@ final class MessagingMediaOutboxTests: XCTestCase {
         XCTAssertEqual(entries, [pending])
     }
 
+    func testZeroMembersEpochEnvelopeReplacementIsDurableAndIdempotent() async throws {
+        let root = try makeRoot()
+        let scope = makeScope()
+        let keys = SyntheticKeyStore()
+        let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
+        let pending = try makePending(try sealMedia(plaintext: Data("ZERO_EPOCH_CAS".utf8), keyByte: 0x72))
+        XCTAssertNil(pending.messageCiphertext)
+        try await outbox.put(pending, scope: scope)
+
+        let zero = envelope(payloadBytes: 48, epoch: 0)
+        XCTAssertEqual(zero.expectedMembersEpoch, 0)
+        try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: nil,
+                                         replacement: zero, scope: scope)
+
+        let replaced = try await outbox.entries(scope: scope)
+        XCTAssertEqual(replaced.count, 1)
+        XCTAssertEqual(replaced[0].messageCiphertext, zero)
+        XCTAssertEqual(replaced[0].messageCiphertext?.expectedMembersEpoch, 0)
+        XCTAssertEqual(replaced[0].clientMessageID, pending.clientMessageID)
+        XCTAssertEqual(replaced[0].conversationID, pending.conversationID)
+        XCTAssertEqual(replaced[0].sealed, pending.sealed)
+        XCTAssertEqual(replaced[0].content, pending.content)
+        XCTAssertEqual(replaced[0].mentionPersonIDs, pending.mentionPersonIDs)
+        XCTAssertEqual(replaced[0].replyToMessageID, pending.replyToMessageID)
+        XCTAssertEqual(replaced[0].createdAt, pending.createdAt, "Seule l'enveloppe change")
+
+        let file = try scopeFolder(scope: scope, root: root)
+            .appendingPathComponent(try recordDigest(pending.mediaID, scope: scope) + ".sealed")
+        let before = try Data(contentsOf: file)
+        try await outbox.replaceEnvelope(mediaID: pending.mediaID, expected: zero,
+                                         replacement: zero, scope: scope)
+        XCTAssertEqual(try Data(contentsOf: file), before, "Un no-op à époque 0 ne réécrit pas l'archive")
+
+        let reopened = try makeOutbox(scope: scope, root: root, keys: keys)
+        let reopenedEntries = try await reopened.entries(scope: scope)
+        XCTAssertEqual(reopenedEntries, replaced)
+        XCTAssertEqual(reopenedEntries[0].messageCiphertext, zero)
+        XCTAssertEqual(reopenedEntries[0].messageCiphertext?.expectedMembersEpoch, 0)
+    }
+
     func testMegolmEnvelopeIsBoundedAndRequiresAValidEpoch() async throws {
         let root = try makeRoot()
         let scope = makeScope()
         let keys = SyntheticKeyStore()
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys)
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
 
-        let accepted = try makePending(try sealMedia(), envelope: envelope(payloadBytes: 9_000, epoch: 9))
+        let accepted = try makePending(try sealMedia(), createdAt: base,
+                                       envelope: envelope(payloadBytes: 9_000, epoch: 9))
         try await outbox.put(accepted, scope: scope)
-        let entries = try await outbox.entries(scope: scope)
-        XCTAssertEqual(entries, [accepted])
 
-        let tooLong = try makePending(try sealMedia(plaintext: Data("B".utf8), keyByte: 0x61),
+        let zeroEpoch = try makePending(try sealMedia(plaintext: Data("ZERO".utf8), keyByte: 0x61),
+                                        createdAt: base.addingTimeInterval(1),
+                                        envelope: envelope(payloadBytes: 32, epoch: 0))
+        try await outbox.put(zeroEpoch, scope: scope)
+
+        let entries = try await outbox.entries(scope: scope)
+        XCTAssertEqual(entries, [accepted, zeroEpoch])
+        let storedZero = entries.first { $0.mediaID == zeroEpoch.mediaID }
+        XCTAssertEqual(storedZero?.messageCiphertext?.expectedMembersEpoch, 0,
+                       "L'époque 0 d'une conversation neuve est légale")
+
+        let reopened = try makeOutbox(scope: scope, root: root, keys: keys)
+        let reopenedEntries = try await reopened.entries(scope: scope)
+        XCTAssertEqual(reopenedEntries, entries)
+        let reopenedZero = reopenedEntries.first { $0.mediaID == zeroEpoch.mediaID }
+        XCTAssertEqual(reopenedZero?.messageCiphertext?.expectedMembersEpoch, 0,
+                       "L'époque 0 survit à la réouverture")
+
+        let tooLong = try makePending(try sealMedia(plaintext: Data("B".utf8), keyByte: 0x62),
                                       envelope: envelope(payloadBytes: 9_001, epoch: 9))
         await expectFailure(.invalidResponse) { try await outbox.put(tooLong, scope: scope) }
 
-        let noEpoch = try makePending(try sealMedia(plaintext: Data("C".utf8), keyByte: 0x62),
+        let noEpoch = try makePending(try sealMedia(plaintext: Data("C".utf8), keyByte: 0x63),
                                       envelope: envelope(payloadBytes: 32, epoch: nil))
         await expectFailure(.invalidResponse) { try await outbox.put(noEpoch, scope: scope) }
 
-        let zeroEpoch = try makePending(try sealMedia(plaintext: Data("D".utf8), keyByte: 0x63),
-                                        envelope: envelope(payloadBytes: 32, epoch: 0))
-        await expectFailure(.invalidResponse) { try await outbox.put(zeroEpoch, scope: scope) }
+        let negativeEpoch = try makePending(try sealMedia(plaintext: Data("D".utf8), keyByte: 0x64),
+                                            envelope: envelope(payloadBytes: 32, epoch: -1))
+        await expectFailure(.invalidResponse) { try await outbox.put(negativeEpoch, scope: scope) }
+
+        let retained = try await outbox.entries(scope: scope)
+        XCTAssertEqual(retained, entries, "Les refus n'altèrent aucune intention admise")
     }
 
     // MARK: - Mentions et plafond du contenu Matrix

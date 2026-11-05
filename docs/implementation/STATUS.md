@@ -1724,3 +1724,44 @@ Le correctif `643589fa` ajoute uniquement `Value: Sendable` au helper privé de 
 son isolation MainActor et ses continuations. Il est intégré après revue ; aucun contournement de
 la concurrence, changement produit ou assertion affaiblie. La qualification Apple doit encore
 être exécutée sur ce nouvel assemblage avant fusion master et déploiement déjà autorisés.
+
+## 5 novembre 2026 — correctifs des scénarios réellement exécutés en Q4
+
+Q4 (`62560a2e`) compile sur Apple. Le résultat métier exact est **1790/1803 réussites, 13 échecs**,
+sans cas ignoré ou échec attendu. Sur chacun des deux simulateurs iPhone 17 Pro et iPad Air 11-inch
+(M4), les cinq tests médias UI réussissent et les trois tests d'annulation échouent. Aucun de ces
+résultats ne constitue une qualification physique. Linux demeure qualifié au `62875344`
+(API 1050/1050, web 880 réussites + un échec attendu), source serveur/web inchangée depuis.
+
+Huit corrections ont été relues et assemblées localement avant la prochaine campagne :
+
+- L1b `fefece0a` et N106 `af193e90` : compter la lecture GET AP72 en plus de la mutation et du
+  renouvellement éventuel ; les tests prouvent distinctement le nombre de POST, le reçu exact et
+  les jetons employés. Aucun client ou règle métier modifié.
+- Cache `33da03fc` : ancre temporaire créée, index scellé distingué des noms opaques de charges,
+  même clé représentée par le vérificateur. Les recherches de données en clair restent sur tous
+  les fichiers ; aucun produit cache modifié.
+- Outbox `abd39f37` : fixture de conflit valide avec la même identité dans le sceau et le
+  descripteur, en conservant les attentes de conflit et l'archive d'origine.
+- Coordinateur `7b4bb33a` : une réponse perdue laisse un résultat inconnu ; elle ne fabrique pas
+  un refus MEMBERS_CHANGED. Le test exige l'absence de nouveau chiffrement, CAS ou POST.
+- Préparation `ed1b595a` : terminaison JPEG/PNG vérifiée avant les dimensions, fixtures sous la
+  borne de 4 Mio et propriétés techniques ImageIO distinguées des données personnelles. Le contrôle
+  de terminaison ne prouve ni tous les CRC ni l'intégrité exhaustive des pixels.
+- UI annulation `8da3a41` : identifiant stable du champ, défilement avant d'attendre les contrôles
+  virtualisés et nettoyage régulier de l'app. L'incident de terminaison du simulateur n'est pas
+  déclaré réparé avant réexécution.
+- Époque initiale `a9b46dc9` : la file accepte l'époque de membres 0, légale pour une conversation
+  neuve. Les tests couvrent PUT, CAS, réouverture, no-op durable, ainsi que le refus de nil/-1 et
+  les limites 9000/9001. L'époque d'accès, les droits et les validations serveur sont inchangés.
+
+La cause du refus média réel a été établie par le diagnostic Q97 `97306ef9` : SQL DEFAULT 0,
+route min(0), crypto reprenant cette valeur, mais coffre exigeant auparavant >0. La mesure Node
+jointe au diagnostic confirme route=0, colonne=0 et POST avec époque 0 accepté en 200. Le test
+relais déjà exécuté sera rejoué avec la correction ; les décorateurs expérimentaux du diagnostic
+restent dans sa branche et ne sont pas requis dans le candidat.
+
+Ces changements sont **préparés et revus, pas encore verts sur Apple**. La prochaine campagne
+rejouera le métier complet et les deux suites UI sur iPhone/iPad. Le porteur a confirmé son feu vert
+pour fusionner et déployer dès validation ; sauvegarde préalable obligatoire, procédure opérateur
+préparée et contrôlée par 12 tests locaux. Aucune fusion master ni bascule homelab n'a encore eu lieu.

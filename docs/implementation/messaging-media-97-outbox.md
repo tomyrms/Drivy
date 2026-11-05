@@ -190,3 +190,15 @@ L'entrée de CI du dépôt reste `bash scripts/ios/test-simulator.sh` (job `refo
 - **Pas de verrou inter-processus** : voir ci-dessus.
 - **Pas de sweeper de temporaires** : un temporaire orphelin est compté et borné, jamais supprimé pendant une opération concurrente. Aucune politique de conservation n'est annoncée.
 - **Aucune politique de conservation** : conserver, purger ou évincer reste une décision d'exploitation (#68) non prise.
+
+## E0 — époque initiale des conversations médias (5 novembre 2026)
+
+Défaut d'intégration révélé par le parcours relay réel : `validateEnvelope` exigeait `expectedMembersEpoch > 0`, alors qu'une conversation neuve a légalement `members_epoch = 0`. Le `put` initial (sans enveloppe) passait, `encryptMatrixContent` produisait bien une enveloppe à époque `0`, puis `replaceEnvelope` la refusait en `.invalidResponse` → `Runtime.invalidContent` (étape IMAGE).
+
+Preuves : `20261023b_messaging_features.sql` déclare `members_epoch bigint NOT NULL DEFAULT 0 CHECK(members_epoch>=0)` et ne l'incrémente pas à la première arrivée ; `messaging-routes.ts` valide `expectedMembersEpoch` avec `.int().min(0).safe().optional()` ; `encryptContent` renvoie `listed.membersEpoch` tel quel. La sonde Node du lot Q97 (`issues-medias-relais-reel-97/artifacts/q4-media-relay-diagnostic`) mesure `membersEpochFromRoute = 0`, colonne `0`, et un `POST ./messages` avec `expectedMembersEpoch: 0` répond `200`.
+
+Correction : seule la borne de `validateEnvelope` passe de `epoch > 0` à `epoch >= 0` ; le commentaire suit le contrat. `nil` et `-1` restent refusés, ainsi que les autres bornes (schéma, clé, charge ≤ 9 000 octets). Les tests couvrent le `put` à `0` puis réouverture et le chemin `put` sans enveloppe → `replaceEnvelope(expected:nil, replacement epoch 0)` → relecture, no-op idempotent et réouverture.
+
+Aucun droit supplémentaire : `expectedMembersEpoch` est une métadonnée locale durable de la conversation ; le serveur continue de comparer l'époque exacte de cette conversation et les contrôles d'accès, d'identité, de scope et de révocation sont inchangés. Accepter `0` aligne le client sur une valeur que le serveur acceptait déjà, sans élargir la portée d'une enveloppe ni créer de conversation.
+
+Limites : aucun Swift/Xcode sur ce poste, donc aucun GREEN local ; la réexécution Apple du parcours relay reste nécessaire.

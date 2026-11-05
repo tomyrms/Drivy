@@ -880,12 +880,14 @@ actor MessagingProtectedMediaOutbox: MessagingMediaOutbox, MessagingMediaOutboxE
     }
 
     /// Enveloppe opaque bornée : schéma et identifiant de clé non vides, charge
-    /// base64 ≤ 12 000 caractères (≤ 9 000 octets décodés), époque positive.
+    /// base64 ≤ 12 000 caractères (≤ 9 000 octets décodés), époque de membres ≥ 0.
+    /// `0` est l'époque légale d'une conversation neuve (migration `DEFAULT 0`,
+    /// route `min(0)`) : la borne suit le contrat serveur, pas une supposition.
     private static func validateEnvelope(_ envelope: MessagingCiphertext) throws {
         guard !envelope.scheme.isEmpty, envelope.scheme.utf8.count <= 80,
               !envelope.keyID.isEmpty, envelope.keyID.utf8.count <= 128,
               !envelope.payload.isEmpty, envelope.payload.count <= 9_000,
-              let epoch = envelope.expectedMembersEpoch, epoch > 0 else {
+              let epoch = envelope.expectedMembersEpoch, epoch >= 0 else {
             throw MessagingFailure.invalidResponse
         }
     }
