@@ -265,3 +265,29 @@ gagne `sonde=phase=… enveloppe=…`. Attendu au prochain run si la cause est l
 Limites : aucune exécution Apple ici ; les autres échecs du même run (cache, préparation,
 `stateConflict` attendu par `MessagingMediaOutboxTests`) sont des défauts distincts du candidat,
 non instruits par ce lot. Aucun fichier M97/UI/coffre/crypto/CI n'est modifié.
+## 9. Diagnostic Q6 — `RUNTIME-UNKNOWN` au premier envoi image (`3f20ce1b`)
+
+Le candidat `3f20ce1be2c692ace8bfb3f35d7b100e306c05a4` (run 41971981391 / job 127062112371)
+franchit `enqueue` (défaut d'époque 0 corrigé) puis rend `.pending(.resultUnknown)` à l'envoi
+image : `Envoi image non confirmé : catégorie=RUNTIME-UNKNOWN`. Le décorateur de perte de
+réponse n'est pas armé pour l'image.
+
+**Mesure réelle** (`artifacts/q6-media-send-diagnostic/`, bootstrap Node validé, PostgreSQL 17
+jetable, même fixture, corps conforme à l'encodage Swift, époque 0) : `PUT` média → 200 avec
+`{mediaId, byteSize, sha256(64 hex), state=UPLOADED}` et contexte concordant ; `POST` porteur →
+200 avec `media` présent et concordant, `ciphertext` écho identique, `acceptedAt` ISO
+millisecondes ; la page liste le message avec son média. **La forme HTTP et la fixture sont donc
+compatibles** : le défaut est côté client.
+
+Côté client, `.resultUnknown` ne peut venir que de : erreur non typée échappant à `deliver`
+(notamment le `outbox.put` de re-conformation, seul appel non ramené aux catégories runtime),
+erreur brute du dépôt, échec typé traduit en inconnu (PUT/POST), ou annulation de tâche.
+
+**Instrumentation fermée ajoutée au seul test** : phases `PREPARE`/`SEAL`/`OUTBOX-PUT`/`ENCRYPT`/
+`CAS`/`UPLOAD`/`RECEIPT`/`POST`/`CLEANUP`, classe d'époque, **détail typé**
+(`TRANSPORT-*`, `MESSAGING-*`, `RUNTIME`, `CANCELLED`, `RAW`), et dernier code de diagnostic
+borné (`MEDIA-PUT-*`, `H-*`). Les décorateurs relaient exactement retours, octets et erreurs ;
+aucune assertion ni mapping produit n'est modifié. Le prochain run nommera la branche exacte
+(table de lecture dans le README des artefacts).
+
+Aucun fichier M97/T2b2/T2b5/backend/CI n'est modifié.
