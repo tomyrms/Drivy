@@ -1686,7 +1686,7 @@ private struct BoundedTimeout: Error, CustomStringConvertible {
 /// Résultat unique d'une course entre une opération et son échéance. `finish` est
 /// idempotent : la première issue gagne, l'autre est ignorée sans double reprise.
 @MainActor
-private final class DeadlineBox<Value> {
+private final class DeadlineBox<Value: Sendable> {
     private var outcome: Value?
     private var continuation: CheckedContinuation<Value, Never>?
 

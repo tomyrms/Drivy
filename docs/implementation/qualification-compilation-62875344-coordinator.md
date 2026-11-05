@@ -44,3 +44,25 @@ produit, des autres tests ou d'un autre fichier.
   et doit être confirmé ou rouvert par le rerun Apple.
 - Commit local final : son SHA exact est transmis avec le `worker_done`. Aucun push, CI,
   fusion ou déploiement.
+
+## Q3 — second diagnostic du helper DeadlineBox
+
+Les deux journaux `simulator-build.log` complets du SHA `3ad58197e88f24fb4b915db12172905749341123`
+(runs `41960681911` / `41960681798`) ne portent qu'une erreur de compilation à
+`MessagingMediaCoordinatorTests.swift:1701:23` : `sending 'value' risks causing data races`.
+Les 21 anciens diagnostics ont disparu et aucun test n'a tourné.
+
+Cause relue : `@MainActor private final class DeadlineBox<Value>` stocke `Value` puis le
+remet au paramètre `sending` de `CheckedContinuation.resume(returning:)`. Les deux usages
+(`80`, `106`) instancient `DeadlineBox<DeadlineOutcome<T>>`, où `T: Sendable` et
+`DeadlineOutcome<Value: Sendable>: Sendable`.
+
+Correction : seule la déclaration devient `DeadlineBox<Value: Sendable>`. `@MainActor`,
+`CheckedContinuation`, `finish`/`wait`, gardes et assertions restent inchangés ; aucun
+`@unchecked Sendable`, `nonisolated(unsafe)` ni désactivation de strict-concurrency.
+
+Vérifications : les deux usages et leurs génériques ont été relus ; le diff est limité à
+cette déclaration (plus ce rapport), `git diff --check` est vide et l'arbre est propre.
+Aucune compilation Apple locale : le RED est le compilateur cité, pas un port Python.
+**Correctif préparé, Apple à réexécuter.** Il ne garantit pas l'absence d'un autre
+diagnostic après compilation.
