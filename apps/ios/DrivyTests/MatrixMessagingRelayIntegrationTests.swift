@@ -115,6 +115,35 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
         MessagingDiagnostics.shared.clear()
     }
 
+    /// Sonde de readiness : transport réel inchangé, seul l'observateur de phases est activé.
+    private func sendReadiness(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+        #if DEBUG && targetEnvironment(simulator)
+        let probe = RelayReadinessPhaseProbe()
+        do {
+            let response = try await SchoolURLSessionTransport(readinessPhaseProbe: probe).send(request)
+            await printReadinessPhases(probe)
+            return response
+        } catch {
+            await printReadinessPhases(probe)
+            throw error
+        }
+        #else
+        return try await SchoolURLSessionTransport().send(request)
+        #endif
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    /// Attente bornée du callback de métriques (2 s au plus) : ne retarde pas le transport
+    /// et ne modifie ni le verdict ni l'erreur réelle.
+    private func printReadinessPhases(_ probe: RelayReadinessPhaseProbe) async {
+        let deadline = Date().addingTimeInterval(2)
+        while !probe.hasObservation, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        print("L2 readiness phases : " + probe.report.joined(separator: " "))
+    }
+    #endif
+
     @MainActor
     func testRealRelayExchangeIdempotenceRecoveryAndContextRefusal() async {
         enter("CONFIGURATION")
@@ -150,7 +179,7 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
 
         // Readiness proves that this is our disposable fixture server, not merely an open port.
         enter("READINESS")
-        let readiness = try await SchoolURLSessionTransport().send(URLRequest(url: base.appendingPathComponent("qualification/ready")))
+        let readiness = try await sendReadiness(URLRequest(url: base.appendingPathComponent("qualification/ready")))
         if let mismatch = relayReadinessMismatch(status: readiness.status, data: readiness.data,
                                                 schoolID: school, instructorID: instructor, learnerID: learner) {
             XCTFail("Le relais ne correspond pas aux fixtures canoniques de qualification : \(mismatch.text).")
@@ -446,4 +475,133 @@ final class RelayReadinessDiagnosticTests: XCTestCase {
         XCTAssertFalse(text.contains("SENTINEL_LEARNER_VALUE"))
         XCTAssertFalse(text.contains(school.uuidString.lowercased()))
     }
+
+    #if DEBUG && targetEnvironment(simulator)
+    // MARK: Phases de readiness (instrumentation opt-in, sans réseau)
+
+    func testReadinessPhaseMarkersStayClosedAndBounded() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        let times = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            connectStart: start.addingTimeInterval(0.010),
+            connectEnd: start.addingTimeInterval(0.020),
+            secureConnectionStart: start.addingTimeInterval(0.022),
+            secureConnectionEnd: start.addingTimeInterval(0.030),
+            requestStart: start.addingTimeInterval(0.031),
+            requestEnd: start.addingTimeInterval(0.032),
+            responseStart: start.addingTimeInterval(0.033),
+            responseEnd: start.addingTimeInterval(0.040))
+
+        let markers = RelayReadinessPhaseMarkers.make(times)
+
+        XCTAssertEqual(markers, ["R-CONNECT-MS-10", "R-TLS-MS-8", "R-REQUEST-MS-1",
+                                 "R-RESPONSE-MS-7", "R-TOTAL-MS-40"])
+        // Le vocabulaire fermé interdit dates absolues, URL, hôte et ponctuation.
+        for marker in markers {
+            XCTAssertTrue(MessagingDiagnostics.isSafe(marker), "Marqueur hors vocabulaire : \(marker)")
+        }
+    }
+
+    func testReadinessPhaseMarkersCoverMissingPartialAndInvalidTimestamps() {
+        XCTAssertEqual(RelayReadinessPhaseMarkers.make(nil), ["R-METRICS-MISSING"])
+        XCTAssertEqual(RelayReadinessPhaseMarkers.make(RelayReadinessPhaseTimes()),
+                       ["R-CONNECT-ABSENT", "R-TLS-ABSENT", "R-REQUEST-ABSENT",
+                        "R-RESPONSE-ABSENT", "R-TOTAL-ABSENT"])
+
+        let start = Date(timeIntervalSinceReferenceDate: 2_000)
+        let inverted = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            connectStart: start.addingTimeInterval(0.050),
+            connectEnd: start.addingTimeInterval(0.040),
+            requestStart: start.addingTimeInterval(0.051),
+            requestEnd: start.addingTimeInterval(0.052))
+        let invertedMarkers = RelayReadinessPhaseMarkers.make(inverted)
+        XCTAssertTrue(invertedMarkers.contains("R-CONNECT-INVALID"))
+        XCTAssertTrue(invertedMarkers.contains("R-RESPONSE-ABSENT"))
+        XCTAssertTrue(invertedMarkers.contains("R-TOTAL-INCOMPLETE"))
+        for marker in invertedMarkers {
+            XCTAssertTrue(MessagingDiagnostics.isSafe(marker), "Marqueur hors vocabulaire : \(marker)")
+        }
+
+        // Une date non finie ne produit jamais de durée : elle est annoncée invalide.
+        let infinite = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            connectStart: start,
+            connectEnd: start.addingTimeInterval(.infinity))
+        XCTAssertTrue(RelayReadinessPhaseMarkers.make(infinite).contains("R-CONNECT-INVALID"))
+
+        let reused = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            requestStart: start,
+            requestEnd: start.addingTimeInterval(0.002),
+            responseStart: start.addingTimeInterval(0.002),
+            responseEnd: start.addingTimeInterval(0.004),
+            reusedConnection: true)
+        let reusedMarkers = RelayReadinessPhaseMarkers.make(reused)
+        XCTAssertEqual(reusedMarkers.first, "R-CONN-REUSED")
+        XCTAssertFalse(reusedMarkers.contains { $0.hasPrefix("R-TLS") || $0.hasPrefix("R-CONNECT-MS") })
+    }
+
+    func testReadinessPhaseFilterAcceptsOnlyTheQualificationProbe() throws {
+        func request(_ raw: String, method: String? = nil, authorization: String? = nil) throws -> URLRequest {
+            var request = URLRequest(url: try XCTUnwrap(URL(string: raw)))
+            if let method { request.httpMethod = method }
+            if let authorization { request.setValue(authorization, forHTTPHeaderField: "Authorization") }
+            return request
+        }
+
+        XCTAssertTrue(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:18443/qualification/ready")))
+        XCTAssertTrue(RelayReadinessPhaseGuard.accepts(
+            try request("https://localhost:18443/qualification/ready", method: "GET")))
+
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(nil))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("http://127.0.0.1:18443/qualification/ready")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://example.invalid/qualification/ready")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:18443/qualification/other")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:18443/qualification/ready/extra")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:18443/qualification/ready?tenant=1")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:18443/qualification/ready#fragment")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(
+            try request("https://user:secret@127.0.0.1:18443/qualification/ready")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:18443/qualification/ready", method: "POST")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(
+            try request("https://127.0.0.1:18443/qualification/ready", authorization: "Bearer SENTINEL_TOKEN")))
+        XCTAssertFalse(RelayReadinessPhaseGuard.accepts(try request("https://127.0.0.1:80/qualification/ready")))
+    }
+
+    func testReadinessPhaseProbesKeepSeparateObservations() throws {
+        let acceptedRequest = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/qualification/ready")))
+        let otherRequest = URLRequest(url: try XCTUnwrap(URL(string: "https://127.0.0.1:18443/other")))
+        let start = Date(timeIntervalSinceReferenceDate: 3_000)
+        let first = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            requestStart: start,
+            requestEnd: start.addingTimeInterval(0.004),
+            responseStart: start.addingTimeInterval(0.004),
+            responseEnd: start.addingTimeInterval(0.009),
+            reusedConnection: true)
+        let second = RelayReadinessPhaseTimes(
+            fetchStart: start,
+            requestStart: start,
+            requestEnd: start.addingTimeInterval(0.100),
+            responseStart: start.addingTimeInterval(0.100),
+            responseEnd: start.addingTimeInterval(0.200),
+            reusedConnection: true)
+
+        let probeA = RelayReadinessPhaseProbe()
+        let probeB = RelayReadinessPhaseProbe()
+        XCTAssertFalse(probeA.hasObservation)
+        XCTAssertEqual(probeA.report, ["R-METRICS-MISSING"], "Une absence de métriques reste explicite")
+
+        probeA.record(first, request: acceptedRequest)
+        probeB.record(second, request: acceptedRequest)
+        probeA.record(second, request: acceptedRequest) // seconde observation de la même sonde : ignorée
+        probeA.record(first, request: otherRequest)     // requête hors périmètre : ignorée
+
+        XCTAssertTrue(probeA.hasObservation)
+        XCTAssertEqual(probeA.report, RelayReadinessPhaseMarkers.make(first))
+        XCTAssertEqual(probeB.report, RelayReadinessPhaseMarkers.make(second))
+        XCTAssertNotEqual(probeA.report, probeB.report)
+    }
+    #endif
 }

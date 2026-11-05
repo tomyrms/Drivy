@@ -23,7 +23,153 @@ protocol SchoolHTTPTransport: Sendable {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse
 }
 
+#if DEBUG && targetEnvironment(simulator)
+/// Phases d’une transaction HTTP, extraites des métriques système. Jamais émises telles quelles :
+/// seuls des marqueurs fermés en sortent, sans date, URL, hôte, certificat ni identité.
+struct RelayReadinessPhaseTimes: Sendable, Equatable {
+    var fetchStart: Date?
+    var connectStart: Date?
+    var connectEnd: Date?
+    var secureConnectionStart: Date?
+    var secureConnectionEnd: Date?
+    var requestStart: Date?
+    var requestEnd: Date?
+    var responseStart: Date?
+    var responseEnd: Date?
+    var reusedConnection: Bool
+
+    init(fetchStart: Date? = nil, connectStart: Date? = nil, connectEnd: Date? = nil,
+         secureConnectionStart: Date? = nil, secureConnectionEnd: Date? = nil,
+         requestStart: Date? = nil, requestEnd: Date? = nil,
+         responseStart: Date? = nil, responseEnd: Date? = nil,
+         reusedConnection: Bool = false) {
+        self.fetchStart = fetchStart
+        self.connectStart = connectStart
+        self.connectEnd = connectEnd
+        self.secureConnectionStart = secureConnectionStart
+        self.secureConnectionEnd = secureConnectionEnd
+        self.requestStart = requestStart
+        self.requestEnd = requestEnd
+        self.responseStart = responseStart
+        self.responseEnd = responseEnd
+        self.reusedConnection = reusedConnection
+    }
+
+    /// Première transaction de la tâche ; `nil` si le système n’en publie aucune.
+    init?(_ metrics: URLSessionTaskMetrics) {
+        guard let transaction = metrics.transactionMetrics.first else { return nil }
+        self.init(fetchStart: transaction.fetchStartDate,
+                  connectStart: transaction.connectStartDate,
+                  connectEnd: transaction.connectEndDate,
+                  secureConnectionStart: transaction.secureConnectionStartDate,
+                  secureConnectionEnd: transaction.secureConnectionEndDate,
+                  requestStart: transaction.requestStartDate,
+                  requestEnd: transaction.requestEndDate,
+                  responseStart: transaction.responseStartDate,
+                  responseEnd: transaction.responseEndDate,
+                  reusedConnection: transaction.isReusedConnection)
+    }
+}
+
+/// Filtre fermé : seule la sonde de readiness de qualification est observée.
+enum RelayReadinessPhaseGuard {
+    static func accepts(_ request: URLRequest?) -> Bool {
+        guard let request, let url = request.url else { return false }
+        if let method = request.httpMethod, method != "GET" { return false }
+        guard url.scheme == "https", let host = url.host,
+              host == "localhost" || host == "127.0.0.1",
+              let port = url.port, (1_024...65_535).contains(port),
+              url.user == nil, url.password == nil,
+              url.query == nil, url.fragment == nil,
+              url.path == "/qualification/ready" else { return false }
+        return request.value(forHTTPHeaderField: "Authorization") == nil
+    }
+}
+
+/// Marqueurs fermés : phase présente, absente, incomplète ou invalide, et durée bornée.
+/// Aucun seuil n’est qualifié de « lent » : la mesure ne conclut pas à la place du diagnostic.
+enum RelayReadinessPhaseMarkers {
+    static let maximumMilliseconds = 600_000
+
+    static func make(_ times: RelayReadinessPhaseTimes?) -> [String] {
+        guard let times else { return ["R-METRICS-MISSING"] }
+        var markers: [String] = []
+        if times.reusedConnection {
+            markers.append("R-CONN-REUSED")
+        } else {
+            markers.append(phase("CONNECT", from: times.connectStart, to: times.connectEnd))
+            markers.append(phase("TLS", from: times.secureConnectionStart, to: times.secureConnectionEnd))
+        }
+        markers.append(phase("REQUEST", from: times.requestStart, to: times.requestEnd))
+        markers.append(phase("RESPONSE", from: times.responseStart, to: times.responseEnd))
+        markers.append(total(times))
+        return markers
+    }
+
+    static func milliseconds(_ interval: TimeInterval) -> Int {
+        let rounded = (interval * 1_000).rounded()
+        guard rounded.isFinite else { return maximumMilliseconds }
+        if rounded <= 0 { return 0 }
+        if rounded >= Double(maximumMilliseconds) { return maximumMilliseconds }
+        return Int(rounded)
+    }
+
+    private static func phase(_ name: String, from start: Date?, to end: Date?) -> String {
+        guard let start else { return "R-\(name)-ABSENT" }
+        guard let end else { return "R-\(name)-INCOMPLETE" }
+        let interval = end.timeIntervalSince(start)
+        guard interval.isFinite, interval >= 0 else { return "R-\(name)-INVALID" }
+        return "R-\(name)-MS-\(milliseconds(interval))"
+    }
+
+    private static func total(_ times: RelayReadinessPhaseTimes) -> String {
+        guard let start = times.fetchStart else { return "R-TOTAL-ABSENT" }
+        guard let end = times.responseEnd else { return "R-TOTAL-INCOMPLETE" }
+        let interval = end.timeIntervalSince(start)
+        guard interval.isFinite, interval >= 0 else { return "R-TOTAL-INVALID" }
+        return "R-TOTAL-MS-\(milliseconds(interval))"
+    }
+}
+
+/// Observateur opt-in d’une seule sonde : la première requête éligible est retenue, les autres ignorées.
+/// État protégé par verrou ; aucune attente, aucun singleton, aucun partage entre sondes.
+final class RelayReadinessPhaseProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var observation: [String]?
+
+    var hasObservation: Bool { lock.withLock { observation != nil } }
+
+    /// Marqueurs fermés, ou l’absence explicite de métriques : une mesure manquante n’est pas un succès.
+    var report: [String] { lock.withLock { observation ?? ["R-METRICS-MISSING"] } }
+
+    func record(_ times: RelayReadinessPhaseTimes?, request: URLRequest?) {
+        guard RelayReadinessPhaseGuard.accepts(request) else { return }
+        let markers = RelayReadinessPhaseMarkers.make(times)
+        lock.withLock {
+            if observation == nil { observation = markers }
+        }
+    }
+}
+#endif
+
 private final class NoAPIRedirects: NSObject, URLSessionTaskDelegate, Sendable {
+    #if DEBUG && targetEnvironment(simulator)
+    private let readinessPhaseProbe: RelayReadinessPhaseProbe?
+
+    init(readinessPhaseProbe: RelayReadinessPhaseProbe? = nil) {
+        self.readinessPhaseProbe = readinessPhaseProbe
+        super.init()
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask,
+                    didFinishCollecting metrics: URLSessionTaskMetrics) {
+        // La sonde ne reçoit que la requête qu’elle a elle-même émise : le filtre revérifie l’URL.
+        readinessPhaseProbe?.record(RelayReadinessPhaseTimes(metrics), request: task.originalRequest)
+    }
+    #else
+    override init() { super.init() }
+    #endif
+
     func urlSession(_ session: URLSession, task: URLSessionTask,
                     willPerformHTTPRedirection response: HTTPURLResponse,
                     newRequest request: URLRequest,
@@ -38,6 +184,20 @@ actor SchoolURLSessionTransport: SchoolHTTPTransport {
     static let maximumResponseBytes = 2 * 1_024 * 1_024
 
     init() {
+        session = URLSession(configuration: Self.configuration(), delegate: NoAPIRedirects(), delegateQueue: nil)
+    }
+
+    #if DEBUG && targetEnvironment(simulator)
+    /// Seule cette session, créée pour la sonde, collecte les phases de sa requête. Aucune métrique globale.
+    init(readinessPhaseProbe: RelayReadinessPhaseProbe) {
+        session = URLSession(configuration: Self.configuration(),
+                             delegate: NoAPIRedirects(readinessPhaseProbe: readinessPhaseProbe),
+                             delegateQueue: nil)
+    }
+    #endif
+
+    /// Configuration inchangée : mêmes bornes, même cache, mêmes cookies, même refus de redirection.
+    private static func configuration() -> URLSessionConfiguration {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.urlCache = nil
         configuration.httpCookieStorage = nil
@@ -45,7 +205,7 @@ actor SchoolURLSessionTransport: SchoolHTTPTransport {
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.timeoutIntervalForRequest = 20
         configuration.timeoutIntervalForResource = 30
-        session = URLSession(configuration: configuration, delegate: NoAPIRedirects(), delegateQueue: nil)
+        return configuration
     }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {

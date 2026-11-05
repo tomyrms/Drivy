@@ -68,7 +68,7 @@ elif [[ "$unit_only" == 1 ]]; then
     # Signalements (#77) : scellement pour les administrateurs, boîte, transport, puis le même parcours contre le vrai relais.
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
       MessagingExyteThreadTests MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
-      MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests; do
+      MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests RelayReadinessDiagnosticTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reactivity ]]; then
