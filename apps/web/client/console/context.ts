@@ -152,10 +152,8 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], s
 export function useDraft<T>(baseline: T | null) {
   const [draft, setDraft] = useState<T | null>(baseline);
   const [acknowledged, setAcknowledged] = useState<string | null>(null);
-  const [conflicts, setConflicts] = useState<readonly string[]>([]);
-  // Read after an await: the confirmation compares the latest typing, not the render that submitted.
-  const latestDraft = useRef(draft);
-  latestDraft.current = draft;
+  // Last confirmation, kept as one value: conflicts are derived from the same draft that is displayed.
+  const confirmation = useRef<{ value: T; sent: T } | null>(null);
   const previous = useRef<string | null>(baseline === null ? null : JSON.stringify(baseline));
   const serialized = baseline === null ? null : JSON.stringify(baseline);
   useEffect(() => {
@@ -164,27 +162,25 @@ export function useDraft<T>(baseline: T | null) {
     setDraft(current => current === null || before === null || JSON.stringify(current) === before ? JSON.parse(serialized) as T : current);
     previous.current = serialized;
     setAcknowledged(null);
-    setConflicts([]);
   }, [serialized]);
   const saved = acknowledged ?? serialized;
   const edited = draft !== null && saved !== null && JSON.stringify(draft) !== saved;
-  const releaseGuard = useUnsavedChanges(edited);
-  const reset = () => { releaseGuard(); setConflicts([]); if (saved !== null) setDraft(JSON.parse(saved) as T); };
+  useUnsavedChanges(edited);
+  const reset = () => { confirmation.current = null; if (saved !== null) setDraft(JSON.parse(saved) as T); };
   /**
    * `value` is what the school confirmed. With `sent`, a local edit made since that submission is never replaced
    * by the confirmation (#123), but a field left untouched locally adopts the confirmed value: normalisation or an
    * external change on another field is not lost. A field changed on both sides differently stays local and is
-   * reported in `conflicts`, never overwritten silently (#106).
+   * reported in `conflicts`, never overwritten silently (#106). The functional update keeps the displayed value and
+   * its conflict paths on the same React state; an unresolved conflict survives a baseline refresh.
    */
   const markSaved = (value: T, sent?: T) => {
     setAcknowledged(JSON.stringify(value));
-    const current = latestDraft.current;
-    const rebased = current === null || sent === undefined ? { value, conflicts: [] } : rebaseConfirmedDraft(sent, value, current);
-    setConflicts(rebased.conflicts);
-    if (JSON.stringify(rebased.value) === JSON.stringify(value)) releaseGuard();
-    // Functional update: a keystroke queued after the ref was read is merged too, not overwritten by an older view.
-    setDraft(previous => previous === null || sent === undefined ? value : rebaseConfirmedDraft(sent, value, previous).value);
+    confirmation.current = sent === undefined ? null : { value, sent };
+    setDraft(previousDraft => previousDraft === null || sent === undefined ? value : rebaseConfirmedDraft(sent, value, previousDraft).value);
   };
+  const conflicts = confirmation.current === null || draft === null
+    ? [] : rebaseConfirmedDraft(confirmation.current.sent, confirmation.current.value, draft).conflicts;
   return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset, markSaved, conflicts };
 }
 

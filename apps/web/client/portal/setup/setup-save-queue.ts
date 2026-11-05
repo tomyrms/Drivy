@@ -48,8 +48,8 @@ export interface SetupSaveSnapshot {
 }
 
 export interface SetupSaveHooks {
-  /** L'école a confirmé ce brouillon ; `body` est exactement ce qu'elle détient désormais. */
-  confirmed?(body: SetupDraftBody, version: number): void;
+  /** L'école a confirmé ce brouillon ; `body` est exactement ce qu'elle détient désormais, `sent` ce qui était parti. */
+  confirmed?(body: SetupDraftBody, version: number, sent: SetupDraftBody): void;
   /** La version a changé à l'école : la saisie locale est gardée, le brouillon doit être relu. */
   conflict?(body: SetupDraftBody): void;
 }
@@ -244,6 +244,8 @@ export class SetupSaveQueue {
       const confirmedEntry = entryOf(outcome.body);
       this.held = { version: outcome.version, entry: confirmedEntry };
       const next = this.pending;
+      let latestHandled = false;
+      let conflict: SetupDraftBody | null = null;
       // Une intention plus récente que l'envoi en vol est basée sur le brouillon parti, pas sur la réponse :
       // seuls les champs qu'elle n'a pas retouchés prennent la valeur confirmée (normalisation ou changement externe).
       if (next !== null && next.key !== pending.key) {
@@ -251,26 +253,37 @@ export class SetupSaveQueue {
         if (rebased.conflicts.length) {
           // Même champ modifié localement et confirmé autrement : la saisie locale reste, l'écran de conflit existant
           // demande une relecture. Rien n'est renvoyé automatiquement sur la valeur de l'école.
+          conflict = next.body;
           this.pending = null;
-          if (this.latest?.key === next.key) this.latest = entryOf(rebased.value);
-          this.phase = 'conflict'; this.conflictStep = next.body.currentStep;
-          this.message = 'La préparation a changé à l’école. Votre saisie est conservée : relisez l’étape avant d’enregistrer.';
-          this.publish();
-          this.options.conflict?.(next.body);
-          return;
+          if (this.latest?.key === next.key) { this.latest = entryOf(rebased.value); latestHandled = true; }
+        } else {
+          const rebasedEntry = entryOf(rebased.value);
+          this.pending = rebasedEntry;
+          if (this.latest?.key === next.key) { this.latest = rebasedEntry; latestHandled = true; }
         }
-        const rebasedEntry = entryOf(rebased.value);
-        this.pending = rebasedEntry;
-        if (this.latest?.key === next.key) this.latest = rebasedEntry;
       } else {
         // Même intention que celle qui vient d'être confirmée, ou aucune intention en attente : elle ne repart pas.
         this.pending = null;
-        if (this.latest?.key === pending.key) this.latest = confirmedEntry;
+        if (this.latest?.key === pending.key) { this.latest = confirmedEntry; latestHandled = true; }
+      }
+      // Une saisie seulement suivie par `track` (sans enqueue) est rebasée elle aussi : elle garde ses champs locaux
+      // et reçoit les champs que l'école vient de normaliser.
+      if (!latestHandled && this.latest !== null && this.latest.key !== pending.key) {
+        this.latest = entryOf(rebaseConfirmedDraft(pending.body, outcome.body, this.latest.body).value);
+      }
+      if (conflict !== null) {
+        this.phase = 'conflict'; this.conflictStep = conflict.currentStep;
+        this.message = 'La préparation a changé à l’école. Votre saisie est conservée : relisez l’étape avant d’enregistrer.';
+        this.publish();
+        // La première écriture est durable : le consommateur reçoit sa confirmation même si la relecture suivante échoue.
+        this.options.confirmed?.(outcome.body, outcome.version, pending.body);
+        this.options.conflict?.(conflict);
+        return;
       }
       if (this.pending?.contentKey === this.held.entry.contentKey) this.pending = null;
       this.phase = 'idle'; this.message = null; this.conflictStep = null;
       this.publish();
-      this.options.confirmed?.(outcome.body, outcome.version);
+      this.options.confirmed?.(outcome.body, outcome.version, pending.body);
       return;
     }
     if (outcome.status === 'conflict') {

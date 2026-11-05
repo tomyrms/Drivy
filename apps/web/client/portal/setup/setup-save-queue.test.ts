@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { setupContentSchema, type SetupContent, type SetupStep } from '../../setup-model';
-import { SetupSaveQueue, saveOutcome, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
+import { SetupSaveQueue, saveOutcome, type SetupSaveHooks, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
 
 const content = (name = 'École synthétique', contactEmail = 'ecole@example.invalid'): SetupContent => setupContentSchema.parse({
   selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE'],
@@ -13,7 +13,7 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 
 /** École synthétique : la version ne change que si `If-Match` correspond, comme le serveur. */
-function harness() {
+function harness(hooks: Partial<SetupSaveHooks> = {}) {
   const state = { version: 1, content: content(), step: 'IDENTITY' as SetupStep };
   const send = vi.fn<SetupSaveSend>(async request => {
     if (request.ifMatch !== state.version) return { status: 'conflict' };
@@ -22,7 +22,7 @@ function harness() {
     state.step = request.body.currentStep;
     return { status: 'confirmed', version: state.version, body: request.body } satisfies SetupSaveOutcome;
   });
-  const queue = new SetupSaveQueue({ send });
+  const queue = new SetupSaveQueue({ send, ...hooks });
   queue.adopt(state.version, { currentStep: state.step, content: state.content });
   return { queue, send, state };
 }
@@ -313,5 +313,30 @@ describe('Enregistrement coalescé du brouillon (#123)', () => {
     expect(h.send).toHaveBeenCalledTimes(1);
     expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', conflictStep: 'PRICING', synced: false, heldVersion: 2 });
     expect(h.queue.getSnapshot().held?.content.identity.contactEmail).toBe('normalise@example.invalid');
+  });
+
+  test('la confirmation durable précède le conflit de la saisie suivante', async () => {
+    const confirmed = vi.fn<NonNullable<SetupSaveHooks['confirmed']>>();
+    const conflicted = vi.fn<NonNullable<SetupSaveHooks['conflict']>>();
+    const h = harness({ confirmed, conflict: conflicted });
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('École A');
+    const second = content('École B', 'local@example.invalid');
+    h.queue.enqueue(draft(first));
+    h.queue.enqueue(draft(second, 'PRICING'));
+
+    const confirmedFirst = content('École A', 'normalise@example.invalid');
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    // Le premier PUT est durable : son callback passe avant l'état conflictuel de la seconde saisie.
+    expect(confirmed).toHaveBeenCalledTimes(1);
+    expect(confirmed.mock.calls[0]![1]).toBe(2);
+    expect(confirmed.mock.calls[0]![2].content.identity.contactEmail).toBe('ecole@example.invalid');
+    expect(conflicted).toHaveBeenCalledTimes(1);
+    expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', heldVersion: 2 });
+    expect(h.send).toHaveBeenCalledTimes(1);
   });
 });

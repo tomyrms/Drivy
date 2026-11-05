@@ -792,3 +792,17 @@ Preuve web locale du 5 novembre 2026 : `draft-rebase.test.ts` et les scénarios 
 `setup-save-queue.test.ts` passent ; la suite web hors harnais navigateur `pending-recovery` donne
 81 fichiers et 886 tests réussis, un échec attendu. Typage et build web réussis. Le rendu réel du hook,
 les captures et le harnais `pending-recovery` ne sont pas qualifiés par ce contrôle.
+
+Retour correctif du même jour : `use-setup-guide` adopte le brouillon fusionné dans le contenu réel de
+l'éditeur, y compris une saisie seulement suivie par `track`, et la confirmation durable est transmise
+avant un éventuel conflit de la saisie suivante. `useDraft` dérive valeur, conflits et garde de la même
+mise à jour React ; un conflit non résolu survit à un rafraîchissement de baseline. Le harnais
+React/Chromium `scripts/dev/check-reconciliation-106.ts` couvre C1–C3 avec latence contrôlée.
+
+Contrat minimal restant pour le propriétaire UI école, non réalisé ici : `useDraft` expose
+`conflicts: readonly string[]` en chemins du brouillon (`name`, `contactEmail`, `contactPhone`, etc.).
+Un tableau non vide doit rester visible jusqu'à résolution explicite ; la saisie locale est conservée,
+l'action de résolution étant de relire la valeur confirmée ou de modifier puis enregistrer à nouveau.
+`SchoolSettingsPilot` appelle encore `markSaved(normalized, sent)` avec une normalisation locale, pas le
+corps confirmé par l'école : le raccord UI devra lui transmettre la réponse réelle et afficher l'alerte.
+Aucun TSX produit n'est modifié par ce lot.
