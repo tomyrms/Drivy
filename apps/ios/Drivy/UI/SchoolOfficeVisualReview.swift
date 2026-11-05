@@ -79,10 +79,15 @@ struct SchoolOfficeVisualReview: View {
     init(context: SchoolVisualContext, permitWarning: Bool = false, draftScreen: String = "", testsStartNowGPS: Bool = false) throws {
         guard let person = context.workspace.person, let membership = context.workspace.membership else { throw SchoolAPIError.invalidResponse }
         let scope = context.agenda.scope(person: person, membership: membership)
-        let baseURL = URL(string: "https://visual.drivy.invalid")!, token = SchoolVisualToken()
+        let baseURL = URL(string: "https://visual.drivy.invalid")!
+        // Activé seulement pour cette scène et ces arguments de qualification synthétique.
+        let cancellationGate = draftScreen == "planning" ? SchoolPlanningL2FixtureGate.fromArguments() : nil
+        let token: any AccessTokenSource
+        if let cancellationGate { token = SchoolPlanningL2FixtureToken(gate: cancellationGate) }
+        else { token = SchoolVisualToken() }
         let transport = SchoolOfficeVisualTransport(responses: try SchoolOfficeVisualData.responses(permitWarning: permitWarning),
-            allowsWrites: !permitWarning, invitationScenario: draftScreen)
-        let outbox = SchoolOfficeVisualOutbox(allowsWrites: !permitWarning)
+            allowsWrites: !permitWarning, invitationScenario: draftScreen, cancellationGate: cancellationGate)
+        let outbox = SchoolOfficeVisualOutbox(allowsWrites: !permitWarning, cancellationGate: cancellationGate)
         self.outbox = outbox
         if draftScreen == "lesson-draft-error" {
             reportDrafts = SchoolVisualUnavailableReportDrafts()
@@ -232,7 +237,9 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     private var responses: [String: Data]
     private let allowsWrites: Bool
     private let invitationScenario: String
-    init(responses: [String: Data], allowsWrites: Bool = true, invitationScenario: String = "") {
+    private let cancellationGate: SchoolPlanningL2FixtureGate?
+    init(responses: [String: Data], allowsWrites: Bool = true, invitationScenario: String = "", cancellationGate: SchoolPlanningL2FixtureGate? = nil) {
+        self.cancellationGate = cancellationGate
         self.responses = responses
         self.allowsWrites = allowsWrites
         self.invitationScenario = invitationScenario
@@ -240,6 +247,7 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url, url.host == "visual.drivy.invalid" else { throw SchoolAPIError.invalidResponse }
         guard allowsWrites || (request.httpMethod ?? "GET") == "GET" else { throw SchoolAPIError.invalidResponse }
+        try await cancellationGate?.beforeTransport(request)
         func envelope(_ value: Any) throws -> Data {
             try JSONSerialization.data(withJSONObject: ["data": value, "requestId": UUID().uuidString, "serverTime": "2026-09-29T10:00:00Z"])
         }
@@ -329,12 +337,79 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
 @MainActor private final class SchoolOfficeVisualOutbox: SchoolCommandOutbox {
     private var value: PendingSchoolCommand?
     private let allowsWrites: Bool
-    init(allowsWrites: Bool = true) { self.allowsWrites = allowsWrites }
+    private let cancellationGate: SchoolPlanningL2FixtureGate?
+    init(allowsWrites: Bool = true, cancellationGate: SchoolPlanningL2FixtureGate? = nil) {
+        self.allowsWrites = allowsWrites; self.cancellationGate = cancellationGate
+    }
     func pending(for scope: SchoolCommandScope) throws -> PendingSchoolCommand? { value?.scope == scope ? value : nil }
     func save(_ command: PendingSchoolCommand) throws {
         guard allowsWrites else { throw SchoolConfigurationFailure.storage }
         value = command
+        cancellationGate?.arm(command)
     }
-    func remove(_ command: PendingSchoolCommand) throws { if value?.id == command.id { value = nil } }
+    func remove(_ command: PendingSchoolCommand) throws {
+        if value?.id == command.id {
+            try cancellationGate?.remove(command)
+            value = nil
+        }
+    }
 }
+/// Source locale à ce harnais : jamais de modification du jeton partagé des autres scènes.
+@MainActor private final class SchoolPlanningL2FixtureToken: AccessTokenSource {
+    let gate: SchoolPlanningL2FixtureGate
+    init(gate: SchoolPlanningL2FixtureGate) { self.gate = gate }
+    func accessToken() async throws -> String {
+        if gate.mode == "token" { try await gate.waitForRemoval() }
+        return "planning-l2-synthetic-token"
+    }
+}
+
+@MainActor private final class SchoolPlanningL2FixtureGate {
+    let mode: String
+    private var refusesRemoval: Bool
+    private var command: PendingSchoolCommand?
+    private var released = false
+    private var expired = false
+    private(set) var identityReads = 0
+    private(set) var mutations = 0
+    private var identityReadsAtAdmission = 0
+    static func fromArguments() -> SchoolPlanningL2FixtureGate? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let mode = ["token", "me"].first(where: { args.contains("-planning-l2-cancellation-" + $0) }) else { return nil }
+        return SchoolPlanningL2FixtureGate(mode: mode, refusesRemoval: args.contains("-planning-l2-cancellation-storage-failure"))
+    }
+    init(mode: String, refusesRemoval: Bool) { self.mode = mode; self.refusesRemoval = refusesRemoval }
+    func arm(_ command: PendingSchoolCommand) {
+        guard self.command == nil, command.kind == .createLesson || command.kind == .moveLesson else { return }
+        self.command = command; identityReadsAtAdmission = identityReads
+    }
+    func waitForRemoval() async throws {
+        guard command != nil else { return }
+        let deadline = Date().addingTimeInterval(25)
+        while !released {
+            guard Date() < deadline else { expired = true; throw Failure.expired }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+    func beforeTransport(_ request: URLRequest) async throws {
+        if request.url?.lastPathComponent == "me" {
+            identityReads += 1
+            if mode == "me" { try await waitForRemoval() }
+        }
+        if (request.httpMethod ?? "GET") != "GET" { mutations += 1 }
+    }
+    func remove(_ candidate: PendingSchoolCommand) throws {
+        // Une échéance ou une émission inattendue font échouer le scénario, jamais une fausse annulation.
+        guard command == candidate, !expired, mutations == 0 else { throw Failure.expired }
+        if mode == "token", identityReads != identityReadsAtAdmission { throw Failure.expired }
+        if mode == "me", identityReads <= identityReadsAtAdmission { throw Failure.expired }
+        if refusesRemoval { refusesRemoval = false; throw SchoolConfigurationFailure.storage }
+        released = true
+    }
+    enum Failure: LocalizedError {
+        case expired
+        var errorDescription: String? { "La barrière de qualification L2 a expiré ou reçu une mutation inattendue." }
+    }
+}
+
 #endif

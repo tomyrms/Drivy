@@ -66,6 +66,38 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     /// Création ou déplacement dont l’envoi est parti (#109) : l’intention est déjà dans le coffre chiffré, la feuille
     /// peut être quittée sans rien perdre. Rien n’est confirmé tant que l’école n’a pas répondu.
     private(set) var isSendingRequest = false
+    /// Preuve vivante uniquement : jamais reconstruite depuis un record restauré.
+    private var sendAdmission: SchoolCommandSendAdmission?
+    private var admittedCommand: PendingSchoolCommand?
+    private var cancellationMessage: String?
+    var sendCancellationMessage: String? { currentSendAdmission == nil ? nil : cancellationMessage }
+    @ObservationIgnored private var sendAttempt = UUID()
+    private var currentSendAdmission: SchoolCommandSendAdmission? {
+        guard pending != nil, pending == admittedCommand else { return nil }
+        return sendAdmission
+    }
+    var canCancelSend: Bool {
+        guard !invalidated, !accessRevoked, !isLoading, let admission = currentSendAdmission else { return false }
+        return admission.phase == .waiting || admission.phase == .cancellationStorageFailed
+    }
+    var sendCancellationNeedsRetry: Bool { currentSendAdmission?.phase == .cancellationStorageFailed }
+    /// Fermer la feuille ne passe jamais par ici. Seule la barrière décide si le retrait est encore sûr.
+    func cancelSend() {
+        guard !invalidated, !accessRevoked, !isLoading, let admission = currentSendAdmission else { return }
+        switch admission.cancel(removing: { try outbox.remove($0) }) {
+        case .alreadyHandedToTransport:
+            cancellationMessage = "La demande est déjà transmise. Son résultat reste à vérifier."
+        case .storageFailure:
+            sendAttempt = UUID(); isBusy = false; isSendingRequest = false
+            cancellationMessage = "La demande n’a pas pu être retirée de cet appareil. Réessaie l’annulation de l’envoi."
+        case .cancelledBeforeSend:
+            sendAttempt = UUID(); isBusy = false; isSendingRequest = false
+            pending = nil; admittedCommand = nil; sendAdmission = nil
+            absentPendingID = nil; pendingRequiresReview = false; sentDraft = nil; leftWhileSending = false
+            cancellationMessage = nil; errorMessage = nil; successMessage = nil
+            rereadBlocker()
+        }
+    }
     private(set) var needsReload = true
     private(set) var errorMessage: String?
     private(set) var successMessage: String?
@@ -353,6 +385,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
         storageAvailable = false; needsReload = true; isBusy = false; isLoading = false
         confirmedLesson = nil; confirmedLessonReference = nil
         isSendingRequest = false; sentDraft = nil
+        sendAdmission = nil; admittedCommand = nil; cancellationMessage = nil
         // Changement de portée ou accès retiré : plus aucune annonce ne part dans l’ancienne portée.
         leftWhileSending = false
     }
@@ -734,6 +767,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
                 try outbox.save(command)
                 // Le geste conservé est celui de cette feuille : la file le refuse tant qu'il attend sa réponse.
                 blockingCommand = command
+                admittedCommand = command
+                sendAdmission = (kind == .createLesson || kind == .moveLesson) ? SchoolCommandSendAdmission(command: command) : nil
+                cancellationMessage = nil
             }
             catch {
                 storageAvailable = false
@@ -749,6 +785,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     var pendingIsStale: Bool { pending?.isStaleLessonRequest(at: client.currentDate) ?? false }
     var canRetry: Bool {
         !invalidated && !isBusy && !isLoading && !accessRevoked && !pendingRequiresReview && !pendingIsStale
+            && !sendCancellationNeedsRetry
             && pending?.scope == scope && pending?.kind.isPlanning == true
     }
     /// Ce que la demande conservée ne permet plus de faire, en plus de sa vérification.
@@ -763,9 +800,11 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     func retry() async -> Bool { sentDraft = draftSnapshot; return await transmit(firstAttempt: false) }
     func verify() async {
         guard !invalidated, !isBusy, let command = pending, command.scope.belongsToWorkspace(scope) else { return }
-        isBusy = true; let request = generation
+        isBusy = true; let request = generation; let attempt = sendAttempt
         do {
-            let receipt = try await client.receipt(for: command); try outbox.remove(command)
+            let receipt = try await client.receipt(for: command)
+            guard attempt == sendAttempt else { return }
+            try outbox.remove(command)
             guard request == generation else { return }
             pending = nil; isBusy = false; pendingRequiresReview = false
             rereadBlocker()
@@ -787,9 +826,9 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             announceConfirmedWrite()
         } catch SchoolPlanningFailure.notFound {
             // Le reçu absent ne dit rien des accès : l’école n’a simplement pas enregistré cette opération.
-            guard request == generation else { return }
+            guard request == generation, attempt == sendAttempt else { return }
             isBusy = false; errorMessage = nil; absentPendingID = command.id; pendingRequiresReview = false
-        } catch { guard request == generation else { return }; isBusy = false; fail(error) }
+        } catch { guard request == generation, attempt == sendAttempt else { return }; isBusy = false; fail(error) }
     }
     /// Retire une demande que l’école ne connaît pas, puis relit le planning : rien n’est supposé enregistré.
     func abandonPending() async {
@@ -807,14 +846,18 @@ struct SchoolPlanningDraftSnapshot: Equatable {
     private func transmit(firstAttempt: Bool) async -> Bool {
         guard canRetry, let command = pending else { return false }
         let request = generation; isBusy = true; errorMessage = nil; successMessage = nil
+        sendAttempt = UUID(); let attempt = sendAttempt
+        let admission = currentSendAdmission
+        cancellationMessage = nil
         // Création ou déplacement : la demande est déjà écrite dans le coffre chiffré, la feuille peut être quittée
         // avant la réponse. Ce qui suit ne réécrit alors plus rien à l’écran ; seule la preuve de l’école est annoncée.
         isSendingRequest = command.kind == .createLesson || command.kind == .moveLesson
         leftWhileSending = false
-        defer { isSendingRequest = false }
+        defer { if attempt == sendAttempt { isSendingRequest = false } }
         do {
             try outbox.save(command)
-            let receipt = try await client.send(command)
+            let receipt = try await client.send(command, admission: admission)
+            guard attempt == sendAttempt else { return false }
             // Création et déplacement ouvrent la fiche relue : sans reçu AP72, l'écriture reste à vérifier, jamais refusée.
             // « Lancer maintenant » confirme par sa propre réponse et ne doit jamais rester bloqué dans le coffre.
             if (command.kind == .createLesson || command.kind == .moveLesson) && receipt == nil {
@@ -842,7 +885,7 @@ struct SchoolPlanningDraftSnapshot: Equatable {
             }
             return true
         } catch {
-            guard request == generation else { return false }
+            guard request == generation, attempt == sendAttempt else { return false }
             if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection || failure == .notFound {
                 // Une demande que l’école ne connaît pas se renvoie comme neuve : son refus est alors définitif.
                 // Un 404 est aussi une réponse de l’école : rien n’a été enregistré.

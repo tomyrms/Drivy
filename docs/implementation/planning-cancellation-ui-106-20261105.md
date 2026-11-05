@@ -2,13 +2,15 @@
 
 ## Préflight du 5 novembre 2026
 
-Travail en attente du checkpoint N106 : aucun raccord ni stub d'admission créé.
+État initial du préflight : attente du checkpoint N106, sans raccord ni stub.
+Le raccord livré après réception est décrit en fin de rapport.
 Base vérifiée : `bc2c53cbaae6fa719e6203ea77119a753d6780d7`, branche
 `tomyrms/issues-annulation-planification-ui-106`, arbre initial propre.
 Le runtime `orca orchestration worker-show --dispatch ctx_03e2318e5896 --json --full`
 rend `startOptions.launch.effective` = Codex, `gpt-6-astra`, effort `high`.
 Le contrat commun de bristleworm `docs/implementation/L2-interface-annulation-native-20261105.md`
-a été lu intégralement. Checkpoint consommé : **aucun pour le moment**.
+a été lu intégralement. Checkpoint ensuite consommé : **8edb13c0b80fa4e932aa5cdd92483490d1e5f144**, via la livraison finale
+**d5c9dee086d5868ac3f8effd4531ff08a63879cf** fusionnée localement sur le préflight `f5a1e76b`.
 
 Skills effectivement lus sous `C:/Users/jtoma/.codex/skills/` :
 
@@ -89,3 +91,67 @@ la course n'est créé à ce stade.
 Swift, XCTest/Testing, rendu Apple, VoiceOver physique : **NON EXÉCUTÉS** ; aucune capture produite.
 Le pilote ne qualifie aucune autre famille de commandes, GPS ou backend.
 STATUS reste à la charge de l'intégration : modification explicitement interdite à ce worker.
+
+
+## Livraison après réception N106
+
+Le coordinateur a autorisé l'extension de `apps/ios/Drivy/UI/SchoolOfficeVisualReview.swift`
+(message de réponse Orca `msg_8df9e7997a55`) : constructeur et helpers de fixture uniquement.
+Aucun fichier N106 n'a été édité ; les cinq fichiers de sa livraison proviennent de la fusion autorisée.
+
+Fichiers U106 modifiés :
+
+- `apps/ios/Drivy/SchoolAgendaUI/SchoolPlanningWorkspace.swift` : admission seulement après sauvegarde réussie d'un nouveau create/move ; comparaison de la commande complète pour utiliser la preuve et afficher son erreur ; aucune reconstruction au chargement.
+- `apps/ios/Drivy/SchoolAgendaUI/SchoolPlanningView.swift` : action « Annuler l’envoi » dans la section de la demande, erreur locale et annonce accessible ; style texte natif existant, sans nouveau panneau ni changement de palette/typo. « Fermer » et « Annuler la leçon » gardent leur sens.
+- `apps/ios/DrivyTests/SchoolPlanningCancellation106Tests.swift` : 9 tests, dont une matrice de 4 cas create/move × token/me, écrits avec vrais workspace/client/admission/coffre temporaire et frontières synthétiques.
+- `apps/ios/Drivy/UI/SchoolOfficeVisualReview.swift` : source privée de jeton et barrière bornée, scène planning uniquement, sous le garde DEBUG simulateur existant.
+- `apps/ios/DrivyUITests/SchoolPlanningCancellationUITests.swift` : 3 scénarios UI (token, /me, retrait refusé puis réessayé en taille maximale), captures seulement lors de leur future exécution.
+- Le présent rapport.
+
+Retrait réussi : pending et bloqueur relus après suppression durable, brouillon conservé, aucune ressource,
+confirmation ni notification serveur. Retrait refusé : émission fermée, record inchangé, message local,
+« Annuler l’envoi » retente le retrait et `canRetry` interdit le renvoi. Admission handed : aucun retrait,
+suivi inchangé. Le même objet admission survit à une panne avant transport dans cette instance ; un
+workspace restauré n'en reçoit jamais. Les méthodes de reprise existantes restent disponibles selon
+leurs règles ; les retours de `verify` sont aussi protégés contre un retrait intervenu pendant leur attente.
+
+Chaque envoi porte une identité de tentative ; retrait et nouveau geste invalident la précédente.
+Le callback et le defer anciens ne réécrivent donc pas l'état nouveau. La génération de chargement et
+les règles existantes de sortie volontaire/révocation restent distinctes. La fermeture pendant envoi
+continue à permettre une notification sur preuve tardive, et ne retire pas l'intention.
+
+Le harnais est activé seulement par `-planning-l2-cancellation-token` ou
+`-planning-l2-cancellation-me`, avec l'option `-planning-l2-cancellation-storage-failure`.
+Il s'arme dans `outbox.save` au geste, jamais pendant le chargement. La suppression réussie libère
+la retenue ; après 25 secondes, la frontière échoue et le retrait ne peut plus passer comme succès.
+Lectures /me et mutations sont comptées séparément ; un retrait exige zéro mutation et le nombre
+attendu de lectures d'identité. Ce contrôle ne prétend pas mesurer de vrais paquets réseau.
+Les tests workspace ont des barrières de 5 secondes et une attente de rendez-vous de 3 secondes,
+avec `Issue.record` et erreur explicites à l'échéance ; aucune continuation indéfinie ni assertion async
+placée dans une autoclosure.
+
+### Vérifications réellement disponibles
+
+- `git diff --check` puis inspection du diff : exit 0 ; avertissements de normalisation CRLF/LF seulement.
+- Impeccable `detect --json` sur workspace/vue : exit 0, `[]`. Détecteur statique, aucune preuve de rendu SwiftUI.
+- Nouvelle indexation Codebase Memory de la même racine après raccord : 53 341 nœuds, 204 264 arêtes ; mêmes 88 parsings partiels et 4 inutilisables globaux. Ce n'est pas un compilateur Swift.
+- Recherche des assertions await et continuations dans le nouveau test : aucune ; quatre boucles d'attente ont des échéances explicites.
+- `Get-Command swift,xcodebuild -ErrorAction SilentlyContinue` : aucun outil trouvé. Tests Swift/UI, compilation, RED/GREEN, rendu et captures : **NON EXÉCUTÉS**. La préparation test-first ne revendique pas un cycle RED/GREEN observé.
+- Le `project.yml` inclut déjà les dossiers DrivyTests/DrivyUITests ; aucun changement du projet requis.
+
+### Campagne Apple restante
+
+Exécuter la suite `SchoolPlanningCancellation106Tests`, les suites N106 et les régressions
+`SchoolPlanningLeaveWhileSendingTests`, `SchoolPlanningRecovery106Tests`, `SchoolPlanningBookingTests`
+et `SchoolPlanningDefaultsTests`, puis la suite UI ajoutée. Faire ensuite la suite native complète
+sur le candidat intégré, sans considérer ces seuls scénarios comme une qualification produit.
+
+Préparer iPhone compact et iPad 11 pouces, portrait/paysage, clair/sombre, taille standard et accessibilité
+maximale : bouton atteignable dans la section de la demande, aucune troncature, saisie intacte après retrait,
+barre Planifier disponible après revalidation du créneau. Avec clavier ouvert, vérifier fermeture protégée
+et réédition du lieu. Sur appareil, vérifier l'ordre VoiceOver, les deux libellés français distincts,
+l'annonce de l'erreur et le focus après disparition de l'action. Aucune de ces vérifications physiques
+n'est annoncée faite. GPS, autres familles de commandes, serveur/PostgreSQL et notification distante
+restent hors qualification de ce pilote.
+
+Pas de push, CI, installation, activation, changement de dépendance, de modèle ni de sous-agent.

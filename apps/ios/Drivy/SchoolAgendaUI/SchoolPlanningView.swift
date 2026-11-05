@@ -134,6 +134,9 @@ struct SchoolPlanningView: View {
                 onConfirmedLesson(lesson)
                 dismiss()
             }
+            .onChange(of: model.sendCancellationMessage) { _, message in
+                if let message { UIAccessibility.post(notification: .announcement, argument: message) }
+            }
             .onChange(of: model.confirmedCancellationLessonID) { _, lessonID in
                 if lessonID != nil { dismiss() }
             }
@@ -647,6 +650,15 @@ struct SchoolPlanningFeedback: View {
                     retry: model.canRetry ? { Task { _ = await model.retry() } } : nil,
                     abandon: model.pendingAbsent ? { Task { await model.abandonPending() } } : nil,
                     canAbandon: !(model.isBusy || model.isLoading))
+                if let message = model.sendCancellationMessage {
+                    DrivyFormMessage(text: message, tone: .warning)
+                        .accessibilityIdentifier("planning-send-cancellation-error")
+                }
+                if model.canCancelSend {
+                    Button("Annuler l’envoi") { model.cancelSend() }
+                        .buttonStyle(.drivyText)
+                        .accessibilityIdentifier("planning-cancel-send")
+                }
             }
                 .drivyFormRows()
         }
