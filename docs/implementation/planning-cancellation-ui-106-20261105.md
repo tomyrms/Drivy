@@ -155,3 +155,5 @@ n'est annoncée faite. GPS, autres familles de commandes, serveur/PostgreSQL et 
 restent hors qualification de ce pilote.
 
 Pas de push, CI, installation, activation, changement de dépendance, de modèle ni de sous-agent.
+
+Commit de raccord : `57179b42885cff02d9595e495ddd61163a7b3832` ; fusion locale N106 : `ac6e0080` ; préflight : `f5a1e76ba9615aa66d61bce128624ead9248c476`. Arbre propre vérifié après le commit de raccord.
