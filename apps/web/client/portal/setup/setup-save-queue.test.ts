@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
 import { setupContentSchema, type SetupContent, type SetupStep } from '../../setup-model';
-import { SetupSaveQueue, saveOutcome, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
+import { SetupSaveQueue, saveOutcome, type SetupSaveHooks, type SetupSaveOutcome, type SetupSaveSend } from './setup-save-queue';
 
-const content = (name = 'École synthétique'): SetupContent => setupContentSchema.parse({
+const content = (name = 'École synthétique', contactEmail = 'ecole@example.invalid'): SetupContent => setupContentSchema.parse({
   selectedSections: ['IDENTITY', 'PRIVACY', 'PROFILE'],
-  identity: { name, contactEmail: 'ecole@example.invalid', contactPhone: null, timeZone: 'Europe/Zurich' },
+  identity: { name, contactEmail, contactPhone: null, timeZone: 'Europe/Zurich' },
   privacy: { noticeText: 'Texte propre à l’école.', retentionText: 'Conservation propre.', contactEmail: 'donnees@example.invalid', templateId: null, templateVersion: null },
   profile: { fields: [], effectiveFrom: null }, formations: [],
 });
@@ -13,7 +13,7 @@ const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve()
 const deferred = <T,>() => { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; };
 
 /** École synthétique : la version ne change que si `If-Match` correspond, comme le serveur. */
-function harness() {
+function harness(hooks: Partial<SetupSaveHooks> = {}) {
   const state = { version: 1, content: content(), step: 'IDENTITY' as SetupStep };
   const send = vi.fn<SetupSaveSend>(async request => {
     if (request.ifMatch !== state.version) return { status: 'conflict' };
@@ -22,7 +22,7 @@ function harness() {
     state.step = request.body.currentStep;
     return { status: 'confirmed', version: state.version, body: request.body } satisfies SetupSaveOutcome;
   });
-  const queue = new SetupSaveQueue({ send });
+  const queue = new SetupSaveQueue({ send, ...hooks });
   queue.adopt(state.version, { currentStep: state.step, content: state.content });
   return { queue, send, state };
 }
@@ -271,5 +271,97 @@ describe('Enregistrement coalescé du brouillon (#123)', () => {
     const refused = await h.queue.flush(draft(content('École B'), 'PROFILE'));
     expect(refused).toMatchObject({ phase: 'refused' });
     expect(saveOutcome(refused, draft(content('École B'), 'PROFILE'))).toBe('failed');
+  });
+
+  test('une normalisation serveur sur un champ non retouché est reprise par l’intention suivante', async () => {
+    const h = harness();
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('École A');
+    const second = content('École B');
+    h.queue.enqueue(draft(first));
+    h.queue.enqueue(draft(second, 'PRICING'));
+
+    const confirmedFirst = content('École A');
+    confirmedFirst.identity = { ...confirmedFirst.identity, contactEmail: 'normalise@example.invalid' };
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    expect(h.send).toHaveBeenCalledTimes(2);
+    const next = h.send.mock.calls[1]![0];
+    // Le nom vient de la saisie postérieure, l'e-mail normalisé par l'école n'est pas écrasé par l'ancien brouillon.
+    expect(next.body.content.identity.name).toBe('École B');
+    expect(next.body.content.identity.contactEmail).toBe('normalise@example.invalid');
+  });
+
+  test('un même champ changé localement et normalisé par l’école reste à relire sans second envoi', async () => {
+    const h = harness();
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('École A');
+    const second = content('École B', 'local@example.invalid');
+    h.queue.enqueue(draft(first));
+    h.queue.enqueue(draft(second, 'PRICING'));
+
+    const confirmedFirst = content('École A', 'normalise@example.invalid');
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    // Même champ des deux côtés : aucune intention locale n'est renvoyée en silence sur la valeur normalisée.
+    expect(h.send).toHaveBeenCalledTimes(1);
+    expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', conflictStep: 'PRICING', synced: false, heldVersion: 2 });
+    expect(h.queue.getSnapshot().held?.content.identity.contactEmail).toBe('normalise@example.invalid');
+  });
+
+  test('un conflit de la dernière saisie suivie par track est signalé sans second envoi', async () => {
+    const confirmed = vi.fn<NonNullable<SetupSaveHooks['confirmed']>>();
+    const conflicted = vi.fn<NonNullable<SetupSaveHooks['conflict']>>();
+    const h = harness({ confirmed, conflict: conflicted });
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('Avant');
+    h.queue.enqueue(draft(first));
+    // Une intention plus ancienne, puis une saisie seulement suivie : les deux diffèrent du brouillon parti.
+    h.queue.enqueue(draft(content('Avant', 'second@example.invalid'), 'PRICING'));
+    h.queue.track(draft(content('Dernière', 'ecole@example.invalid')));
+
+    const confirmedFirst = content('Serveur', 'ecole@example.invalid');
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    expect(confirmed).toHaveBeenCalledTimes(1);
+    expect(conflicted).toHaveBeenCalledTimes(1);
+    expect(conflicted.mock.calls[0]![0].content.identity.name).toBe('Dernière');
+    expect(h.send).toHaveBeenCalledTimes(1);
+    expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', conflictStep: 'FORMATIONS', heldVersion: 2,
+      conflicts: ['content.identity.name'] });
+  });
+
+  test('la confirmation durable précède le conflit de la saisie suivante', async () => {
+    const confirmed = vi.fn<NonNullable<SetupSaveHooks['confirmed']>>();
+    const conflicted = vi.fn<NonNullable<SetupSaveHooks['conflict']>>();
+    const h = harness({ confirmed, conflict: conflicted });
+    const waiting = deferred<SetupSaveOutcome>();
+    h.send.mockImplementationOnce(() => waiting.promise);
+    const first = content('École A');
+    const second = content('École B', 'local@example.invalid');
+    h.queue.enqueue(draft(first));
+    h.queue.enqueue(draft(second, 'PRICING'));
+
+    const confirmedFirst = content('École A', 'normalise@example.invalid');
+    h.state.version = 2; h.state.content = confirmedFirst;
+    waiting.resolve({ status: 'confirmed', version: 2, body: draft(confirmedFirst) });
+    await flush();
+
+    // Le premier PUT est durable : son callback passe avant l'état conflictuel de la seconde saisie.
+    expect(confirmed).toHaveBeenCalledTimes(1);
+    expect(confirmed.mock.calls[0]![1]).toBe(2);
+    expect(confirmed.mock.calls[0]![2].content.identity.contactEmail).toBe('ecole@example.invalid');
+    expect(conflicted).toHaveBeenCalledTimes(1);
+    expect(h.queue.getSnapshot()).toMatchObject({ phase: 'conflict', heldVersion: 2 });
+    expect(h.send).toHaveBeenCalledTimes(1);
   });
 });

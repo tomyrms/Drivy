@@ -9,6 +9,7 @@ import {
   setupNavigationSteps, setupPreviewSchema, setupTemplatesSchema, type SetupContent, type SetupDraft, type SetupPreview, type SetupStep,
 } from '../../setup-model';
 import { readError, useCommandLane, useCommandRunner, useConsole, useLoad } from '../../console/context';
+import { rebaseConfirmedDraft } from '../../console/draft-model';
 import type { SectionKey } from '../../console/sections';
 import { guideNextStep, matchesReviewedField, templatePrivacy, type StoredSetupDraft } from './setup-guide-model';
 import { reviewGate } from './setup-review-gate';
@@ -31,6 +32,11 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
   const [document, setDocument] = useState<SetupDraft | null>(null);
   const [content, setContent] = useState<SetupContent | null>(null);
   const [step, setStep] = useState<SetupStep>(catalogueOnly ? 'FORMATIONS' : 'IDENTITY');
+  // Latest editor state, available to the confirmation callback before the next render.
+  const contentRef = useRef<SetupContent | null>(content);
+  const stepRef = useRef<SetupStep>(step);
+  contentRef.current = content;
+  stepRef.current = step;
   const [editorRevision, setEditorRevision] = useState(0);
   const [preview, setPreview] = useState<SetupPreview | null>(null);
   const [reviewIssues, setReviewIssues] = useState<SetupPreview['issues']>([]);
@@ -69,11 +75,11 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     }
     return { status: 'unknown', message: result.message };
   }, [schoolId, runLane]);
-  const savedDraft = useRef<(body: SetupDraftBody, version: number) => void>(() => {});
+  const savedDraft = useRef<(body: SetupDraftBody, version: number, sent: SetupDraftBody) => void>(() => {});
   const conflictedDraft = useRef<() => void>(() => {});
   const queue = useMemo(() => new SetupSaveQueue({
     send,
-    confirmed: (body, version) => savedDraft.current(body, version),
+    confirmed: (body, version, sent) => savedDraft.current(body, version, sent),
     conflict: () => conflictedDraft.current(),
   }), [scope, send]);
   useEffect(() => () => queue.dispose(), [queue]);
@@ -89,8 +95,20 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     return { draft, templates, offerings: offerings.items.filter(item => item.enabled) };
   }, [schoolId, snapshot.revision]);
   reloadDraft.current = loaded.reload;
-  savedDraft.current = (body, version) => {
+  savedDraft.current = (body, version, sent) => {
     setDocument(previous => previous ? { ...previous, version, currentStep: body.currentStep, content: body.content, status: 'DRAFT' } : previous);
+    // The durable answer reaches the real editor: server-only fields are adopted, newer typing is kept, and a
+    // same-field conflict stays local. This is also what the next PUT will carry.
+    const local = contentRef.current;
+    if (local !== null) {
+      const rebased = rebaseConfirmedDraft(sent, body, { currentStep: stepRef.current, content: local });
+      contentRef.current = rebased.value.content;
+      setContent(rebased.value.content);
+      if (rebased.value.currentStep !== stepRef.current) {
+        stepRef.current = rebased.value.currentStep;
+        setStep(rebased.value.currentStep);
+      }
+    }
     // A summary read for an older version is out of date: it is read again once the save is confirmed.
     setPreview(previous => previous && previous.draftVersion !== version ? null : previous);
   };
@@ -165,8 +183,9 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     needsAdoption.current = false;
     // Un brouillon relu ne vaut pas relecture : la revue se redemande par un geste.
     reviewWanted.current = false;
-    setDocument(saved); setContent(next);
-    setStep(availableSteps.includes(nextStep) || !catalogueOnly && secondarySteps.includes(nextStep) ? nextStep : availableSteps[0]!);
+    const shownStep = availableSteps.includes(nextStep) || !catalogueOnly && secondarySteps.includes(nextStep) ? nextStep : availableSteps[0]!;
+    setDocument(saved); contentRef.current = next; setContent(next);
+    stepRef.current = shownStep; setStep(shownStep);
     setEditorRevision(revision => revision + 1);
     setPreview(null); setReviewIssues([]); setReviewContent(null); setAcknowledged(false); setReadFailure(null);
     queue.adopt(saved.version, { currentStep: saved.currentStep, content: saved.content });
@@ -185,7 +204,11 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     setPreview(null); setReviewIssues([]); setReviewContent(null); setAcknowledged(false);
     // Les éditeurs à état local (prix) repartent du contenu relu, pas d'une confirmation de notre propre saisie.
     setEditorRevision(revision => revision + 1);
-    if (!edited) setContent(clone(saved.content));
+    if (!edited) {
+      const adopted = clone(saved.content);
+      contentRef.current = adopted;
+      setContent(adopted);
+    }
   }, [loaded.data, loaded.status, document]);
 
   // Memory only, scoped to the school and access: resumed after an in-console navigation, never on another version.
@@ -217,7 +240,9 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
   }, [review.read, document?.version]);
 
   const update = (next: SetupContent) => {
-    setContent(content && loaded.data ? refreshSetupExamples(content, next, loaded.data.templates) : next);
+    const value = content && loaded.data ? refreshSetupExamples(content, next, loaded.data.templates) : next;
+    contentRef.current = value;
+    setContent(value);
     setPreview(null); setAcknowledged(false); runner.clearOutcome();
   };
   const errorFor = (path: string): string | null => reviewContent && matchesReviewedField(content, reviewContent, path)
@@ -240,6 +265,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     setReadFailure(null); setAcknowledged(false);
     if (nextStep === 'REVIEW') reviewWanted.current = true;
     queue.enqueue({ currentStep: nextStep, content: value });
+    contentRef.current = value; stepRef.current = nextStep;
     setStep(nextStep);
     setFocusField(null);
   }
@@ -251,6 +277,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
    */
   async function save(nextStep: SetupStep, value = content, exit = false, afterSave?: () => void) {
     if (!value || !document || blocked) return;
+    contentRef.current = value; stepRef.current = nextStep;
     setSaving(true); setReadFailure(null); setAcknowledged(false);
     try {
       const body: SetupDraftBody = { currentStep: nextStep, content: value };
@@ -297,6 +324,7 @@ export function useSetupGuide({ catalogueOnly, initialCategory, exitTo }: { cata
     setFocusField(field ?? null);
     setReadFailure(null);
     if (target === 'REVIEW') reviewWanted.current = true;
+    stepRef.current = target;
     setStep(target);
     if (target === 'REVIEW' && content && document) queue.enqueue({ currentStep: target, content });
   }

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useReducer, useRef, useState, useSyncExternalStore } from 'react';
 import type { SchoolCommand } from '../command-core';
 import { commandMessage } from '../command-core';
 import { commandRefreshesSchool, wouldConflict, type ConflictSubject } from '../command-conflicts';
@@ -9,7 +9,7 @@ import type { Member, Me } from '../protocol';
 import type { School } from '../school-api';
 import type { NavigationQuery } from './route';
 import type { SectionKey } from './sections';
-import { resumableDraft } from './draft-model';
+import { rebaseConfirmedDraft, resumableDraft } from './draft-model';
 import { failedReadState, readStateFor, type ScopedReadState, type ScopedReadCache } from './load-model';
 export { sectionKeys, type SectionKey } from './sections';
 
@@ -148,38 +148,86 @@ export function useLoad<T>(loader: () => Promise<T>, deps: readonly unknown[], s
   return { ...visible, reload, refresh, ...(state.scope === accessScope && state.readAt !== undefined ? { readAt: state.readAt } : {}) };
 }
 
+interface DraftState<T> {
+  draft: T | null;
+  /** Chemins détectés lors de la dernière confirmation, jamais recalculés contre un ancien envoi. */
+  conflicts: readonly string[];
+  /** Dernière valeur confirmée : sert uniquement à reconnaître la résolution d'un chemin signalé. */
+  confirmed: T | null;
+}
+
+type DraftAction<T> =
+  | { type: 'edit'; update: T | ((value: T | null) => T | null) }
+  | { type: 'baseline'; value: T; before: string | null }
+  | { type: 'confirm'; value: T; sent?: T }
+  | { type: 'reset'; value: T };
+
+const sameDraft = (left: unknown, right: unknown): boolean => JSON.stringify(left) === JSON.stringify(right);
+
+const valueAtPath = (value: unknown, path: string): unknown => {
+  if (path === '$') return value;
+  let current = value;
+  for (const key of path.split('.')) {
+    if (current === null || typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+};
+
+const unresolvedConflicts = <T,>(conflicts: readonly string[], draft: T | null, confirmed: T | null): readonly string[] => {
+  if (!conflicts.length || draft === null || confirmed === null) return conflicts;
+  return conflicts.filter(path => !sameDraft(valueAtPath(draft, path), valueAtPath(confirmed, path)));
+};
+
+function draftReducer<T>(state: DraftState<T>, action: DraftAction<T>): DraftState<T> {
+  if (action.type === 'baseline') {
+    const adopt = state.draft === null || action.before === null || sameDraft(state.draft, JSON.parse(action.before));
+    return adopt ? { draft: action.value, conflicts: [], confirmed: action.value } : state;
+  }
+  if (action.type === 'reset') return { draft: action.value, conflicts: [], confirmed: action.value };
+  if (action.type === 'confirm') {
+    if (state.draft === null || action.sent === undefined) return { draft: action.value, conflicts: [], confirmed: action.value };
+    const rebased = rebaseConfirmedDraft(action.sent, action.value, state.draft);
+    return { draft: rebased.value, conflicts: rebased.conflicts, confirmed: action.value };
+  }
+  const next = typeof action.update === 'function'
+    ? (action.update as (value: T | null) => T | null)(state.draft) : action.update;
+  if (next === state.draft) return state;
+  return { draft: next, conflicts: unresolvedConflicts(state.conflicts, next, state.confirmed), confirmed: state.confirmed };
+}
+
 /** Draft that follows the school's value until the person edits it. */
 export function useDraft<T>(baseline: T | null) {
-  const [draft, setDraft] = useState<T | null>(baseline);
+  const [state, dispatch] = useReducer(draftReducer<T>, {
+    draft: baseline, conflicts: [], confirmed: baseline,
+  });
   const [acknowledged, setAcknowledged] = useState<string | null>(null);
-  // Read after an await: the confirmation compares the latest typing, not the render that submitted.
-  const latestDraft = useRef(draft);
-  latestDraft.current = draft;
   const previous = useRef<string | null>(baseline === null ? null : JSON.stringify(baseline));
   const serialized = baseline === null ? null : JSON.stringify(baseline);
   useEffect(() => {
     if (serialized === null) return;
-    const before = previous.current;
-    setDraft(current => current === null || before === null || JSON.stringify(current) === before ? JSON.parse(serialized) as T : current);
+    dispatch({ type: 'baseline', value: JSON.parse(serialized) as T, before: previous.current });
     previous.current = serialized;
     setAcknowledged(null);
   }, [serialized]);
+  const draft = state.draft;
   const saved = acknowledged ?? serialized;
   const edited = draft !== null && saved !== null && JSON.stringify(draft) !== saved;
-  const releaseGuard = useUnsavedChanges(edited);
-  const reset = () => { releaseGuard(); if (saved !== null) setDraft(JSON.parse(saved) as T); };
+  useUnsavedChanges(edited);
+  const setDraft = useCallback((update: T | ((value: T | null) => T | null)) => dispatch({ type: 'edit', update }), []);
+  const reset = () => { if (saved !== null) dispatch({ type: 'reset', value: JSON.parse(saved) as T }); };
   /**
-   * `value` is what the school confirmed. With `sent`, typing continued since that submission stays on screen,
-   * still to be saved, instead of being replaced by the confirmation (#123).
+   * `value` is what the school confirmed. With `sent`, a local edit made since that submission is never replaced
+   * by the confirmation (#123), but a field left untouched locally adopts the confirmed value: normalisation or an
+   * external change on another field is not lost. A field changed on both sides differently stays local and is
+   * reported in `conflicts`, never overwritten silently (#106). Value, conflicts and guard transition together in
+   * one reducer state; a later ordinary keystroke never recreates a conflict against an older confirmation.
    */
   const markSaved = (value: T, sent?: T) => {
     setAcknowledged(JSON.stringify(value));
-    const current = latestDraft.current;
-    const keptEdits = sent !== undefined && current !== null && JSON.stringify(current) !== JSON.stringify(sent);
-    if (!keptEdits) releaseGuard();
-    setDraft(previous => keptEdits && previous !== null ? previous : value);
+    dispatch({ type: 'confirm', value, ...(sent === undefined ? {} : { sent }) });
   };
-  return { draft, setDraft: setDraft as (update: T | ((value: T | null) => T | null)) => void, edited, reset, markSaved };
+  return { draft, setDraft, edited, reset, markSaved, conflicts: state.conflicts };
 }
 
 export type Outcome = { tone: 'success' | 'error' | 'warning'; title: string; message: string; code?: string; needsLogin?: boolean } | null;

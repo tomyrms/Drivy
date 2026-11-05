@@ -773,3 +773,39 @@ Les mécanismes de rebase par champ déjà présents ne sont pas déclarés abse
 complète des parcours et les familles hors pilote restent à établir dans #106/#131. Voir les
 rapports `planning-native-recovery-106-20261104.md`, `planning-send-admission-106-20261105.md`,
 `planning-cancellation-ui-106-20261105.md` et `onboarding-exit-106-20261105.md`.
+
+### Raccord de réconciliation des brouillons (5 novembre 2026)
+
+`useDraft.markSaved` ne remplace plus tout le brouillon dès qu'une saisie postérieure à l'envoi existe.
+La fonction pure `rebaseConfirmedDraft(sent, confirmed, current)` conserve un champ local seul, adopte
+un champ confirmé seul — normalisation ou changement externe — et conserve la valeur locale en signalant
+le chemin d'un champ modifié des deux côtés différemment. Les objets sont fusionnés récursivement ; un
+tableau modifié des deux côtés reste local et conflictuel. Le hook expose ces chemins dans `conflicts`,
+sans nouvelle présentation.
+
+`SetupSaveQueue` applique le même rebase à une intention plus récente que l'envoi en vol avant de la
+transmettre. Un conflit sur le même champ réutilise la phase `conflict` et l'alerte existantes : aucune
+intention n'est renvoyée automatiquement sur la valeur normalisée. Les reçus, `If-Match`, la portée et
+les réponses tardives restent inchangés.
+
+Preuve web locale du 5 novembre 2026 : `draft-rebase.test.ts` et les scénarios ajoutés à
+`setup-save-queue.test.ts` passent ; la suite web hors harnais navigateur `pending-recovery` donne
+81 fichiers et 886 tests réussis, un échec attendu. Typage et build web réussis. Le rendu réel du hook,
+les captures et le harnais `pending-recovery` ne sont pas qualifiés par ce contrôle.
+
+Retour correctif du même jour : `use-setup-guide` adopte le brouillon fusionné dans le contenu réel de
+l’éditeur, y compris une saisie seulement suivie par `track`, et la confirmation durable est transmise
+avant un éventuel conflit de la saisie suivante. Un conflit de la dernière saisie trackée est signalé par
+la phase/le message existants et ses chemins, sans second envoi ni perte de la confirmation ; le snapshot
+expose `conflicts`. `useDraft` stocke valeur, conflits réellement détectés et garde dans un réducteur
+unique ; une frappe après adoption ou résolution ne recrée pas de faux conflit, et un conflit non résolu
+survit au rafraîchissement. Le harnais React/Chromium `scripts/dev/check-reconciliation-106.ts` couvre
+C1-C3 ainsi que R1/R2 avec latence contrôlée.
+
+Contrat minimal restant pour le propriétaire UI école, non réalisé ici : `useDraft` expose
+`conflicts: readonly string[]` en chemins du brouillon (`name`, `contactEmail`, `contactPhone`, etc.).
+Un tableau non vide doit rester visible jusqu'à résolution explicite ; la saisie locale est conservée,
+l'action de résolution étant de relire la valeur confirmée ou de modifier puis enregistrer à nouveau.
+`SchoolSettingsPilot` appelle encore `markSaved(normalized, sent)` avec une normalisation locale, pas le
+corps confirmé par l'école : le raccord UI devra lui transmettre la réponse réelle et afficher l'alerte.
+Aucun TSX produit n'est modifié par ce lot.
