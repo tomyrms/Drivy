@@ -115,8 +115,8 @@ Exigences de réalisation proposées :
 | RES01 | Inventaire signé des lieux, personnes, sous-traitants et sorties pour chaque ligne de la cartographie | Non exécuté |
 | RES02 | Test réseau synthétique : destinations autorisées seulement, aucune fédération/preview/télémétrie cachée | Non exécuté |
 | RES03 | Sentinelles dans message/média/preuve, inspection logs/crash/queues/CI sans contenu ni clé | Non exécuté |
-| RES04 | Sauvegarde chiffrée puis restauration isolée complète avec messages et médias synthétiques | Non exécuté |
-| RES05 | Retrait/suppression après sauvegarde, restauration ancienne, contrôle de non-résurrection des droits et données | Non exécuté |
+| RES04 | Sauvegarde chiffrée puis restauration isolée complète avec messages et médias synthétiques | **Sauvegarde/restauration synthétique exécutée** (2026-11-05, `messaging-restore-replay-20261105.md`, exit 0) ; **chiffrement NON QUALIFIÉ** (`pg_dump -Fc` est compressé, pas chiffré) ; production non exécuté |
+| RES05 | Retrait/suppression après sauvegarde, restauration ancienne, contrôle de non-résurrection des droits et données | **Qualifié pour le scénario couvert** (médias, messages, appareil, fin de lien, fin d'affectation, retrait du général ; 0 violation) ; **non fourni** pour les autres causes et la production (archive durable absente) |
 | RES06 | Purge par catégorie avec horloge contrôlée selon politique approuvée, pannes/reprises et copies orphelines | Politique absente |
 | RES07 | Export authentifié : clair seulement sur appareil habilité, autre école et ADMIN non participant refusés | Non exécuté |
 | RES08 | Worker push simulé : payload minimal, droits recontrôlés, zéro envoi réel | Non exécuté |
