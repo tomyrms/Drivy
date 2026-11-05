@@ -346,7 +346,7 @@ final class MessagingMediaCacheTests: XCTestCase {
                       "Aucune demande de création de clé n'est faite tant que des fichiers scellés existent")
         XCTAssertEqual(try Data(contentsOf: mediaPath), sealedBefore,
                        "L'état incohérent ne modifie ni ne supprime la preuve")
-        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.indexURL().path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try fixture.indexURL().path))
 
         // Rouvrir ne rétablit rien implicitement.
         let again = try fixture.makeCache(scope: fixture.scope, keyProvider: creating.provider)
