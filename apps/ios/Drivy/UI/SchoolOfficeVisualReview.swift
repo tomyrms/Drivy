@@ -1,5 +1,6 @@
 #if DEBUG && targetEnvironment(simulator)
 import SwiftUI
+import Observation
 
 /// Écrans natifs avec transport synthétique isolé. Aucune requête ni commande réelle.
 struct SchoolOfficeVisualReview: View {
@@ -15,7 +16,16 @@ struct SchoolOfficeVisualReview: View {
         Group {
             if let models {
                 switch screen {
-                case "planning": SchoolPlanningView(model: models.planning)
+                case "planning":
+                    SchoolPlanningView(model: models.planning)
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            if let gate = models.cancellationGate {
+                                // Témoin de rendez-vous uniquement pour les tests L2 explicites.
+                                Text(gate.evidence).font(.caption).foregroundStyle(DrivyTheme.muted)
+                                    .accessibilityIdentifier("planning-l2-rendezvous")
+                                    .allowsHitTesting(false)
+                            }
+                        }
                 case "start-now", "start-now-gps-disabled", "start-now-gps-permission", "start-now-gps-known": SchoolStartNowView(launch: models.startNowLaunch)
                 case "planning-settings":
                     NavigationStack {
@@ -70,6 +80,7 @@ struct SchoolOfficeVisualReview: View {
 @MainActor private final class SchoolOfficeVisualModels {
     let agenda: SchoolAgendaClient
     let planning: SchoolPlanningWorkspace
+    let cancellationGate: SchoolPlanningL2FixtureGate?
     let startNow: SchoolStartNowWorkspace
     let startNowLaunch: SchoolStartNowLaunch
     let invitations: SchoolInvitationWorkspace
@@ -82,6 +93,7 @@ struct SchoolOfficeVisualReview: View {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
         // Activé seulement pour cette scène et ces arguments de qualification synthétique.
         let cancellationGate = draftScreen == "planning" ? SchoolPlanningL2FixtureGate.fromArguments() : nil
+        self.cancellationGate = cancellationGate
         let token: any AccessTokenSource
         if let cancellationGate { token = SchoolPlanningL2FixtureToken(gate: cancellationGate) }
         else { token = SchoolVisualToken() }
@@ -364,12 +376,18 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     }
 }
 
-@MainActor private final class SchoolPlanningL2FixtureGate {
+@MainActor @Observable private final class SchoolPlanningL2FixtureGate {
     let mode: String
     private var refusesRemoval: Bool
     private var command: PendingSchoolCommand?
     private var released = false
     private var expired = false
+    private var waiting = false
+    /// Les exigences de phase sont vérifiées par XCTest, jamais assimilées à une panne du retrait.
+    var evidence: String {
+        let phase = expired ? "expired" : released ? "removed" : waiting ? "waiting-" + mode : command == nil ? "idle" : "admitted"
+        return "\(phase)|me=\(identityReads - identityReadsAtAdmission)|mutations=\(mutations)"
+    }
     private(set) var identityReads = 0
     private(set) var mutations = 0
     private var identityReadsAtAdmission = 0
@@ -384,7 +402,9 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
         self.command = command; identityReadsAtAdmission = identityReads
     }
     func waitForRemoval() async throws {
-        guard command != nil else { return }
+        guard command != nil, !released else { return }
+        waiting = true
+        defer { waiting = false }
         let deadline = Date().addingTimeInterval(25)
         while !released {
             guard Date() < deadline else { expired = true; throw Failure.expired }
@@ -401,8 +421,8 @@ private actor SchoolOfficeVisualTransport: SchoolHTTPTransport {
     func remove(_ candidate: PendingSchoolCommand) throws {
         // Une échéance ou une émission inattendue font échouer le scénario, jamais une fausse annulation.
         guard command == candidate, !expired, mutations == 0 else { throw Failure.expired }
-        if mode == "token", identityReads != identityReadsAtAdmission { throw Failure.expired }
-        if mode == "me", identityReads <= identityReadsAtAdmission { throw Failure.expired }
+        // Une annulation avant l'entrée dans /me reste légitime. Le rendez-vous et les compteurs
+        // sont des assertions du scénario UI ; seuls délai, mutation et panne explicite refusent ici.
         if refusesRemoval { refusesRemoval = false; throw SchoolConfigurationFailure.storage }
         released = true
     }

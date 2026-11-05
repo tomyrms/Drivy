@@ -157,3 +157,63 @@ restent hors qualification de ce pilote.
 Pas de push, CI, installation, activation, changement de dépendance, de modèle ni de sous-agent.
 
 Commit de raccord : `57179b42885cff02d9595e495ddd61163a7b3832` ; fusion locale N106 : `ac6e0080` ; préflight : `f5a1e76ba9615aa66d61bce128624ead9248c476`. Arbre propre vérifié après le commit de raccord.
+
+
+## Correction 1/2 — preuves UI R106 (5 novembre 2026)
+
+Base conservée : `7d8cd1c71155ab1185a0aa3639b6fdc2c0976fae`. Rapport R106 lu
+intégralement à `review-annulation-ui-106/artifacts/review-planning-cancellation-106/RAPPORT.md`.
+Deux défauts de harnais confirmés par lecture du source, aucun nouveau défaut produit établi.
+Le dispatch de suivi expose des champs modèle/effort nuls ; la vérification du dispatch initial
+confirme Codex `gpt-6-astra/high`, même incarnation `structured:1bfdfca6-7879-485f-8a8c-426c16376122`.
+Aucun changement de modèle ni délégation.
+
+Préflight : les cinq skills déjà intégralement chargés dans cette session ont été retrouvés et
+leurs fichiers contrôlés par SHA-256, puis leurs instructions pertinentes relues :
+`C:/Users/jtoma/.codex/skills/{systematic-debugging,test-driven-development,verification-before-completion,impeccable,uncodixfy}/SKILL.md`,
+avec `impeccable/reference/craft-floor.md`. Le contexte Impeccable déjà exécuté et DESIGN restent
+applicables, sans nouveau redesign ni installation. Sobriété/native préservées : seul un texte
+technique de fixture opt-in rend le rendez-vous observable ; aucun panneau ni style produit ajouté.
+Les règles web de police/dimensions/couleur ne remplacent pas les tokens natifs imposés.
+
+Codebase Memory : `index_status` confirme ready et la racine exacte
+`C:/Users/jtoma/orca/workspaces/Drivy/issues-annulation-planification-ui-106`, projet
+`C-Users-jtoma-orca-workspaces-Drivy-issues-annulation-planification-ui-106` ; recherche de
+`SchoolPlanningL2FixtureGate|SchoolPlanningCancellationUITests`, puis lecture directe des deux
+sources et des dépendances `SchoolMeetingPointField`, `bookingActionContent`, `validBooking`,
+`focusForTyping`. Pas d'utilisation de l'index du reviewer voisin.
+
+Scénarios préparés dans le test avant correction de la fixture :
+
+- Développer explicitement « Détails du rendez-vous », atteindre le vrai TextField/TextView,
+  saisir au clavier un suffixe synthétique L2 distinct, vérifier sa présence et la différence
+  avec la valeur initiale ; après retrait, retrouver le champ hittable et la même valeur.
+- Attendre par prédicat XCTest, en cinq secondes au plus, le témoin observable
+  `waiting-token|me=0|mutations=0` ou `waiting-me|me=1|mutations=0` avant le clic.
+  Le témoin provient de l'entrée réelle dans la retenue, jamais de l'apparition du bouton.
+- Après retrait, vérifier `removed` et les compteurs, tout en conservant le cas existant
+  de premier retrait refusé puis réessayé en grande taille.
+
+La scène est une création : le source actuel confirme le tarif par « Planifier », sans case
+« Prix et conditions acceptés ». Le lieu remet bien agreementConfirmed à false, mais cette valeur
+n'est requise par validBooking que pour un déplacement ; le test ne force aucun modèle et attend
+l'activation réelle de Planifier. Si le contrôle « Le nouvel horaire est convenu » est présent,
+le test le réactive par un vrai appui, jamais par injection.
+
+Le témoin est sous DEBUG/simulateur, scène planning et arguments L2 déjà explicites. Il ajoute
+un texte de fixture en safe area, non interactif, avec identifiant AX dédié et observation réelle
+des phases/compteurs. Les conditions sur le nombre de lectures ont été retirées de `remove` : une
+annulation légitime avant /me n'est plus transformée en erreur de stockage. Les assertions de
+phase appartiennent au test. Commande différente, échéance expirée, mutation inattendue et panne
+explicite restent refusées. L'échéance de 25 secondes n'a pas augmenté ; aucune pause ajoutée pour
+simuler un rendez-vous. Les compteurs n'établissent aucune preuve de paquets réseau réels.
+
+Fichiers changés seulement : ce rapport, `apps/ios/DrivyUITests/SchoolPlanningCancellationUITests.swift`
+et `apps/ios/Drivy/UI/SchoolOfficeVisualReview.swift`. Workspace/vue produit, client, admission,
+coffre et tests N106 inchangés. Les trois tests UI existants sont enrichis ; aucune nouvelle suite.
+
+Vérification disponible : `git diff --check` exit 0 (avertissements CRLF/LF seulement), inspection
+du diff et comparaison des chemins produit avec la base sans changement. Swift/Xcode restent
+absents : **NON COMPILÉ / NON EXÉCUTÉ**, aucun RED/GREEN, screenshot ou vert inventé.
+Restent l'exécution et le rendu Apple du candidat, dont la représentation AX du champ multiligne,
+le clavier, iPhone/iPad et grandes tailles ; le témoin de fixture ne qualifie pas le rendu produit.
