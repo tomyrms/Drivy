@@ -279,6 +279,12 @@ jetable, même fixture, corps conforme à l'encodage Swift, époque 0) : `PUT` m
 millisecondes ; la page liste le message avec son média. **La forme HTTP et la fixture sont donc
 compatibles** : le défaut est côté client.
 
+> **Rectification R-ID (§10)** : cette mesure ne portait **pas** sur la forme de `requestId`.
+> Le relais émettait un identifiant de compteur (`req-N`) au lieu de l'UUID de production, ce que
+> le décodeur média Swift refuse. La phrase ci-dessus est donc trop large : `data`/`context`
+> étaient compatibles, `requestId` ne l'était pas. Les §10 et suivants portent le correctif de
+> parité et sa régression ; la cause client invoquée ici n'est pas établie.
+
 Côté client, `.resultUnknown` ne peut venir que de : erreur non typée échappant à `deliver`
 (notamment le `outbox.put` de re-conformation, seul appel non ramené aux catégories runtime),
 erreur brute du dépôt, échec typé traduit en inconnu (PUT/POST), ou annulation de tâche.
@@ -291,3 +297,42 @@ aucune assertion ni mapping produit n'est modifié. Le prochain run nommera la b
 (table de lecture dans le README des artefacts).
 
 Aucun fichier M97/T2b2/T2b5/backend/CI n'est modifié.
+## 10. R-ID — parité `requestId` du relais avec la production
+
+**Rectification de la conclusion Q6 (§9).** La mesure Q6 n'avait vérifié que les clés et types de
+`data`, `context`, l'écho de `ciphertext`, la présence de `media` et `acceptedAt` : elle n'avait
+**pas** regardé la forme de `requestId`. La phrase « la forme HTTP et la fixture sont compatibles
+avec les décodeurs Swift » était donc trop large.
+
+**Cause mesurée.** `scripts/messaging-relay-qualification.mts` créait Fastify **sans** `genReqId` :
+l'identifiant par défaut est un compteur (`req-N`). La production (`apps/api/src/app.ts`) utilise
+`genReqId: () => randomUUID()`. `registerMessaging`/`execute` recopient `request.id` dans
+l'enveloppe, et `MessagingHTTPMediaTransport.UploadEnvelope.requestId` (comme `CancelEnvelope`)
+est un `UUID` : le décodage échoue fermé, puis le transport rend `invalidResponse`, que le
+coordinateur traduit en `.resultUnknown`. C'est une **incohérence de fixture**, pas un défaut du
+client ni du serveur produit.
+
+**Correctif de parité (fixture seulement).** Le bootstrap de qualification construit désormais
+Fastify avec `genReqId: () => randomUUID()`, exactement comme la production ; aucune autre option,
+route, garde, authentification, certificat ni reset n'est modifié. Le backend, T2b2, M97, T2b5 et
+l'API canonique restent intacts.
+
+**Régression exécutée (Node 24, PostgreSQL 17 synthétique).** Le test média exige désormais un
+`requestId` de forme UUID sur les réponses **PUT média**, **PUT rejoué**, **POST message média**,
+**DELETE annulation** et **DELETE idempotent** (booléen et libellé seulement, aucun identifiant
+imprimé) :
+
+| État | Constat |
+|---|---|
+| Avant correctif (RED) | `23` tests, `20` passés, **3 échoués** : `PUT média`, `POST message média`, `DELETE annulation` — `requestId UUID attendu` |
+| Après correctif (GREEN) | `23` tests, **23 passés**, `0` échec |
+| Relais texte historique | `9` tests, **9 passés** |
+| Typage | `tsc --noEmit` sur les deux `.mts` du lot : aucune erreur |
+| Démarrage réel HTTPS | `probe-listen.mjs` : écoute sur port dédié, readiness `200`, `ready=true`, `fixture` conforme |
+
+**Swift.** `apps/ios/DrivyTests/MessagingMediaRealRelayTests.swift` est remis **exactement au blob
+du candidat `3f20ce1b`** (`a5d759056c8504b33db76af57c78417dff506968`, identique à `ce6bafdf`), déjà
+compilé et exécuté. L'instrumentation Q4/Q6 reste inspectable dans ses commits d'origine
+(`97306ef9`, `04631689`) ; aucune assertion ni scénario du harnais qualifié n'est retiré. Le
+parcours média réel reste **NON EXÉCUTÉ** après ce correctif : il doit être rejoué au prochain
+candidat intégrant la parité `requestId`, et ne peut pas être annoncé vert depuis Windows.

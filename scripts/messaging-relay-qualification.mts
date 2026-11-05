@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import { freshDatabase } from '../apps/api/test/support/harness.js';
@@ -92,7 +93,11 @@ export async function buildQualificationRelay(env: Record<string, string | undef
   assertEffectiveResetEnvironment(target);
   const pool = await freshDatabase();
   const issuer = 'https://messaging-relay.example.invalid';
-  const app = Fastify({ logger: false, disableRequestLogging: true, https: { cert, key }, bodyLimit: 1_048_576 });
+  // Parité de forme avec la production (`apps/api/src/app.ts`, `genReqId: () => randomUUID()`) :
+  // l'enveloppe média renvoie `request.id`, que les décodeurs Swift attendent en `UUID`.
+  // Aucune autre option, route, garde ni certificat n'est modifié.
+  const app = Fastify({ logger: false, disableRequestLogging: true, genReqId: () => randomUUID(),
+    https: { cert, key }, bodyLimit: 1_048_576 });
   try {
     // Canonical fixture IDs and relationships. Adds this synthetic issuer only.
     await seedFixtures(pool, issuer);

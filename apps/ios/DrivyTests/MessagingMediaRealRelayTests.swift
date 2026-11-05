@@ -236,226 +236,6 @@ private struct MediaQualificationOutboxKeyStore: MessagingMediaOutboxKeyStore {
     }
 }
 
-// MARK: - Sonde fermée du parcours média (diagnostics Q4/Q6)
-
-/// Sous-étapes observables de la mise en file et de l'envoi média, valeurs fermées. Jamais
-/// d'identifiant, de clé, d'enveloppe, de hash, d'URL ni de contenu.
-private enum MediaEnqueuePhase: String, Sendable {
-    case prepare = "PREPARE"
-    case seal = "SEAL"
-    case outboxPut = "OUTBOX-PUT"
-    case encrypt = "ENCRYPT"
-    case cas = "CAS"
-    case upload = "UPLOAD"
-    case receipt = "RECEIPT"
-    case post = "POST"
-    case cleanup = "CLEANUP"
-}
-
-/// Classe de l'époque lue pour l'enveloppe produite : catégorie close, jamais la valeur.
-private enum MediaEnvelopeEpoch: String, Sendable {
-    case absent = "ABSENTE"
-    case zero = "ZERO"
-    case positive = "POSITIVE"
-    case invalid = "INVALIDE"
-}
-
-/// Sonde locale aux seuls décorateurs de test : verrou, aucun acteur, aucune suspension ni
-/// attente ajoutée, aucun effet sur le déroulement.
-private final class MediaEnqueueProbe: @unchecked Sendable {
-    private let lock = NSLock()
-    private var lastPhase: MediaEnqueuePhase?
-    private var lastEpoch: MediaEnvelopeEpoch?
-    private var lastDetail = "NONE"
-
-    func mark(_ phase: MediaEnqueuePhase) {
-        lock.lock(); defer { lock.unlock() }
-        lastPhase = phase
-    }
-
-    func recordEpoch(_ epoch: Int?) {
-        lock.lock(); defer { lock.unlock() }
-        guard let epoch else { lastEpoch = .absent; return }
-        if epoch > 0 { lastEpoch = .positive }
-        else if epoch == 0 { lastEpoch = .zero }
-        else { lastEpoch = .invalid }
-    }
-
-    /// Catégorie typée de l'erreur relayée, sans texte libre ni valeur associée.
-    func recordError(_ error: any Error) {
-        lock.lock(); defer { lock.unlock() }
-        if let failure = error as? MessagingMediaTransportFailure {
-            lastDetail = "TRANSPORT-\(Self.transportName(failure))"
-        } else if let failure = error as? MessagingFailure {
-            lastDetail = "MESSAGING-\(Self.messagingName(failure))"
-        } else if error is MessagingMediaRuntimeFailure {
-            lastDetail = "RUNTIME"
-        } else if error is CancellationError {
-            lastDetail = "CANCELLED"
-        } else {
-            lastDetail = "RAW"
-        }
-    }
-
-    /// Diagnostic fermé : uniquement des libellés d'énumération et des noms de cas.
-    var closedDiagnostic: String {
-        lock.lock(); defer { lock.unlock() }
-        return "phase=\(lastPhase?.rawValue ?? "NONE") enveloppe=\(lastEpoch?.rawValue ?? "NONE") détail=\(lastDetail)"
-    }
-
-    private static func transportName(_ failure: MessagingMediaTransportFailure) -> String {
-        switch failure {
-        case .invalidIntent: return "INTENT"
-        case .contextChanged: return "CONTEXT"
-        case .accessChanged: return "ACCESS"
-        case .deviceRequired: return "DEVICE"
-        case .notFound: return "NOT-FOUND"
-        case .purged: return "PURGED"
-        case .alreadyAttached: return "ATTACHED"
-        case .intentConflict: return "INTENT-CONFLICT"
-        case .sizeConflict: return "SIZE"
-        case .stateConflict: return "STATE"
-        case .unavailable: return "UNAVAILABLE"
-        case .invalidResponse: return "RESPONSE"
-        case .integrityMismatch: return "INTEGRITY"
-        case .tooLarge: return "TOO-LARGE"
-        }
-    }
-
-    private static func messagingName(_ failure: MessagingFailure) -> String {
-        switch failure {
-        case .protectionUnavailable: return "PROTECTION"
-        case .accessChanged: return "ACCESS"
-        case .conversationUnavailable: return "CONVERSATION"
-        case .unavailable: return "UNAVAILABLE"
-        case .invalidResponse: return "RESPONSE"
-        case .contextChanged: return "CONTEXT"
-        case .stateConflict: return "STATE"
-        case .deviceLimitReached: return "DEVICE-LIMIT"
-        case .membersChanged: return "MEMBERS"
-        default: return "OTHER"
-        }
-    }
-}
-
-/// Décorateurs transparents : ils marquent l'opération entrante puis relaient exactement le
-/// résultat ou l'erreur du composant réel. Aucun retour, mapping produit ni attente modifié.
-private struct ProbedPreparer: MessagingMediaPreparing {
-    let wrapped: any MessagingMediaPreparing
-    let probe: MediaEnqueueProbe
-
-    func prepare(_ data: Data, suggestedName: String) throws -> MessagingPreparedMedia {
-        probe.mark(.prepare)
-        return try wrapped.prepare(data, suggestedName: suggestedName)
-    }
-}
-
-private struct ProbedMediaCryptography: MessagingMediaCryptography {
-    let wrapped: any MessagingMediaCryptography
-    let probe: MediaEnqueueProbe
-
-    func seal(_ plaintext: Data) throws -> MessagingSealedMedia {
-        probe.mark(.seal)
-        return try wrapped.seal(plaintext)
-    }
-
-    func open(_ ciphertext: Data, info: MessagingMediaEncryptionInfo) throws -> Data {
-        try wrapped.open(ciphertext, info: info)
-    }
-
-    func verify(_ ciphertext: Data, info: MessagingMediaEncryptionInfo) -> Bool {
-        wrapped.verify(ciphertext, info: info)
-    }
-}
-
-private struct ProbedOutbox: MessagingMediaOutbox, MessagingMediaOutboxEnvelope {
-    let wrapped: any MessagingMediaOutbox & MessagingMediaOutboxEnvelope
-    let probe: MediaEnqueueProbe
-
-    func put(_ pending: MessagingPendingMedia, scope: MessagingScope) async throws {
-        probe.mark(.outboxPut)
-        do {
-            try await wrapped.put(pending, scope: scope)
-        } catch {
-            probe.recordError(error)
-            throw error
-        }
-    }
-
-    func entries(scope: MessagingScope) async throws -> [MessagingPendingMedia] {
-        try await wrapped.entries(scope: scope)
-    }
-
-    func remove(mediaID: UUID, scope: MessagingScope) async throws {
-        probe.mark(.cleanup)
-        try await wrapped.remove(mediaID: mediaID, scope: scope)
-    }
-
-    func replaceEnvelope(mediaID: UUID, expected: MessagingCiphertext?,
-                         replacement: MessagingCiphertext, scope: MessagingScope) async throws {
-        probe.mark(.cas)
-        do {
-            try await wrapped.replaceEnvelope(mediaID: mediaID, expected: expected,
-                                             replacement: replacement, scope: scope)
-        } catch {
-            probe.recordError(error)
-            throw error
-        }
-    }
-}
-
-private struct ProbedContentEncryption: MessagingMatrixContentEncryption, MessagingContentProvenanceDecryption {
-    let wrapped: any MessagingMatrixContentEncryption & MessagingContentProvenanceDecryption
-    let probe: MediaEnqueueProbe
-
-    func encryptMatrixContent(_ content: MessagingMediaContentV3, mentions: [UUID],
-                              scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
-        probe.mark(.encrypt)
-        do {
-            let envelope = try await wrapped.encryptMatrixContent(content, mentions: mentions,
-                                                                 scope: scope, conversationID: conversationID)
-            probe.recordEpoch(envelope.expectedMembersEpoch)
-            return envelope
-        } catch {
-            probe.recordError(error)
-            throw error
-        }
-    }
-
-    func decryptContent(_ message: MessagingWireMessage,
-                        scope: MessagingScope) async throws -> MessagingDecryptedContent {
-        try await wrapped.decryptContent(message, scope: scope)
-    }
-}
-
-/// Décorateur transparent du transport binaire : marque le PUT avant émission, le RECEIPT
-/// après un reçu accepté par le transport, et relaie exactement octets, reçus et erreurs.
-private struct ProbedMediaTransport: MessagingMediaTransport {
-    let wrapped: any MessagingMediaTransport
-    let probe: MediaEnqueueProbe
-
-    func upload(_ sealed: MessagingSealedMedia, scope: MessagingScope,
-                conversationID: UUID) async throws -> MessagingMediaReceipt {
-        probe.mark(.upload)
-        do {
-            let receipt = try await wrapped.upload(sealed, scope: scope, conversationID: conversationID)
-            probe.mark(.receipt)
-            return receipt
-        } catch {
-            probe.recordError(error)
-            throw error
-        }
-    }
-
-    func download(mediaID: UUID, scope: MessagingScope, conversationID: UUID) async throws -> Data {
-        try await wrapped.download(mediaID: mediaID, scope: scope, conversationID: conversationID)
-    }
-
-    func cancel(mediaID: UUID, scope: MessagingScope, conversationID: UUID) async throws {
-        try await wrapped.cancel(mediaID: mediaID, scope: scope, conversationID: conversationID)
-    }
-}
-
 /// Panne de **remise** contrôlée, jamais une panne du serveur : le POST réel est exécuté
 /// jusqu'à son accusé durable, puis exactement une réponse réussie est jetée. Aucun faux
 /// accusé n'est inventé et aucun effet serveur n'est simulé.
@@ -468,17 +248,12 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
     }
 
     private let upstream: any MessagingMediaMessageSending
-    /// Sonde de diagnostic optionnelle : marque le POST et la catégorie typée de l'erreur.
-    private let probe: MediaEnqueueProbe?
     private var discardNextSuccess = false
     private(set) var discarded = 0
     /// Toutes les émissions, tous gestes confondus : l'appelant filtre par `clientMessageID`.
     private(set) var transmissions: [Transmission] = []
 
-    init(upstream: any MessagingMediaMessageSending, probe: MediaEnqueueProbe? = nil) {
-        self.upstream = upstream
-        self.probe = probe
-    }
+    init(upstream: any MessagingMediaMessageSending) { self.upstream = upstream }
 
     func armOneLostResponse() { discardNextSuccess = true }
 
@@ -490,23 +265,15 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
                    media: MessagingMediaMessageIntent) async throws -> MessagingAcknowledgement {
         transmissions.append(Transmission(clientMessageID: pending.clientMessageID,
                                           mediaID: media.mediaID, ciphertext: pending.ciphertext))
-        probe?.mark(.post)
-        do {
-            let acknowledgement = try await upstream.sendMedia(scope: scope, pending: pending, media: media)
-            if discardNextSuccess {
-                discardNextSuccess = false
-                discarded += 1
-                // Réponse acceptée par le serveur mais perdue pour l'appelant : le coordinateur
-                // doit laisser le résultat inconnu, jamais un refus définitif ni un succès.
-                let loss = MessagingFailure.unavailable
-                probe?.recordError(loss)
-                throw loss
-            }
-            return acknowledgement
-        } catch {
-            probe?.recordError(error)
-            throw error
+        let acknowledgement = try await upstream.sendMedia(scope: scope, pending: pending, media: media)
+        if discardNextSuccess {
+            discardNextSuccess = false
+            discarded += 1
+            // Réponse acceptée par le serveur mais perdue pour l'appelant : le coordinateur
+            // doit laisser le résultat inconnu, jamais un refus définitif ni un succès.
+            throw MessagingFailure.unavailable
         }
+        return acknowledgement
     }
 }
 
@@ -534,36 +301,13 @@ private actor LostResponseMediaSender: MessagingMediaMessageSending {
 @MainActor
 final class MessagingMediaRealRelayTests: XCTestCase {
     private var stage = MediaRelayStage.configuration
-    /// Sonde fermée des sous-étapes de mise en file : diagnostic uniquement.
-    private let probe = MediaEnqueueProbe()
 
-    private func enter(_ next: String) {
-        stage = next
-        // Diagnostic fermé : le dernier code observé doit provenir de l'étape courante.
-        MessagingDiagnostics.shared.clear()
-    }
-
-    /// Dernier code de diagnostic borné à un vocabulaire fermé (aucune valeur, URL, identifiant).
-    private func closedTransportDiagnostic() -> String {
-        guard let code = MessagingDiagnostics.shared.last else { return "NONE" }
-        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
-        guard code.utf8.count <= 40, code.unicodeScalars.allSatisfy({ allowed.contains($0) }) else { return "OTHER" }
-        for operation in ["MEDIA-PUT", "MEDIA-GET", "MEDIA-DELETE"] {
-            if code == operation || code.hasPrefix(operation + "-M-") { return code }
-        }
-        if code.hasPrefix("H-") { return code }
-        if ["D-NOKEY", "D-MEGOLM", "D-UNKNOWN", "D-MISMATCH", "D-UNTRUSTED"].contains(code) { return code }
-        if code.hasPrefix("SDK") { return "SDK" }
-        if code.hasPrefix("K-") { return "KEYCHAIN" }
-        if code.hasPrefix("S-") || code.hasPrefix("SQL-") { return "STORE" }
-        return "OTHER"
-    }
+    private func enter(_ next: String) { stage = next }
 
     func testRealRelayMediaJourney() async {
         do { try await exerciseRealRelay() }
         catch {
-            XCTFail("Parcours média interrompu : étape=\(stage), catégorie=\(mediaFailureLabel(error)), "
-                    + "sonde=\(probe.closedDiagnostic), transport=\(closedTransportDiagnostic()).")
+            XCTFail("Parcours média interrompu : étape=\(stage), catégorie=\(mediaFailureLabel(error)).")
         }
     }
 
@@ -703,9 +447,8 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         // Les transports média portent l'identifiant d'appareil réellement enregistré.
         let aFactory: MessagingMediaTransportFactory = {
             let deviceID = try await aCrypto.currentDeviceID(scope: aScope)
-            let transport = MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { aToken },
-                                                        invalidate: { _ in false }, currentScope: { aScope })
-            return ProbedMediaTransport(wrapped: transport, probe: probe)
+            return MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { aToken },
+                                               invalidate: { _ in false }, currentScope: { aScope })
         }
 
         // Les DEUX appareils sont publiés avant le premier chiffrement émetteur : une session
@@ -718,23 +461,17 @@ final class MessagingMediaRealRelayTests: XCTestCase {
         }
         let bFactory: MessagingMediaTransportFactory = {
             let deviceID = try await bCrypto.currentDeviceID(scope: bScope)
-            let transport = MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { bToken },
-                                                        invalidate: { _ in false }, currentScope: { bScope })
-            return ProbedMediaTransport(wrapped: transport, probe: probe)
+            return MessagingHTTPMediaTransport(baseURL: base, deviceID: deviceID, token: { bToken },
+                                               invalidate: { _ in false }, currentScope: { bScope })
         }
-        let bSender = LostResponseMediaSender(upstream: apiB, probe: probe)
         let bMedia = MessagingMediaCoordinator(scope: bScope, preparer: MessagingMediaPreparer(),
             cryptography: AESCTRMediaCryptography(), outbox: bOutbox, cache: bCache,
-            encryption: bCrypto, sending: bSender, transportFactory: bFactory, currentScope: { bScope })
+            encryption: bCrypto, sending: apiB, transportFactory: bFactory, currentScope: { bScope })
 
-        let lostSender = LostResponseMediaSender(upstream: apiA, probe: probe)
-        // Décorateurs de diagnostic : ils relaient exactement les mêmes retours et erreurs.
-        let aMedia = MessagingMediaCoordinator(scope: aScope,
-            preparer: ProbedPreparer(wrapped: MessagingMediaPreparer(), probe: probe),
-            cryptography: ProbedMediaCryptography(wrapped: AESCTRMediaCryptography(), probe: probe),
-            outbox: ProbedOutbox(wrapped: aOutbox, probe: probe), cache: aCache,
-            encryption: ProbedContentEncryption(wrapped: aCrypto, probe: probe),
-            sending: lostSender, transportFactory: aFactory, currentScope: { aScope })
+        let lostSender = LostResponseMediaSender(upstream: apiA)
+        let aMedia = MessagingMediaCoordinator(scope: aScope, preparer: MessagingMediaPreparer(),
+            cryptography: AESCTRMediaCryptography(), outbox: aOutbox, cache: aCache,
+            encryption: aCrypto, sending: lostSender, transportFactory: aFactory, currentScope: { aScope })
 
         // 2. Image synthétique : préparation, mise en file, envoi, reçu serveur.
         enter(MediaRelayStage.image)
@@ -784,12 +521,9 @@ final class MessagingMediaRealRelayTests: XCTestCase {
             keyProvider: { mayCreate in
                 try MessagingProtectedMediaCache.keychainKey(mayCreate: mayCreate, namespace: aCacheNamespace)
             })
-        let reopenedMedia = MessagingMediaCoordinator(scope: aScope,
-            preparer: ProbedPreparer(wrapped: MessagingMediaPreparer(), probe: probe),
-            cryptography: ProbedMediaCryptography(wrapped: AESCTRMediaCryptography(), probe: probe),
-            outbox: ProbedOutbox(wrapped: reopenedOutbox, probe: probe), cache: reopenedCache,
-            encryption: ProbedContentEncryption(wrapped: aCrypto, probe: probe),
-            sending: lostSender, transportFactory: aFactory, currentScope: { aScope })
+        let reopenedMedia = MessagingMediaCoordinator(scope: aScope, preparer: MessagingMediaPreparer(),
+            cryptography: AESCTRMediaCryptography(), outbox: reopenedOutbox, cache: reopenedCache,
+            encryption: aCrypto, sending: lostSender, transportFactory: aFactory, currentScope: { aScope })
         let reopenedPending = try await reopenedMedia.pending(conversationID: conversation)
         let reopenedSnapshot = try XCTUnwrap(reopenedPending.first { $0.clientMessageID == pdfClientID })
         XCTAssertEqual(reopenedSnapshot.mediaID, pdfSnapshot.mediaID, "Le mediaID ne change pas à la réouverture.")
