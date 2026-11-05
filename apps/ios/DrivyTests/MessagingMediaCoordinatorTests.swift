@@ -72,31 +72,61 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
             transportFactory: { transport }, currentScope: { scope })
     }
 
-    /// Terminaison bornée d'une tâche retenue par une barrière : l'échéance ouvre la
-    /// barrière puis annule la tâche, sans attendre un enfant non coopératif.
-    private func boundedValue<T>(_ task: Task<T, Never>, gate: Gate,
-                                 timeout: Duration = .seconds(2)) async -> T {
-        let deadline = Task {
+    /// Une opération retenue ne bloque jamais le test : la course rend un résultat ou
+    /// une échéance explicite, sans joindre le travail qui ignorerait l'annulation.
+    /// La tâche et le watcher sont annulés, la barrière ouverte sur tous les chemins.
+    private func boundedValue<T: Sendable>(_ task: Task<T, Never>, gate: Gate,
+                                           timeout: Duration = .seconds(2)) async throws -> T {
+        let box = DeadlineBox<DeadlineOutcome<T>>()
+        let watcher = Task { @MainActor in
+            let value = await task.value
+            box.finish(.value(value))
+        }
+        let deadline = Task { @MainActor in
             try? await Task.sleep(for: timeout)
             guard !Task.isCancelled else { return }
+            box.finish(.timedOut)
+        }
+        let outcome = await box.wait()
+        deadline.cancel()
+        watcher.cancel()
+        switch outcome {
+        case .value(let value): return value
+        case .error(let errorBox): throw errorBox.error
+        case .timedOut:
             await gate.open()
             task.cancel()
+            watcher.cancel()
+            throw BoundedTimeout()
         }
-        let value = await task.value
-        deadline.cancel()
-        return value
     }
 
-    private func boundedValue<T>(_ task: Task<T, Error>, gate: Gate,
-                                 timeout: Duration = .seconds(2)) async throws -> T {
-        let deadline = Task {
+    private func boundedValue<T: Sendable>(_ task: Task<T, Error>, gate: Gate,
+                                           timeout: Duration = .seconds(2)) async throws -> T {
+        let box = DeadlineBox<DeadlineOutcome<T>>()
+        let watcher = Task { @MainActor in
+            switch await task.result {
+            case .success(let value): box.finish(.value(value))
+            case .failure(let error): box.finish(.error(ErrorBox(error)))
+            }
+        }
+        let deadline = Task { @MainActor in
             try? await Task.sleep(for: timeout)
             guard !Task.isCancelled else { return }
+            box.finish(.timedOut)
+        }
+        let outcome = await box.wait()
+        deadline.cancel()
+        watcher.cancel()
+        switch outcome {
+        case .value(let value): return value
+        case .error(let errorBox): throw errorBox.error
+        case .timedOut:
             await gate.open()
             task.cancel()
+            watcher.cancel()
+            throw BoundedTimeout()
         }
-        defer { deadline.cancel() }
-        return try await task.value
     }
 
     // MARK: Préparation et mise en file
@@ -329,18 +359,18 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let arrived = await gate.waitUntilWaiting()
         guard arrived else {
             await gate.open()
-            _ = await boundedValue(first, gate: gate)
+            _ = try? await boundedValue(first, gate: gate)
             XCTFail("Le premier envoi n'a pas atteint la frontière attendue."); return
         }
         let second = await coordinator.send(clientMessageID: snapshot.clientMessageID)
         guard case .pending(let failure) = second else {
             await gate.open()
-            _ = await boundedValue(first, gate: gate)
+            _ = try? await boundedValue(first, gate: gate)
             XCTFail("Le second geste concurrent ne doit pas repartir."); return
         }
         XCTAssertEqual(failure, .alreadyInFlight)
         await gate.open()
-        let firstDelivery = await boundedValue(first, gate: gate)
+        let firstDelivery = try await boundedValue(first, gate: gate)
         guard case .confirmed = firstDelivery else {
             XCTFail("Le premier geste doit aboutir."); return
         }
@@ -1190,13 +1220,13 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let arrived = await crypto.gate.waitUntilWaiting()
         guard arrived else {
             await crypto.gate.open()
-            _ = await boundedValue(task, gate: crypto.gate)
+            _ = try? await boundedValue(task, gate: crypto.gate)
             XCTFail("Le déchiffrement n'a pas atteint la barrière."); return
         }
         await service.setPage(MessagingPage<MessagingWireMessage>(items: [tombstone], nextCursor: nil))
         await workspace.loadMessages(conversation)
         await crypto.gate.open()
-        let value = await boundedValue(task, gate: crypto.gate)
+        let value = try await boundedValue(task, gate: crypto.gate)
 
         XCTAssertNil(value, "Un tombstone reçu pendant le déchiffrement ne ressuscite pas le clair.")
         XCTAssertNil(workspace.contents[messageID])
@@ -1226,7 +1256,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let arrived = await crypto.gate.waitUntilWaiting()
         guard arrived else {
             await crypto.gate.open()
-            _ = await boundedValue(task, gate: crypto.gate)
+            _ = try? await boundedValue(task, gate: crypto.gate)
             XCTFail("Le déchiffrement n'a pas atteint la barrière."); return
         }
         let access = MessagingConversationAccess(canWrite: false,
@@ -1234,7 +1264,7 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         await service.setPage(MessagingPage<MessagingWireMessage>(items: [live], nextCursor: nil, access: access))
         await workspace.loadMessages(conversation)
         await crypto.gate.open()
-        let value = await boundedValue(task, gate: crypto.gate)
+        let value = try await boundedValue(task, gate: crypto.gate)
 
         XCTAssertNil(value, "Une limite lisible abaissée ne ressuscite pas le clair.")
         XCTAssertNil(workspace.contents[messageID])
@@ -1274,12 +1304,12 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let arrived = await gate.waitUntilWaiting()
         guard arrived else {
             await gate.open()
-            _ = await boundedValue(task, gate: gate)
+            _ = try? await boundedValue(task, gate: gate)
             XCTFail("La reconfirmation n'a pas atteint le put attendu."); return
         }
         await coordinator.invalidate()
         await gate.open()
-        let delivery = await boundedValue(task, gate: gate)
+        let delivery = try await boundedValue(task, gate: gate)
         guard case .pending(let failure) = delivery else {
             XCTFail("Une invalidation pendant la reconfirmation doit fermer le geste."); return
         }
@@ -1397,12 +1427,12 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         let arrived = await gate.waitUntilWaiting()
         guard arrived else {
             await gate.open()
-            _ = await boundedValue(task, gate: gate)
+            _ = try? await boundedValue(task, gate: gate)
             XCTFail("Le POST n'a pas atteint la barrière."); return
         }
         task.cancel()
         await gate.open()
-        let delivery = await boundedValue(task, gate: gate)
+        let delivery = try await boundedValue(task, gate: gate)
         guard case .pending(let failure) = delivery else {
             XCTFail("Un POST annulé n'est pas une confirmation."); return
         }
@@ -1596,6 +1626,28 @@ final class MessagingMediaCoordinatorTests: XCTestCase {
         XCTAssertTrue(revoked.contains(sealed.mediaID))
     }
 
+    func testBoundedValueTimesOutWithoutJoiningNonCooperativeTask() async throws {
+        let gate = Gate()
+        let retained = Task<Int, Never> {
+            // Ignore l'annulation et ne se termine jamais : le helper ne doit pas le joindre.
+            await withUnsafeContinuation { (_: UnsafeContinuation<Int, Never>) in }
+        }
+        let completion = expectation(description: "Échéance explicite du helper")
+        let started = Date()
+        Task {
+            do {
+                _ = try await boundedValue(retained, gate: gate, timeout: .milliseconds(100))
+                XCTFail("Une opération non coopérative ne doit pas rendre de valeur.")
+            } catch is BoundedTimeout {
+                completion.fulfill()
+            } catch {
+                XCTFail("Échéance explicite attendue, reçu \(type(of: error)).")
+            }
+        }
+        await fulfillment(of: [completion], timeout: 2)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
+    }
+
     func testGateArrivalTimeoutDoesNotHang() async {
         let gate = Gate()
         let arrived = await gate.waitUntilWaiting(timeout: .milliseconds(50))
@@ -1615,6 +1667,40 @@ private final class ScopeBox {
 @MainActor
 private final class FactoryBox {
     var calls = 0
+}
+
+private struct ErrorBox: @unchecked Sendable {
+    let error: Error
+}
+
+private enum DeadlineOutcome<Value: Sendable>: Sendable {
+    case value(Value)
+    case error(ErrorBox)
+    case timedOut
+}
+
+private struct BoundedTimeout: Error, CustomStringConvertible {
+    var description: String { "opération retenue au-delà de l'échéance" }
+}
+
+/// Résultat unique d'une course entre une opération et son échéance. `finish` est
+/// idempotent : la première issue gagne, l'autre est ignorée sans double reprise.
+@MainActor
+private final class DeadlineBox<Value> {
+    private var outcome: Value?
+    private var continuation: CheckedContinuation<Value, Never>?
+
+    func wait() async -> Value {
+        if let outcome { return outcome }
+        return await withCheckedContinuation { continuation = $0 }
+    }
+
+    func finish(_ value: Value) {
+        guard outcome == nil else { return }
+        outcome = value
+        continuation?.resume(returning: value)
+        continuation = nil
+    }
 }
 
 private actor OrderRecorder {
