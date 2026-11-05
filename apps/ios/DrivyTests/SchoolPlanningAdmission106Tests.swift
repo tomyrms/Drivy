@@ -154,7 +154,33 @@ struct SchoolPlanningAdmission106Tests {
         #expect(writes[1].value(forHTTPHeaderField: "Idempotency-Key") == command.id.uuidString)
         #expect(writes[0].value(forHTTPHeaderField: "If-Match") == nil)
         #expect(writes[1].value(forHTTPHeaderField: "If-Match") == nil)
-        #expect(token.invalidations == 1 && token.calls == 2)
+        // Première écriture avec le jeton initial, seconde avec l'unique jeton renouvelé après le 401.
+        #expect(writes[0].value(forHTTPHeaderField: "Authorization") == "Bearer token-1")
+        #expect(writes[1].value(forHTTPHeaderField: "Authorization") == "Bearer token-2")
+
+        // Trace exacte des appels de jeton : envoi initial (1), unique renouvellement après 401 (2), puis
+        // lecture AP72 du reçu (3). `/me` utilise PinnedToken et ne compte pas dans cette source.
+        #expect(token.invalidations == 1)
+        #expect(token.calls == 3)
+
+        // Le troisième appel de jeton sert une seule lecture GET du reçu exact de cette opération : ni
+        // troisième mutation, ni second renouvellement, ni lecture d'une autre opération.
+        let requests = await server.requests()
+        let receiptGets = requests.filter {
+            $0.httpMethod == "GET" && $0.url?.pathComponents.dropLast().last == "operations"
+        }
+        #expect(receiptGets.count == 1)
+        let receiptRead = try #require(receiptGets.first)
+        #expect(receiptRead.value(forHTTPHeaderField: "Authorization") == "Bearer token-3")
+        #expect(receiptRead.url?.lastPathComponent == command.id.uuidString)
+        #expect(await server.receiptOperationIDs() == [command.id])
+        #expect(await server.receiptReadCount() == 1)
+        #expect(await server.mutationCount() == 2)
+        let lastWriteIndex = try #require(requests.lastIndex { $0.httpMethod == "POST" })
+        let receiptIndex = try #require(requests.firstIndex {
+            $0.httpMethod == "GET" && $0.url?.pathComponents.dropLast().last == "operations"
+        })
+        #expect(receiptIndex > lastWriteIndex)
     }
 
     @Test func aFailedRemovalClosesTheEmissionAndTheRetryRemovesOnlyTheExactRecord() async throws {
@@ -565,11 +591,11 @@ private func boundedValue<Value: Sendable>(_ task: Task<Value, Error>, label: St
 
 /// Jeton contrôlé : un appel précis peut rester suspendu sur une retenue bornée, pour annuler pendant
 /// l'attente réelle du client. Aucun point de suspension n'existe sans échéance.
+/// Chaque appel rend un jeton distinct : le test peut prouver quel appel a servi quelle requête.
 @MainActor
 private final class AdmissionTokenSource: AccessTokenSource {
     private(set) var calls = 0
     private(set) var invalidations = 0
-    private var token = "token-1"
     private var holds: [Int: BoundedHold] = [:]
 
     @discardableResult
@@ -582,12 +608,11 @@ private final class AdmissionTokenSource: AccessTokenSource {
     func accessToken() async throws -> String {
         calls += 1
         if let hold = holds.removeValue(forKey: calls) { try await hold.wait() }
-        return token
+        return "token-\(calls)"
     }
 
     func invalidateAccessToken(_ token: String) async -> Bool {
         invalidations += 1
-        self.token = "token-renewed"
         return true
     }
 }
@@ -631,6 +656,7 @@ private final class AdmissionOutboxStub: SchoolCommandOutbox {
 private actor AdmissionServer: SchoolHTTPTransport {
     private var recorded: [URLRequest] = []
     private var recordedMutations: [URLRequest] = []
+    private var recordedReceiptOperations: [UUID] = []
     private var meReads = 0
     private var receiptReads = 0
     private var meHold: BoundedHold?
@@ -641,10 +667,12 @@ private actor AdmissionServer: SchoolHTTPTransport {
     private var operationType = "CREATE_LESSON"
 
     func requestCount() -> Int { recorded.count }
+    func requests() -> [URLRequest] { recorded }
     func mutations() -> [URLRequest] { recordedMutations }
     func mutationCount() -> Int { recordedMutations.count }
     func meReadCount() -> Int { meReads }
     func receiptReadCount() -> Int { receiptReads }
+    func receiptOperationIDs() -> [UUID] { recordedReceiptOperations }
     func holdNextMe(_ label: String = "lecture /me") -> BoundedHold {
         let hold = BoundedHold(label)
         meHold = hold
@@ -700,6 +728,7 @@ private actor AdmissionServer: SchoolHTTPTransport {
         if parts.dropLast().last == "operations" {
             receiptReads += 1
             let operationID = UUID(uuidString: parts.last ?? "") ?? UUID()
+            recordedReceiptOperations.append(operationID)
             let data: [String: Any] = ["operationId": operationID.uuidString, "commandType": operationType,
                 "resourceType": "Lesson", "resourceId": HubFixture.lessonID.uuidString,
                 "committedAt": ISO8601DateFormatter().string(from: Date()),
