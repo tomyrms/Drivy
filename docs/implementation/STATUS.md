@@ -1,5 +1,16 @@
 # État de la réalisation
 
+## 5 novembre 2026 — Intégration des lots et qualification avant déploiement
+
+Les lots serveur et client média, récupération web, worker de cours, accès et socle de réactivité sont assemblés dans `tomyrms/integration-issues-20261105`. Cette intégration ne clôture pas les issues : leurs critères d'exploitation, de parcours complémentaires et de qualification physique restent distincts.
+
+- **Métier Apple Q11** : [run 42067102945](https://github.com/tomyrms/Drivy/actions/runs/42067102945), candidat `d1be4068f45045fdb561e252904efed5fd57e68b`, **1 814/1 814 réussis**, zéro échec, ignoré ou expected ; garde FFI et scénario du relais réel verts. Sont notamment exécutés les tests d'attente concurrente, d'annulation réseau, le parcours média réel et l'époque zéro. Les changements suivants ne touchent que le harnais UI et la documentation ; les sources métier restent identiques. Il ne s'agit pas d'une nouvelle exécution métier sur le commit final.
+- **UI finale** : [run 42079325954](https://github.com/tomyrms/Drivy/actions/runs/42079325954), candidat `e0d1aaff064d0517c0f4a2a380030c6c72d3e352`, attempt 1, compilation et **8/8 cas par appareil** : cinq médias et trois annulations de planification, iPhone 17 Pro et iPad Air 11-inch M4 sous OS 26.4.1. Zéro échec, ignoré ou expected. En grand texte, refus initial puis second toucher réel à +9,99 s / +15,76 s depuis Planifier, sous la borne de 25 s ; retrait et saisie conservée vérifiés.
+- **Limite du harnais** : le bouton était déjà atteignable après le refus dans ce dernier run. Le nouvel appel de révélation passe, mais sa branche de défilement n'a pas été exercée dans cet état ; l'incident historique hors zone n'est pas reproduit. Les causes des anciens timeouts AX média et readiness ne sont pas déclarées résolues par un seul succès. Aucun rerun supplémentaire.
+- **API/web Linux Q2** : [run 41957174316](https://github.com/tomyrms/Drivy/actions/runs/41957174316), candidat `62875344` : API 1 050/1 050, web 880 plus un échec attendu, typage/build/Chromium verts et SIGTERM du worker réellement exécuté. Cette preuve reste attribuée à ce SHA ; les contrôles automatiques du futur master doivent encore être collectés sur leur SHA exact.
+
+La fusion et le déploiement homelab sont autorisés par le porteur. À cette entrée : aucune nouvelle bascule effectuée ; sauvegarde privée vérifiée et répétition de restauration obligatoires avant release, contrôles de santé après bascule. L'IPA reste non signée, sans installation sur appareil par cette orchestration. Aucune preuve physique GPS, batterie, Face ID ou VoiceOver, activation SMTP, nouvelle politique de conservation ou clôture globale d'issue n'est déduite de ces campagnes.
+
 ## 2 novembre 2026 (nuit) — Corrections et retraits d'observations après la leçon (#112, `claude/signalements-112`)
 
 - **Lot** : une correction ou un retrait d'observation après la leçon est conservé sur l'appareil avant son envoi, ne retient plus l'écran, ne bloque plus les autres observations, revient « non confirmé » après un arrêt de l'app (Réessayer rejoue la même opération, Abandonner la retire) et n'est jamais renvoyé de lui-même. Détail et limites : [signalements-corrections-112.md](signalements-corrections-112.md).
