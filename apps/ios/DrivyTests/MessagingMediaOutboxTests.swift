@@ -403,6 +403,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
         let fileSystem = FaultyFileSystem()
         let outbox = try makeOutbox(scope: scope, root: root, keys: keys, fileSystem: fileSystem)
         let pending = try makePending(try sealMedia(), envelope: envelope(payloadBytes: 32, epoch: 2))
+        let ciphertext = try XCTUnwrap(pending.messageCiphertext)
         try await outbox.put(pending, scope: scope)
         let file = try scopeFolder(scope, root: root)
             .appendingPathComponent(try recordDigest(pending.mediaID, scope: scope) + ".sealed")
@@ -413,7 +414,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
         await expectFailure(.protectionUnavailable) {
             try await outbox.replaceEnvelope(mediaID: pending.mediaID,
                                              expected: pending.messageCiphertext,
-                                             replacement: pending.messageCiphertext,
+                                             replacement: ciphertext,
                                              scope: scope)
         }
         XCTAssertTrue(fileSystem.operations.contains(.protect))
@@ -423,7 +424,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
         fileSystem.heal(.synchronizeDirectory)
         try await outbox.replaceEnvelope(mediaID: pending.mediaID,
                                          expected: pending.messageCiphertext,
-                                         replacement: pending.messageCiphertext,
+                                         replacement: ciphertext,
                                          scope: scope)
         XCTAssertEqual(try Data(contentsOf: file), before, "Un no-op ne réécrit jamais l'archive")
         let entries = try await outbox.entries(scope: scope)
@@ -1090,7 +1091,7 @@ final class MessagingMediaOutboxTests: XCTestCase {
             .map { String(format: "%02x", $0) }.joined()
     }
 
-    private func folderContents(_ scope: MessagingScope, root: URL) throws -> [URL] {
+    private func folderContents(scope: MessagingScope, root: URL) throws -> [URL] {
         try FileManager.default.contentsOfDirectory(at: try scopeFolder(scope, root: root),
                                                     includingPropertiesForKeys: nil)
     }
