@@ -188,6 +188,74 @@ final class MessagingReportScreensUITests: XCTestCase {
         navigation.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
     }
 
+    private func waitForMediaReportConfirmation(_ confirm: XCUIElement, phase: String) {
+        let ready = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            confirm.exists && confirm.isHittable
+        }, object: confirm)
+        let result = XCTWaiter.wait(for: [ready], timeout: 10)
+        if result != .completed {
+            let exists = confirm.exists
+            let state = exists
+                ? "id=\(confirm.identifier);label=\(confirm.label);frame=\(confirm.frame);enabled=\(confirm.isEnabled);hittable=\(confirm.isHittable)"
+                : "exists=false; contrôle non résolu"
+            let diagnostic = XCTAttachment(string: "Confirmation média \(phase); attente=\(result.rawValue); \(state)")
+            diagnostic.name = "report-confirmation-refusal-\(phase)"
+            diagnostic.lifetime = .keepAlways
+            add(diagnostic)
+            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+            screenshot.name = "report-confirmation-refusal-\(phase)"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertEqual(result, .completed, "La confirmation doit exister et être atteignable dans la même borne de 10 s")
+        XCTAssertTrue(confirm.isHittable)
+    }
+
+    private func inspectMediaReportConfirmation(in app: XCUIApplication, largeText: Bool) {
+        let content = app.scrollViews.containing(.staticText, identifier: "messaging.report.disclosure.recipients").firstMatch
+        XCTAssertTrue(content.exists)
+        let confirm = app.buttons["messaging.report.confirm"]
+        let cancel = app.buttons["messaging.report.confirm.cancel"]
+        XCTAssertTrue(cancel.isHittable)
+        let expected = [
+            ("recipients", "administrateurs de l’école", "pourront lire"),
+            ("selection", "Ces 3 messages", "auteur et leur date"),
+            ("metadata", "nature, nom", "légende éventuelle"),
+            ("file", "Pièce jointe non transmise aux administrateurs", ""),
+            ("privacy", "Le reste de la conversation ne leur est pas montré", "")
+        ]
+        for (part, first, second) in expected {
+            let text = app.staticTexts["messaging.report.disclosure." + part]
+            XCTAssertTrue(text.exists)
+            XCTAssertTrue(text.label.contains(first))
+            XCTAssertTrue(text.label.contains(second))
+            // A partially hittable paragraph is not proof that its complete disclosure was visible.
+            var visible = false
+            for gesture in 0...10 {
+                let bounds = content.frame.intersection(app.windows.firstMatch.frame)
+                let top = max(bounds.minY, app.navigationBars["Signalement"].frame.maxY)
+                let bottom = min(bounds.maxY, confirm.frame.minY)
+                let frame = text.frame
+                visible = text.isHittable && frame.minY >= top && frame.maxY <= bottom
+                    && frame.minX >= bounds.minX && frame.maxX <= bounds.maxX
+                if visible || gesture == 10 { break }
+                XCTAssertGreaterThan(bottom - top, frame.height, "Le bloc doit tenir dans la zone de lecture")
+                let downward = frame.minY < top
+                let overflow = downward ? top - frame.minY : frame.maxY - bottom
+                let distance = min(max(overflow + 12, 24), (bottom - top) * 0.6)
+                let startY = downward ? top + 12 : bottom - 12
+                let endY = startY + (downward ? distance : -distance)
+                let origin = app.coordinate(withNormalizedOffset: .zero)
+                origin.withOffset(CGVector(dx: bounds.midX, dy: startY)).press(forDuration: 0.05,
+                    thenDragTo: origin.withOffset(CGVector(dx: bounds.midX, dy: endY)))
+            }
+            capture("report-mixed-\(largeText ? "large" : "normal")-\(part)")
+            XCTAssertTrue(visible, "Le bloc \(part) doit être entièrement visible après défilement borné")
+        }
+        XCTAssertTrue(confirm.isHittable)
+        XCTAssertTrue(cancel.isHittable)
+    }
+
     /// Gestes natifs bornés dans la liste, sans toucher de modèle ni supposer qu'un élément AX est visible.
     private func revealReportElement(_ target: XCUIElement, in app: XCUIApplication, towardOlder: Bool = false,
                                      contentPrefix: String = "messaging.reports.line.") {
@@ -298,20 +366,15 @@ final class MessagingReportScreensUITests: XCTestCase {
         assertReportWitness("prepared=0;post=0;ack=0;removed=0;files=0;selection=-", in: app)
         send.tap()
         let confirm = app.buttons["messaging.report.confirm"]
-        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
-        let explanation = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@",
-            "pièce jointe non transmise aux administrateurs")).firstMatch
-        XCTAssertTrue(explanation.exists)
-        XCTAssertTrue(explanation.label.contains("ces 3 messages"))
-        XCTAssertTrue(explanation.label.contains("auteur et leur date"))
-        XCTAssertTrue(confirm.isHittable)
+        waitForMediaReportConfirmation(confirm, phase: "first")
+        inspectMediaReportConfirmation(in: app, largeText: largeText)
         capture(largeText ? "report-mixed-confirm-large" : "report-mixed-confirm")
-        dismissReportConfirmation(in: app)
+        app.buttons["messaging.report.confirm.cancel"].tap()
         XCTAssertTrue(confirm.waitForNonExistence(timeout: 5))
         XCTAssertEqual(send.label, "Transmettre (3)")
         assertReportWitness("prepared=0;post=0;ack=0;removed=0;files=0;selection=-", in: app)
         send.tap()
-        XCTAssertTrue(confirm.waitForExistence(timeout: 10))
+        waitForMediaReportConfirmation(confirm, phase: "second")
         confirm.tap()
         let acknowledgement = app.alerts["Signalement transmis"]
         XCTAssertTrue(acknowledgement.waitForExistence(timeout: 15))
