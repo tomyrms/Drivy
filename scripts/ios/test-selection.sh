@@ -77,13 +77,15 @@ elif [[ "$unit_only" == 1 ]]; then
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reports ]]; then
-    for suite in SchoolReportFlowTests SchoolLessonFinishTests SchoolLessonHubTests SchoolTrainingRefreshTests; do
+    # Barrière de leçon libérée après un refus corrigeable (#427) : SchoolLessonLifecycleTests et SchoolNativeRegression131Tests.
+    for suite in SchoolReportFlowTests SchoolLessonFinishTests SchoolLessonHubTests SchoolTrainingRefreshTests \
+      SchoolLessonLifecycleTests SchoolNativeRegression131Tests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == agenda ]]; then
     # Agenda #144-#146: calendar projection, course reads and their synthetic UI transport.
     # Confidentialité des fiches de cours (#426) : refus d'accès, gestes durables et file de la feuille. Le replay (#425) reste dans gps.
-    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests       SchoolCourseAccessRevocationTests SchoolCourseSheetQueueTests SchoolCourseIntentPersistenceTests; do
+    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests       SchoolCourseAccessRevocationTests SchoolCourseSheetQueueTests SchoolCourseIntentPersistenceTests SchoolIntentExactnessTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   else

@@ -135,6 +135,14 @@ enum SchoolCourseFormat {
     private let persistence: SchoolCourseIntentPersistence?
     @ObservationIgnored private var kept: PendingSchoolCommand?
     @ObservationIgnored private var didRestore = false
+    /// Opération incertaine telle qu'elle est partie, ou reprise du coffre : son enveloppe (corps, version, opération)
+    /// se rejoue à l'identique, même si le cours a changé depuis (#431).
+    @ObservationIgnored private var sent: SchoolCourseEditorRecord?
+    /// Pourquoi la reprise ne part pas (archive incomplète, ou cours modifié depuis) ; la saisie reste intacte (#431).
+    private(set) var replayHold: String?
+    var replayBlocked: Bool { replayHold != nil }
+    static let incompleteReplayMessage = "Cette demande, gardée par une ancienne version de l’app, ne peut pas être rejouée telle quelle. Ta saisie est conservée : abandonne la demande, vérifie l’agenda, puis enregistre à nouveau."
+    static let staleReplayMessage = "Ce cours a changé depuis ta saisie, qui n’a pas été enregistrée. Elle est conservée : abandonne la demande pour reprendre depuis la version à jour."
 
     init(schoolID: UUID, membershipID: UUID, timeZone: String, client: SchoolCourseClient,
          catalogue: SchoolCourseCatalogue?, series: SchoolCourseSeries? = nil, day: Date = Date(), selectedOccurrenceID: UUID? = nil,
@@ -173,8 +181,8 @@ enum SchoolCourseFormat {
     var instructors: [SchoolCourseInstructor] { catalogue?.instructors ?? [] }
     var selfCancelHours: Int { catalogue?.policy.selfCancelHours ?? series?.selfCancelHours ?? 24 }
     var problem: String? { form.problem() }
-    var canSave: Bool { !isBusy && !accessUnavailable && selectionMessage == nil && catalogue?.canManage == true && problem == nil }
-    var canPublish: Bool { !isBusy && !accessUnavailable && selectionMessage == nil && catalogue?.canManage == true && form.problem(publishing: true) == nil }
+    var canSave: Bool { !isBusy && !accessUnavailable && !replayBlocked && selectionMessage == nil && catalogue?.canManage == true && problem == nil }
+    var canPublish: Bool { !isBusy && !accessUnavailable && !replayBlocked && selectionMessage == nil && catalogue?.canManage == true && form.problem(publishing: true) == nil }
     var publishProblem: String? { problem ?? form.problem(publishing: true) }
     var hasUnconfirmedOperation: Bool { pending != nil }
 
@@ -262,12 +270,25 @@ enum SchoolCourseFormat {
         guard canPublish else { return }
         pendingIntent = .publication
         isBusy = true; errorMessage = nil; defer { isBusy = false }
+        // Publication incertaine reprise : même version, même opération, que le cours ait changé ou non depuis (#431).
+        if let record = sent, record.intent == .publication, record.operationId == pending?.operation {
+            guard record.canReplayExactly, let seriesID = record.seriesId, let version = record.baseVersion else {
+                hold(Self.incompleteReplayMessage); return
+            }
+            do {
+                let published = try await client.publish(schoolID: schoolID, seriesID: seriesID, version: version, operationID: record.operationId)
+                clearPending(); series = published; finished = published
+            } catch {
+                if (error as? SchoolPlanningFailure) == .conflict { hold(Self.staleReplayMessage) } else { fail(error) }
+            }
+            return
+        }
         var written = series
         if written == nil || hasUnsavedChanges { written = await writeDraft(closing: false) }
         guard let draft = written else { return }
         let key = "publish|\(draft.id)|\(draft.version)"
         let operation = operationID(for: key)
-        guard remember(.publication, key: key, operation: operation) else { return }
+        guard remember(.publication, key: key, operation: operation, baseVersion: draft.version) else { return }
         do {
             let published = try await client.publish(schoolID: schoolID, seriesID: draft.id, version: draft.version, operationID: operation)
             clearPending(); series = published; finished = published
@@ -282,7 +303,7 @@ enum SchoolCourseFormat {
 
     /// Les champs restent figés après une réponse perdue : ce bouton reprend exactement l’intention précédente.
     func retryUnconfirmed() async {
-        guard pending != nil, !isBusy else { return }
+        guard pending != nil, !isBusy, !replayBlocked else { return }
         // Opération reprise après un arrêt de l'app : le catalogue n'est pas encore relu, et rien ne part sans lui.
         if catalogue == nil { await load() }
         switch pendingIntent {
@@ -294,21 +315,41 @@ enum SchoolCourseFormat {
     }
 
     private func writeDraft(closing: Bool) async -> SchoolCourseSeries? {
-        guard let probe = form.body(operationID: UUID(), timeZone: timeZone),
-              let signature = try? JSONEncoder().encode(SchoolCourseSeriesBody(operationId: Self.zero, typeId: probe.typeId, title: probe.title,
-                description: probe.description, location: probe.location, conditions: probe.conditions, teachingLanguage: probe.teachingLanguage,
-                responsibleMembershipId: probe.responsibleMembershipId, capacity: probe.capacity, minParticipants: probe.minParticipants,
-                timeZone: probe.timeZone, occurrences: probe.occurrences)) else { return nil }
-        let key = "draft|\(series?.id.uuidString ?? "new")|\(series?.version ?? 0)|" + signature.base64EncodedString()
-        let operation = operationID(for: key)
-        guard remember(.draft, closing: closing, key: key, operation: operation) else { return nil }
-        guard let body = form.body(operationID: operation, timeZone: timeZone) else { return nil }
+        let seriesID: UUID?, version: Int?, body: SchoolCourseSeriesBody, replaying: Bool
+        if let record = sent, record.intent == .draft, record.operationId == pending?.operation,
+           record.form.comparable == form.comparable {
+            // Rejeu : l'enveloppe exacte de la première tentative, jamais recalculée sur le cours relu (#431).
+            guard record.canReplayExactly,
+                  let exact = record.seriesBody ?? (record.seriesId == nil ? form.body(operationID: record.operationId, timeZone: timeZone) : nil)
+            else { hold(Self.incompleteReplayMessage); return nil }
+            seriesID = record.seriesId; version = record.baseVersion; body = exact; replaying = true
+        } else {
+            guard let probe = form.body(operationID: UUID(), timeZone: timeZone),
+                  let signature = try? JSONEncoder().encode(SchoolCourseSeriesBody(operationId: Self.zero, typeId: probe.typeId, title: probe.title,
+                    description: probe.description, location: probe.location, conditions: probe.conditions, teachingLanguage: probe.teachingLanguage,
+                    responsibleMembershipId: probe.responsibleMembershipId, capacity: probe.capacity, minParticipants: probe.minParticipants,
+                    timeZone: probe.timeZone, occurrences: probe.occurrences)) else { return nil }
+            let key = "draft|\(series?.id.uuidString ?? "new")|\(series?.version ?? 0)|" + signature.base64EncodedString()
+            let operation = operationID(for: key)
+            guard let fresh = form.body(operationID: operation, timeZone: timeZone) else { return nil }
+            guard remember(.draft, closing: closing, key: key, operation: operation, baseVersion: series?.version, body: fresh) else { return nil }
+            seriesID = series?.id; version = series?.version; body = fresh; replaying = false
+        }
         do {
-            let saved = try await client.save(schoolID: schoolID, seriesID: series?.id, version: series?.version, body: body)
+            let saved = try await client.save(schoolID: schoolID, seriesID: seriesID, version: version, body: body)
             clearPending(); series = saved
             if closing { finished = saved }
             return saved
-        } catch { fail(error); return nil }
+        } catch {
+            // Rejeu refusé pour version : l'opération n'a pas été appliquée et le cours a changé. Rien n'est envoyé sur la
+            // version récente ; la demande et la saisie restent, à abandonner explicitement (#431).
+            if replaying, (error as? SchoolPlanningFailure) == .conflict { hold(Self.staleReplayMessage); return nil }
+            fail(error); return nil
+        }
+    }
+
+    private func hold(_ message: String) {
+        replayHold = message; errorMessage = message
     }
 
     private static let zero = UUID(uuidString: "00000000-0000-0000-0000-000000000000")!
@@ -326,16 +367,17 @@ enum SchoolCourseFormat {
     // MARK: Conservation sur l'appareil (#127)
 
     /// Écrit l'opération et la saisie dans le coffre avant l'envoi. Faux : rien n'a pu être conservé, l'opération ne part pas.
-    private func remember(_ intent: SchoolCourseEditorRecord.Intent, closing: Bool = false, key: String, operation: UUID) -> Bool {
-        guard let persistence else { return true }
-        // Même opération reprise : elle est déjà conservée, avec la même saisie (sa clé la désigne).
-        if kept?.id == operation { return true }
+    private func remember(_ intent: SchoolCourseEditorRecord.Intent, closing: Bool = false, key: String, operation: UUID,
+                          baseVersion: Int? = nil, body: SchoolCourseSeriesBody? = nil) -> Bool {
+        // Même opération reprise : elle est déjà conservée, avec la même saisie et la même enveloppe (sa clé la désigne).
+        if sent?.operationId == operation { return true }
+        let record = SchoolCourseEditorRecord(operationId: operation, intent: intent, closing: closing, key: key, seriesId: series?.id,
+            form: form, newTypeTitle: newTypeTitle, newTypeDescription: newTypeDescription, baseVersion: baseVersion, seriesBody: body)
+        guard let persistence else { sent = record; return true }
         do {
-            let command = try SchoolCourseEditorRecord(operationId: operation, intent: intent, closing: closing, key: key, seriesId: series?.id,
-                form: form, newTypeTitle: newTypeTitle, newTypeDescription: newTypeDescription)
-                .command(scope: persistence.scope, createdAt: Date())
+            let command = try record.command(scope: persistence.scope, createdAt: Date())
             try persistence.store.replace(kept, with: command)
-            kept = command
+            kept = command; sent = record
             return true
         } catch {
             pending = nil
@@ -346,7 +388,7 @@ enum SchoolCourseFormat {
 
     /// L'école a répondu (ou refusé) : l'opération quitte le coffre.
     private func clearPending() {
-        pending = nil
+        pending = nil; sent = nil; replayHold = nil
         guard let persistence, let command = kept else { return }
         kept = nil
         try? persistence.store.remove(command)
@@ -364,7 +406,7 @@ enum SchoolCourseFormat {
             try? persistence.store.remove(command)
             return
         }
-        kept = command
+        kept = command; sent = record
         form = record.form; newTypeTitle = record.newTypeTitle; newTypeDescription = record.newTypeDescription
         pending = (record.key, record.operationId)
         switch record.intent {
@@ -372,13 +414,21 @@ enum SchoolCourseFormat {
         case .draft: pendingIntent = .draft(closing: record.closing)
         case .publication: pendingIntent = .publication
         }
-        errorMessage = SchoolCourseIntentPersistence.restoredMessage
+        if record.canReplayExactly { errorMessage = SchoolCourseIntentPersistence.restoredMessage }
+        else { hold(Self.incompleteReplayMessage) }
     }
 
     /// Abandonne la demande à reprendre ; l'école l'a peut-être reçue, l'agenda se relit pour le montrer.
     func abandonUnconfirmed() async {
         guard pending != nil, !isBusy else { return }
-        clearPending()
+        // Demande bloquée : la saisie est jetée et le cours se relit à sa version actuelle avant que quoi que ce soit reparte (#431).
+        if replayBlocked, let current = series {
+            guard let fresh = try? await client.series(schoolID: schoolID, id: current.id) else {
+                errorMessage = "Le cours n’a pas pu être relu. Réessaie."; return
+            }
+            clearPending(); series = fresh; form = SchoolCourseForm(series: fresh); initialForm = form
+            newTypeTitle = ""; newTypeDescription = ""
+        } else { clearPending() }
         pendingIntent = nil
         errorMessage = "Demande abandonnée. L’école l’a peut-être reçue : vérifie l’agenda avant d’enregistrer à nouveau."
         await load()

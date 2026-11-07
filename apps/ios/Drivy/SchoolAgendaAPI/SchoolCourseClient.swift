@@ -78,7 +78,7 @@ struct SchoolCourseOccurrenceInput: Codable, Sendable, Equatable {
 }
 
 /// Corps de POST et PUT `course-series` : `teachingLanguage` et `minParticipants` partent en `null` explicite.
-struct SchoolCourseSeriesBody: Encodable, Sendable, Equatable {
+struct SchoolCourseSeriesBody: Codable, Sendable, Equatable {
     let operationId: UUID
     let typeId: UUID
     let title: String, description: String, location: String, conditions: String

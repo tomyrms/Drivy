@@ -215,7 +215,7 @@ struct SchoolCourseEditorView: View {
     @ViewBuilder private var actions: some View {
         if model.hasUnconfirmedOperation {
             Button("Réessayer la demande") { Task { await model.retryUnconfirmed() } }
-                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isBusy)
+                .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isBusy || model.replayBlocked)
                 .accessibilityIdentifier("course-retry-command")
             Button("Abandonner la demande", role: .destructive) { Task { await model.abandonUnconfirmed() } }
                 .disabled(model.isBusy)

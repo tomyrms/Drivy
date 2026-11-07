@@ -36,7 +36,8 @@ struct SchoolCourseIntentPersistence {
 
 @MainActor
 final class EncryptedSchoolCourseIntentStore: SchoolCourseIntentStoring {
-    private let outbox: EncryptedSchoolCommandOutbox
+    /// Le coffre chiffré sous-jacent ; les tests y posent leurs pannes d'écriture.
+    let outbox: EncryptedSchoolCommandOutbox
 
     init(directory: URL? = nil, keyData: Data? = nil, vault: (any IdentityVault)? = nil) {
         let base = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -52,8 +53,8 @@ final class EncryptedSchoolCourseIntentStore: SchoolCourseIntentStoring {
             // L'école relit les droits au rejeu ; le geste suit la portée actuelle plutôt que de rester bloqué.
             let moved = PendingSchoolCommand(id: command.id, scope: scope, kind: command.kind, resourceVersion: command.resourceVersion,
                 createdAt: command.createdAt, body: command.body, resourceID: command.resourceID, routeResourceID: command.routeResourceID)
-            try outbox.remove(command)
-            try outbox.save(moved)
+            // Un seul instantané chiffré (#438) : la migration d'époque garde l'ancien geste ou le nouveau, jamais aucun.
+            try outbox.replace(command, with: moved)
             kept.append(moved)
         }
         return kept.sorted { $0.createdAt < $1.createdAt }
@@ -65,12 +66,9 @@ final class EncryptedSchoolCourseIntentStore: SchoolCourseIntentStoring {
 
     func replace(_ old: PendingSchoolCommand?, with new: PendingSchoolCommand) throws {
         // Le coffre applique la règle d'admission des gestes de l'élève : la même série attend, deux séries de gestes
-        // d'agrégats disjoints entrent ensemble (#106, tâche 5). Rien n'est retiré avant ce contrôle.
-        if try outbox.pendingCommands(for: new.scope).contains(where: { $0.id != old?.id && SchoolCourseLearnerLane.blocks(new, $0) }) {
-            throw SchoolConfigurationFailure.pendingCommand
-        }
-        if let old { try outbox.remove(old) }
-        try outbox.save(new)
+        // d'agrégats disjoints entrent ensemble (#106, tâche 5). Admission et remplacement se font dans une seule
+        // écriture atomique : rien n'est retiré si `new` est refusé ou n'a pas pu être écrit (#438).
+        try outbox.replace(old, with: new, refusing: { SchoolCourseLearnerLane.blocks(new, $0) })
     }
 
     func remove(_ command: PendingSchoolCommand) throws { try outbox.remove(command) }
@@ -281,6 +279,24 @@ struct SchoolCourseEditorRecord: Codable, Equatable, Sendable {
     let form: SchoolCourseForm
     let newTypeTitle: String
     let newTypeDescription: String
+    /// Version de la série envoyée dans `If-Match` : brouillon d'un cours existant, ou brouillon publié (#431).
+    /// `nil` pour une création, ou pour une archive d'avant #431 qui ne l'a pas conservée.
+    var baseVersion: Int? = nil
+    /// Corps canonique tel qu'il est parti (#431) : avec `baseVersion` et `operationId`, l'enveloppe exacte à rejouer.
+    /// L'école rejoue la réponse d'une opération déjà appliquée seulement pour le même corps et la même version.
+    var seriesBody: SchoolCourseSeriesBody? = nil
+
+    /// Vrai quand le geste conserve de quoi repartir à l'identique. Une archive ancienne qui n'a pas gardé la version
+    /// ou le corps d'une modification n'est jamais reconstruite avec la version courante : elle bloque le rejeu.
+    var canReplayExactly: Bool {
+        switch intent {
+        case .type: true
+        case .draft:
+            seriesId == nil || (baseVersion.map { $0 > 0 } == true && seriesBody?.operationId == operationId)
+        case .publication:
+            seriesId != nil && baseVersion.map { $0 > 0 } == true
+        }
+    }
 
     func command(scope: SchoolCommandScope, createdAt: Date) throws -> PendingSchoolCommand {
         // Un cours en création n'a pas d'identifiant : l'adhésion de la personne désigne son brouillon.

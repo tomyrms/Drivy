@@ -19,9 +19,11 @@ GPS_SUITES = [
 ]
 GPS_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in GPS_SUITES]
 AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolCourseClientTests', 'SchoolVisualTransportTests',
-                 'SchoolCourseAccessRevocationTests', 'SchoolCourseSheetQueueTests', 'SchoolCourseIntentPersistenceTests']
+                 'SchoolCourseAccessRevocationTests', 'SchoolCourseSheetQueueTests', 'SchoolCourseIntentPersistenceTests',
+                 'SchoolIntentExactnessTests']
 AGENDA_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in AGENDA_SUITES]
-REPORT_SUITES = ['SchoolReportFlowTests', 'SchoolLessonFinishTests', 'SchoolLessonHubTests', 'SchoolTrainingRefreshTests']
+REPORT_SUITES = ['SchoolReportFlowTests', 'SchoolLessonFinishTests', 'SchoolLessonHubTests', 'SchoolTrainingRefreshTests',
+                 'SchoolLessonLifecycleTests', 'SchoolNativeRegression131Tests']
 REPORT_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REPORT_SUITES]
 REACTIVITY_SUITES = ['SchoolNotificationSettingsTests', 'AccountIntentStorageTests', 'SchoolCommandSchedulingTests',
                      'SchoolNotificationTests', 'SchoolCommandOutboxTests', 'SchoolPlanningDefaultsTests', 'SchoolInvitationWorkspaceTests']
