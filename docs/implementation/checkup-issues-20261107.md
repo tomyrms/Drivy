@@ -24,7 +24,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | A · Planning API | #423, #424, #439, #444 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables | En cours, Sonnet |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | 8d6c00fc relu et intégré en 3d213e7c ; CI Apple en cours |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur préparé pour Sonnet, contrat client à coordonner |
-| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | En cours avec Sonnet, ctx_fd98c5c7c86d |
+| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | b283b4bd relu ; retour correctif 1/2, ctx_302dba84258e |
 | E · Intentions natives | #427, #431, #437, #438, #442, #443 | Reprise atomique sans verrou fantôme, doublon ni écrasement concurrent | À réaliser |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur | #429, #441, #448 | Identités distinctes et reprises par appareil, révocation cohérente | À réaliser |
@@ -110,3 +110,20 @@ Le worker B reprend la collecte de ses preuves sur ces runs, sans les dupliquer.
 Un quatrième lot peut avancer sans conflit pendant cette qualification :
 C ne touche que les profils/portraits API, A possède le planning, D le web
 et B le client Swift. Les migrations nouvelles restent propres à chaque lot.
+
+## Première revue du lot D
+
+Livraison `b283b4bd`, non intégrée. Typages et build réussis selon le rapport ;
+43 tests ciblés réussis. La suite web complète termine en **échec** : 903 tests
+réussis, deux tests pending-recovery-106 bloqués au lancement du navigateur.
+Le contrôle Chromium synthétique de #432/#433 passe ; le contrôle sur les
+sources d'origine s'arrête à #433 et ne prouve donc pas le RED de #432.
+
+Deux chemins d'écrasement résiduels relevés dans la revue de #422 : résolution
+d'un conflit d'horaires à partir d'une saisie devenue périmée pendant l'alerte,
+et reprise d'une intention refusée sans sa base d'origine (#430 également).
+Retour groupé 1/2 au même worker Sonnet, `ctx_302dba84258e` : correction,
+preuves sur les vrais composants/hooks et contrôles navigateur manquants
+de #422/#430/#434. Réutilisation d'Edge et adaptation minimale du harnais
+autorisées pour exécuter les deux tests bloqués ; aucune nouvelle campagne
+complète demandée. Aucun succès global ni clôture d'issue déduit de la livraison.
