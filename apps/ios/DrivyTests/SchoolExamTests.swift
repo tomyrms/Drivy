@@ -151,4 +151,20 @@ import Testing
         #expect(SchoolExamClient.failure(403, nil) == .forbidden)
         #expect(SchoolExamClient.failure(503, nil) == .unavailable)
     }
+
+    /// Lot A (#423) : l'accompagnement refusé peut venir d'un congé du moniteur, plus seulement d'un rendez-vous.
+    @Test func anEscortRefusedForALeaveIsNotCalledAnAppointment() {
+        let expected = SchoolPlanningFailure.rejected("Le moniteur est absent ou a déjà un rendez-vous pendant l’accompagnement. Choisis un autre créneau ou un autre moniteur.")
+        #expect(SchoolExamClient.failure(409, "EXAM_ESCORT_CONFLICT") == expected)
+        // Refus définitif : la saisie reste à l'écran, rien n'est rejoué.
+        #expect(SchoolExamClient.failure(409, "EXAM_ESCORT_CONFLICT").definitiveRejection)
+    }
+
+    /// Lot A (#444) : le droit de gérer ne dépend pas de l'état de la formation. Un examen prévu reste donc corrigeable
+    /// (le serveur accepte UPDATE_EXAM et POSTPONE_EXAM après pause, fin, annulation ou archivage) ; seule la création reste refusée.
+    @Test func aFutureExamStaysManageableWhateverTheTrainingBecame() throws {
+        let state = try JSONDecoder().decode(SchoolExamState.self, from: stateJSON(exams: [examJSON()]))
+        #expect(state.canManage && state.exams.first?.examStatus == .scheduled)
+        #expect(SchoolExamClient.failure(422, "TRAINING_NOT_ACTIVE") == .rejected("La formation doit être active dans un dossier non archivé."))
+    }
 }

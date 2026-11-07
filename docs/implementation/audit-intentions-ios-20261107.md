@@ -82,3 +82,18 @@ Limites : le serveur simulé reproduit le rejeu-avant-version décrit dans l'API
 
 Compilation et exécution des trois suites ci-dessus sur le runner Apple ; vérification visuelle du blocage de reprise dans l'éditeur de
 cours ; confirmation côté `apps/api` du rejeu avant contrôle de version pour `PUT course-series` et `POST publish`.
+
+## Raccord Swift du lot A (#423, #439, #444) — API 2878e141
+
+NON COMPILÉ, NON EXÉCUTÉ (poste Windows). Lecture de `git show 2878e141` et du code natif existant :
+
+| Issue | Constat côté iOS | Décision |
+|---|---|---|
+| #423 cours | `COURSE_INSTRUCTOR_CLOSED` (409) à la publication : absent de `SchoolCourseClient.failure`, il retombait sur le message générique. | Message français ajouté ; refus définitif, brouillon et saisie conservés (`fail` ne vide que l'opération). |
+| #423 examen | `EXAM_ESCORT_CONFLICT` pouvait être un congé, le message disait « rendez-vous » seulement. | Message : « Le moniteur est absent ou a déjà un rendez-vous pendant l'accompagnement. Choisis un autre créneau ou un autre moniteur. » |
+| #439 | `COURSE_POSITIONS_MISMATCH` : la replanification de cours n'existe pas dans l'app (aucun appel client, aucune vue). | Aucun mapping ajouté (code inatteignable) ; traité par le bureau web. |
+| #444 | `canManage` vient de `exam_manage` (droit pédagogique, indépendant de l'état de la formation). La section reste visible et le menu Actions (modifier, reporter) ne dépend que du statut de l'examen. | Aucun changement de gate : un examen futur reste corrigeable après pause, fin, annulation ou archivage. |
+
+Limite connue : `SchoolExamState` ne porte pas l'état de la formation. Sur une formation non active, « Prévoir » reste proposé (canManage vrai) et le serveur refuse avec `TRAINING_NOT_ACTIVE`, message déjà traduit ; il n'y a pas de masquage préventif, à décider avec le coordinateur.
+
+Tests ajoutés : `SchoolExamTests` (`anEscortRefusedForALeaveIsNotCalledAnAppointment`, `aFutureExamStaysManageableWhateverTheTrainingBecame`), `SchoolCourseClientTests` (mapping `COURSE_INSTRUCTOR_CLOSED`). Sélection : `unit_test_scope=agenda` contient désormais `SchoolExamTests` en plus de `SchoolCourseClientTests`.

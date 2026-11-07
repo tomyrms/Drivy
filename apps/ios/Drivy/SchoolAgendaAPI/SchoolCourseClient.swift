@@ -518,6 +518,7 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
         let messages = [
             "COURSE_ACCESS_REQUIRED": "Tu n’as pas le droit de gérer les cours de cette école.",
             "COURSE_INSTRUCTOR_CONFLICT": "Un moniteur a déjà un rendez-vous pendant une séance. Le brouillon est conservé.",
+            "COURSE_INSTRUCTOR_CLOSED": "Un moniteur est absent (fermeture) pendant une séance. Le brouillon est conservé : change le moniteur ou l’horaire.",
             "COURSE_OCCURRENCES_OVERLAP": "Deux séances de ce cours se chevauchent.",
             "COURSE_OCCURRENCES_REQUIRED": "Ajoute au moins une séance.",
             "COURSE_IN_PAST": "La première séance est déjà passée.",

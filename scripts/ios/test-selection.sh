@@ -85,7 +85,7 @@ elif [[ "$unit_only" == 1 ]]; then
   elif [[ "$unit_test_scope" == agenda ]]; then
     # Agenda #144-#146: calendar projection, course reads and their synthetic UI transport.
     # Confidentialité des fiches de cours (#426) : refus d'accès, gestes durables et file de la feuille. Le replay (#425) reste dans gps.
-    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests       SchoolCourseAccessRevocationTests SchoolCourseSheetQueueTests SchoolCourseIntentPersistenceTests SchoolIntentExactnessTests; do
+    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests       SchoolCourseAccessRevocationTests SchoolCourseSheetQueueTests SchoolCourseIntentPersistenceTests SchoolIntentExactnessTests SchoolExamTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   else
