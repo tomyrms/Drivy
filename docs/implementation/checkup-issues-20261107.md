@@ -21,10 +21,10 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables | Préparé |
-| B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Préparé |
+| A · Planning API | #423, #424, #439, #444 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables | En cours, Sonnet |
+| B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | 9dc90566 livré ; deux défauts de revue à corriger, retour 1/2 ; Apple non exécuté |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | À réaliser |
-| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | À réaliser, vérifier la part native de #434 |
+| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | Préparé pour Sonnet ; #434 concerne bien le web |
 | E · Intentions natives | #427, #431, #437, #438, #442, #443 | Reprise atomique sans verrou fantôme, doublon ni écrasement concurrent | À réaliser |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur | #429, #441, #448 | Identités distinctes et reprises par appareil, révocation cohérente | À réaliser |
@@ -76,3 +76,18 @@ les lots I/F qui pourraient les recouvrir.
 
 Le coordinateur est l’unique auteur de STATUS.md et de ce suivi transversal.
 Les workers livrent leurs preuves dans leur rapport de lot.
+
+## Première revue du lot B
+
+Sonnet A : `ctx_c87ad04aa597`. Sonnet B : `ctx_73ee36443ecc`.
+Le lot B livre `9dc90566` et rapporte 25 tests du sélecteur Python réussis,
+mais Swift non compilé/non exécuté. Revue groupée : deux chemins résiduels
+retournés au même worker, dispatch `ctx_939b65ae1a39` :
+lecture tardive de loadCandidates après révocation (#426), et feuille
+reading du texte intégral non réconciliée après retrait/correction (#425).
+Premier retour correctif sur chacun, aucun succès produit revendiqué.
+Les chemins des skills UI existants ont été fournis ; le rapport initial les
+disait à tort absents. Validation Apple prévue sur le delta stable.
+
+Le lot D peut démarrer en parallèle : son périmètre web est indépendant
+des fichiers API de A et Swift de B, ce qui justifie un troisième worker.
