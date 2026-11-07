@@ -134,6 +134,20 @@ actor CourseSheetServer: SchoolHTTPTransport {
     private var replies: [String: Data] = [:]
     private(set) var attendance: [Attendance] = []
     private(set) var keys: [String] = []
+    private var readDenial: Int?
+    private var writeDenial: Int?
+    private var readOutage = false
+    private var readsHeld = false
+    private var heldReaders: [CheckedContinuation<Void, Never>] = []
+    private(set) var heldReads = 0
+
+    /// Refus d’accès (401/403/404) aux lectures ou aux écritures, tant qu’il n’est pas levé avec `nil`.
+    func denyReads(_ status: Int?) { readDenial = status }
+    func denyWrites(_ status: Int?) { writeDenial = status }
+    func outage(_ down: Bool) { readOutage = down }
+    /// Retient les lectures déjà préparées : leur réponse arrivera après ce qui se passe entre-temps.
+    func holdReads() { readsHeld = true }
+    func releaseReads() { readsHeld = false; heldReaders.forEach { $0.resume() }; heldReaders = [] }
 
     func hold(_ enrollment: UUID) { held = enrollment }
     func release() { held = nil; waiting.forEach { $0.resume() }; waiting = [] }
@@ -143,11 +157,21 @@ actor CourseSheetServer: SchoolHTTPTransport {
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         let url = request.url!
         let parts = Array(url.pathComponents.dropFirst(4))
-        guard (request.httpMethod ?? "GET") != "GET" else { return reply(url, sheet()) }
+        guard (request.httpMethod ?? "GET") != "GET" else {
+            if readOutage { throw URLError(.notConnectedToInternet) }
+            if let readDenial { return denial(url, readDenial) }
+            let snapshot = reply(url, sheet())
+            if readsHeld {
+                heldReads += 1
+                await withCheckedContinuation { heldReaders.append($0) }
+            }
+            return snapshot
+        }
         let enrollment = UUID(uuidString: parts[1])!
         let key = request.value(forHTTPHeaderField: "Idempotency-Key") ?? ""
         keys.append(key)
         if held == enrollment { await withCheckedContinuation { waiting.append($0) } }
+        if let writeDenial { return denial(url, writeDenial) }
         if failing {
             failing = false
             // Écrit puis réponse perdue : la reprise doit rendre la même réponse, sans doublon.
@@ -162,6 +186,10 @@ actor CourseSheetServer: SchoolHTTPTransport {
         if let replay = replies[key] { return SchoolHTTPResponse(data: replay, status: status(parts), url: url, contentType: "application/json") }
         let data = apply(parts, request, enrollment: enrollment, key: key)
         return SchoolHTTPResponse(data: data, status: status(parts), url: url, contentType: "application/json")
+    }
+
+    private func denial(_ url: URL, _ status: Int) -> SchoolHTTPResponse {
+        SchoolHTTPResponse(data: Data(#"{"code":"DENIED","title":"Denied"}"#.utf8), status: status, url: url, contentType: "application/problem+json")
     }
 
     private func status(_ parts: [String]) -> Int { ["payments", "validate"].contains(parts.last ?? "") ? 201 : 200 }

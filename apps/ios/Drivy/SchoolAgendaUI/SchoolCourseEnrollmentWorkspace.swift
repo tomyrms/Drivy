@@ -511,6 +511,10 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
     private(set) var isBusy = false
     var errorMessage: String?
     private(set) var confirmation: String?
+    /// Un refus explicite d’accès (401/403/404) a purgé les inscrits (#426) ; seule une lecture autorisée le lève.
+    private(set) var accessRevoked = false
+    /// Change à chaque refus : une lecture ou une réponse partie avant lui ne remet rien à l’écran.
+    @ObservationIgnored private var accessEpoch = 0
     @ObservationIgnored private var memory = SchoolCourseOperationMemory()
     @ObservationIgnored var onChange: (@MainActor () async -> Void)?
     /// Les élèves déjà lus par l’app : première page de l’annuaire, parfois filtrée par une recherche. Jamais présumés complets.
@@ -535,6 +539,8 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
 
     /// Élèves sans inscription active ni place en file.
     var candidates: [SchoolLearner] {
+        // Accès retiré : aucun nom n'est proposé, quelle que soit la lecture qui les aurait rapportés.
+        guard !accessRevoked else { return [] }
         let taken = Set((roster?.active.map(\.enrollment.learnerId) ?? []) + (roster?.waitlist.map(\.learnerId) ?? []))
         return learners.filter { !taken.contains($0.id) }
     }
@@ -542,21 +548,26 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
     /// Lit tout l’annuaire, page après page : aucun élève admissible n’est écarté par la taille d’une page. Les noms déjà lus
     /// restent proposés pendant la suite ; une panne les garde et se reprend. Une lecture complète n’est pas refaite.
     func loadCandidates() async {
-        guard let learnerPages, candidateRead != .loading, candidateRead != .complete else { return }
+        guard !accessRevoked, let learnerPages, candidateRead != .loading, candidateRead != .complete else { return }
+        // Une page ou une erreur arrivée après un refus (époque changée) n'écrit ni noms ni état de lecture.
+        let epoch = accessEpoch
         candidateRead = .loading
         var read: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
         do {
             repeat {
                 let page = try await learnerPages(cursor)
+                guard epoch == accessEpoch else { return }
                 try Task.checkCancellation()
                 read.append(contentsOf: page.items); cursor = page.nextCursor
                 guard read.count <= Self.maximumDirectory else { throw SchoolPlanningFailure.invalidResponse }
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
                 if cursor != nil { learners = Self.visible(seed + read) }
             } while cursor != nil
+            guard epoch == accessEpoch else { return }
             learners = Self.visible(read)
             candidateRead = .complete
         } catch {
+            guard epoch == accessEpoch else { return }
             learners = Self.visible(seed + read)
             // Sélecteur refermé pendant la lecture : ni panne ni lecture complète.
             if error is CancellationError || Task.isCancelled { candidateRead = .idle; return }
@@ -566,7 +577,7 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
 
     /// Reprend la lecture après une panne.
     func retryCandidates() async {
-        guard case .failed = candidateRead else { return }
+        guard !accessRevoked, case .failed = candidateRead else { return }
         candidateRead = .idle
         await loadCandidates()
     }
@@ -574,35 +585,78 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
     func load() async {
         guard !isLoading else { return }
         isLoading = true; defer { isLoading = false }
-        do { roster = try await client.roster(schoolID: schoolID, seriesID: seriesID); errorMessage = nil }
+        let epoch = accessEpoch
+        do {
+            let fresh = try await client.roster(schoolID: schoolID, seriesID: seriesID)
+            guard epoch == accessEpoch else { return }
+            if accessRevoked { restoreCandidatesIfNeeded() }
+            roster = fresh; accessRevoked = false; errorMessage = nil
+        }
         catch is CancellationError {}
-        catch { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+        catch {
+            guard epoch == accessEpoch else { return }
+            if SchoolCourseAccess.isDenied(error) { revokeAccess(error) }
+            else { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+        }
+    }
+
+    /// Refus explicite : inscrits, file, confirmation et élèves proposés disparaissent, et plus aucune action n’est offerte.
+    /// Une panne transitoire n’arrive jamais ici : elle garde le contenu autorisé et le dit.
+    private func revokeAccess(_ error: any Error) {
+        accessEpoch += 1
+        accessRevoked = true
+        roster = nil; confirmation = nil; learners = []; candidateRead = learnerPages == nil ? .complete : .idle
+        errorMessage = SchoolCourseLearnerWorkspace.message(error)
+    }
+
+    /// Les élèves proposés reviennent avec l’accès, relus ou repris de ce que l’app avait.
+    private func restoreCandidatesIfNeeded() {
+        guard learners.isEmpty, !seed.isEmpty else { return }
+        learners = Self.visible(seed)
     }
 
     @discardableResult func enroll(_ learner: SchoolLearner) async -> Bool {
-        guard !isBusy else { return false }
+        guard !isBusy, !accessRevoked else { return false }
         isBusy = true; errorMessage = nil; confirmation = nil; defer { isBusy = false }
+        let epoch = accessEpoch
         let operation = memory.operation(for: "staff-enroll|\(learner.id)")
         do {
             _ = try await client.staffEnroll(schoolID: schoolID, seriesID: seriesID, learnerID: learner.id, operationID: operation)
-            memory.settle(); confirmation = "\(learner.displayName) est inscrit"
+            memory.settle()
+            guard epoch == accessEpoch else { return false }
+            confirmation = "\(learner.displayName) est inscrit"
         } catch is CancellationError { return false }
-        catch { memory.fail(error); errorMessage = SchoolCourseLearnerWorkspace.message(error); return false }
+        catch {
+            guard epoch == accessEpoch else { return false }
+            memory.fail(error)
+            if SchoolCourseAccess.isDenied(error) { revokeAccess(error) }
+            else { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+            return false
+        }
         await reloadAfterChange()
         return true
     }
 
     @discardableResult func cancel(_ row: SchoolCourseRosterEnrollment, reason: String) async -> Bool {
         let reason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !isBusy, !reason.isEmpty, reason.count <= 1000 else { return false }
+        guard !isBusy, !accessRevoked, !reason.isEmpty, reason.count <= 1000 else { return false }
         isBusy = true; errorMessage = nil; confirmation = nil; defer { isBusy = false }
+        let epoch = accessEpoch
         let operation = memory.operation(for: "staff-cancel|\(row.enrollment.id)|\(row.enrollment.version)|\(reason)")
         do {
             _ = try await client.staffCancel(schoolID: schoolID, enrollmentID: row.enrollment.id, version: row.enrollment.version,
                 reason: reason, operationID: operation)
-            memory.settle(); confirmation = "Inscription annulée"
+            memory.settle()
+            guard epoch == accessEpoch else { return false }
+            confirmation = "Inscription annulée"
         } catch is CancellationError { return false }
-        catch { memory.fail(error); errorMessage = SchoolCourseLearnerWorkspace.message(error); return false }
+        catch {
+            guard epoch == accessEpoch else { return false }
+            memory.fail(error)
+            if SchoolCourseAccess.isDenied(error) { revokeAccess(error) }
+            else { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+            return false
+        }
         await reloadAfterChange()
         return true
     }

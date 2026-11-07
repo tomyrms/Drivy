@@ -77,6 +77,8 @@ struct SchoolCaptureReplayView: View {
         timeline = built
         player.load(built)
         selectedID = built.retainedSelection(selectedID)
+        // La feuille de texte intégral suit la projection : texte corrigé, ou fermée si l'observation a disparu.
+        reading = built.refreshed(reading)
     }
 
     // MARK: States
