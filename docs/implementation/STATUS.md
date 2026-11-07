@@ -34,6 +34,13 @@ retournés à Sonnet, avec qualification des parcours #422/#430/#434 à complét
 Le périmètre web reçoit aussi #437/#442/#443, initialement mal rangées dans
 le suivi ; le rang des examens #446 rejoint le lot API qui possède exams.ts.
 
+Lot planning serveur : `2878e141` livré et relu, non intégré. Seize tests
+ciblés PostgreSQL et typage/build réussis ; suite complète en **échec**
+(1 073 réussis, un ignoré, deux tests SMTP bloqués faute de Mailpit).
+Retour correctif 1/2 sur visibilité RLS des congés d'un collègue (#423)
+et comparaison des règles structurées (#424). Raccords de ces parcours
+et des examens après clôture (#444) confiés aux propriétaires web et Swift.
+
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 
 - **Intégration qualifiée sous Linux** : candidat `7dc77d30f1614d76dd31e4efde935af68d7acb7b`, [run 42111093690](https://github.com/tomyrms/Drivy/actions/runs/42111093690), tentative 1, success, watcher unique code 0. API PostgreSQL réel **1060/1060**, dont dix tests restauration/rejeu et SIGTERM du worker cours ; web **890 réussis + un échec attendu préexistant**, dont les deux cas pending-recovery ; typages, builds et contrats verts. Le résumé web sanitizé compte l'échec attendu parmi ses 891 assertions acceptées ; le journal conserve la distinction. Preuves locales : `artifacts/qualification-restes-7dc77d30/RAPPORT.md`.

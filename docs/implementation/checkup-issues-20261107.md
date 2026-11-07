@@ -21,7 +21,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | Première livraison 2878e141 ; complément #446 en cours, ctx_e127ab0d1b51 |
+| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 2878e141 relu, non intégré ; retour 1/2 #423/#424 et complément #446, ctx_ec6c6bd171dc |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur en cours avec Sonnet, contrat client à coordonner |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | b283b4bd relu ; retour correctif 1/2 et trois issues web complémentaires, ctx_302dba84258e |
@@ -146,3 +146,29 @@ remplacement atomique du coffre réel. Il possède temporairement les sources
 Swift et la sélection des tests ; les trois autres workers possèdent planning
 API, identité API et web. Les nouvelles preuves Apple seront demandées sur
 le candidat stable, sans rejouer les campagnes B pour de simples documents.
+
+## Première revue du lot A et raccords clients
+
+Livraison serveur `2878e141` : typage/build réussis, seize tests ciblés
+PostgreSQL réussis après reproduction des quatre défauts. Suite API complète
+en **échec** : 1 073 réussis, un ignoré, deux échecs g1c avec Mailpit absent.
+Rejeu ciblé des deux échecs demandé avec un Mailpit synthétique isolé, image
+déjà verrouillée ; aucune campagne complète supplémentaire demandée.
+
+Revue groupée retournée au même worker (`ctx_ec6c6bd171dc`), premier retour
+correctif pour #423 et #424 : la lecture directe des congés sous RLS peut
+ignorer ceux d'un collègue pour un moniteur pourtant autorisé à gérer le
+cours ou l'examen ; l'égalité par JSON.stringify des règles d'annulation
+dépend de l'ordre des clés JSONB/Zod. Régressions demandées avec vraies
+identités non admin, véritable aller-retour sans changement et conservation
+de l'échéance lors d'une nouvelle inscription au programme révisé.
+
+Pour #444, l'option de l'issue qui garde les examens existants corrigeables
+après transition est retenue ; aucune réactivation administrative exigée,
+création de nouvel examen toujours soumise à une formation active.
+Les raccords web sont confiés au propriétaire D : règles structurées,
+actions d'examen actuellement masquées par le statut ACTIVE, engagements
+restants visibles et messages de refus. Le propriétaire E vérifie les
+consommateurs Swift existants et leurs messages, sans créer d'administration
+dans l'app. Le contrat et la couverture des issues A restent transversaux ;
+la livraison API seule ne termine pas ces parcours.
