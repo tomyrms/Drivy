@@ -52,14 +52,17 @@ async function notifyExam(db:PoolClient,schoolId:string,trainingId:string,examId
 const scheduleChanged=(old:ExamRow,next:{startsAt:string;timeZone:string;location:string})=>
  Date.parse(next.startsAt)!==old.starts_at.getTime()||next.timeZone!==old.time_zone||next.location!==old.location;
 
-/** Rang de chaque tentative réellement tenue ou prévue : un report n'en est pas une. */
-export function attemptNumbers(rows:Pick<ExamRow,'id'|'kind'|'status'|'starts_at'|'created_at'>[]):Map<string,number>{
- const result=new Map<string,number>();
- for(const kind of kinds){
-  rows.filter(row=>row.kind===kind&&row.status!=='POSTPONED')
-   .sort((a,b)=>a.starts_at.getTime()-b.starts_at.getTime()||a.created_at.getTime()-b.created_at.getTime()||a.id.localeCompare(b.id))
-   .forEach((row,index)=>result.set(row.id,index+1));
+/** Rang de chaque tentative réellement tenue ou prévue, par formation et par épreuve : un report n'en est pas une, une autre formation non plus. */
+export function attemptNumbers(rows:Pick<ExamRow,'id'|'training_id'|'kind'|'status'|'starts_at'|'created_at'>[]):Map<string,number>{
+ const result=new Map<string,number>(),groups=new Map<string,typeof rows>();
+ for(const row of rows){
+  if(row.status==='POSTPONED')continue;
+  const key=`${row.training_id}:${row.kind}`;
+  groups.set(key,[...(groups.get(key)??[]),row]);
  }
+ for(const group of groups.values())
+  group.sort((a,b)=>a.starts_at.getTime()-b.starts_at.getTime()||a.created_at.getTime()-b.created_at.getTime()||a.id.localeCompare(b.id))
+   .forEach((row,index)=>result.set(row.id,index+1));
  return result;
 }
 export function examView(row:ExamRow,attempt:number|undefined,now:Date):ExamView{

@@ -22,12 +22,12 @@ beforeAll(async()=>{
 afterAll(async()=>{await app?.close();await pool?.end();});
 const conforms=(validate:ReturnType<Ajv2020['compile']>,body:unknown)=>{expect(validate(body),JSON.stringify(validate.errors)).toBe(true);};
 /** Chaque test travaille sur sa propre formation pour que les épreuves prévues ou réussies ne s'entrechoquent pas. */
-async function freshTraining(){
+async function freshTraining(learner:string=id.aliceLearner){
  const offering=randomUUID(),training=randomUUID();
  await pool.query(`INSERT INTO drivy.offering_version(id,school_id,offering_key,category_code,version,enabled,curriculum_version_id,policy_version_id,default_duration_minutes,default_price_cents)
   VALUES($1,$2,$3,'B',1,true,$4,$5,50,9000)`,[offering,id.schoolA,`exam-${offering}`,school.curriculum,school.policy]);
  await pool.query(`INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,$5,'ACTIVE',current_date)`,
-  [training,id.schoolA,id.aliceLearner,offering,`exam-${offering}`]);
+  [training,id.schoolA,learner,offering,`exam-${offering}`]);
  await pool.query(`INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,now()-interval '1 day')`,
   [randomUUID(),id.schoolA,training,id.instructorMember]);
  return training;
@@ -150,7 +150,7 @@ describe('report et tentatives',()=>{
 
  it('compte les tentatives par épreuve sans compter les reports',()=>{
   const row=(idValue:string,kind:'THEORY'|'PRACTICAL',status:'SCHEDULED'|'POSTPONED'|'ABSENT'|'PASSED'|'FAILED',day:number)=>
-   ({id:idValue,kind,status,starts_at:new Date(Date.UTC(2030,0,day)),created_at:new Date(Date.UTC(2029,0,day))});
+   ({id:idValue,training_id:'t',kind,status,starts_at:new Date(Date.UTC(2030,0,day)),created_at:new Date(Date.UTC(2029,0,day))});
   const rows=[row('a','PRACTICAL','POSTPONED',1),row('b','PRACTICAL','FAILED',5),row('c','PRACTICAL','SCHEDULED',9),row('d','THEORY','PASSED',2)];
   const ranks=attemptNumbers(rows);
   expect(ranks.get('a')).toBeUndefined();expect(ranks.get('b')).toBe(1);expect(ranks.get('c')).toBe(2);expect(ranks.get('d')).toBe(1);
@@ -279,5 +279,32 @@ describe('isolement',()=>{
   const rows=await pool.query("SELECT relname,relrowsecurity AND relforcerowsecurity AS forced FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relname IN('exam','exam_revision')");
   expect(rows.rows.map(row=>row.forced)).toEqual([true,true]);
   expect([403,404]).toContain((await call('GET',`/trainings/${randomUUID()}/exams`,undefined,null,alice)).statusCode);
+ });
+});
+
+describe('rang de tentative par formation (#446)',()=>{
+ it('la liste de l’école numérote chaque formation et chaque épreuve séparément, comme le dossier individuel',async()=>{
+  const first=await freshTraining(),second=await freshTraining(),other=await freshTraining(id.bobLearner);
+  const firstPractical=(await create(first,'PRACTICAL')).json().data.exams[0];
+  const moved=await call('POST',`/exams/${firstPractical.id}/postpone`,{operationId:randomUUID(),startsAt:when(nextDay++),timeZone:'Europe/Zurich',location:'Autre centre',reason:'Report'},firstPractical.version,staff);
+  expect(moved.statusCode,moved.body).toBe(200);
+  const created=[(await create(first,'THEORY')).json().data.exams.find((exam:{kind:string;status:string})=>exam.kind==='THEORY'),
+   (await create(second,'PRACTICAL')).json().data.exams[0],(await create(other,'PRACTICAL')).json().data.exams[0]];
+  const scheduled=moved.json().data.exams.find((exam:{status:string})=>exam.status==='SCHEDULED');
+  const ours=new Set([scheduled.id,...created.map((exam:{id:string})=>exam.id)]);
+  const rankOf=async(filter:string)=>{
+   const response=await call('GET',`/exams?filter=${filter}`,undefined,null,admin);expect(response.statusCode,response.body).toBe(200);
+   return new Map<string,number|null>(response.json().data.items.filter((item:{exam:{id:string}})=>ours.has(item.exam.id)).map((item:{exam:{id:string;attempt:number|null}})=>[item.exam.id,item.exam.attempt]));
+  };
+  // À venir : chaque premier examen vaut 1, le report ne consomme aucun numéro.
+  const upcoming=await rankOf('UPCOMING');expect([...upcoming.values()]).toEqual([1,1,1,1]);
+  for(const training of [first,second,other]){
+   for(const exam of (await list(training,admin)).exams as {id:string;attempt:number|null;status:string}[])
+    if(ours.has(exam.id))expect(upcoming.get(exam.id)).toBe(exam.attempt);
+  }
+  const old=(await list(first,admin)).exams.find((exam:{status:string})=>exam.status==='POSTPONED');expect(old.attempt).toBeNull();
+  // Résultat à renseigner : mêmes rangs une fois les dates passées.
+  for(const exam of ours)await toPast(exam);
+  const pending=await rankOf('PENDING_RESULT');expect([...pending.values()]).toEqual([1,1,1,1]);
  });
 });
