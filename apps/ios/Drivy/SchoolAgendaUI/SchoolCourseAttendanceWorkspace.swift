@@ -15,6 +15,15 @@ enum SchoolCourseParticipantMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// Refus explicite de l’école (401/403/404) : la personne n’a plus accès à ce que l’écran montre. Une panne réseau,
+/// une réponse illisible ou un conflit n’en sont jamais un.
+enum SchoolCourseAccess {
+    static func isDenied(_ error: any Error) -> Bool {
+        guard let failure = error as? SchoolPlanningFailure else { return false }
+        return failure == .unauthorized || failure == .forbidden || failure == .notFound
+    }
+}
+
 /// Commandes de la feuille d’un cours ; la clé décrit l’intention pour rejouer la même opération.
 enum SchoolCourseSheetAction: Equatable, Sendable {
     case attendance(enrollmentID: UUID, occurrenceID: UUID, status: SchoolCourseAttendanceStatus, expectedVersion: Int?)
@@ -119,6 +128,10 @@ struct SchoolCourseAnnouncement: Equatable {
     @ObservationIgnored private var kept: [UUID: PendingSchoolCommand] = [:]
     @ObservationIgnored private var didRestore = false
     @ObservationIgnored private var didPrune = false
+    /// Un refus d’accès a purgé la feuille (#426). Tant qu’une lecture autorisée n’a pas réussi, rien n’est affiché ni envoyé.
+    private(set) var accessRevoked = false
+    /// Change à chaque refus : une réponse partie avant lui ne peut plus rien afficher ni ressusciter.
+    @ObservationIgnored private var accessEpoch = 0
 
     init(schoolID: UUID, seriesID: UUID, timeZone: String, client: SchoolCourseClient, persistence: SchoolCourseIntentPersistence? = nil) {
         self.schoolID = schoolID; self.seriesID = seriesID; self.timeZone = timeZone; self.client = client
@@ -144,20 +157,41 @@ struct SchoolCourseAnnouncement: Equatable {
     }
 
     func load() async {
-        restoreKeptIntents()
+        if !accessRevoked { restoreKeptIntents() }
         guard !isLoading else { reloadRequested = true; return }
         isLoading = true; defer { isLoading = false }
         repeat {
             reloadRequested = false
-            let since = stamp
+            let since = stamp, epoch = accessEpoch
             do {
                 let fresh = try await client.sheet(schoolID: schoolID, seriesID: seriesID)
+                // Lecture partie avant un refus : elle ne remet pas la feuille retirée.
+                guard epoch == accessEpoch else { continue }
+                if accessRevoked {
+                    // Accès rendu par une lecture autorisée : les gestes conservés reviennent « à reprendre », sous les droits actuels.
+                    accessRevoked = false; didRestore = false; didPrune = false; rowStamps = [:]
+                    restoreKeptIntents()
+                }
                 apply(fresh, keepingRowsNewerThan: since)
                 discardOrphanedIntents()
                 errorMessage = nil
             } catch is CancellationError { return
-            } catch { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+            } catch {
+                guard epoch == accessEpoch else { continue }
+                if SchoolCourseAccess.isDenied(error) { revokeAccess(error) }
+                else { errorMessage = SchoolCourseLearnerWorkspace.message(error) }
+            }
         } while reloadRequested
+    }
+
+    /// Refus explicite : noms, présences, règlements, droits et refus affichés disparaissent. Les gestes déjà conservés sur
+    /// l’appareil restent dans le coffre (rien n’est inventé ni abandonné) ; ils ne reviennent qu’après une lecture autorisée.
+    private func revokeAccess(_ error: any Error) {
+        accessEpoch += 1
+        accessRevoked = true
+        sheet = nil; occurrenceID = nil; lanes = [:]; notices = [:]; announcement = nil
+        rowStamps = [:]; reloadRequested = false
+        errorMessage = SchoolCourseLearnerWorkspace.message(error)
     }
 
     // MARK: Conservation sur l'appareil (#128 à #130)
@@ -266,6 +300,7 @@ struct SchoolCourseAnnouncement: Equatable {
     /// Retour immédiat : la demande rejoint la file de l’élève et part dès que la précédente a répondu.
     /// Deux présences successives pour la même séance, la seconde pas encore partie, ne font qu’une demande.
     func submit(_ action: SchoolCourseSheetAction, learnerName: String) {
+        guard !accessRevoked else { return }
         let enrollmentID = action.enrollmentID
         notices[enrollmentID] = nil
         var lane = lanes[enrollmentID] ?? []
@@ -294,7 +329,7 @@ struct SchoolCourseAnnouncement: Equatable {
 
     /// Même demande, même opération : l’école ne l’enregistre pas deux fois.
     func retry(_ enrollmentID: UUID) {
-        guard var lane = lanes[enrollmentID], let head = lane.first, case .uncertain = head.state else { return }
+        guard !accessRevoked, var lane = lanes[enrollmentID], let head = lane.first, case .uncertain = head.state else { return }
         lane[0].state = .queued
         lanes[enrollmentID] = lane
         drain(enrollmentID)
@@ -302,7 +337,7 @@ struct SchoolCourseAnnouncement: Equatable {
 
     /// Abandonne la demande à reprendre ; elle a pu être enregistrée, la feuille est donc relue.
     func abandon(_ enrollmentID: UUID) {
-        guard var lane = lanes[enrollmentID], let head = lane.first, case .uncertain = head.state else { return }
+        guard !accessRevoked, var lane = lanes[enrollmentID], let head = lane.first, case .uncertain = head.state else { return }
         lane.removeFirst()
         release(head.id)
         lanes[enrollmentID] = lane.isEmpty ? nil : lane
@@ -315,7 +350,7 @@ struct SchoolCourseAnnouncement: Equatable {
     func clearNotice(_ enrollmentID: UUID) { notices[enrollmentID] = nil }
 
     private func drain(_ enrollmentID: UUID) {
-        guard !running.contains(enrollmentID), lanes[enrollmentID]?.first?.state == .queued else { return }
+        guard !accessRevoked, !running.contains(enrollmentID), lanes[enrollmentID]?.first?.state == .queued else { return }
         running.insert(enrollmentID)
         Task { await run(enrollmentID) }
     }
@@ -342,9 +377,12 @@ struct SchoolCourseAnnouncement: Equatable {
             }
             intent.state = .sending
             update(intent, in: enrollmentID)
+            let epoch = accessEpoch
             do {
                 let fresh = try await execute(intent.action, operation: intent.id)
                 remove(intent.id, from: enrollmentID)
+                // Enregistrée avant le refus : la demande a abouti, mais sa réponse ne remet rien à l’écran.
+                guard epoch == accessEpoch else { return }
                 applyRow(enrollmentID, from: fresh)
                 announcement = SchoolCourseAnnouncement(text: confirmation(intent))
                 changed = true
@@ -353,9 +391,15 @@ struct SchoolCourseAnnouncement: Equatable {
                 update(intent, in: enrollmentID)
                 return
             } catch {
+                // Une réponse d’avant le refus ne parle plus de cet écran ; la demande reste au coffre.
+                guard epoch == accessEpoch else { return }
+                if SchoolCourseAccess.isDenied(error) {
+                    // Droits perdus : l’intention reste conservée sur l’appareil et ne repartira qu’après une lecture autorisée.
+                    revokeAccess(error)
+                    return
+                }
                 let message = SchoolCourseLearnerWorkspace.message(error)
-                if let failure = error as? SchoolPlanningFailure,
-                   failure.definitiveRejection || failure == .forbidden || failure == .notFound {
+                if let failure = error as? SchoolPlanningFailure, failure.definitiveRejection {
                     // Refus de l’école : la demande s’arrête, la ligne dit pourquoi, la feuille est relue.
                     remove(intent.id, from: enrollmentID)
                     notices[enrollmentID] = refusal(intent, message)

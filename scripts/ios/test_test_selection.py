@@ -18,7 +18,8 @@ GPS_SUITES = [
     'SchoolMapCourseTests', 'SchoolMapRouteGapTests', 'SchoolLiveHeadingTests', 'SchoolReplayFormattingTests',
 ]
 GPS_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in GPS_SUITES]
-AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolCourseClientTests', 'SchoolVisualTransportTests']
+AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolCourseClientTests', 'SchoolVisualTransportTests',
+                 'SchoolCourseAccessRevocationTests', 'SchoolCourseSheetQueueTests', 'SchoolCourseIntentPersistenceTests']
 AGENDA_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in AGENDA_SUITES]
 REPORT_SUITES = ['SchoolReportFlowTests', 'SchoolLessonFinishTests', 'SchoolLessonHubTests', 'SchoolTrainingRefreshTests']
 REPORT_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REPORT_SUITES]

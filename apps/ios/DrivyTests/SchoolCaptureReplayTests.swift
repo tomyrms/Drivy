@@ -104,10 +104,90 @@ import Testing
         await second.load()
         #expect(second.isComplete && second.pointCount == 3 && second.observations == first.observations)
         #expect(second.matchingState == .matched && second.errorMessage == nil)
-        #expect(await server.replayReads == pagesRead)
+        // Les mesures gardées ne sont pas retéléchargées ; seules les annotations sont relues (#425), ici une page.
+        #expect(await server.replayReads == pagesRead + 1)
+        #expect(second.fragments.map(\.id) == first.fragments.map(\.id))
         // Une autre époque d’accès ne lit jamais ce qui a été gardé pour la précédente.
         #expect(cache.entry(scope: ConfigurationFixture.scope(epoch: 2), captureID: server.captureID) == nil)
         second.invalidate()
+        #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID) == nil)
+    }
+
+    /// #425 : une observation corrigée, retirée ou devenue privée ne dépend pas de la version du trajet. Le trajet garde
+    /// sa version, sa synchronisation et ses mesures ; seules les annotations sont relues auprès de l’école.
+    @Test func reopeningRereadsObservationsWhileKeepingUnchangedMeasurements() async {
+        let server = ReplayMatchingServer(replies: Array(repeating: .ready(), count: 20))
+        let cache = SchoolReplayCache()
+        let first = cachedWorkspace(server, cache)
+        await first.load()
+        #expect(first.observations.map(\.text) == ["Observation synthétique"] && timeline(first).items.count == 1)
+        let version = first.capture?.version, syncState = first.capture?.syncState, fragments = first.fragments.map(\.id)
+
+        await server.setObservation("Texte corrigé")
+        let corrected = cachedWorkspace(server, cache)
+        await corrected.load()
+        #expect(corrected.capture?.version == version && corrected.capture?.syncState == syncState)
+        #expect(corrected.matchedRoute?.reconstructionVersion == first.matchedRoute?.reconstructionVersion)
+        #expect(corrected.fragments.map(\.id) == fragments && corrected.pointCount == first.pointCount && corrected.isComplete)
+        #expect(corrected.observations.map(\.text) == ["Texte corrigé"] && corrected.errorMessage == nil)
+
+        // Retirée ou passée en privée : la carte, la liste et le rail (la chronologie) ne la montrent plus.
+        await server.setObservation(nil)
+        let removed = cachedWorkspace(server, cache)
+        await removed.load()
+        #expect(removed.observations.isEmpty && timeline(removed).items.isEmpty)
+        #expect(removed.fragments.map(\.id) == fragments && removed.isComplete && removed.errorMessage == nil)
+        // Le cache est lui aussi corrigé : une réouverture hors de portée de l’école n’y retrouve pas l’ancienne note.
+        #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID)?.observations.isEmpty == true)
+
+        await server.setObservation("Observation synthétique")
+        let restored = cachedWorkspace(server, cache)
+        await restored.load()
+        #expect(restored.observations.map(\.text) == ["Observation synthétique"])
+    }
+
+    @Test func observationRevalidationRefusedPurgesTheCachedReplayButAnOutageKeepsIt() async {
+        let server = ReplayMatchingServer(replies: Array(repeating: .ready(), count: 20))
+        let cache = SchoolReplayCache()
+        await cachedWorkspace(server, cache).load()
+        // Panne transitoire : la copie autorisée reste, l’erreur est visible et n’est pas un refus.
+        await server.failReplay(503)
+        let outage = cachedWorkspace(server, cache)
+        await outage.load()
+        #expect(outage.pointCount == 3 && outage.observations.count == 1 && outage.errorMessage != nil)
+        #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID) != nil)
+        // Refus explicite : plus rien, ni à l’écran ni dans le cache.
+        for code in [401, 403, 404] {
+            await server.failReplay(nil)
+            await cachedWorkspace(server, cache).load()
+            await server.failReplay(code)
+            let denied = cachedWorkspace(server, cache)
+            await denied.load()
+            #expect(denied.observations.isEmpty && denied.fragments.isEmpty && denied.capture == nil && denied.errorMessage != nil)
+            #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID) == nil)
+        }
+        // L’accès revient : une nouvelle lecture autorisée relit tout.
+        await server.failReplay(nil)
+        let back = cachedWorkspace(server, cache)
+        await back.load()
+        #expect(back.isComplete && back.pointCount == 3 && back.observations.count == 1 && back.errorMessage == nil)
+    }
+
+    @Test func lateObservationResponseCannotReviveAnInvalidatedReplay() async throws {
+        // Lecture 1 : premier chargement ; lecture 2 : relecture des observations, retenue.
+        let server = ReplayMatchingServer(replies: Array(repeating: .ready(), count: 20), heldReplayRead: 2)
+        let cache = SchoolReplayCache()
+        await cachedWorkspace(server, cache).load()
+        let reopened = cachedWorkspace(server, cache)
+        let loading = Task { await reopened.load() }
+        defer { loading.cancel(); Task { await server.release() } }
+        try await HubFixture.wait { await server.isHeld }
+        try #require(await server.isHeld)
+        await server.setObservation(nil)
+        reopened.invalidate()
+        await server.release()
+        await loading.value
+        #expect(reopened.isInvalidated && reopened.observations.isEmpty && reopened.fragments.isEmpty && reopened.capture == nil)
         #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID) == nil)
     }
 
@@ -324,6 +404,12 @@ private actor ReplayMatchingServer: SchoolHTTPTransport {
     private(set) var isHeld = false
     private(set) var matchingReads = 0
     private(set) var replayReads = 0
+    private var observationText: String? = "Observation synthétique"
+    private var replayFailure: Int?
+
+    /// `nil` : l’observation est retirée ou privée, la page ne la porte plus.
+    func setObservation(_ text: String?) { observationText = text }
+    func failReplay(_ status: Int?) { replayFailure = status }
 
     init(replies: [ReplayMatchingReply], heldRead: Int? = nil, heldReplayRead: Int? = nil, pagedRefresh: Bool = false) {
         self.replies = replies
@@ -395,6 +481,10 @@ private actor ReplayMatchingServer: SchoolHTTPTransport {
         }
         if url.lastPathComponent == "replay" {
             replayReads += 1
+            if let replayFailure {
+                return SchoolHTTPResponse(data: Data("{\"code\":\"UNAVAILABLE\"}".utf8), status: replayFailure,
+                    url: url, contentType: "application/problem+json")
+            }
             let start = SchoolLesson.date("2026-10-01T12:00:00Z")!
             let points = (0...(version * 2)).map { index in
                 SchoolCapturePoint(sequence: index, elapsedMs: index * 1000,
@@ -404,7 +494,7 @@ private actor ReplayMatchingServer: SchoolHTTPTransport {
             let observation = SchoolPrivateGeoObservation(id: observationID, schoolId: scope.schoolID, version: 1,
                 lessonId: HubFixture.lessonID, trainingId: HubFixture.trainingID, draftId: nil,
                 captureId: captureID, segmentId: segmentID, pointSequence: 1, competencyId: nil,
-                text: "Observation synthétique", origin: "LIVE", observedAt: points[1].capturedAt,
+                text: observationText ?? "Retirée", origin: "LIVE", observedAt: points[1].capturedAt,
                 eventKind: "MARKER", eventStatus: nil, authorMembershipId: scope.membershipID)
             let paged = pagedRefresh && version >= 2
             let cursor = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "cursor" }?.value
@@ -414,7 +504,7 @@ private actor ReplayMatchingServer: SchoolHTTPTransport {
             let page = SchoolPrivateReplayPage(captureId: captureID, quality: "SYNCED", publicationState: .privateCapture,
                 segments: [.init(segmentId: segmentID, segmentIndex: 0, points: pagePoints, hasGapBefore: false,
                     qualityLabel: "AVAILABLE", continuesFromPreviousPage: continuation, continuesOnNextPage: paged && !continuation)],
-                observations: paged && !continuation ? [] : [observation], nextCursor: paged && !continuation ? "synthetic-next" : nil,
+                observations: paged && !continuation || observationText == nil ? [] : [observation], nextCursor: paged && !continuation ? "synthetic-next" : nil,
                 generatedAt: "2026-10-01T12:00:00Z", reportRevisionId: nil, geometrySnapshotId: nil)
             if replayReads == heldReplayRead {
                 isHeld = true
