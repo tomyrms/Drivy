@@ -5,6 +5,7 @@ import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
+import {overlapsClosure} from './instructor-closures.js';
 
 /**
  * Cours collectifs : socle (#80) et création/publication depuis l'agenda (#38).
@@ -227,6 +228,9 @@ export function registerCourses(app:FastifyInstance,options:{pool:Pool;verifyTok
    const instructors=new Set((await db.query<{membership_id:string}>('SELECT membership_id FROM drivy.course_instructors($1)',[schoolId])).rows.map(row=>row.membership_id));
    if(old.occurrences.some(o=>!instructors.has(o.instructorMembershipId)))throw new ApiError(422,'INSTRUCTOR_NOT_ACTIVE','Un moniteur de ce cours n’est plus actif.');
    if(old.occurrences.some(o=>o.timeZone!==school.timeZone))throw new ApiError(422,'INVALID_TIME_ZONE','Le fuseau de l’école a changé. Relisez les séances.');
+   // Un horaire collectif peut différer des heures de conduite, mais jamais d'une absence confirmée du moniteur (R09).
+   for(const o of old.occurrences)if(await overlapsClosure(db,schoolId,o.instructorMembershipId,o.startsAt,o.endsAt))
+    throw new ApiError(409,'COURSE_INSTRUCTOR_CLOSED','Un moniteur est absent (fermeture) pendant une séance. Le brouillon est conservé.');
    for(const o of old.occurrences)await db.query(`INSERT INTO drivy.reservation(school_id,course_occurrence_id,resource_id,resource_role,during)
     SELECT $1,$2,m.person_id,'INSTRUCTOR',tstzrange($3::timestamptz,$4::timestamptz,'[)') FROM drivy.membership m WHERE m.school_id=$1 AND m.id=$5`,[schoolId,o.id,o.startsAt,o.endsAt,o.instructorMembershipId]);
    const policy=await currentPolicy(db,schoolId);

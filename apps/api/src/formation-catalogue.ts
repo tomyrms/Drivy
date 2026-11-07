@@ -26,7 +26,10 @@ const amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const webURL=z.url().max(2048).refine(value=>{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password;});
 export const competencyInput=z.object({key:z.string().trim().min(1).max(80).refine(noControl).nullable(),label:text(200),description:longText(4000)}).strict();
 const competencies=z.array(competencyInput).min(1).max(200);
-export const procedureInput=z.object({procedureText:longText(4000),cancellationPolicyText:longText(4000),sourceUrls:z.array(webURL).max(30)}).strict();
+/** Règles structurées d'annulation (migration 20261028). Omises : reprises de la version précédente si le texte d'annulation ne change pas ;
+ * null : retrait explicite ; objet : nouvelle règle. Une décision explicite est exigée quand le texte d'annulation change alors qu'une règle existe. */
+export const cancellationRulesInput=z.object({cancellationHours:z.number().int().min(0).max(8760).nullable(),lateAction:z.enum(['CONTACT','NO_FEE'])}).strict();
+export const procedureInput=z.object({procedureText:longText(4000),cancellationPolicyText:longText(4000),sourceUrls:z.array(webURL).max(30),cancellationRules:cancellationRulesInput.nullable().optional()}).strict();
 const programmeLabel=text(120);
 export const productTypes=['INDIVIDUAL_LESSON','COLLECTIVE_COURSE','EXAM_SUPPORT','EXTERNAL_SERVICE'] as const;
 
@@ -49,7 +52,8 @@ export const saveTariffCommand=z.discriminatedUnion('mode',[
 // Types écrits à la main plutôt qu'inférés : l'inférence zod de ces schémas coûtait ~90 000 instanciations au compilateur,
 // au-delà de la mémoire allouée à la compilation de production. Les schémas restent l'unique validation à l'exécution.
 interface CompetencyInput {key:string|null;label:string;description:string}
-interface ProcedureInput {procedureText:string;cancellationPolicyText:string;sourceUrls:string[]}
+interface CancellationRules {cancellationHours:number|null;lateAction:'CONTACT'|'NO_FEE'}
+interface ProcedureInput {procedureText:string;cancellationPolicyText:string;sourceUrls:string[];cancellationRules?:CancellationRules|null|undefined}
 interface ProgrammeCommand {operationId:string;offeringKey:string;expectedOfferingVersionId:string;label?:string|null|undefined;enabled?:boolean|undefined;
  defaultDurationMinutes?:number|undefined;competencies?:CompetencyInput[]|undefined;procedure?:ProcedureInput|undefined;source?:{templateId:string;templateVersion:string}|undefined}
 interface FormationCommand {operationId:string;categoryCode:string;intent:'NEW'|'ADDITIONAL_PROGRAMME';programmeLabel:string|null;competencies:CompetencyInput[];procedure:ProcedureInput;
@@ -78,7 +82,7 @@ export async function insertCurriculum(db:PoolClient,schoolId:string,membershipI
  for(const c of items)await db.query('INSERT INTO drivy.competency_definition(school_id,curriculum_version_id,stable_key,label,description,sort_order) VALUES($1,$2,$3,$4,$5,$6)',[schoolId,id,c.key,c.label,c.description,c.sortOrder]);
  return id;
 }
-export async function insertProcedure(db:PoolClient,schoolId:string,membershipId:string,category:string,value:{procedureText:string;cancellationPolicyText:string;sourceUrls:readonly string[];cancellationRules?:{cancellationHours:number|null;lateAction:'CONTACT'|'NO_FEE'}|null},reason=''){
+export async function insertProcedure(db:PoolClient,schoolId:string,membershipId:string,category:string,value:{procedureText:string;cancellationPolicyText:string;sourceUrls:readonly string[];cancellationRules?:{cancellationHours:number|null;lateAction:'CONTACT'|'NO_FEE'}|null|undefined},reason=''){
  return (await db.query<{id:string}>(`INSERT INTO drivy.school_policy_version(school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at,cancellation_rules)
   SELECT $1,$2,coalesce(max(version),0)+1,$3,$4,$5,true,$6,$7,now(),$8 FROM drivy.school_policy_version WHERE school_id=$1 AND category_code=$2 RETURNING id`,
   [schoolId,category,value.procedureText,value.cancellationPolicyText,[...value.sourceUrls],reason,membershipId,value.cancellationRules?JSON.stringify(value.cancellationRules):null])).rows[0]!.id;
@@ -233,8 +237,8 @@ const curriculumContent=async(db:PoolClient,schoolId:string,id:string)=>{
  // Libellés enregistrés tels quels : la fiche les modifie, l'alias d'affichage terrain ne s'applique pas ici.
  return {...row,competencies:items};
 };
-const procedureContent=async(db:PoolClient,schoolId:string,id:string)=>(await db.query<{id:string;version:number;approved:boolean;categoryCode:string;createdAt:Date;procedureText:string;cancellationPolicyText:string;sourceUrls:string[]}>(
- `SELECT id,version,approved,category_code AS "categoryCode",created_at AS "createdAt",procedure_text AS "procedureText",cancellation_policy_text AS "cancellationPolicyText",source_urls AS "sourceUrls"
+const procedureContent=async(db:PoolClient,schoolId:string,id:string)=>(await db.query<{id:string;version:number;approved:boolean;categoryCode:string;createdAt:Date;procedureText:string;cancellationPolicyText:string;sourceUrls:string[];cancellationRules:CancellationRules|null}>(
+ `SELECT id,version,approved,category_code AS "categoryCode",created_at AS "createdAt",procedure_text AS "procedureText",cancellation_policy_text AS "cancellationPolicyText",source_urls AS "sourceUrls",cancellation_rules AS "cancellationRules"
   FROM drivy.school_policy_version WHERE school_id=$1 AND id=$2`,[schoolId,id])).rows[0]??null;
 const publicHead=(head:HeadRow)=>({id:head.id,version:head.version,enabled:head.enabled,label:head.label,defaultDurationMinutes:head.defaultDurationMinutes,
  hasReferencePrice:head.defaultPriceCents!==null,createdAt:head.createdAt.toISOString(),ready:programmeReady(head),complete:programmeComplete(head)});
@@ -384,9 +388,14 @@ async function updateProgramme(db:PoolClient,actor:CommandActor,school:SchoolRow
  }
  if(body.procedure){
   const current=head.policyVersionId?await procedureContent(db,school.id,head.policyVersionId):null;
-  const same=current&&current.approved&&current.procedureText===body.procedure.procedureText&&current.cancellationPolicyText===body.procedure.cancellationPolicyText
+  const previousRules=current?.cancellationRules??null,textChanged=!current||current.cancellationPolicyText!==body.procedure.cancellationPolicyText;
+  // Omises, les règles suivent la version précédente tant que leur texte ne change pas ; sinon la décision doit être explicite (#424).
+  if(body.procedure.cancellationRules===undefined&&previousRules&&textChanged)
+   throw new ApiError(422,'CANCELLATION_RULES_DECISION_REQUIRED','Le texte d’annulation change : confirmez le nouveau délai structuré, ou retirez-le explicitement.');
+  const rules=body.procedure.cancellationRules===undefined?previousRules:body.procedure.cancellationRules;
+  const same=current&&current.approved&&current.procedureText===body.procedure.procedureText&&!textChanged&&JSON.stringify(rules)===JSON.stringify(previousRules)
    &&current.sourceUrls.length===body.procedure.sourceUrls.length&&current.sourceUrls.every((value,index)=>value===body.procedure!.sourceUrls[index]);
-  if(!same){policyVersionId=await insertProcedure(db,school.id,actor.membershipId,head.categoryCode,body.procedure);changed.push('procedure');}
+  if(!same){policyVersionId=await insertProcedure(db,school.id,actor.membershipId,head.categoryCode,{...body.procedure,cancellationRules:rules});changed.push('procedure');}
  }
  const label=body.label===undefined?head.label:body.label;if(label!==head.label)changed.push('label');
  const enabled=body.enabled??head.enabled;if(enabled!==head.enabled)changed.push('enabled');

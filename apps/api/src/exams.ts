@@ -6,6 +6,7 @@ import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
+import {overlapsClosure} from './instructor-closures.js';
 
 /**
  * Examens théorique et pratique d'une formation (#54). Saisie manuelle du personnel, aucun lien avec une autorité : une date passée ne
@@ -123,6 +124,8 @@ function validateSchedule(value:Schedule,school:SchoolRow,now:Date){
  }
 }
 async function holdEscort(db:PoolClient,schoolId:string,exam:{id:string;training_id:string},escort:NonNullable<Schedule['escort']>){
+ if(await overlapsClosure(db,schoolId,escort.instructorMembershipId,escort.startsAt,escort.endsAt))
+  throw new ApiError(409,'EXAM_ESCORT_CONFLICT','Le moniteur est absent (fermeture) pendant l’accompagnement.');
  const person=(await db.query<{person:string|null}>('SELECT drivy.exam_escort_person($1,$2) AS person',[exam.training_id,escort.instructorMembershipId])).rows[0]?.person;
  if(!person)throw new ApiError(422,'INSTRUCTOR_NOT_ASSIGNED','Le moniteur d’accompagnement doit être actif et affecté à cette formation.');
  await db.query(`INSERT INTO drivy.reservation(school_id,exam_id,resource_id,resource_role,during) VALUES($1,$2,$3,'INSTRUCTOR',tstzrange($4::timestamptz,$5::timestamptz,'[)'))`,
@@ -157,6 +160,14 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
   if(!row)throw notFound();
   if(!(await db.query<{ok:boolean}>('SELECT drivy.exam_manage($1) AS ok',[trainingId])).rows[0]?.ok)throw forbidden();
   if(row.status!=='ACTIVE'||row.archived_at)throw new ApiError(422,'TRAINING_NOT_ACTIVE','La formation doit être active dans un dossier non archivé.');
+  return row;
+ };
+ /** Examen déjà prévu : l'accompagnement reste corrigeable quel que soit l'état de la formation (en pause, terminée ou annulée),
+  * pour ne jamais imposer de réactiver administrativement la formation. Seule la création d'un examen exige une formation active. */
+ const existingTraining=async(db:PoolClient,schoolId:string,trainingId:string)=>{
+  const row=(await db.query<{category_code:string}>(`SELECT o.category_code FROM drivy.training t JOIN drivy.offering_version o ON o.school_id=t.school_id AND o.id=t.offering_id
+   WHERE t.school_id=$1 AND t.id=$2`,[schoolId,trainingId])).rows[0];
+  if(!row)throw notFound();
   return row;
  };
  const loadExam=async(db:PoolClient,schoolId:string,examId:string)=>{
@@ -219,7 +230,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
   return envelope(await run(r,'UPDATE_EXAM',{...body,examId},expected,async(db,actor,school)=>{
    const old=await loadExam(db,schoolId,examId);checkVersion(old.version,expected);
    if(old.status!=='SCHEDULED')throw closed();
-   await writableTraining(db,schoolId,old.training_id);validateSchedule(body,school,new Date());
+   await existingTraining(db,schoolId,old.training_id);validateSchedule(body,school,new Date());
    await releaseEscort(db,schoolId,examId);
    await db.query(`UPDATE drivy.exam SET starts_at=$3,time_zone=$4,location=$5,escort_instructor_membership_id=$6,escort_starts_at=$7,escort_ends_at=$8,version=version+1,updated_at=statement_timestamp()
     WHERE school_id=$1 AND id=$2`,[schoolId,examId,body.startsAt,body.timeZone,body.location,body.escort?.instructorMembershipId??null,body.escort?.startsAt??null,body.escort?.endsAt??null]);
@@ -236,7 +247,7 @@ export function registerExams(app:FastifyInstance,options:{pool:Pool;verifyToken
   return envelope(await run(r,'POSTPONE_EXAM',{...body,examId},expected,async(db,actor,school)=>{
    const old=await loadExam(db,schoolId,examId);checkVersion(old.version,expected);
    if(old.status!=='SCHEDULED')throw closed();
-   const training=await writableTraining(db,schoolId,old.training_id);validateSchedule(body,school,new Date());
+   const training=await existingTraining(db,schoolId,old.training_id);validateSchedule(body,school,new Date());
    const next=randomUUID();
    await releaseEscort(db,schoolId,examId);
    await db.query("UPDATE drivy.exam SET status='POSTPONED',postponed_to_exam_id=$3,version=version+1,updated_at=statement_timestamp() WHERE school_id=$1 AND id=$2",[schoolId,examId,next]);

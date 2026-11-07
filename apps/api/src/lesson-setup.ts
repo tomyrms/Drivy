@@ -9,6 +9,7 @@ import {ApiError,forbidden,notFound} from './errors.js';
 import {Cursors} from './cursor.js';
 import {registerPlanningDefaults} from './planning-defaults.js';
 import {ensureNoTariffGap} from './formation-catalogue.js';
+import {bookingsUnderClosure,describeBookings} from './instructor-closures.js';
 const id=z.uuid(),text=(max:number)=>z.string().trim().min(1).max(max),op={operationId:id};
 const amount=z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
 const termsCommand=z.object({...op,label:text(200),termsText:text(20000),validFrom:z.iso.date(),validUntil:z.iso.date().nullable(),approved:z.boolean(),approvalReason:text(1000).optional()}).strict();
@@ -122,9 +123,9 @@ export function registerLessonSetup(app:FastifyInstance,options:{pool:Pool;verif
  app.post(`${base}/closures`,async(r,reply)=>{
   const body=closureCommand.parse(r.body);if(Date.parse(body.endsAt)<=Date.parse(body.startsAt))throw new ApiError(422,'INVALID_INTERVAL','La fermeture doit avoir une durée positive.');
   const data=await created(r,body,'CREATE_CLOSURE',async(db,_actor,school)=>{
-   const overlap=await db.query(`SELECT 1 FROM drivy.lesson WHERE school_id=$1 AND instructor_membership_id=$2 AND status='PLANNED'
-    AND tstzrange(planned_start,planned_end,'[)')&&tstzrange($3::timestamptz,$4::timestamptz,'[)') LIMIT 1`,[school.id,body.instructorMembershipId,body.startsAt,body.endsAt]);
-   if(overlap.rowCount)throw new ApiError(409,'EXISTING_BOOKINGS','Des rendez-vous doivent être traités avant cette fermeture.');
+   // Leçons, séances de cours publiées et accompagnements d'examen : tous doivent être traités avant l'absence (#423).
+   const booked=await bookingsUnderClosure(db,school.id,body.instructorMembershipId,body.startsAt,body.endsAt),summary=describeBookings(booked);
+   if(summary)throw new ApiError(409,'EXISTING_BOOKINGS',`Des rendez-vous doivent être traités avant cette fermeture : ${summary}.`);
    const row=(await db.query<Row>(`INSERT INTO drivy.closure(id,school_id,instructor_membership_id,starts_at,ends_at,reason) VALUES($1,$2,$3,$4,$5,$6) RETURNING ${columns.closures}`,
     [randomUUID(),school.id,body.instructorMembershipId,body.startsAt,body.endsAt,body.reason??null])).rows[0]!;
    return {data:row,action:'ClosureCreated',resourceType:'Closure',changedFields:['startsAt','endsAt','reason']};
