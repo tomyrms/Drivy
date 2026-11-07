@@ -1,5 +1,16 @@
 # État de la réalisation
 
+## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
+
+Inventaire GitHub : 30 anomalies #421–#450 et neuf sujets antérieurs encore ouverts,
+aucune PR ouverte ; base locale et master vérifiés à `2a801eaf`. Reprise demandée
+de bout en bout avec orchestre-go sur `tomyrms/issues-manquantes-orchestre-go`.
+Les lots initiaux portent sur le planning API et la confidentialité des projections
+iOS. Le [suivi des lots](checkup-issues-20261107.md) couvre les 39 issues, les travaux
+préexistants à réutiliser et les validations manquantes. À ce stade : inventaire et
+préparation uniquement, aucun nouveau résultat de tests ni clôture revendiqué.
+La modification locale préexistante de package-lock.json est préservée.
+
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 
 - **Intégration qualifiée sous Linux** : candidat `7dc77d30f1614d76dd31e4efde935af68d7acb7b`, [run 42111093690](https://github.com/tomyrms/Drivy/actions/runs/42111093690), tentative 1, success, watcher unique code 0. API PostgreSQL réel **1060/1060**, dont dix tests restauration/rejeu et SIGTERM du worker cours ; web **890 réussis + un échec attendu préexistant**, dont les deux cas pending-recovery ; typages, builds et contrats verts. Le résumé web sanitizé compte l'échec attendu parmi ses 891 assertions acceptées ; le journal conserve la distinction. Preuves locales : `artifacts/qualification-restes-7dc77d30/RAPPORT.md`.
