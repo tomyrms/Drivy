@@ -21,11 +21,11 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 2878e141 relu, non intégré ; retour 1/2 #423/#424 et complément #446, ctx_ec6c6bd171dc |
+| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 2878e141 + b0215d88 relus, non intégrés ; retour 1/2 #423/#424 en cours, ctx_ec6c6bd171dc |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur en cours avec Sonnet, contrat client à coordonner |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | b283b4bd relu ; retour correctif 1/2 et trois issues web complémentaires, ctx_302dba84258e |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | En cours avec le même worker iOS Sonnet, ctx_2ac5d783ea2e |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 7a4d70b4 relu, non compilé/non intégré ; retour 1/2 #431/#438, ctx_b8241b8cfecb |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
@@ -172,3 +172,32 @@ restants visibles et messages de refus. Le propriétaire E vérifie les
 consommateurs Swift existants et leurs messages, sans créer d'administration
 dans l'app. Le contrat et la couverture des issues A restent transversaux ;
 la livraison API seule ne termine pas ces parcours.
+
+Complément #446 livré en `b0215d88` et delta relu : rang groupé par formation
+et type d'épreuve, reports sans numéro, ordre date/création/id conservé.
+Régression PostgreSQL rouge puis verte rapportée : seize tests examens
+réussis, seize tests planning encore réussis et typage réussi. Pas de
+campagne globale répétée. Ce delta attend l'intégration du lot A corrigé ;
+il n'annule ni le retour #423/#424 ni les deux échecs SMTP à requalifier.
+
+## Première revue du lot E
+
+Livraison `7a4d70b4`, Swift **NON COMPILÉ / NON EXÉCUTÉ**. Les 25 tests
+Python de sélection passent. Les suites préparées sont agenda (exactitude
+et coffre), reports (barrière de leçon) et reactivity (outbox commune).
+La correction principale de #427 existait déjà en `8271c206` ; ce lot ajoute
+deux relectures de barrière et sélectionne les régressions déjà présentes.
+
+Retour groupé 1/2 #431/#438 au même worker, `ctx_b8241b8cfecb` : substitution
+d'une ancienne intention absente actuellement acceptée malgré le test qui
+l'interdit ; absence de parcours conservant une saisie bloquée pour une
+réconciliation explicite ; abandon annoncé malgré un éventuel échec de
+suppression du coffre. L'oracle du serveur simulé doit vérifier l'identité
+canonique réelle incluant la version, sans dépendre de l'ordre d'encodage JSON.
+Raccord Swift A également rappelé. Aucun run Apple lancé sur ce candidat
+connu incomplet ; compilation et contrôles ciblés prévus dès le delta stable.
+
+Le coordinateur a vérifié dans les sources API que schoolCommand traite
+le reçu/hash après autorisation mais avant work/checkVersion, et que
+PUT course-series et publish suivent ce chemin. Le test API existant couvre
+le rejeu publish ; ceci n'est pas présenté comme une nouvelle exécution.

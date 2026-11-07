@@ -40,6 +40,15 @@ ciblés PostgreSQL et typage/build réussis ; suite complète en **échec**
 Retour correctif 1/2 sur visibilité RLS des congés d'un collègue (#423)
 et comparaison des règles structurées (#424). Raccords de ces parcours
 et des examens après clôture (#444) confiés aux propriétaires web et Swift.
+Complément #446 `b0215d88` relu : rangs des examens séparés par formation
+et épreuve ; seize tests examens et seize tests planning réussis, typage
+réussi. Intégration différée jusqu'au retour correctif A en cours.
+
+Lot intentions iOS #427/#431/#438 : `7a4d70b4` livré, relu mais **non compilé
+et non exécuté** en Swift ; 25 tests Python de sélection réussis. Retour 1/2
+avant intégration sur substitution d'une intention absente, réconciliation
+de la saisie bloquée et échec durable d'abandon. Contrôles Apple ciblés
+agenda/reports/reactivity prévus après correction, sans succès anticipé.
 
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 
