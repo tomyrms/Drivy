@@ -539,6 +539,8 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
 
     /// Élèves sans inscription active ni place en file.
     var candidates: [SchoolLearner] {
+        // Accès retiré : aucun nom n'est proposé, quelle que soit la lecture qui les aurait rapportés.
+        guard !accessRevoked else { return [] }
         let taken = Set((roster?.active.map(\.enrollment.learnerId) ?? []) + (roster?.waitlist.map(\.learnerId) ?? []))
         return learners.filter { !taken.contains($0.id) }
     }
@@ -546,21 +548,26 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
     /// Lit tout l’annuaire, page après page : aucun élève admissible n’est écarté par la taille d’une page. Les noms déjà lus
     /// restent proposés pendant la suite ; une panne les garde et se reprend. Une lecture complète n’est pas refaite.
     func loadCandidates() async {
-        guard let learnerPages, candidateRead != .loading, candidateRead != .complete else { return }
+        guard !accessRevoked, let learnerPages, candidateRead != .loading, candidateRead != .complete else { return }
+        // Une page ou une erreur arrivée après un refus (époque changée) n'écrit ni noms ni état de lecture.
+        let epoch = accessEpoch
         candidateRead = .loading
         var read: [SchoolLearner] = [], cursor: String?, seen = Set<String>()
         do {
             repeat {
                 let page = try await learnerPages(cursor)
+                guard epoch == accessEpoch else { return }
                 try Task.checkCancellation()
                 read.append(contentsOf: page.items); cursor = page.nextCursor
                 guard read.count <= Self.maximumDirectory else { throw SchoolPlanningFailure.invalidResponse }
                 if let cursor, !seen.insert(cursor).inserted { throw SchoolPlanningFailure.invalidResponse }
                 if cursor != nil { learners = Self.visible(seed + read) }
             } while cursor != nil
+            guard epoch == accessEpoch else { return }
             learners = Self.visible(read)
             candidateRead = .complete
         } catch {
+            guard epoch == accessEpoch else { return }
             learners = Self.visible(seed + read)
             // Sélecteur refermé pendant la lecture : ni panne ni lecture complète.
             if error is CancellationError || Task.isCancelled { candidateRead = .idle; return }
@@ -570,7 +577,7 @@ typealias SchoolCourseLearnerPageReader = @MainActor (_ cursor: String?) async t
 
     /// Reprend la lecture après une panne.
     func retryCandidates() async {
-        guard case .failed = candidateRead else { return }
+        guard !accessRevoked, case .failed = candidateRead else { return }
         candidateRead = .idle
         await loadCandidates()
     }

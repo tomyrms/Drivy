@@ -169,6 +169,49 @@ import Testing
         }
     }
 
+    private func pagedRoster(_ server: RosterServer, directory: HeldDirectory, seed: [SchoolLearner]) -> SchoolCourseRosterWorkspace {
+        let client = SchoolCourseClient(baseURL: URL(string: "https://school.example.test")!, tokenSource: HubToken(), transport: server)
+        return SchoolCourseRosterWorkspace(schoolID: schoolID, seriesID: seriesID, client: client, learners: seed,
+            learnerPages: { cursor in try await directory.page(cursor) })
+    }
+
+    @Test func aDirectoryPageArrivingAfterTheRefusalNeverBringsTheNamesBack() async throws {
+        for outcome in [HeldDirectory.Outcome.page, .failure, .cancellation] {
+            let server = RosterServer(seriesID: seriesID), directory = HeldDirectory(learners: [learner("Zoé Exemple"), learner("Alex Exemple")])
+            let model = pagedRoster(server, directory: directory, seed: [learner("Camille Exemple")])
+            await model.load()
+            directory.hold(outcome)
+            let loading = Task { await model.loadCandidates() }
+            defer { loading.cancel(); directory.release() }
+            try await HubFixture.wait { directory.isHeld }
+            try #require(directory.isHeld)
+            // Refus pendant que la page est en vol.
+            await server.deny(403)
+            await model.load()
+            #expect(model.accessRevoked && model.candidates.isEmpty && model.candidateRead == .idle)
+            directory.release()
+            await loading.value
+            // Ni la page, ni l'erreur, ni l'annulation tardives ne remettent noms ou état de lecture.
+            #expect(model.candidates.isEmpty && model.candidateRead == .idle && model.roster == nil)
+            await model.loadCandidates()
+            await model.retryCandidates()
+            #expect(model.candidates.isEmpty && directory.reads == 1)
+        }
+    }
+
+    @Test func candidatesReadAgainAfterAnAuthorisedReadFollowingTheRefusal() async throws {
+        let server = RosterServer(seriesID: seriesID), directory = HeldDirectory(learners: [learner("Zoé Exemple")])
+        let model = pagedRoster(server, directory: directory, seed: [])
+        await model.load()
+        await server.deny(404)
+        await model.load()
+        #expect(model.accessRevoked && model.candidates.isEmpty)
+        await server.deny(nil)
+        await model.load()
+        await model.loadCandidates()
+        #expect(!model.accessRevoked && model.candidateRead == .complete && model.candidates.count == 1)
+    }
+
     @Test func aTransientOutageKeepsTheRosterAndSaysSo() async throws {
         let server = RosterServer(seriesID: seriesID)
         let model = rosterWorkspace(server)
@@ -246,5 +289,35 @@ actor RosterServer: SchoolHTTPTransport {
             await withCheckedContinuation { waiting.append($0) }
         }
         return reply
+    }
+}
+
+/// Annuaire dont une page peut être retenue, puis rendue en page, en erreur ou en annulation.
+@MainActor final class HeldDirectory {
+    enum Outcome { case page, failure, cancellation }
+    private let learners: [SchoolLearner]
+    private var outcome: Outcome?
+    private var waiting: CheckedContinuation<Outcome, Never>?
+    private(set) var reads = 0
+    private(set) var isHeld = false
+
+    init(learners: [SchoolLearner]) { self.learners = learners }
+
+    func hold(_ outcome: Outcome) { self.outcome = outcome }
+    func release() { isHeld = false; waiting?.resume(returning: outcome ?? .page); waiting = nil; outcome = nil }
+
+    func page(_ cursor: String?) async throws -> SchoolPage<SchoolLearner> {
+        reads += 1
+        if let held = outcome {
+            isHeld = true
+            let result = await withCheckedContinuation { waiting = $0 }
+            _ = held
+            switch result {
+            case .page: break
+            case .failure: throw SchoolPlanningFailure.unavailable
+            case .cancellation: throw CancellationError()
+            }
+        }
+        return SchoolPage(items: learners, nextCursor: nil)
     }
 }

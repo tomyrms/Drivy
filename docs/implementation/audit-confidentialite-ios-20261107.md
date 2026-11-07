@@ -31,11 +31,19 @@ Base : `2a801eaf`. Branche `tomyrms/audit-confidentialite-20261107`. Aucun backe
 
 **Limites.** Les élèves « semences » restent en mémoire dans `seed` (jamais affichés tant que l'accès est retiré). La vue affiche déjà le message et « Réessayer » quand `sheet` est nul ; aucune capture n'a été vue, pas de recette native de la révocation.
 
+## Retour correctif 1/2 (revue groupée sur 9dc90566)
+
+- **#426, sélecteur d'élèves.** `loadCandidates`, `retryCandidates` et `candidates` suivent maintenant `accessRevoked` / `accessEpoch` : une page, une erreur ou une annulation arrivées après un refus ne réécrivent ni `learners` ni `candidateRead` ; `candidates` est vide tant que l'accès est retiré ; aucune relance n'est possible. Après une lecture autorisée, `restoreCandidatesIfNeeded` et `candidateRead` remis à zéro par le refus permettent une nouvelle lecture complète. Un refus renvoyé par l'annuaire lui-même (droit distinct du cours) reste une erreur de lecture du sélecteur, pas une révocation du cours.
+- **#425, feuille de texte intégral.** `SchoolCaptureReplayView.rebuildTimeline()` réconcilie aussi `reading` via `SchoolReplayTimeline.refreshed(_:)` : texte corrigé, ou feuille fermée si l'observation a disparu (retirée / privée). `sheet(item:)` est lié à l'identifiant : elle se met à jour sur place, sans changement visuel.
+- **Preuves ciblées (NON EXÉCUTÉES).** `SchoolCourseAccessRevocationTests` : `aDirectoryPageArrivingAfterTheRefusalNeverBringsTheNamesBack` (page, erreur et annulation tardives) et `candidatesReadAgainAfterAnAuthorisedReadFollowingTheRefusal` ; `SchoolCaptureReplayTests.reopeningRereadsObservationsWhileKeepingUnchangedMeasurements` couvre désormais `refreshed` (texte à jour puis `nil`). Le comportement de `@State reading` dans la vue elle-même n'a pas de test d'interface : la preuve porte sur la fonction de réconciliation.
+- **Sélection.** Inchangée : `gps` (replay) et `agenda` (cours, 11 tests dans `SchoolCourseAccessRevocationTests`). Le contrôle `test_test_selection.py` (25 OK) n'est pas relancé : aucun script de sélection modifié depuis.
+- **Skills UI.** Impeccable et Uncodixfy sont bien présents (`~/.codex/skills`) ; le rapport précédent les disait absents à tort. Les deux ont été lus avant le delta UI ; ce delta ne change aucun rendu (réconciliation d'état, ni copie ni mise en page).
+
 ## Fichiers
 
 - `apps/ios/Drivy/SchoolCaptureUI/SchoolCaptureReplayWorkspace.swift`
 - `apps/ios/Drivy/SchoolAgendaUI/SchoolCourseAttendanceWorkspace.swift`, `SchoolCourseEnrollmentWorkspace.swift`
-- Tests : `DrivyTests/SchoolCaptureReplayTests.swift` (3 nouveaux, 1 assertion adaptée : `replayReads == pagesRead + 1`), `DrivyTests/SchoolCourseAccessRevocationTests.swift` (nouveau, 9), `DrivyTests/SchoolCourseSheetQueueTests.swift` (serveur synthétique étendu).
+- Tests : `DrivyTests/SchoolCaptureReplayTests.swift` (3 nouveaux, 1 assertion adaptée : `replayReads == pagesRead + 1`), `DrivyTests/SchoolCourseAccessRevocationTests.swift` (nouveau, 11), `DrivyTests/SchoolCourseSheetQueueTests.swift` (serveur synthétique étendu).
 - `scripts/ios/test-selection.sh` et `test_test_selection.py` : `unit_test_scope=agenda` reçoit `SchoolCourseAccessRevocationTests`, `SchoolCourseSheetQueueTests`, `SchoolCourseIntentPersistenceTests` (aucun changement de workflow). `gps` couvre déjà `SchoolCaptureReplayTests`.
 
 ## À lancer sur le runner Apple (NON EXÉCUTÉ)
@@ -47,4 +55,4 @@ Base : `2a801eaf`. Branche `tomyrms/audit-confidentialite-20261107`. Aucun backe
 
 - `python -m unittest scripts/ios/test_test_selection.py` : 25 tests, OK.
 - Swift : **NON COMPILÉ, NON EXÉCUTÉ** (pas de Xcode). Aucune preuve physique ni simulateur.
-- Impeccable et Uncodixfy : non installés ici ; aucune modification d'interface n'a été faite.
+- Impeccable et Uncodixfy : présents dans `~/.codex/skills` (correction du rapport initial) ; le seul delta UI est une réconciliation d'état sans effet visuel.

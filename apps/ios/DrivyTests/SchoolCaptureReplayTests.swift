@@ -123,6 +123,8 @@ import Testing
         #expect(first.observations.map(\.text) == ["Observation synthétique"] && timeline(first).items.count == 1)
         let version = first.capture?.version, syncState = first.capture?.syncState, fragments = first.fragments.map(\.id)
 
+        // Texte intégral ouvert avant la revalidation : il suit la nouvelle projection (#425).
+        let opened = timeline(first).items.first
         await server.setObservation("Texte corrigé")
         let corrected = cachedWorkspace(server, cache)
         await corrected.load()
@@ -130,12 +132,16 @@ import Testing
         #expect(corrected.matchedRoute?.reconstructionVersion == first.matchedRoute?.reconstructionVersion)
         #expect(corrected.fragments.map(\.id) == fragments && corrected.pointCount == first.pointCount && corrected.isComplete)
         #expect(corrected.observations.map(\.text) == ["Texte corrigé"] && corrected.errorMessage == nil)
+        #expect(timeline(corrected).refreshed(opened)?.text == "Texte corrigé" && timeline(corrected).refreshed(opened)?.id == opened?.id)
+        #expect(timeline(corrected).refreshed(nil) == nil)
 
         // Retirée ou passée en privée : la carte, la liste et le rail (la chronologie) ne la montrent plus.
         await server.setObservation(nil)
         let removed = cachedWorkspace(server, cache)
         await removed.load()
         #expect(removed.observations.isEmpty && timeline(removed).items.isEmpty)
+        // La feuille de texte intégral se dissout : plus d'observation à lire.
+        #expect(timeline(removed).refreshed(opened) == nil)
         #expect(removed.fragments.map(\.id) == fragments && removed.isComplete && removed.errorMessage == nil)
         // Le cache est lui aussi corrigé : une réouverture hors de portée de l’école n’y retrouve pas l’ancienne note.
         #expect(cache.entry(scope: ConfigurationFixture.scope(), captureID: server.captureID)?.observations.isEmpty == true)
