@@ -54,6 +54,16 @@ et non exécuté** en Swift ; 25 tests Python de sélection réussis. Retour 1/2
 avant intégration sur substitution d'une intention absente, réconciliation
 de la saisie bloquée et échec durable d'abandon. Contrôles Apple ciblés
 agenda/reports/reactivity prévus après correction, sans succès anticipé.
+Raccord Swift A `823f4410` relu : messages de congés adaptés, non compilés.
+Le gate de création d'examen après transition connue reste à raccorder au
+statut déjà lu par le parent ; actions sur les examens existants à conserver.
+
+Lot identité #421/#450 interrompu par la limite de session Claude, remise à
+disposition annoncée à 22 h 50 Europe/Zurich. Sept fichiers partiels conservés
+dans son worktree, non intégrés. Résultat du run déjà lancé récupéré : 1 069 tests
+réussis, deux échecs SMTP, un ignoré ; suite non verte malgré le code zéro du
+pipeline. Choix de reprise demandé au porteur (attendre Sonnet ou autoriser
+Codex GPT-6-Astra), sans changement silencieux de modèle.
 
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 

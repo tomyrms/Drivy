@@ -23,7 +23,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 |---|---|---|---|
 | A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 2878e141 + b0215d88 relus, non intégrés ; retour 1/2 #423/#424 en cours, ctx_ec6c6bd171dc |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur en cours avec Sonnet, contrat client à coordonner |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Interrompu par quota Claude ; sept fichiers conservés, non committés/non intégrés ; choix de reprise demandé |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments et raccords A en cours, ctx_44befd0463cc |
 | E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 7a4d70b4 relu, non compilé/non intégré ; retour 1/2 #431/#438, ctx_b8241b8cfecb |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
@@ -217,3 +217,38 @@ Le coordinateur a vérifié dans les sources API que schoolCommand traite
 le reçu/hash après autorisation mais avant work/checkVersion, et que
 PUT course-series et publish suivent ce chemin. Le test API existant couvre
 le rejeu publish ; ceci n'est pas présenté comme une nouvelle exécution.
+
+Raccord Swift A livré en `823f4410`, messages relus, toujours non compilé :
+congé distingué d'un rendez-vous dans les refus ; absence de route native de
+replanification documentée. Premier retour sur le raccord #444 : le bouton
+Prévoir ne doit pas rester proposé après une transition connue. Le statut
+existe déjà dans SchoolTrainingWorkspace reçu par la section ; aucune
+extension API n'est nécessaire pour ce cas. Garder séparées création et
+gestion des examens existants, y compris si une feuille est déjà ouverte.
+Ce retour rejoint le dispatch E courant ; compteurs #431/#438 inchangés.
+
+## Interruption du lot C par quota Claude
+
+Le runtime signale `Claude hit its session limit`, réinitialisation annoncée
+le 7 novembre à 22 h 50 Europe/Zurich, dispatch `ctx_611681e7d5be`.
+Le porteur a explicitement choisi Sonnet 5.5 après épuisement de DeepSeek :
+aucun changement de fournisseur effectué. Une question est ouverte entre
+attendre Sonnet et autoriser Codex GPT-6-Astra. Le quota ne remet pas à zéro
+les compteurs de correction ; aucun retour correctif coordinateur sur C à ce stade.
+
+Worktree `audit-identite-20261107`, base `b8354517`, sept fichiers conservés :
+contrat self-profile, profiles/self-profile/invitations, migration
+`20261107_identity_versions_photo_generation.sql`, tests identité et adaptation
+du test de migration onboarding. Rien n'a été committé, intégré ou écrasé.
+Le contrat partiel ajoute photoGeneration tout en gardant photoVersion nullable ;
+la revue et le raccord client ne sont pas acquis, aucun succès produit déclaré.
+
+Traces collectées sans relance : douze tests identité réussis, typage réussi,
+test temporaire de migration réussi ; après échecs intermédiaires corrigés,
+le dernier test complet lancé en arrière-plan se termine à **1 069 réussis,
+deux échecs g1c SMTP, un ignoré**. Le pipeline affiche un code zéro malgré ces
+échecs : le contenu du journal prévaut, la suite n'est pas verte. Source locale :
+`C:/Users/jtoma/AppData/Local/Temp/claude/d5157b6475162846/592eabc7-e05f-481a-a2d4-27d439268159/tasks/b9josjxlc.output`.
+Le futur worker doit exploiter ces résultats, achever revue/rapport et requalifier
+les tests affectés avec Mailpit synthétique avant livraison ; ne pas dupliquer
+une campagne globale sans besoin établi.
