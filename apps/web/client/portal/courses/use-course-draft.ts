@@ -5,7 +5,7 @@ import { courseErrorMessage, emptyForm, emptySession, formFromSeries, hasProblem
 import { useCommandRunner, useConsole, useUnsavedChanges } from '../../console/context';
 import { confirmedSeries } from './course-catalogue';
 import { formSignature } from './course-presentation';
-import { rebaseCourseDraft, type CourseConflict } from './course-rebase';
+import { rebaseCourseDraft } from './course-rebase';
 
 /** One composition at a time: the series, a single session, or the review before publication. */
 export type DraftStage = { kind: 'course' } | { kind: 'session'; key: string } | { kind: 'review' };
@@ -24,22 +24,28 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   const initial = useMemo(() => series ? formFromSeries(series, timeZone)
     : emptyForm(catalogue, catalogue.instructors.some(item => item.membershipId === membership.membershipId) ? membership.membershipId : ''), []);
   const [form, setForm] = useState<SeriesForm>(initial);
-  const [concurrent, setConcurrent] = useState<{ series: CourseSeries; conflict: CourseConflict } | null>(null);
+  // Le conflit se déduit de la saisie actuelle, jamais d'un instantané : une retouche faite après l'alerte reste dans le choix (#422).
+  const newer = series && current && series.version > current.version ? series : null;
+  const signature = formSignature(form);
+  const concurrent = useMemo(() => {
+    if (!newer || !current) return null;
+    const conflict = rebaseCourseDraft(formFromSeries(current, timeZone), formFromSeries(newer, timeZone), form);
+    return conflict.fields.length > 0 ? { series: newer, conflict } : null;
+  }, [newer, current, signature]);
   useEffect(() => {
     if (!series) return;
     if (!current) { setCurrent(series); return; }
-    if (series.version <= current.version) return;
-    const base = formFromSeries(current, timeZone), latest = formFromSeries(series, timeZone);
-    if (formSignature(form) === formSignature(base)) { setForm(latest); setCurrent(series); setConcurrent(null); return; }
-    const conflict = rebaseCourseDraft(base, latest, form);
-    if (conflict.fields.length === 0) { setForm(conflict.merged); setCurrent(series); setConcurrent(null); return; }
-    setConcurrent({ series, conflict });
-  }, [series]);
+    if (!newer || concurrent) return;
+    const base = formFromSeries(current, timeZone), latest = formFromSeries(newer, timeZone);
+    setForm(formSignature(form) === formSignature(base) ? latest : rebaseCourseDraft(base, latest, form).merged);
+    setCurrent(newer);
+  }, [series, signature]);
   /** Choix explicite : garder la saisie ou prendre la valeur de l'école sur les champs changés des deux côtés. Les autres champs sont déjà fusionnés. */
   const resolveConcurrent = (keep: 'mine' | 'theirs') => {
-    if (!concurrent) return;
-    setForm(keep === 'mine' ? concurrent.conflict.merged : concurrent.conflict.theirs);
-    setCurrent(concurrent.series); setConcurrent(null); setRefusal(null);
+    if (!concurrent || !current) return;
+    const conflict = rebaseCourseDraft(formFromSeries(current, timeZone), formFromSeries(concurrent.series, timeZone), form);
+    setForm(keep === 'mine' ? conflict.merged : conflict.theirs);
+    setCurrent(concurrent.series); setRefusal(null);
   };
   const [stage, setStage] = useState<DraftStage>({ kind: 'course' });
   const [touched, setTouched] = useState(false);

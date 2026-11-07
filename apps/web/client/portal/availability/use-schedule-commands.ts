@@ -76,7 +76,7 @@ export function useScheduleCommands(state: ScheduleState) {
       : { schoolId, kind: 'createAvailabilityRule', path: 'availability-rules', resourceVersion: 0, body: ruleBody(draft, state.instructor), scope: state.instructor });
     const base = { tag: ruleTag(target?.id ?? null), operationId: command.operationId, instructor: state.instructor, draft };
     return keep(command, target ? 'L’horaire est modifié.' : 'L’horaire est ajouté.',
-      target ? { ...base, kind: 'rule-update', ruleId: target.id } : { ...base, kind: 'rule-create' });
+      target ? { ...base, kind: 'rule-update', ruleId: target.id, base: target } : { ...base, kind: 'rule-create' });
   };
 
   const saveAbsence = (draft: AbsenceDraft): 'kept' | 'refused' | 'invalid' => {
@@ -104,7 +104,7 @@ export function useScheduleCommands(state: ScheduleState) {
     setRefusals(list => list.filter(item => item !== refusal));
     lane.clearOutcome();
     if (intention.kind === 'rule-create') state.setView({ kind: 'rule', ruleId: null, restored: { draft: intention.draft, outcome } });
-    else if (intention.kind === 'rule-update') state.setView({ kind: 'rule', ruleId: intention.ruleId, restored: { draft: intention.draft, outcome } });
+    else if (intention.kind === 'rule-update') state.setView({ kind: 'rule', ruleId: intention.ruleId, restored: { draft: intention.draft, outcome, ...(intention.base ? { base: intention.base } : {}) } });
     else if (intention.kind === 'absence-create') state.setView({ kind: 'absence', restored: { draft: intention.draft, outcome } });
     else {
       const row = intention.kind === 'rule-remove' ? state.rules.find(item => item.id === intention.ruleId) : (state.loaded.data?.closures ?? []).find(item => item.id === intention.closureId);

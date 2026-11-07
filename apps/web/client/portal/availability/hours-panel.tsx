@@ -105,28 +105,35 @@ export function RuleRemoval({ state, commands }: { state: ScheduleState; command
 
 type Stage = 'edit' | 'review';
 
-export function RuleEditor({ state, commands, ruleId, restored }: { state: ScheduleState; commands: ScheduleCommands; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome> } | undefined }) {
+export function RuleEditor({ state, commands, ruleId, restored }: { state: ScheduleState; commands: ScheduleCommands; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome>; base?: Availability } | undefined }) {
   const latest = ruleId ? state.rules.find(rule => rule.id === ruleId) ?? null : null;
   // `target` est la version sur laquelle le brouillon repose, et la seule dont la version part dans If-Match. Une relecture plus
   // récente ne l'avance que si la saisie est propre ou fusionnée sans conflit ; sinon elle attend un choix explicite (#422).
-  const [target, setTarget] = useState<Availability | null>(latest);
+  const [target, setTarget] = useState<Availability | null>(restored?.base ?? latest);
   const opened = useRef(state.today);
   const baselineDraft = useMemo(() => draftFromRule(target, opened.current), [target]);
   const baseline = { current: baselineDraft };
   const [draft, setDraft] = useState<RuleDraft>(restored?.draft ?? baselineDraft);
-  const [concurrent, setConcurrent] = useState<{ latest: Availability; merged: RuleDraft; theirs: RuleDraft; fields: string[] } | null>(null);
+  // Le conflit se déduit de la saisie actuelle, jamais d'un instantané : une retouche faite après l'alerte reste dans le choix (#422).
+  const newer = latest && target && latest.version > target.version ? latest : null;
+  const concurrent = useMemo(() => {
+    if (!newer || !target) return null;
+    const { conflicts } = rebaseConfirmedDraft(draftFromRule(target, opened.current), draftFromRule(newer, opened.current), draft);
+    return conflicts.length > 0 ? { latest: newer, fields: [...new Set(conflicts.map(path => path.split('.')[0]!))] } : null;
+  }, [newer, target, draft]);
+  // À l'ouverture comme après une relecture : saisie propre ou sans conflit, la nouvelle version est adoptée sans friction.
   useEffect(() => {
-    if (!latest || !target || latest.version <= target.version) return;
-    const from = draftFromRule(target, opened.current), to = draftFromRule(latest, opened.current);
-    if (sameRuleDraft(draft, from)) { setDraft(to); setTarget(latest); setConcurrent(null); return; }
-    const { value, conflicts } = rebaseConfirmedDraft(from, to, draft);
-    if (conflicts.length === 0) { setDraft(value); setTarget(latest); setConcurrent(null); return; }
-    const fields = [...new Set(conflicts.map(path => path.split('.')[0]!))];
-    setConcurrent({ latest, merged: value, theirs: { ...value, ...Object.fromEntries(fields.map(field => [field, to[field as keyof RuleDraft]])) }, fields });
-  }, [latest?.version]);
+    if (!newer || !target || concurrent) return;
+    const from = draftFromRule(target, opened.current), to = draftFromRule(newer, opened.current);
+    setDraft(sameRuleDraft(draft, from) ? to : rebaseConfirmedDraft(from, to, draft).value);
+    setTarget(newer);
+  }, [newer, draft]);
   const resolveConcurrent = (keep: 'mine' | 'theirs') => {
-    if (!concurrent) return;
-    setDraft(keep === 'mine' ? concurrent.merged : concurrent.theirs); setTarget(concurrent.latest); setConcurrent(null);
+    if (!concurrent || !target) return;
+    const from = draftFromRule(target, opened.current), to = draftFromRule(concurrent.latest, opened.current);
+    const { value } = rebaseConfirmedDraft(from, to, draft);
+    setDraft(keep === 'mine' ? value : { ...value, ...Object.fromEntries(concurrent.fields.map(field => [field, to[field as keyof RuleDraft]])) });
+    setTarget(concurrent.latest);
   };
   // What the school refused comes back with the typed draft; the first change the person makes clears it.
   const [returned, setReturned] = useState<NonNullable<Outcome> | null>(restored?.outcome ?? null);
