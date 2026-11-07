@@ -24,7 +24,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 2878e141 + b0215d88 relus, non intégrés ; retour 1/2 #423/#424 en cours, ctx_ec6c6bd171dc |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur en cours avec Sonnet, contrat client à coordonner |
-| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | b283b4bd relu ; retour correctif 1/2 et trois issues web complémentaires, ctx_302dba84258e |
+| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments et raccords A en cours, ctx_44befd0463cc |
 | E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 7a4d70b4 relu, non compilé/non intégré ; retour 1/2 #431/#438, ctx_b8241b8cfecb |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
@@ -131,6 +131,22 @@ preuves sur les vrais composants/hooks et contrôles navigateur manquants
 de #422/#430/#434. Réutilisation d'Edge et adaptation minimale du harnais
 autorisées pour exécuter les deux tests bloqués ; aucune nouvelle campagne
 complète demandée. Aucun succès global ni clôture d'issue déduit de la livraison.
+
+Retour `e5224959` : les deux chemins retournés sont corrigés et le delta relu.
+Les conflits d'horaires se calculent sur la saisie actuelle ; l'intention refusée
+conserve la règle de départ pour la reprise. Typages/build, 63 tests ciblés,
+deux tests pending-recovery et contrôles navigateur horaires/cours/participants
+réussis ; journal de refus testé dans les hooks réels des trois autres familles.
+Cause du lancement bloqué établie : playwright-core non épinglé demandait une
+révision absente, alors que la version verrouillée utilise le navigateur présent.
+Le rapport distingue les parcours avec RED observé, les confirmations seules et
+les fixtures simulant l'API. Pas de nouvelle exécution PostgreSQL dans ce lot web.
+
+Les cinq premières issues D sont fusionnées sans conflit en
+`9a159fb2dd31dfd5e90cfba186135dde7947dbf7` ; blobs apps/web et scripts/dev
+identiques au candidat du worker, diff propre. Preuves réutilisées sans
+campagne redondante. Les compléments #437/#442/#443 et raccords A sont déjà
+affectés au même worker dans `ctx_44befd0463cc`. Compteur correctif inchangé : 1/2.
 
 ## Périmètres corrigés et suite après B
 

@@ -31,6 +31,11 @@ Typages/build et 43 tests ciblés réussis ; suite complète en **échec** malgr
 903 tests réussis (deux tests bloqués au lancement navigateur). Contrôle
 synthétique #432/#433 réussi. Deux chemins résiduels d'écrasement d'horaires
 retournés à Sonnet, avec qualification des parcours #422/#430/#434 à compléter.
+Retour web `e5224959` relu et intégré sans conflit en `9a159fb2` : les deux
+défauts retournés sont corrigés ; typages/build, 63 tests ciblés et les deux
+tests pending-recovery auparavant bloqués réussissent. Contrôles navigateur
+synthétiques des horaires, cours, participants et hooks de journal réussis ;
+serveur réel non exécuté dans ces fixtures, pas de campagne globale répétée.
 Le périmètre web reçoit aussi #437/#442/#443, initialement mal rangées dans
 le suivi ; le rang des examens #446 rejoint le lot API qui possède exams.ts.
 
