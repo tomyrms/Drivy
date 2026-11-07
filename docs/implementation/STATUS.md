@@ -16,18 +16,23 @@ et branches avec Claude Sonnet 5.5 ; aucun code n’avait encore été modifié.
 
 Lot confidentialité #425/#426 : `9dc90566` puis correction de revue `8d6c00fc`,
 intégrés sans conflit en `3d213e7c` sur la branche de travail publiée.
-Deux contrôles Apple ciblés sont **en cours** : GPS/replay
-[42395051487](https://github.com/tomyrms/Drivy/actions/runs/42395051487) et
-agenda/cours [42395055092](https://github.com/tomyrms/Drivy/actions/runs/42395055092).
-Aucun résultat Swift/UI ni fermeture d’issue revendiqué avant leurs résultats.
-Les lots planning API et web restent en réalisation ; le lot profils/portraits
-serveur est préparé en parallèle, avec raccord client distinct.
+Deux contrôles Apple ciblés sont **réussis** sur `3d213e7c` : GPS/replay
+[42395051487](https://github.com/tomyrms/Drivy/actions/runs/42395051487),
+**146 tests / 11 suites**, et agenda/cours
+[42395055092](https://github.com/tomyrms/Drivy/actions/runs/42395055092),
+**118 tests / 7 suites** ; compilation réussie et aucun test ignoré.
+Rapport `f1eb696a` intégré en `82e1d651`. Pas de test UI de `@State reading`
+ni recette physique/VoiceOver/GPS. Les issues restent ouvertes à cette étape.
+Les lots planning API, web et profils/portraits serveur restent en réalisation ;
+le même worker Sonnet iOS poursuit avec #427/#431/#438 (intentions natives).
 
 Lot web #422/#430/#432/#433/#434 : livraison `b283b4bd` relue, non intégrée.
 Typages/build et 43 tests ciblés réussis ; suite complète en **échec** malgré
 903 tests réussis (deux tests bloqués au lancement navigateur). Contrôle
 synthétique #432/#433 réussi. Deux chemins résiduels d'écrasement d'horaires
 retournés à Sonnet, avec qualification des parcours #422/#430/#434 à compléter.
+Le périmètre web reçoit aussi #437/#442/#443, initialement mal rangées dans
+le suivi ; le rang des examens #446 rejoint le lot API qui possède exams.ts.
 
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 

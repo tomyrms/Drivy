@@ -21,14 +21,14 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables | En cours, Sonnet |
-| B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | 8d6c00fc relu et intégré en 3d213e7c ; CI Apple en cours |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur préparé pour Sonnet, contrat client à coordonner |
-| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | b283b4bd relu ; retour correctif 1/2, ctx_302dba84258e |
-| E · Intentions natives | #427, #431, #437, #438, #442, #443 | Reprise atomique sans verrou fantôme, doublon ni écrasement concurrent | À réaliser |
+| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | Première livraison 2878e141 ; complément #446 en cours, ctx_e127ab0d1b51 |
+| B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur en cours avec Sonnet, contrat client à coordonner |
+| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | b283b4bd relu ; retour correctif 1/2 et trois issues web complémentaires, ctx_302dba84258e |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | En cours avec le même worker iOS Sonnet, ctx_2ac5d783ea2e |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
-| G · Notifications serveur | #429, #441, #448 | Identités distinctes et reprises par appareil, révocation cohérente | À réaliser |
-| H · Boîtes natives | #445, #446, #447, #449 | Nouveau message chargé, comptes exacts, listes complètes et actualisation cohérente | À réaliser |
+| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
+| H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
 | I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | À rapprocher des critères et commentaires actuels |
 
 Les lots A et B sont indépendants : deux workers isolés suffisent pour commencer.
@@ -102,10 +102,14 @@ Branche de travail poussée ; master et exploitation inchangés.
 - GPS/replay : [run 42395051487](https://github.com/tomyrms/Drivy/actions/runs/42395051487).
 - Agenda/cours : [run 42395055092](https://github.com/tomyrms/Drivy/actions/runs/42395055092).
 
-Les deux runs sont observés en cours au SHA intégré ; aucun résultat Apple
-n’est encore acquis. La réconciliation du texte intégral n’a pas encore
-de preuve UI ; la régression actuelle vérifie sa fonction et son raccord.
-Le worker B reprend la collecte de ses preuves sur ces runs, sans les dupliquer.
+Les deux runs ont terminé avec succès au SHA intégré : compilation et
+**146 tests dans 11 suites** pour GPS/replay, **118 tests dans 7 suites** pour
+agenda/cours. Résultats collectés par le worker et succès des jobs vérifiés
+par le coordinateur via GitHub. Les trois nouvelles régressions de replay et
+les onze de révocation sont réussies, sans test ignoré. Rapport `f1eb696a`
+intégré en `82e1d651` ; pas de relance. La réconciliation du texte intégral
+conserve sa limite : pas de test UI de `@State reading`, preuve par sa fonction
+et son raccord. Aucune recette physique, GPS ou VoiceOver déduite de ces tests.
 
 Un quatrième lot peut avancer sans conflit pendant cette qualification :
 C ne touche que les profils/portraits API, A possède le planning, D le web
@@ -127,3 +131,18 @@ preuves sur les vrais composants/hooks et contrôles navigateur manquants
 de #422/#430/#434. Réutilisation d'Edge et adaptation minimale du harnais
 autorisées pour exécuter les deux tests bloqués ; aucune nouvelle campagne
 complète demandée. Aucun succès global ni clôture d'issue déduit de la livraison.
+
+## Périmètres corrigés et suite après B
+
+La lecture des chemins sources corrige le classement initial : #437/#442/#443
+sont web et rejoignent D ; #446 est API et rejoint A, propriétaire de exams.ts.
+#445 rejoint les notifications G pour garder un seul auteur de SchoolPushCenter.
+Il reste bien trente anomalies réparties, sans doublon. Ces ajouts ne sont pas
+des retours correctifs et ne remettent aucun compteur existant à zéro.
+
+Le même worker Sonnet de B reprend E dans son checkout conservé, sur les trois
+problèmes iOS #427/#431/#438 : barrière après refus, rejeu exact après relance,
+remplacement atomique du coffre réel. Il possède temporairement les sources
+Swift et la sélection des tests ; les trois autres workers possèdent planning
+API, identité API et web. Les nouvelles preuves Apple seront demandées sur
+le candidat stable, sans rejouer les campagnes B pour de simples documents.
