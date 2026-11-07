@@ -22,9 +22,9 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
 | A · Planning API | #423, #424, #439, #444 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables | En cours, Sonnet |
-| B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | 9dc90566 livré ; deux défauts de revue à corriger, retour 1/2 ; Apple non exécuté |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | À réaliser |
-| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | Préparé pour Sonnet ; #434 concerne bien le web |
+| B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | 8d6c00fc relu et intégré en 3d213e7c ; CI Apple en cours |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Serveur préparé pour Sonnet, contrat client à coordonner |
+| D · Reprise web et finances | #422, #430, #432, #433, #434 | Saisies conservées, conflits explicites, historique financier accessible | En cours avec Sonnet, ctx_fd98c5c7c86d |
 | E · Intentions natives | #427, #431, #437, #438, #442, #443 | Reprise atomique sans verrou fantôme, doublon ni écrasement concurrent | À réaliser |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur | #429, #441, #448 | Identités distinctes et reprises par appareil, révocation cohérente | À réaliser |
@@ -91,3 +91,22 @@ disait à tort absents. Validation Apple prévue sur le delta stable.
 
 Le lot D peut démarrer en parallèle : son périmètre web est indépendant
 des fichiers API de A et Swift de B, ce qui justifie un troisième worker.
+
+## Intégration B et validation Apple
+
+Le delta `8d6c00fc` ferme les deux chemins retournés ; diff relu,
+`git diff --check` réussi. Fusion sans conflit en `3d213e7c46500e46a35abd4a49ec2125fe9d7cad`,
+identité de tous les blobs apps/scripts avec le worker vérifiée.
+Branche de travail poussée ; master et exploitation inchangés.
+
+- GPS/replay : [run 42395051487](https://github.com/tomyrms/Drivy/actions/runs/42395051487).
+- Agenda/cours : [run 42395055092](https://github.com/tomyrms/Drivy/actions/runs/42395055092).
+
+Les deux runs sont observés en cours au SHA intégré ; aucun résultat Apple
+n’est encore acquis. La réconciliation du texte intégral n’a pas encore
+de preuve UI ; la régression actuelle vérifie sa fonction et son raccord.
+Le worker B reprend la collecte de ses preuves sur ces runs, sans les dupliquer.
+
+Un quatrième lot peut avancer sans conflit pendant cette qualification :
+C ne touche que les profils/portraits API, A possède le planning, D le web
+et B le client Swift. Les migrations nouvelles restent propres à chaque lot.

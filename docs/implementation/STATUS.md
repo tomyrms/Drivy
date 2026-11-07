@@ -14,6 +14,15 @@ Après épuisement du quota OpenCode Go, le porteur a demandé Sonnet 5.5 pour
 les tâches restantes. Les deux lots initiaux sont repris sur les mêmes tâches
 et branches avec Claude Sonnet 5.5 ; aucun code n’avait encore été modifié.
 
+Lot confidentialité #425/#426 : `9dc90566` puis correction de revue `8d6c00fc`,
+intégrés sans conflit en `3d213e7c` sur la branche de travail publiée.
+Deux contrôles Apple ciblés sont **en cours** : GPS/replay
+[42395051487](https://github.com/tomyrms/Drivy/actions/runs/42395051487) et
+agenda/cours [42395055092](https://github.com/tomyrms/Drivy/actions/runs/42395055092).
+Aucun résultat Swift/UI ni fermeture d’issue revendiqué avant leurs résultats.
+Les lots planning API et web restent en réalisation ; le lot profils/portraits
+serveur est préparé en parallèle, avec raccord client distinct.
+
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 
 - **Intégration qualifiée sous Linux** : candidat `7dc77d30f1614d76dd31e4efde935af68d7acb7b`, [run 42111093690](https://github.com/tomyrms/Drivy/actions/runs/42111093690), tentative 1, success, watcher unique code 0. API PostgreSQL réel **1060/1060**, dont dix tests restauration/rejeu et SIGTERM du worker cours ; web **890 réussis + un échec attendu préexistant**, dont les deux cas pending-recovery ; typages, builds et contrats verts. Le résumé web sanitizé compte l'échec attendu parmi ses 891 assertions acceptées ; le journal conserve la distinction. Preuves locales : `artifacts/qualification-restes-7dc77d30/RAPPORT.md`.
