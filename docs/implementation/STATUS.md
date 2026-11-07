@@ -65,6 +65,13 @@ réussis, deux échecs SMTP, un ignoré ; suite non verte malgré le code zéro 
 pipeline. Choix de reprise demandé au porteur (attendre Sonnet ou autoriser
 Codex GPT-6-Astra), sans changement silencieux de modèle.
 
+Le retour correctif iOS E est également interrompu par ce quota Claude.
+Les commits `7a4d70b4` et `823f4410` ainsi que deux fichiers partiellement
+modifiés sont conservés dans le worktree du worker ; aucun nouveau résultat
+Swift, aucune intégration de ce lot. Réconciliation, abandon durable et gate
+de création d'examen restent à terminer. La même décision de reprise est
+attendue, sans relance ni remise à zéro des budgets de correction.
+
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 
 - **Intégration qualifiée sous Linux** : candidat `7dc77d30f1614d76dd31e4efde935af68d7acb7b`, [run 42111093690](https://github.com/tomyrms/Drivy/actions/runs/42111093690), tentative 1, success, watcher unique code 0. API PostgreSQL réel **1060/1060**, dont dix tests restauration/rejeu et SIGTERM du worker cours ; web **890 réussis + un échec attendu préexistant**, dont les deux cas pending-recovery ; typages, builds et contrats verts. Le résumé web sanitizé compte l'échec attendu parmi ses 891 assertions acceptées ; le journal conserve la distinction. Preuves locales : `artifacts/qualification-restes-7dc77d30/RAPPORT.md`.

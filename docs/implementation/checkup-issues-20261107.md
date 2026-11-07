@@ -25,7 +25,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Interrompu par quota Claude ; sept fichiers conservés, non committés/non intégrés ; choix de reprise demandé |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments et raccords A en cours, ctx_44befd0463cc |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 7a4d70b4 relu, non compilé/non intégré ; retour 1/2 #431/#438, ctx_b8241b8cfecb |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Retour 1/2 interrompu par quota Claude ; 7a4d70b4 et 823f4410 conservés, deux fichiers partiels non committés ; Swift non compilé/non intégré |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
@@ -252,3 +252,20 @@ deux échecs g1c SMTP, un ignoré**. Le pipeline affiche un code zéro malgré c
 Le futur worker doit exploiter ces résultats, achever revue/rapport et requalifier
 les tests affectés avec Mailpit synthétique avant livraison ; ne pas dupliquer
 une campagne globale sans besoin établi.
+
+## Interruption du retour E par le même quota
+
+Le dispatch `ctx_b8241b8cfecb` (tâche `task_66f6273f991f`) signale à son tour
+la limite Claude, même réinitialisation annoncée à 22 h 50 Europe/Zurich.
+Le choix de reprise déjà demandé couvre aussi ce lot ; aucune nouvelle
+demande ni bascule de modèle, aucun redémarrage effectué.
+
+Le worktree `audit-confidentialite-20261107` conserve HEAD `823f4410` et
+deux modifications non committées : `SchoolCommandOutbox.swift` et
+`SchoolCourseIntentStore.swift`. Le delta ajoute un refus de substitution
+si l'ancienne intention manque et que la nouvelle exacte n'existe pas déjà.
+Ce n'est pas une livraison : aucun nouveau test ni compilation Swift observé.
+La réconciliation explicite, l'abandon durable, l'oracle de rejeu et le raccord
+du bouton Prévoir restent à terminer, puis à qualifier sur Apple.
+Les compteurs restent à un retour sur deux pour #431/#438 et pour le raccord
+#444 ; l'interruption de fournisseur n'est pas un nouvel échec produit.
