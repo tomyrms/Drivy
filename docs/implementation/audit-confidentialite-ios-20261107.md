@@ -46,13 +46,18 @@ Base : `2a801eaf`. Branche `tomyrms/audit-confidentialite-20261107`. Aucun backe
 - Tests : `DrivyTests/SchoolCaptureReplayTests.swift` (3 nouveaux, 1 assertion adaptée : `replayReads == pagesRead + 1`), `DrivyTests/SchoolCourseAccessRevocationTests.swift` (nouveau, 11), `DrivyTests/SchoolCourseSheetQueueTests.swift` (serveur synthétique étendu).
 - `scripts/ios/test-selection.sh` et `test_test_selection.py` : `unit_test_scope=agenda` reçoit `SchoolCourseAccessRevocationTests`, `SchoolCourseSheetQueueTests`, `SchoolCourseIntentPersistenceTests` (aucun changement de workflow). `gps` couvre déjà `SchoolCaptureReplayTests`.
 
-## À lancer sur le runner Apple (NON EXÉCUTÉ)
+## Qualification sur runner Apple (RÉUSSIE, SHA intégré 3d213e7c)
 
-- `unit_only=true`, `unit_test_scope=gps` : `SchoolCaptureReplayTests` — `reopeningRereadsObservationsWhileKeepingUnchangedMeasurements`, `observationRevalidationRefusedPurgesTheCachedReplayButAnOutageKeepsIt`, `lateObservationResponseCannotReviveAnInvalidatedReplay`, `reopeningAnUnchangedReplayKeepsItsPagesAndOnlyRereadsItsVersion` (adapté), puis le reste de la suite.
-- `unit_only=true`, `unit_test_scope=agenda` : `SchoolCourseAccessRevocationTests` (9), `SchoolCourseSheetQueueTests`, `SchoolCourseIntentPersistenceTests`, `SchoolCourseClientTests`.
+Runs « Refonte · iOS » lancés par le coordinateur sur `3d213e7c46500e46a35abd4a49ec2125fe9d7cad` (inclut le delta `8d6c00fc`), `unit_only=true`, Xcode 26.6, simulateur iOS. Aucun artefact lu ne contient de secret, jeton ni position ; seuls les journaux de tests ont été consultés. Pas de relance.
+
+- **gps, run 42395051487 : succès.** Job « Tests métier iPhone · gps ». Swift Testing : **146 tests dans 11 suites, tous réussis**. `SchoolCaptureReplayTests` réussie, dont `reopeningRereadsObservationsWhileKeepingUnchangedMeasurements`, `observationRevalidationRefusedPurgesTheCachedReplayButAnOutageKeepsIt`, `lateObservationResponseCannotReviveAnInvalidatedReplay` et `reopeningAnUnchangedReplayKeepsItsPagesAndOnlyRereadsItsVersion` (assertion adaptée).
+- **agenda, run 42395055092 : succès.** Job « Tests métier iPhone · agenda ». **118 tests dans 7 suites, tous réussis** : `SchoolCourseAccessRevocationTests` (11 tests, dont les deux régressions du sélecteur), `SchoolCourseSheetQueueTests`, `SchoolCourseIntentPersistenceTests`, `SchoolCourseClientTests`, `SchoolAgendaCoursesTests`, `SchoolAgendaMonthTests`, `SchoolVisualTransportTests`.
+- Les deux builds compilent les nouveaux tests ; aucun test masqué ni ignoré (« Executed 0 tests » de la ligne XCTest correspond à la cible XCTest vide, les tests sont Swift Testing).
+
+**Limites restantes.** Le comportement de `@State reading` dans `SchoolCaptureReplayView` n'a pas de test d'interface (preuve sur `refreshed(_:)` seulement) ; aucune capture ni recette native de la révocation de cours ; aucun essai physique, VoiceOver ni GPS. Coût accepté de #425 : une relecture de pages à chaque réouverture.
 
 ## Contrôles exécutés ici (Windows)
 
 - `python -m unittest scripts/ios/test_test_selection.py` : 25 tests, OK.
-- Swift : **NON COMPILÉ, NON EXÉCUTÉ** (pas de Xcode). Aucune preuve physique ni simulateur.
+- Swift : non compilé sous Windows (pas de Xcode) ; compilé et exécuté sur le runner Apple, voir la section ci-dessus.
 - Impeccable et Uncodixfy : présents dans `~/.codex/skills` (correction du rapport initial) ; le seul delta UI est une réconciliation d'état sans effet visuel.
