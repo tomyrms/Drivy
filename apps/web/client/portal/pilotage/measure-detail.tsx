@@ -9,7 +9,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/
 import { Tabs, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { ReadFeedback } from '../components/feedback';
 import { coverageBadge, PilotageSection } from './components';
-import { expectedFromCard, exportErrorMessage, lineStatus, lineTitle, measureDomain, measureParts, shownAmount, totalText } from './detail-model';
+import { defaultPart, expectedFromCard, exportErrorMessage, lineStatus, lineTitle, measureDomain, measureParts, shownAmount, totalText } from './detail-model';
 import { exportMeasure, readDetails, type DetailLineRecord, type DetailRequest } from './details-api';
 import { describeReason, formatMeasure } from './measure-format';
 import { MetricsView, ScopeLine } from './metrics-view';
@@ -25,13 +25,18 @@ export function MeasureDetail({ measure, part, period, filters, scopeLabel, canE
 }) {
   // Relire remonte les deux lectures : la carte et ses lignes repartent d'un même instant.
   const [reread, setReread] = useState(0);
+  const { schoolId } = useConsole();
   return <div className="pilotage-detail">
     <Button variant="ghost" size="sm" className="pilotage-back" onClick={onBack} autoFocus><ArrowLeft data-icon="inline-start" aria-hidden="true" />Retour aux chiffres</Button>
     <MetricsView key={reread} label="Lecture du détail" request={{ domain: measureDomain(measure), from: period.from, toExclusive: period.toExclusive, ...filters }}>
       {(answer, definitions) => {
         const card = answer.measures[measure], definition = definitions.get(measure);
         if (!card || !definition) return <Alert><AlertTitle>Cette mesure n’est pas disponible</AlertTitle><AlertDescription>Elle n’existe pas pour cette portée ou vos accès ne la montrent pas.</AlertDescription></Alert>;
-        return <DetailBody measure={measure} part={part} onPart={onPart} card={card} definition={definition} answer={answer} period={period} filters={filters} scopeLabel={scopeLabel}
+        // Les pages chargées, le curseur et l'export appartiennent à la portée complète (partie, période, filtres, école) : en changer remonte le détail,
+        // et une réponse tardive d'une portée quittée ne peut plus rien écrire dans la suivante (#432).
+        const shownPart = measureParts[measure] ? part ?? defaultPart(measure, card) : undefined;
+        const scopeKey = [schoolId, measure, shownPart ?? '', period.from, period.toExclusive, filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');
+        return <DetailBody key={scopeKey} measure={measure} part={part} onPart={onPart} card={card} definition={definition} answer={answer} period={period} filters={filters} scopeLabel={scopeLabel}
           canExport={canExport} onReread={() => setReread(value => value + 1)} />;
       }}
     </MetricsView>
@@ -44,7 +49,7 @@ function DetailBody({ measure, part, onPart, card, definition, answer, period, f
 }) {
   const { schoolId, school, csrf, refreshCsrf, login, navigate } = useConsole();
   // Une mesure en deux listes se lit par partie (F06) ; le chiffre de la carte les additionne, il ne peut donc pas servir de valeur attendue pour une seule.
-  const parts = measureParts[measure], shownPart = parts ? part ?? parts[0]?.part : undefined;
+  const parts = measureParts[measure], shownPart = parts ? part ?? defaultPart(measure, card) : undefined;
   const request: DetailRequest = { measure, part: shownPart, from: period.from, toExclusive: period.toExclusive, ...filters };
   const expected = parts ? {} : expectedFromCard(card);
   const scope = [schoolId, measure, shownPart ?? '', period.from, period.toExclusive, filters.instructor ?? '', filters.category ?? '', filters.product ?? ''].join('/');

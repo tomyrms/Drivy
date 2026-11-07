@@ -5,6 +5,7 @@ import { courseErrorMessage, emptyForm, emptySession, formFromSeries, hasProblem
 import { useCommandRunner, useConsole, useUnsavedChanges } from '../../console/context';
 import { confirmedSeries } from './course-catalogue';
 import { formSignature } from './course-presentation';
+import { rebaseCourseDraft, type CourseConflict } from './course-rebase';
 
 /** One composition at a time: the series, a single session, or the review before publication. */
 export type DraftStage = { kind: 'course' } | { kind: 'session'; key: string } | { kind: 'review' };
@@ -17,12 +18,29 @@ export interface Refusal { code: string; message: string }
 export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCatalogue, done: (series: CourseSeries | null, message: string) => void) {
   const { schoolId, school, membership } = useConsole();
   const timeZone = school.timeZone;
+  // `current` est la version sur laquelle le brouillon repose : elle seule part dans If-Match. Une relecture plus récente ne
+  // l'avance que si la saisie est propre, ou fusionnée sans conflit ; sinon elle attend le choix de la personne (#422).
   const [current, setCurrent] = useState(series);
-  // A re-read after a version conflict supplies the version to send next; the typed draft is never replaced.
-  useEffect(() => { if (series && (!current || series.version > current.version)) setCurrent(series); }, [series]);
   const initial = useMemo(() => series ? formFromSeries(series, timeZone)
     : emptyForm(catalogue, catalogue.instructors.some(item => item.membershipId === membership.membershipId) ? membership.membershipId : ''), []);
   const [form, setForm] = useState<SeriesForm>(initial);
+  const [concurrent, setConcurrent] = useState<{ series: CourseSeries; conflict: CourseConflict } | null>(null);
+  useEffect(() => {
+    if (!series) return;
+    if (!current) { setCurrent(series); return; }
+    if (series.version <= current.version) return;
+    const base = formFromSeries(current, timeZone), latest = formFromSeries(series, timeZone);
+    if (formSignature(form) === formSignature(base)) { setForm(latest); setCurrent(series); setConcurrent(null); return; }
+    const conflict = rebaseCourseDraft(base, latest, form);
+    if (conflict.fields.length === 0) { setForm(conflict.merged); setCurrent(series); setConcurrent(null); return; }
+    setConcurrent({ series, conflict });
+  }, [series]);
+  /** Choix explicite : garder la saisie ou prendre la valeur de l'école sur les champs changés des deux côtés. Les autres champs sont déjà fusionnés. */
+  const resolveConcurrent = (keep: 'mine' | 'theirs') => {
+    if (!concurrent) return;
+    setForm(keep === 'mine' ? concurrent.conflict.merged : concurrent.conflict.theirs);
+    setCurrent(concurrent.series); setConcurrent(null); setRefusal(null);
+  };
   const [stage, setStage] = useState<DraftStage>({ kind: 'course' });
   const [touched, setTouched] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
@@ -34,7 +52,7 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   const pendingKind = runner.pending?.meta.kind;
   const sent = pendingKind === 'createCourseSeries' || pendingKind === 'updateCourseSeries' || pendingKind === 'publishCourseSeries';
   const releaseGuard = useUnsavedChanges(dirty && !sent);
-  const locked = runner.busy || Boolean(runner.pending);
+  const locked = runner.busy || Boolean(runner.pending) || concurrent !== null;
   const problems = validate(form, timeZone);
   const shown = touched ? problems : { fields: {}, sessions: {} };
   const overview = preview(form, timeZone);
@@ -65,7 +83,7 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   async function save(): Promise<CourseSeries | null | undefined> {
     setTouched(true);
     const body = seriesBody(form, timeZone);
-    if (!body || locked) return undefined;
+    if (!body || locked || concurrent) return undefined;
     setRefusal(null);
     const result = await runner.run(createCommand(current
       ? { schoolId, kind: 'updateCourseSeries', path: `course-series/${current.id}`, ifMatch: current.version, resourceId: current.id, resourceVersion: current.version, body }
@@ -89,7 +107,7 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   /** Publication is explicit and follows a save when the draft changed: the school publishes the stored version, never the screen. */
   const publish = () => once(async () => {
     setTouched(true);
-    if (hasProblems(problems) || locked) return;
+    if (hasProblems(problems) || locked || concurrent) return;
     let target = current;
     if (!target || dirty) {
       const result = await save();
@@ -106,7 +124,7 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   }, undefined);
 
   const review = () => { setTouched(true); if (hasProblems(problems)) { setStage({ kind: 'course' }); return false; } setStage({ kind: 'review' }); return true; };
-  return { form, set, setSession, addSession, removeSession, stage, setStage, touched, shown, problems, overview, dirty, locked, runner, refusal, setRefusal, current,
+  return { form, set, setSession, addSession, removeSession, stage, setStage, touched, shown, problems, overview, dirty, locked, runner, refusal, setRefusal, current, concurrent, resolveConcurrent,
     types, addType: (type: CourseType) => setAddedTypes(previous => [...previous, type]), instructorOptions, responsibleOptions, saveDraft, publish, review, releaseGuard, timeZone };
 }
 export type CourseDraft = ReturnType<typeof useCourseDraft>;

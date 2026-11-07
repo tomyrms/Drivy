@@ -37,7 +37,7 @@ export function CourseSheet({ series, catalogue, occurrenceId, notice, onClose, 
   const done = (next: CourseSeries | null, message: string) => { setDialog(null); setRescheduling(false); onChanged(next, message); };
 
   // Participants are for people who run courses; the school still decides each task from the rights it returns with the sheet.
-  const canOpenParticipants = (series.status === 'PUBLISHED' || series.status === 'CLOSED') && (membership.roles.includes('ADMIN') || membership.roles.includes('INSTRUCTOR'));
+  const canOpenParticipants = (series.status === 'PUBLISHED' || series.status === 'CLOSED' || series.status === 'CANCELLED') && (membership.roles.includes('ADMIN') || membership.roles.includes('INSTRUCTOR'));
   if (participants) return <ParticipantsView key={series.id} series={series} task={participants.task} occurrenceId={participants.occurrenceId} onBack={() => setParticipants(null)} />;
   if (rescheduling && catalogue) return <CourseReschedule series={series} catalogue={catalogue} onBack={() => setRescheduling(false)} onChanged={done} onReread={onReread} />;
   const language = languageLabel(series.teachingLanguage);

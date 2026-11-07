@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createCommand, type SchoolCommand } from '../../command-core';
 import { refusalOutcome } from '../../command-lane';
 import { useCommandSnapshot } from '../../command-store';
 import type { Availability, Closure } from '../../school-api';
 import { useCommandLane, type Outcome } from '../../console/context';
+import { useJournal } from '../../console/session-journal';
 import { absenceBody, REMOVAL_REASON, ruleBody, type AbsenceDraft, type RuleDraft } from './schedule-model';
 import { projectAbsences, projectRules, visibleIntentions, type ScheduleIntention } from './schedule-projection';
 import type { ScheduleState } from './use-schedule';
@@ -14,6 +15,7 @@ export interface ScheduleRefusal { readonly intention: ScheduleIntention; readon
 
 /** Memory only, in the console's drafts: renewed with the account, school, membership and access epoch; never written to browser storage. */
 const INTENTIONS_KEY = 'schedule/intentions';
+const REFUSALS_KEY = 'schedule/refusals';
 export const ruleTag = (ruleId: string | null) => `rule:${ruleId ?? 'new'}`;
 export const ABSENCE_TAG = 'absence:new';
 export const removalTag = (id: string) => `remove:${id}`;
@@ -27,18 +29,13 @@ const BLOCKED = 'Une demande sur ces horaires attend sa confirmation (voir en ha
  * (the school refuses it: EXISTING_BOOKINGS).
  */
 export function useScheduleCommands(state: ScheduleState) {
-  const { schoolId, school, drafts } = state.context;
+  const { schoolId, school } = state.context;
   const { entries } = useCommandSnapshot();
   const [removing, setRemoving] = useState<Removal | null>(null);
   const [removalOutcome, setRemovalOutcome] = useState<NonNullable<Outcome> | null>(null);
-  const [refusals, setRefusals] = useState<ScheduleRefusal[]>([]);
-  const stored = useRef<ScheduleIntention[]>((drafts?.get(INTENTIONS_KEY) as ScheduleIntention[] | undefined) ?? []);
-  const [intentionList, setIntentionList] = useState<ScheduleIntention[]>(stored.current);
-  const change = (next: (list: ScheduleIntention[]) => ScheduleIntention[]) => {
-    stored.current = next(stored.current);
-    drafts?.set(INTENTIONS_KEY, stored.current);
-    setIntentionList(stored.current);
-  };
+  // Intentions et refus partagent la durée de vie du journal de session : une réponse tardive y écrit même page quittée (#430).
+  const [refusals, setRefusals] = useJournal<ScheduleRefusal>(REFUSALS_KEY);
+  const [intentionList, change] = useJournal<ScheduleIntention>(INTENTIONS_KEY);
   const settle = (operationId: string) => change(list => list.map(item => item.operationId === operationId && item.settledAt === undefined ? { ...item, settledAt: Date.now() } : item));
   const lane = useCommandLane(intent => settle(intent.operationId));
 

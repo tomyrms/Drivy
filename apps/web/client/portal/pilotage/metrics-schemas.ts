@@ -10,7 +10,9 @@ const coverage = z.object({
   status: z.enum(['COMPLETE', 'PARTIAL', 'UNAVAILABLE', 'NOT_APPLICABLE']),
   reasons: z.array(z.object({ code: z.string().max(60), count: z.number().int().nonnegative().optional() })).max(20),
 });
-const measure = z.object({ value: z.number().int().nullable(), unit, coverage, lineCount: z.number().int().nonnegative().optional() });
+/** Parts contractuelles d'une mesure (F06 : saisies annulées, corrections postérieures et leur montant) : conservées, jamais déduites du montant principal (#433). */
+const parts = z.record(z.string().max(60), z.number().int().nullable());
+const measure = z.object({ value: z.number().int().nullable(), unit, coverage, lineCount: z.number().int().nonnegative().optional(), parts: parts.optional() });
 const comparisonValue = z.object({
   current: z.number().int().nullable(), base: z.number().int().nullable(), delta: z.number().int().nullable(),
   percentTenths: z.number().int().nullable(), percentReason: z.string().nullable(),

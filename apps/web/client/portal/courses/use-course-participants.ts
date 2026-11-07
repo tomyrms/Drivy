@@ -5,6 +5,7 @@ import { refusalOutcome, type LaneResult } from '../../command-lane';
 import { useCommandSnapshot } from '../../command-store';
 import { attendanceBody, attendanceCell, courseErrorMessage, courseRosterSchema, courseSheetSchema, type AttendanceStatus, type CourseSeries, type CourseSheetRow } from '../../console/course-model';
 import { useCommandLane, useConsole, useLoad, type Outcome } from '../../console/context';
+import { useJournal } from '../../console/session-journal';
 import { RequestFailure } from '../../protocol';
 import { readSchool } from '../../school-api';
 import { participantScope, projectParticipants, resumable, visibleIntentions, type Mark, type OverlaidRow, type ParticipantsIntention, type SheetOverlay } from './participants-projection';
@@ -43,21 +44,16 @@ const EMPTY_FOLLOWED: ReadonlySet<string> = new Set();
  * request, the row shows « À confirmer », and nothing is confirmed before the school's answer or its receipt.
  */
 export function useCourseParticipants(series: CourseSeries) {
-  const { schoolId, me, membership, drafts } = useConsole();
+  const { schoolId, me, membership } = useConsole();
   const scope = `${schoolId}/${me.personId}/${membership.membershipId}/${membership.accessEpoch}/${series.id}`;
   const { entries, revision } = useCommandSnapshot();
-  const [refusals, setRefusals] = useState<ParticipantsRefusal[]>([]);
+  // Intentions et refus partagent la durée de vie du journal de session : une réponse tardive y écrit même page quittée (#430).
+  const [refusals, setRefusals] = useJournal<ParticipantsRefusal>(`course-participants/${series.id}/refusals`);
   const [overlay, setOverlay] = useState<{ scope: string; rows: Map<string, OverlaidRow> }>({ scope, rows: new Map() });
   const writeGeneration = useRef(0);
   // Memory only, in the console's drafts: renewed with the account, school, membership and access epoch; never written to browser storage.
   const draftsKey = `course-participants/${series.id}/intentions`;
-  const stored = useRef<ParticipantsIntention[]>((drafts?.get(draftsKey) as ParticipantsIntention[] | undefined) ?? []);
-  const [intentionList, setIntentionList] = useState<ParticipantsIntention[]>(stored.current);
-  const change = (next: (list: ParticipantsIntention[]) => ParticipantsIntention[]) => {
-    stored.current = next(stored.current);
-    drafts?.set(draftsKey, stored.current);
-    setIntentionList(stored.current);
-  };
+  const [intentionList, change] = useJournal<ParticipantsIntention>(draftsKey);
   const lane = useCommandLane(intent => {
     change(list => list.map(item => item.operationId === intent.operationId && item.settledAt === undefined ? { ...item, settledAt: Date.now() } : item));
     // A confirmation is news for a few seconds, not a permanent line under the person.

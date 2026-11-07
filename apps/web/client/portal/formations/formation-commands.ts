@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { createCommand } from '../../command-core';
 import { refusalOutcome } from '../../command-lane';
 import { useCommandSnapshot } from '../../command-store';
 import { useCommandLane, useConsole } from '../../console/context';
+import { useJournal } from '../../console/session-journal';
 import type { Programme } from '../../formation-api';
 import { changedCodes, unchangedCodes } from './catalogue-command';
 import {
@@ -29,19 +30,7 @@ export interface ProgrammeSave<D> {
 export type { ProgrammeRefusal } from './formation-projection';
 
 const INTENTIONS_KEY = 'formations/intentions';
-
-/** Liste d'intentions gardée en mémoire, renouvelée avec la portée de la console. */
-function useMemoryList<T>(key: string) {
-  const { drafts } = useConsole();
-  const stored = useRef<T[]>((drafts?.get(key) as T[] | undefined) ?? []);
-  const [list, setList] = useState<T[]>(stored.current);
-  const change = (next: (items: readonly T[]) => T[]) => {
-    stored.current = next(stored.current);
-    drafts?.set(key, stored.current);
-    setList(stored.current);
-  };
-  return [list, change] as const;
-}
+const REFUSALS_KEY = 'formations/refusals';
 
 /** Demandes de cette école encore envoyées ou suivies par le magasin, par opération. */
 function useStorePhases(schoolId: string) {
@@ -63,8 +52,9 @@ function useStorePhases(schoolId: string) {
  */
 export function useProgrammeLane(programmes: readonly Programme[] | undefined, reload?: () => void) {
   const { schoolId } = useConsole();
-  const [intentions, change] = useMemoryList<FormationIntention>(INTENTIONS_KEY);
-  const [refusals, setRefusals] = useState<ProgrammeRefusal[]>([]);
+  const [intentions, change] = useJournal<FormationIntention>(INTENTIONS_KEY);
+  // Le refus vit autant que l'intention : dans le journal de session, il survit à la fermeture de la page (#430).
+  const [refusals, setRefusals] = useJournal<ProgrammeRefusal>(REFUSALS_KEY);
   const { sending, followed } = useStorePhases(schoolId);
   // Une demande confirmée garde ses valeurs sans marque jusqu'à la lecture suivante : l'école reste la seule source.
   const read = useRef<readonly Programme[] | undefined>(undefined);
