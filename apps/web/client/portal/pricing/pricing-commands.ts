@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { createCommand } from '../../command-core';
 import { refusalOutcome } from '../../command-lane';
 import { useCommandSnapshot } from '../../command-store';
 import { useCommandLane, useConsole, type Outcome } from '../../console/context';
+import { useJournal } from '../../console/session-journal';
 import type { TariffDraft } from '../../console/formation-model';
 import type { CatalogueReference, Tariff } from '../../formation-api';
 import { changedCodes, createdId, unchangedCodes } from '../formations/catalogue-command';
@@ -39,19 +40,8 @@ export interface TermsRefusal { readonly intention: TermsIntention; readonly out
 
 const TARIFF_KEY = 'pricing/intentions';
 const TERMS_KEY = 'pricing/terms';
-
-/** Liste d'intentions gardée en mémoire, renouvelée avec la portée de la console. */
-function useMemoryList<T>(key: string) {
-  const { drafts } = useConsole();
-  const stored = useRef<T[]>((drafts?.get(key) as T[] | undefined) ?? []);
-  const [list, setList] = useState<T[]>(stored.current);
-  const change = (next: (items: readonly T[]) => T[]) => {
-    stored.current = next(stored.current);
-    drafts?.set(key, stored.current);
-    setList(stored.current);
-  };
-  return [list, change] as const;
-}
+const REFUSALS_KEY = 'pricing/refusals';
+const TERMS_REFUSALS_KEY = 'pricing/terms-refusals';
 
 /** Demandes de cette école encore envoyées ou suivies par le magasin, par opération. */
 function useStorePhases(schoolId: string) {
@@ -74,8 +64,9 @@ function useStorePhases(schoolId: string) {
  */
 export function useTariffLane(tariffs: readonly Tariff[], onCreated?: (versionId: string) => void, reload?: () => void) {
   const { schoolId } = useConsole();
-  const [intentions, change] = useMemoryList<TariffIntention>(TARIFF_KEY);
-  const [refusals, setRefusals] = useState<TariffRefusal[]>([]);
+  const [intentions, change] = useJournal<TariffIntention>(TARIFF_KEY);
+  // Le refus vit autant que l'intention : dans le journal de session, il survit à la fermeture de la page (#430).
+  const [refusals, setRefusals] = useJournal<TariffRefusal>(REFUSALS_KEY);
   const { sending, followed } = useStorePhases(schoolId);
   const created = useRef(onCreated);
   created.current = onCreated;
@@ -137,8 +128,9 @@ export type TariffLane = ReturnType<typeof useTariffLane>;
 /** Révision des conditions communes : une intention par jeu de conditions, « Révision en cours » puis « À confirmer ». */
 export function useTermsLane(reference: Extract<CatalogueReference, { kind: 'TERMS' }>, reload?: () => void) {
   const { schoolId } = useConsole();
-  const [intentions, change] = useMemoryList<TermsIntention>(TERMS_KEY);
-  const [refusal, setRefusal] = useState<TermsRefusal | null>(null);
+  const [intentions, change] = useJournal<TermsIntention>(TERMS_KEY);
+  const [refusals, setRefusals] = useJournal<TermsRefusal>(`${TERMS_REFUSALS_KEY}/${reference.id}`);
+  const refusal = refusals.at(-1) ?? null;
   const { sending, followed } = useStorePhases(schoolId);
   const read = useRef(reference);
   useEffect(() => {
@@ -165,7 +157,7 @@ export function useTermsLane(reference: Extract<CatalogueReference, { kind: 'TER
       if (result.status === 'rejected') {
         change(list => list.filter(item => item.operationId !== intention.operationId));
         if (unchangedCodes.has(result.code)) { reload?.(); return; }
-        setRefusal({ intention, outcome: refusalOutcome(result) as NonNullable<Outcome> });
+        setRefusals(() => [{ intention, outcome: refusalOutcome(result) as NonNullable<Outcome> }]);
         if (changedCodes.has(result.code)) reload?.();
       }
     });
@@ -175,7 +167,7 @@ export function useTermsLane(reference: Extract<CatalogueReference, { kind: 'TER
   return {
     pending, refusal,
     blocked: () => lane.blocked({ kind: 'reviseSharedTerms', scope: termsScope(reference.id) }),
-    revise, dismiss: () => setRefusal(null),
+    revise, dismiss: () => setRefusals(() => []),
     outcomeFor: (tag: string) => lane.view(tag).outcome,
     clearOutcome: (tag?: string) => lane.clearOutcome(tag),
     confirmation: [...lane.outcomes.values()].filter(item => item.tone === 'success').at(-1) ?? null,

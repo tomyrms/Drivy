@@ -1,5 +1,5 @@
 import { formatMeasure, type MeasureUnit } from './measure-format';
-import type { MetricDomain } from './metrics-api';
+import type { MetricDomain, MetricMeasure } from './metrics-api';
 
 /** Règles pures du détail d'une mesure et de son export (#380). */
 export const measureDomain = (measure: string): MetricDomain => measure.startsWith('F') ? 'finance' : 'activity';
@@ -69,6 +69,25 @@ export const exportFileName = (measure: string, part: 'a' | 'b' | undefined, fro
 export const measureParts: Readonly<Record<string, readonly { part: 'a' | 'b'; label: string }[]>> = {
   F06: [{ part: 'a', label: 'Saisies annulées' }, { part: 'b', label: 'Corrections postérieures' }],
 };
+
+/** Les lignes d'une mesure s'ouvrent dès qu'elles existent : le montant principal peut être nul alors que des corrections de paiements plus anciens ont des lignes (#433). */
+export function hasDetailLines(measure: Pick<MetricMeasure, 'value' | 'lineCount'>): boolean {
+  return measure.lineCount !== undefined ? measure.lineCount > 0 : measure.value !== null && measure.value > 0;
+}
+
+/** Partie ouverte d'abord : celle qui contient des lignes quand l'autre est vide (F06 sans saisie annulée mais avec des corrections postérieures). */
+export function defaultPart(measure: string, card: Pick<MetricMeasure, 'parts'>): 'a' | 'b' | undefined {
+  const parts = measureParts[measure];
+  if (!parts) return undefined;
+  if (measure === 'F06' && card.parts?.voidedEntries === 0 && (card.parts.laterCorrections ?? 0) > 0) return 'b';
+  return parts[0]?.part;
+}
+
+/** Corrections de paiements plus anciens de F06, montrées à côté du montant principal quand il y en a. */
+export function laterCorrectionsCents(measure: string, card: Pick<MetricMeasure, 'parts'>): number | null {
+  const cents = measure === 'F06' ? card.parts?.laterCorrectionsCents : null;
+  return cents !== null && cents !== undefined && cents > 0 ? cents : null;
+}
 
 /** Messages courts des refus de l'export ; aucun n'invente un fichier. */
 export function exportErrorMessage(code: string): string {

@@ -1,7 +1,8 @@
 import { useEffect, type ReactNode } from 'react';
 import { addDays } from '../../agenda-model';
 import { MeasureList, MeasureRow, type MeasureRowProps } from './components';
-import type { MeasureComparison } from './measure-format';
+import { hasDetailLines, laterCorrectionsCents } from './detail-model';
+import { formatMeasure, type MeasureComparison } from './measure-format';
 import { useOptionalMetrics, type MetricDefinition, type MetricDomain, type MetricFilters, type MetricMeasure, type MetricsAnswer } from './metrics-api';
 import { formatSpan, type ResolvedPeriod } from './period-model';
 
@@ -58,9 +59,11 @@ export function MeasureGroups({ domain, groups, answer, definitions, period, tod
   const present = (id: string) => answer.measures[id] !== undefined;
   const row = (id: string, extra: Pick<MeasureRowProps, 'position' | 'note'> = {}) => {
     const change: MeasureComparison | undefined = toDate && !comparableToDate.has(id) ? undefined : comparison?.measures[id];
-    const measure = answer.measures[id]!, openable = onOpen !== undefined && definitions.get(id)?.details === true && measure.value !== null && measure.value > 0;
+    const measure = answer.measures[id]!, openable = onOpen !== undefined && definitions.get(id)?.details === true && hasDetailLines(measure);
+    const later = laterCorrectionsCents(id, measure);
+    const laterNote = later === null ? undefined : `+ ${formatMeasure(later, 'cents')} de corrections de paiements plus anciens`;
     return <MeasureRow key={id} measureId={id} label={labelOf(definitions, id)} measure={measure} definition={definitions.get(id)} comparison={change} comparisonLabel={label}
-      onOpen={openable ? () => onOpen(id) : undefined} {...extra} />;
+      onOpen={openable ? () => onOpen(id) : undefined} {...(laterNote ? { note: laterNote } : {})} {...extra} />;
   };
   const sections = groups.flatMap(group => {
     const ids = group.ids.filter(id => present(id) && (!group.onlyWhenOpen || isOpen(answer.measures[id]!)));

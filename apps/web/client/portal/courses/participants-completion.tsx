@@ -45,6 +45,7 @@ export function CompletionTab({ state, series, resume, onResumeDone }: { state: 
         : <ul className="participants-list">{rows.map(row => {
           const kind = eligibility(row, series.id);
           const completion = activeCompletion(row);
+          const canRevoke = sheet.rights.canValidate;
           const blocked = state.blockedFor(row.enrollmentId);
           const marks = state.marks.get(row.enrollmentId) ?? [];
           const text = marks.map(value => markLabels[value]).join(' · ');
@@ -58,6 +59,7 @@ export function CompletionTab({ state, series, resume, onResumeDone }: { state: 
               <FeedbackText feedback={state.feedback[feedbackKey('completion', row.enrollmentId)]} /></div>
             {kind === 'eligible' && <Button disabled={Boolean(blocked)} {...(text ? { 'aria-describedby': markId } : {})} aria-label={`Valider le cours pour ${row.learnerDisplayName || 'cet élève'}`} onClick={() => setValidating(row)}>Valider</Button>}
             {kind === 'validated' && completion && <Button variant="ghost" disabled={Boolean(blocked)} aria-label={`Retirer la validation de ${row.learnerDisplayName || 'cet élève'}`} onClick={() => setRevoking({ row, completionId: completion.id, reason: '' })}>Retirer</Button>}
+            {kind === 'cancelled' && completion && canRevoke && <Button variant="ghost" disabled={Boolean(blocked)} aria-label={`Retirer la validation de ${row.learnerDisplayName || 'cet élève'}`} onClick={() => setRevoking({ row, completionId: completion.id, reason: '' })}>Retirer</Button>}
             {kind === 'cancelled' && <Badge variant="outline">Annulée</Badge>}
           </li>;
         })}</ul>}

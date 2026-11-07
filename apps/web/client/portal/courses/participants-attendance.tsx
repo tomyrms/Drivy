@@ -4,7 +4,7 @@ import { Badge } from '../../components/ui/badge';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { Input } from '../../components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
-import { attendanceCell, attendanceLabels, attendanceStatuses, canMarkAttendance, occurrenceStarted, type AttendanceStatus, type CourseSheet, type CourseSheetRow } from '../../console/course-model';
+import { attendanceCell, attendanceLabels, attendanceStatuses, attendanceRows, canMarkAttendance, occurrenceStarted, type AttendanceStatus, type CourseSheet, type CourseSheetRow } from '../../console/course-model';
 import { useConsole } from '../../console/context';
 import { PortalSelect } from '../components/portal-select';
 import { ReadFeedback } from '../agenda/presentation';
@@ -28,7 +28,7 @@ export function AttendanceTab({ state, occurrenceId, onOccurrence, now }: { stat
   const occurrence = state.occurrences.find(item => item.id === occurrenceId) ?? state.occurrences[0];
   if (!occurrence) return <Empty className="participants-empty"><EmptyHeader><EmptyMedia variant="icon"><ClipboardCheck /></EmptyMedia><EmptyTitle>Aucune séance</EmptyTitle></EmptyHeader></Empty>;
   const started = occurrenceStarted(occurrence, now);
-  const people = sheet.rows.filter(row => row.status === 'ACTIVE');
+  const people = attendanceRows(sheet.rows, occurrence.id);
   const shown = filterByName(people, search);
   const summary = attendanceSummary(sheet.rows, occurrence.id);
   const options = state.occurrences.map(item => ({ value: item.id, label: `Séance ${item.position} · ${instantDayLabel(item.startsAt, timeZone)} · ${occurrenceTimes(item, timeZone)}` }));
@@ -51,7 +51,7 @@ export function AttendanceTab({ state, occurrenceId, onOccurrence, now }: { stat
         const texts = asked ? [`${markLabels.attendance} · ${attendanceLabels[asked]}`]
           : (state.marks.get(row.enrollmentId) ?? []).map(value => markLabels[value]);
         return <li key={row.enrollmentId} className="participants-call">
-          <div className="participants-main"><strong>{row.learnerDisplayName || 'Élève'}</strong>
+          <div className="participants-main"><strong>{row.learnerDisplayName || 'Élève'}</strong>{row.status !== 'ACTIVE' && <Badge variant="outline">Annulée</Badge>}
             <span className="participants-state" data-state={cell.status ?? 'unset'}>{cell.status ? attendanceLabels[cell.status] : 'Non renseigné'}</span>
             {texts.length > 0 && <MarkText id={markId} text={texts.join(' · ')} />}
             <FeedbackText feedback={state.feedback[feedbackKey('call', row.enrollmentId)]} /></div>

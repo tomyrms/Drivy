@@ -13,6 +13,7 @@ import { CommandFeedback } from '../agenda/presentation';
 import { useHeadingFocus } from '../agenda/use-heading-focus';
 import { civilDayLabel, isSessionRefusal, keptMessage, languageLabel, sessionCountLabel } from './course-presentation';
 import { CourseNotice } from './course-notice';
+import { courseFieldLabels } from './course-rebase';
 import { CourseTypeDialog } from './course-type-dialog';
 import { SessionEditor, SessionList } from './session-parts';
 import { useCourseDraft, type CourseDraft } from './use-course-draft';
@@ -27,6 +28,17 @@ function RefusalAlert({ draft, onReread }: { draft: CourseDraft; onReread: () =>
   const stale = refusal.code === 'VERSION_CONFLICT';
   return <Alert variant="destructive"><AlertTitle>{stale ? 'Modifié entre-temps' : 'Non enregistré'}</AlertTitle><AlertDescription>{keptMessage(refusal.message)}</AlertDescription>
     {stale && <div className="course-actions"><Button type="button" variant="outline" disabled={draft.locked} onClick={() => { draft.setRefusal(null); onReread(); }}>Relire, garder ma saisie</Button></div>}
+  </Alert>;
+}
+
+/** Un autre administrateur a changé les mêmes champs : la saisie reste, la version de départ n'avance que sur choix explicite (#422). */
+function ConcurrentAlert({ draft }: { draft: CourseDraft }) {
+  const { concurrent } = draft;
+  if (!concurrent) return null;
+  const labels = concurrent.conflict.fields.map(field => courseFieldLabels[field]).join(', ');
+  return <Alert variant="destructive"><AlertTitle>Modifié ailleurs</AlertTitle><AlertDescription>Déjà changé par un autre administrateur : {labels}. Choisissez la valeur à garder.</AlertDescription>
+    <div className="course-actions"><Button type="button" variant="outline" onClick={() => draft.resolveConcurrent('mine')}>Garder ma saisie</Button>
+      <Button type="button" variant="outline" onClick={() => draft.resolveConcurrent('theirs')}>Prendre la version de l’école</Button></div>
   </Alert>;
 }
 
@@ -53,6 +65,7 @@ export function CourseEditor({ series, catalogue, canManage, notice, onClose, on
   const sessionIssue = isSessionRefusal(refusal?.code);
   const instructors = draft.instructorOptions;
   const feedback = <><CommandFeedback outcome={runner.outcome?.needsLogin ? runner.outcome : null} blocked={runner.blockedReason} />
+    <ConcurrentAlert draft={draft} />
     {refusal && !sessionIssue && <RefusalAlert draft={draft} onReread={onReread} />}</>;
   const title = form.title.trim() || 'Nouveau cours collectif';
   const policyHours = catalogue.policy.selfCancelHours;

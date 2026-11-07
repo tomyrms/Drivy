@@ -16,7 +16,7 @@ import { absenceInstants, type AbsenceDraft, type RuleDraft } from './schedule-m
 interface Base { readonly tag: string; readonly operationId: string; readonly instructor: string; readonly settledAt?: number }
 export type ScheduleIntention =
   | (Base & { readonly kind: 'rule-create'; readonly draft: RuleDraft })
-  | (Base & { readonly kind: 'rule-update'; readonly ruleId: string; readonly draft: RuleDraft })
+  | (Base & { readonly kind: 'rule-update'; readonly ruleId: string; readonly draft: RuleDraft; readonly base?: Availability })
   | (Base & { readonly kind: 'rule-remove'; readonly ruleId: string })
   | (Base & { readonly kind: 'absence-create'; readonly draft: AbsenceDraft })
   | (Base & { readonly kind: 'absence-remove'; readonly closureId: string });
