@@ -10,6 +10,9 @@ iOS. Le [suivi des lots](checkup-issues-20261107.md) couvre les 39 issues, les t
 préexistants à réutiliser et les validations manquantes. À ce stade : inventaire et
 préparation uniquement, aucun nouveau résultat de tests ni clôture revendiqué.
 La modification locale préexistante de package-lock.json est préservée.
+Après épuisement du quota OpenCode Go, le porteur a demandé Sonnet 5.5 pour
+les tâches restantes. Les deux lots initiaux sont repris sur les mêmes tâches
+et branches avec Claude Sonnet 5.5 ; aucun code n’avait encore été modifié.
 
 ## 5 novembre 2026 — Compléments après le déploiement 1778ed7d
 

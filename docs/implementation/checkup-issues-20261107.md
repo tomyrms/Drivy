@@ -32,10 +32,20 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | À rapprocher des critères et commentaires actuels |
 
 Les lots A et B sont indépendants : deux workers isolés suffisent pour commencer.
-Logique/backend/tests autonomes : OpenCode sans surcharge de modèle, configuration
-hôte `opencode-go/deepseek-v4.1-flash` vérifiée (champ model seul).
-UI : Codex `gpt-6-astra`, effort high. Chaque worker conserve son modèle,
-son propriétaire et le budget de deux reprises par problème.
+Le routage initial était OpenCode Go pour A et Codex GPT-6-Astra pour B.
+Après l’erreur `Go usage limit exceeded`, le porteur a demandé explicitement
+Claude Sonnet 5.5 pour les tâches restantes. Le routage est donc remplacé par
+`--agent claude --model claude-sonnet-5-5 --effort medium`, pour le backend
+comme pour l’UI. Cette instruction utilisateur prime sur le routage du skill.
+Les mêmes tâches, branches et worktrees sont réutilisés ; aucun fichier produit
+n’avait encore été modifié. Le budget de reprises par problème reste inchangé ;
+l’échec de quota n’est pas un échec de correction produit.
+
+Run de cette session : `run_c89bc7c0cfbd`. Lot A : `task_c79eb56f8380`,
+premier dispatch `ctx_2805e5e51a0e` arrêté après quota. Lot B :
+`task_9be193226778`, premier dispatch `ctx_67dee16934c1` arrêté pour le
+changement de modèle demandé. Les deux arrêts sont confirmés par Orca
+(`state: stopped`, `processAction: closed_agent_terminal`).
 
 ## Travaux préexistants à réutiliser
 
