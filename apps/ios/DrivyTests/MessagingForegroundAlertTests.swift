@@ -21,9 +21,11 @@ final class MessagingForegroundAlertTests: XCTestCase {
             ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("m".utf8)), meta: meta)
     }
 
-    private func workspace(sequences: [Int], directory: AlertDirectory) -> MessagingWorkspace {
+    private func workspace(sequences: [Int], directory: AlertDirectory, loadFailure: MessagingFailure? = nil,
+                           onMessages: @escaping @Sendable () -> Void = {}) -> MessagingWorkspace {
         let box = AlertScopeBox(scope)
-        return MessagingWorkspace(scope: scope, service: AlertService(messages: sequences.map(message)), directory: directory,
+        let service = AlertService(messages: sequences.map(message), failure: loadFailure, onMessages: onMessages)
+        return MessagingWorkspace(scope: scope, service: service, directory: directory,
                                   notifications: AlertNotifications(),
                                   mutationLatency: MessagingMutationLatency(slow: .seconds(60), unconfirmed: .seconds(120)),
                                   currentScope: { box.value })
@@ -58,6 +60,16 @@ final class MessagingForegroundAlertTests: XCTestCase {
         XCTAssertNil(workspace.readStates[conversation]?.lastReadSequence)
     }
 
+    /// Chargement du fil échoué : aucune preuve d'affichage, aucune lecture inventée.
+    func testFailedLoadKeepsTheAlertAndSendsNoRead() async {
+        let directory = AlertDirectory()
+        let workspace = workspace(sequences: [5], directory: directory, loadFailure: .unavailable)
+        let absorbed = await workspace.absorbForegroundAlert(conversation, sequence: 5)
+        XCTAssertFalse(absorbed)
+        let reads = await directory.reads
+        XCTAssertTrue(reads.isEmpty)
+    }
+
     /// La séquence visée n'est pas disponible dans le fil lisible : aucune lecture n'est inventée.
     func testSequenceNotAvailableKeepsTheAlertAndSendsNoRead() async {
         let directory = AlertDirectory()
@@ -68,10 +80,45 @@ final class MessagingForegroundAlertTests: XCTestCase {
         XCTAssertTrue(reads.isEmpty)
     }
 
+    /// Les messages 4 et 6 sont affichés mais pas le 5 : un message plus récent ne prouve rien sur la cible.
+    func testTargetAbsentUnderAHigherSequenceKeepsTheAlertAndSendsNoRead() async {
+        let directory = AlertDirectory()
+        let workspace = workspace(sequences: [4, 6], directory: directory)
+        await workspace.loadMessages(conversation)
+        XCTAssertEqual(workspace.lastReadableSequence(conversation), 6)
+        let absorbed = await workspace.absorbForegroundAlert(conversation, sequence: 5)
+        XCTAssertFalse(absorbed)
+        let reads = await directory.reads
+        XCTAssertTrue(reads.isEmpty, "Aucun accusé pour une séquence absente du fil")
+        XCTAssertNil(workspace.readStates[conversation]?.lastReadSequence)
+    }
+
+    /// La présentation prend fin pendant le chargement : l'accusé n'est pas envoyé.
+    func testPresentationEndedDuringTheLoadSendsNoRead() async {
+        let directory = AlertDirectory()
+        let flag = AlertPresentation()
+        let workspace = workspace(sequences: [5], directory: directory, onMessages: { flag.end() })
+        let absorbed = await workspace.absorbForegroundAlert(conversation, sequence: 5, stillPresented: { flag.isPresented })
+        XCTAssertFalse(absorbed)
+        let reads = await directory.reads
+        XCTAssertTrue(reads.isEmpty)
+    }
+
+    /// La présentation a pris fin avant toute lecture : ni chargement ni accusé.
+    func testPresentationAlreadyEndedDoesNothing() async {
+        let directory = AlertDirectory()
+        let workspace = workspace(sequences: [5], directory: directory)
+        await workspace.loadMessages(conversation)
+        let absorbed = await workspace.absorbForegroundAlert(conversation, sequence: 5, stillPresented: { false })
+        XCTAssertFalse(absorbed)
+        let reads = await directory.reads
+        XCTAssertTrue(reads.isEmpty)
+    }
+
     // MARK: Décision du délégué
 
     func testAbsorbedOnlyWhenTheReadConfirmsTheTargetedSequence() async {
-        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { sequence in sequence == 5 }
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { sequence, _ in sequence == 5 }
         let confirmed = await MessagingActiveConversation.absorbs(info(sequence: 5))
         XCTAssertTrue(confirmed)
         let refused = await MessagingActiveConversation.absorbs(info(sequence: 6))
@@ -85,7 +132,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
     /// Fil au bas mais recouvert par une feuille : pas d'absorption, pas de lecture.
     func testCoveredThreadNeverAbsorbs() async {
         let asked = AlertCounter()
-        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true, covered: true) { _ in
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true, covered: true) { _, _ in
             await asked.bump(); return true
         }
         let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
@@ -98,7 +145,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
 
     /// Fil non affiché au bas (historique parcouru, app inactive) : ni lecture ni absorption.
     func testThreadNotAtBottomNeverAbsorbs() async {
-        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: false) { _ in true }
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: false) { _, _ in true }
         let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
         XCTAssertFalse(absorbed)
     }
@@ -106,7 +153,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
     /// Une feuille s'ouvre pendant la lecture : l'alerte est quand même présentée.
     func testThreadCoveredDuringTheReadKeepsTheAlert() async {
         let school = school, conversation = conversation
-        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _ in
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in
             MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true, covered: true)
             return true
         }
@@ -114,9 +161,39 @@ final class MessagingForegroundAlertTests: XCTestCase {
         XCTAssertFalse(absorbed)
     }
 
+    /// Départ puis retour du même fil pendant la lecture, indicateurs identiques : l'ancienne lecture ne vaut rien,
+    /// ni pour son accusé (`stillPresented` devient faux) ni pour la suppression.
+    func testLeavingAndReturningDuringTheReadKeepsTheAlert() async {
+        let school = school, conversation = conversation
+        let seen = AlertPresentation()
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, stillPresented in
+            MessagingActiveConversation.clear(conversation)
+            MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in true }
+            if !stillPresented() { seen.end() }
+            return true
+        }
+        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        XCTAssertFalse(absorbed)
+        XCTAssertFalse(seen.isPresented, "La lecture de l'ancienne présentation a vu qu'elle n'était plus la courante")
+    }
+
+    /// Remplacement du contexte par un enregistrement identique en apparence, sans départ : autre époque, alerte gardée.
+    func testReplacingTheContextWithAnIdenticalOneKeepsTheAlert() async {
+        let school = school, conversation = conversation
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in
+            MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in true }
+            return true
+        }
+        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        XCTAssertFalse(absorbed)
+        // La nouvelle présentation, elle, absorbe normalement.
+        let next = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        XCTAssertTrue(next)
+    }
+
     /// Aucune conversation enregistrée (écran quitté) : rien n'est absorbé.
     func testClearedConversationAbsorbsNothing() async {
-        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _ in true }
+        MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in true }
         MessagingActiveConversation.clear(conversation)
         let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
         XCTAssertFalse(absorbed)
@@ -134,20 +211,34 @@ private actor AlertCounter {
     func bump() { value += 1 }
 }
 
+/// Présentation du fil observable depuis un callback `@Sendable` : vraie jusqu'à `end()`.
+private final class AlertPresentation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var presented = true
+    var isPresented: Bool { lock.withLock { presented } }
+    func end() { lock.withLock { presented = false } }
+}
+
 @MainActor private final class AlertScopeBox: Sendable {
     var value: MessagingScope?
     init(_ value: MessagingScope?) { self.value = value }
 }
 
-/// Service dont le fil contient les messages donnés, dans l'ordre des séquences.
+/// Service dont le fil contient les messages donnés, dans l'ordre des séquences ; échec et crochet programmables.
 private actor AlertService: MessagingService {
     private let all: [MessagingWireMessage]
-    init(messages: [MessagingWireMessage]) { all = messages }
+    private let failure: MessagingFailure?
+    private let onMessages: @Sendable () -> Void
+    init(messages: [MessagingWireMessage], failure: MessagingFailure?, onMessages: @escaping @Sendable () -> Void) {
+        all = messages; self.failure = failure; self.onMessages = onMessages
+    }
     func conversations(scope: MessagingScope, cursor: String?) async throws -> MessagingPage<MessagingConversation> {
         MessagingPage(items: [], nextCursor: nil)
     }
     func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPage<MessagingWireMessage> {
-        MessagingPage(items: all, nextCursor: nil)
+        onMessages()
+        if let failure { throw failure }
+        return MessagingPage(items: all, nextCursor: nil)
     }
     func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement { throw MessagingFailure.unavailable }
 }

@@ -63,10 +63,99 @@ final class MessagingSendRecoveryTests: XCTestCase {
         await until { workspace.sendStatus(m1.clientMessageID) == .uncertain }
         workspace.scheduleSend(m2)
         await workspace.refreshVisible()
-        XCTAssertEqual(workspace.sendStatus(m1.clientMessageID), .uncertain)
+        // Les exécuteurs ne sont pas attendus par l'actualisation : on attend le second essai de M1, puis son verdict.
+        await until { await service.sent.count == 2 }
+        await until { workspace.sendStatus(m1.clientMessageID) == .uncertain }
         XCTAssertEqual(workspace.sendStatus(m2.clientMessageID), .queued)
         let sent = await service.sent
         XCTAssertEqual(sent, [m1.clientMessageID, m1.clientMessageID])
+    }
+
+    /// M1 retenu en vol (réponse en attente), M2 derrière lui, actualisations concurrentes, autre conversation libre :
+    /// un seul envoi de M1, jamais M2 avant l'accusé de M1, l'autre conversation part sans attendre.
+    func testHeldFirstMessageIsSentOnceAndTheSecondNeverOvertakes() async {
+        let m1 = pending("un"), m2 = pending("deux"), other = pending("autre", in: otherConversation)
+        let service = ScriptedSender(account: account, school: school, scripts: [m1.clientMessageID: [.suspend]])
+        let workspace = workspace(service)
+        workspace.scheduleSend(m1)
+        await until { await service.isSuspended(m1.clientMessageID) }
+        workspace.scheduleSend(m2)
+        workspace.scheduleSend(other)
+        await until { self.isAccepted(workspace, other) }
+
+        let refreshes = [Task { await workspace.refreshVisible() }, Task { await workspace.refreshVisible() }]
+        for refresh in refreshes { await refresh.value }
+        workspace.setNetworkAvailable(false)
+        workspace.setNetworkAvailable(true)
+        for _ in 0..<50 { await Task.yield() }
+
+        XCTAssertEqual(workspace.sendStatus(m1.clientMessageID), .sending, "M1 reste en vol, il n'est jamais renvoyé")
+        XCTAssertEqual(workspace.sendStatus(m2.clientMessageID), .queued, "M2 n'est jamais envoyé avant l'accusé de M1")
+        let beforeAck = await service.sent
+        XCTAssertEqual(beforeAck, [m1.clientMessageID, other.clientMessageID])
+
+        await service.release(m1.clientMessageID)
+        await until { self.isAccepted(workspace, m2) }
+        XCTAssertTrue(isAccepted(workspace, m1))
+        let order = await service.sent
+        XCTAssertEqual(order, [m1.clientMessageID, other.clientMessageID, m2.clientMessageID])
+    }
+
+    /// Un envoi retenu dans une conversation ne bloque pas la lecture d'une autre conversation.
+    func testHeldSendDoesNotBlockReadingAnotherConversation() async {
+        let m1 = pending("un")
+        let service = ScriptedSender(account: account, school: school, scripts: [m1.clientMessageID: [.suspend]])
+        let workspace = workspace(service)
+        workspace.scheduleSend(m1)
+        await until { await service.isSuspended(m1.clientMessageID) }
+
+        await workspace.refreshVisible(conversationID: otherConversation)   // reviendrait jamais si l'envoi retenu bloquait
+        let read = await service.messageRequests
+        XCTAssertTrue(read.contains(otherConversation))
+        XCTAssertEqual(workspace.sendStatus(m1.clientMessageID), .sending)
+        await service.release(m1.clientMessageID)
+        await until { self.isAccepted(workspace, m1) }
+    }
+
+    /// Le journal garde un ancien M1 inconnu de la mémoire pendant que M2 est mis en file au milieu de la restauration :
+    /// l'ordre durable est conservé, M1 part avant M2, une seule fois chacun.
+    func testDurableOrderSurvivesAnEnqueueDuringTheRestoration() async {
+        let m1 = pending("un"), m2 = pending("deux")
+        let store = RecoveryStore()
+        try? await store.put(m1, scope: scope)
+        try? await store.put(m2, scope: scope)
+        await store.holdNextRead()
+        let service = ScriptedSender(account: account, school: school, scripts: [:])
+        let workspace = workspace(service, store: store)
+
+        let refresh = Task { await workspace.refreshVisible() }
+        await until { await store.isReadWaiting() }
+        workspace.scheduleSend(m2)                 // mise en file pendant la restauration
+        for _ in 0..<50 { await Task.yield() }
+        let early = await service.sent
+        XCTAssertTrue(early.isEmpty, "Aucun envoi avant que l'ordre durable soit fixé")
+
+        await store.releaseRead()
+        await refresh.value
+        await until { self.isAccepted(workspace, m2) }
+        let sent = await service.sent
+        XCTAssertEqual(sent, [m1.clientMessageID, m2.clientMessageID])
+    }
+
+    /// Un refus définitif du journal n'est pas remis en file par une restauration tardive.
+    func testRestorationNeverReplaysADefinitiveRefusal() async {
+        let m1 = pending("refusé"), m2 = pending("suivant")
+        let store = RecoveryStore()
+        try? await store.put(m1, scope: scope)
+        try? await store.put(m2, scope: scope)
+        let service = ScriptedSender(account: account, school: school, scripts: [m1.clientMessageID: [.refuse(.membersChanged)]])
+        let workspace = workspace(service, store: store)
+        await workspace.refreshVisible()
+        await until { self.isAccepted(workspace, m2) }
+        XCTAssertEqual(workspace.sendStatus(m1.clientMessageID), .failed(.membersChanged))
+        await workspace.refreshVisible()
+        let sent = await service.sent
+        XCTAssertEqual(sent, [m1.clientMessageID, m2.clientMessageID], "Le refus reste dans le journal sans être rejoué")
     }
 
     /// Un M1 incertain d'une conversation ne retient aucune autre conversation.
@@ -132,8 +221,8 @@ final class MessagingSendRecoveryTests: XCTestCase {
         workspace.scheduleSend(m1)
         await until { workspace.sendStatus(m1.clientMessageID) == .uncertain }
         await workspace.refreshVisible()
-        XCTAssertEqual(workspace.sendStatus(m1.clientMessageID), .failed(.protectionUnavailable))
-        XCTAssertEqual(workspace.error, .protectionUnavailable)
+        await until { workspace.sendStatus(m1.clientMessageID) == .failed(.protectionUnavailable) }
+        await until { workspace.error == .protectionUnavailable }
     }
 }
 
@@ -153,15 +242,34 @@ private struct RecoveryCipher: MessagingCryptography {
 /// Journal d'envoi synthétique en mémoire (double de test, jamais utilisé en production).
 private actor RecoveryStore: MessagingProtectedOutbox {
     private var stored: [MessagingPending] = []
+    private var holdsNextRead = false
+    private var readWaiter: CheckedContinuation<Void, Never>?
     func put(_ entry: MessagingPending, scope: MessagingScope) async throws { stored.append(entry) }
-    func entries(scope: MessagingScope) async throws -> [MessagingPending] { stored }
+    /// La prochaine lecture du journal reste suspendue jusqu'à `releaseRead` (restauration retenue au milieu).
+    func holdNextRead() { holdsNextRead = true }
+    func isReadWaiting() -> Bool { readWaiter != nil }
+    func releaseRead() { readWaiter?.resume(); readWaiter = nil }
+    func entries(scope: MessagingScope) async throws -> [MessagingPending] {
+        if holdsNextRead {
+            holdsNextRead = false
+            let snapshot = stored                       // le journal lu au moment de la demande
+            await withCheckedContinuation { readWaiter = $0 }
+            return snapshot
+        }
+        return stored
+    }
     func remove(clientMessageID: UUID, scope: MessagingScope) async throws { stored.removeAll { $0.clientMessageID == clientMessageID } }
 }
 
 /// Transport scripté par clientMessageID : chaque appel consomme le comportement suivant, puis accepte.
 private actor ScriptedSender: MessagingService {
-    enum Behavior: Sendable { case accept, lost, refuse(MessagingFailure) }
+    /// `suspend` : la requête reste en vol (réponse en attente) jusqu'à `release`, puis elle est acceptée.
+    enum Behavior: Sendable { case accept, lost, refuse(MessagingFailure), suspend }
     private(set) var sent: [UUID] = []
+    private(set) var messageRequests: [UUID] = []
+    private var suspended: [UUID: CheckedContinuation<Void, Never>] = [:]
+    func isSuspended(_ id: UUID) -> Bool { suspended[id] != nil }
+    func release(_ id: UUID) { suspended.removeValue(forKey: id)?.resume() }
     private var scripts: [UUID: [Behavior]]
     private let account: UUID, school: UUID
     init(account: UUID, school: UUID, scripts: [UUID: [Behavior]]) { self.account = account; self.school = school; self.scripts = scripts }
@@ -170,7 +278,8 @@ private actor ScriptedSender: MessagingService {
         MessagingPage(items: [], nextCursor: nil)
     }
     func messages(scope: MessagingScope, conversationID: UUID, before: String?) async throws -> MessagingPage<MessagingWireMessage> {
-        MessagingPage(items: [], nextCursor: nil)
+        messageRequests.append(conversationID)
+        return MessagingPage(items: [], nextCursor: nil)
     }
     func send(scope: MessagingScope, pending: MessagingPending) async throws -> MessagingAcknowledgement {
         sent.append(pending.clientMessageID)
@@ -180,7 +289,8 @@ private actor ScriptedSender: MessagingService {
         switch behavior {
         case .lost: throw MessagingFailure.unavailable
         case .refuse(let failure): throw failure
-        case .accept:
+        case .suspend, .accept:
+            if case .suspend = behavior { await withCheckedContinuation { suspended[pending.clientMessageID] = $0 } }
             return MessagingAcknowledgement(clientMessageID: pending.clientMessageID, serverMessageID: UUID(),
                 conversationID: pending.conversationID, schoolID: school, acceptedAt: Date(), senderID: account)
         }

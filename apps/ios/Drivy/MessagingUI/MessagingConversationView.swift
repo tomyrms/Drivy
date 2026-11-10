@@ -791,8 +791,8 @@ private struct MessagingThreadLifecycle: ViewModifier {
                 // #445 : le fil est « visible » seulement actif, au bas du fil et sans rien par-dessus.
                 let workspace = workspace, conversationID = conversationID
                 MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID,
-                    atBottom: thread.atBottom && scenePhase == .active, covered: covered) { sequence in
-                    await workspace.absorbForegroundAlert(conversationID, sequence: sequence)
+                    atBottom: thread.atBottom && scenePhase == .active, covered: covered) { sequence, stillPresented in
+                    await workspace.absorbForegroundAlert(conversationID, sequence: sequence, stillPresented: stillPresented)
                 }
             }
             .onAppear { connectivity.start() }

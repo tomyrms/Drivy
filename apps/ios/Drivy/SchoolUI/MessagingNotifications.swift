@@ -93,30 +93,49 @@ enum MessagingNotificationOpening {
 /// pas de seconde bannière pour un message de cette conversation quand son bas est visible.
 enum MessagingActiveConversation {
     /// `atBottom` : le bas du fil est affiché, l'app est active. `covered` : une feuille ou un écran le recouvre (#445).
+    /// `epoch` identifie cette présentation précise : chaque enregistrement en reçoit une neuve, jamais réutilisée. Une
+    /// lecture lancée pour une présentation ne vaut plus rien dès que l'époque courante est différente (départ puis
+    /// retour, remplacement du contexte, feuille ouverte puis fermée).
     struct State: Equatable, Sendable {
         let schoolID: UUID; let conversationID: UUID; let atBottom: Bool
         var covered = false
+        var epoch = 0
     }
     /// Lecture autorisée de la séquence visée : vrai seulement si elle est disponible, visible et confirmée par le serveur.
-    typealias Absorber = @Sendable (_ sequence: Int) async -> Bool
+    /// Le second argument rend faux dès que la présentation qui a demandé la lecture n'est plus la courante.
+    typealias Absorber = @Sendable (_ sequence: Int, _ stillPresented: @Sendable () -> Bool) async -> Bool
     private static let lock = NSLock()
     nonisolated(unsafe) private static var current: State?
     nonisolated(unsafe) private static var absorber: Absorber?
+    nonisolated(unsafe) private static var lastEpoch = 0
 
     static func set(schoolID: UUID, conversationID: UUID, atBottom: Bool, covered: Bool = false, absorb: Absorber? = nil) {
-        lock.lock(); defer { lock.unlock() }
-        current = State(schoolID: schoolID, conversationID: conversationID, atBottom: atBottom, covered: covered)
-        absorber = absorb
+        lock.withLock {
+            lastEpoch += 1
+            current = State(schoolID: schoolID, conversationID: conversationID, atBottom: atBottom, covered: covered,
+                            epoch: lastEpoch)
+            absorber = absorb
+        }
     }
     static func clear(_ conversationID: UUID) {
-        lock.lock(); defer { lock.unlock() }
-        if current?.conversationID == conversationID { current = nil; absorber = nil }
+        lock.withLock {
+            if current?.conversationID == conversationID { current = nil; absorber = nil }
+        }
     }
+
+    /// Présentation courante et sa lecture, captées d'un bloc. Synchrone : le verrou n'est jamais tenu à travers un await.
+    private static func snapshot() -> (state: State?, absorber: Absorber?) {
+        lock.withLock { (current, absorber) }
+    }
+    /// Cette présentation (conversation, indicateurs et époque) est-elle encore exactement la courante ?
+    private static func isCurrent(_ state: State) -> Bool {
+        lock.withLock { current == state }
+    }
+
     /// Candidate à la suppression : alerte messagerie de la conversation active, bas du fil affiché, rien ne le recouvre.
     /// Ce n'est jamais une décision suffisante (#445) : voir `absorbs`.
     static func suppresses(_ info: [AnyHashable: Any]) -> Bool {
-        lock.lock(); let state = current; lock.unlock()
-        return suppresses(info, state: state)
+        suppresses(info, state: snapshot().state)
     }
     static func suppresses(_ info: [AnyHashable: Any], state: State?) -> Bool {
         guard let state, state.atBottom, !state.covered, info["kind"] as? String == "MESSAGING",
@@ -132,14 +151,14 @@ enum MessagingActiveConversation {
     }
 
     /// #445 : la bannière de premier plan n'est retirée qu'après une lecture autorisée de la séquence visée.
-    /// Lecture échouée, séquence indisponible, feuille recouvrante ou fil quitté entre-temps : l'alerte est gardée.
+    /// Lecture échouée, séquence indisponible, feuille recouvrante, fil quitté ou présentation remplacée entre-temps
+    /// (époque différente, avant l'accusé comme avant la suppression) : l'alerte est gardée.
     static func absorbs(_ info: [AnyHashable: Any]) async -> Bool {
-        lock.lock(); let state = current; let absorb = absorber; lock.unlock()
-        guard suppresses(info, state: state), let sequence = sequence(in: info), let absorb else { return false }
-        guard await absorb(sequence) else { return false }
-        // Le fil a pu être recouvert, défilé ou quitté pendant la lecture : mieux vaut une alerte de plus qu'une alerte perdue.
-        lock.lock(); let after = current; lock.unlock()
-        return after == state
+        let (state, absorb) = snapshot()
+        guard let state, suppresses(info, state: state), let sequence = sequence(in: info), let absorb else { return false }
+        guard await absorb(sequence, { isCurrent(state) }) else { return false }
+        // Le fil a pu être recouvert, défilé, quitté ou rouvert pendant la lecture : mieux vaut une alerte de plus qu'une alerte perdue.
+        return isCurrent(state)
     }
 }
 
