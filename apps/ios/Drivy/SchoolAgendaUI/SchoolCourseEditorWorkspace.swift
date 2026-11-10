@@ -444,23 +444,38 @@ enum SchoolCourseFormat {
     }
 
     /// Abandonne la demande à reprendre ; l'école l'a peut-être reçue, l'agenda se relit pour le montrer.
+    /// Le geste verrouille l'éditeur de bout en bout (lecture comprise) : ni comparaison, ni « Enregistrer ma saisie », ni
+    /// réessai, ni second abandon ne peuvent remplacer l'intention conservée pendant qu'il attend la réponse de l'école.
     func abandonUnconfirmed() async {
         guard pending != nil, !isBusy else { return }
+        isBusy = true
+        let abandoned = await abandonLocked()
+        isBusy = false
+        if abandoned { await load() }
+    }
+
+    /// Vrai quand la demande a été retirée du coffre. Le retrait vise l'intention capturée au départ : si elle a changé
+    /// entre-temps, rien n'est retiré.
+    private func abandonLocked() async -> Bool {
+        let captured = kept, capturedOperation = pending?.operation
         // Demande bloquée : la saisie est jetée et le cours se relit à sa version actuelle avant que quoi que ce soit reparte (#431).
         // Rien n'est annoncé ni remplacé tant que le coffre n'a pas retiré la demande.
+        var fresh: SchoolCourseSeries?
         if replayBlocked, let current = series {
-            guard let fresh = try? await client.series(schoolID: schoolID, id: current.id) else {
-                errorMessage = Self.rereadFailedMessage; return
-            }
-            guard clearPending() else { errorMessage = Self.removalFailedMessage; return }
+            do { fresh = try await client.series(schoolID: schoolID, id: current.id) }
+            catch is CancellationError { return false }
+            catch { errorMessage = Self.rereadFailedMessage; return false }
+            guard !Task.isCancelled else { return false }
+        }
+        guard kept?.id == captured?.id, pending?.operation == capturedOperation else { return false }
+        guard clearPending() else { errorMessage = Self.removalFailedMessage; return false }
+        if let fresh {
             series = fresh; form = SchoolCourseForm(series: fresh); initialForm = form
             newTypeTitle = ""; newTypeDescription = ""
-        } else if !clearPending() {
-            errorMessage = Self.removalFailedMessage; return
         }
         pendingIntent = nil
         errorMessage = "Demande abandonnée. L’école l’a peut-être reçue : vérifie l’agenda avant d’enregistrer à nouveau."
-        await load()
+        return true
     }
 
     /// Relit le cours et montre ce qui diffère de la saisie conservée. Aucune écriture, aucun `If-Match` avancé : la saisie
@@ -665,28 +680,63 @@ struct SchoolCourseFieldDifference: Identifiable, Equatable, Sendable {
 
 extension SchoolCourseForm {
     /// Champs dont la valeur diffère de `current`. Pas de base : on compare deux états, on ne devine pas qui a changé quoi.
+    /// La différence se décide sur les valeurs métier (identifiants, dates réelles) ; le libellé français ne sert qu'à
+    /// l'affichage. Deux personnes ou deux types de même nom restent donc une différence, dite « autre » plutôt que montrée
+    /// identique, et aucun identifiant brut n'est exposé.
     func differences(from current: SchoolCourseForm, catalogue: SchoolCourseCatalogue?, timeZone: String) -> [SchoolCourseFieldDifference] {
         func text(_ value: String) -> String {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? "—" : trimmed
         }
-        func type(_ id: UUID?) -> String { id.flatMap { id in catalogue?.types.first { $0.id == id }?.title } ?? "—" }
-        func person(_ id: UUID?) -> String { id.flatMap { id in catalogue?.instructors.first { $0.membershipId == id }?.displayName } ?? "—" }
-        func sessions(_ form: SchoolCourseForm) -> String {
-            form.sortedOccurrences.map { occurrence in
-                "\(SchoolPlanningFormat.instant(occurrence.startsAt, zone: timeZone)) · "
-                    + SchoolCourseFormat.duration(minutes: max(0, Int(occurrence.endsAt.timeIntervalSince(occurrence.startsAt) / 60)))
-                    + " · \(person(occurrence.instructorID))" + (occurrence.attendanceRequired ? "" : " · présence facultative")
-            }.joined(separator: "\n")
+        func type(_ id: UUID?) -> String {
+            guard let id else { return "—" }
+            return catalogue?.types.first { $0.id == id }?.title ?? "Type introuvable"
         }
-        let pairs: [(String, String, String)] = [
-            ("Type", type(typeID), type(current.typeID)), ("Titre", text(title), text(current.title)),
-            ("Description", text(description), text(current.description)), ("Lieu", text(location), text(current.location)),
-            ("Conditions", text(conditions), text(current.conditions)), ("Langue", teachingLanguage ?? "—", current.teachingLanguage ?? "—"),
-            ("Responsable", person(responsibleID), person(current.responsibleID)),
-            ("Capacité", String(capacity), String(current.capacity)),
-            ("Minimum", minParticipants.map(String.init) ?? "—", current.minParticipants.map(String.init) ?? "—"),
-            ("Séances", sessions(self), sessions(current))]
-        return pairs.filter { $0.1 != $0.2 }.map { SchoolCourseFieldDifference(label: $0.0, mine: $0.1, current: $0.2) }
+        func person(_ id: UUID?) -> String {
+            guard let id else { return "—" }
+            return catalogue?.instructors.first { $0.membershipId == id }?.displayName ?? "Moniteur introuvable"
+        }
+        /// Même libellé pour deux identités distinctes : la saisie le dit.
+        func pair(_ label: String, _ mine: UUID?, _ theirs: UUID?, _ format: (UUID?) -> String, other: String) -> SchoolCourseFieldDifference? {
+            guard mine != theirs else { return nil }
+            let a = format(mine), b = format(theirs)
+            return SchoolCourseFieldDifference(label: label, mine: a == b ? "\(a) (\(other))" : a, current: b)
+        }
+        func line(_ occurrence: SchoolCourseOccurrenceDraft, suffix: String = "") -> String {
+            "\(SchoolPlanningFormat.instant(occurrence.startsAt, zone: timeZone)) · "
+                + SchoolCourseFormat.duration(minutes: max(0, Int(occurrence.endsAt.timeIntervalSince(occurrence.startsAt) / 60)))
+                + " · \(person(occurrence.instructorID))\(suffix)" + (occurrence.attendanceRequired ? "" : " · présence facultative")
+        }
+        func same(_ a: SchoolCourseOccurrenceDraft, _ b: SchoolCourseOccurrenceDraft) -> Bool {
+            Int(a.startsAt.timeIntervalSince1970) == Int(b.startsAt.timeIntervalSince1970)
+                && Int(a.endsAt.timeIntervalSince1970) == Int(b.endsAt.timeIntervalSince1970)
+                && a.instructorID == b.instructorID && a.attendanceRequired == b.attendanceRequired
+        }
+        var result: [SchoolCourseFieldDifference] = []
+        func add(_ label: String, _ mine: String, _ theirs: String) {
+            if mine != theirs { result.append(SchoolCourseFieldDifference(label: label, mine: mine, current: theirs)) }
+        }
+        if let d = pair("Type", typeID, current.typeID, type, other: "autre type") { result.append(d) }
+        add("Titre", text(title), text(current.title))
+        add("Description", text(description), text(current.description))
+        add("Lieu", text(location), text(current.location))
+        add("Conditions", text(conditions), text(current.conditions))
+        add("Langue", teachingLanguage ?? "—", current.teachingLanguage ?? "—")
+        if let d = pair("Responsable", responsibleID, current.responsibleID, person, other: "autre compte") { result.append(d) }
+        add("Capacité", String(capacity), String(current.capacity))
+        add("Minimum", minParticipants.map(String.init) ?? "—", current.minParticipants.map(String.init) ?? "—")
+        let mine = sortedOccurrences, theirs = current.sortedOccurrences
+        let identical = mine.count == theirs.count && zip(mine, theirs).allSatisfy(same)
+        if !identical {
+            let mineLines = mine.enumerated().map { index, occurrence -> String in
+                // Même ligne lue, mais autre moniteur de même nom : la différence est nommée.
+                if index < theirs.count, occurrence.instructorID != theirs[index].instructorID,
+                   person(occurrence.instructorID) == person(theirs[index].instructorID) { return line(occurrence, suffix: " (autre compte)") }
+                return line(occurrence)
+            }
+            result.append(SchoolCourseFieldDifference(label: "Séances", mine: mineLines.joined(separator: "\n"),
+                current: theirs.map { line($0) }.joined(separator: "\n")))
+        }
+        return result
     }
 }

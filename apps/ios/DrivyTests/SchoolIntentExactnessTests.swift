@@ -456,6 +456,159 @@ import Testing
         #expect(try ids(store).isEmpty)
     }
 
+    // MARK: Retour 2/2 — abandon verrouillé, comparaison sur les identités, admission du rejeu
+
+    private func waitUntil(_ condition: () async -> Bool) async {
+        for _ in 0..<500 where !(await condition()) { await Task.yield() }
+    }
+
+    @Test func aSuspendedAbandonLocksEveryOtherGestureAndRemovesOnlyItsOwnIntent() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let server = CourseReplayServer(version: 3, title: "Titre")
+        let bystander = try intentCommand(series: UUID(), title: "autre geste")
+        let (reopened, store, _) = try await blockedEditor(server, folder: folder, other: bystander)
+        await reopened.compareHeldInput()
+        #expect(reopened.reconciliation != nil)
+        let writes = await server.writes.count, vault = try ids(store)
+        #expect(vault.count == 2)
+
+        // L'abandon attend la relecture de l'école : rien d'autre ne peut remplacer ou retirer l'intention pendant ce temps.
+        await server.holdSeriesReads()
+        let abandon = Task { await reopened.abandonUnconfirmed() }
+        await waitUntil { await server.heldReads == 1 }
+        #expect(await server.heldReads == 1 && reopened.isBusy)
+        await reopened.keepMyInputOnCurrentVersion()
+        await reopened.compareHeldInput()
+        await reopened.retryUnconfirmed()
+        await reopened.abandonUnconfirmed()                  // second abandon : sans effet
+        _ = await reopened.saveDraft(); await reopened.publish()
+        #expect(await server.writes.count == writes && await server.heldReads == 1)
+        #expect(try ids(EncryptedSchoolCourseIntentStore(directory: folder, keyData: key)) == vault)
+        #expect(reopened.hasUnconfirmedOperation && reopened.reconciliation != nil)
+
+        // La réponse tardive retire l'intention capturée, et seulement elle.
+        await server.releaseSeriesReads()
+        await abandon.value
+        #expect(!reopened.isBusy && !reopened.hasUnconfirmedOperation && reopened.reconciliation == nil)
+        #expect(try ids(store) == [bystander.id])
+        #expect(await server.writes.count == writes && await server.mutations == 1)
+    }
+
+    @Test func anAbandonThatFailsToReadUnlocksTheEditorAndChangesNothing() async throws {
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let server = CourseReplayServer(version: 3, title: "Titre")
+        let (reopened, store, _) = try await blockedEditor(server, folder: folder)
+        let before = try ids(store)
+        await server.failNextSeriesRead()
+        await reopened.abandonUnconfirmed()
+        #expect(!reopened.isBusy && reopened.errorMessage == SchoolCourseEditorWorkspace.rereadFailedMessage)
+        #expect(reopened.hasUnconfirmedOperation && reopened.replayBlocked && reopened.form.title == secondSession)
+        #expect(try ids(store) == before)
+        // Déverrouillé : la comparaison fonctionne de nouveau.
+        await reopened.compareHeldInput()
+        #expect(reopened.reconciliation != nil)
+    }
+
+    private func catalogue(sameNames: Bool) throws -> SchoolCourseCatalogue {
+        let other = UUID(uuidString: "66666666-6666-4666-8666-666666666666")!
+        let secondType = UUID(uuidString: "88888888-8888-4888-8888-888888888888")!
+        let school = schoolID.uuidString.lowercased()
+        let json = """
+        {"schoolId":"\(school)","canManage":true,
+         "types":[{"id":"\(CourseReplayFixture.type.uuidString.lowercased())","schoolId":"\(school)","stableKey":null,"title":"Sensibilisation",
+           "description":"","version":1,"predefined":false},
+          {"id":"\(secondType.uuidString.lowercased())","schoolId":"\(school)","stableKey":null,"title":"\(sameNames ? "Sensibilisation" : "Autre")",
+           "description":"","version":1,"predefined":false}],
+         "policy":{"version":1,"selfCancelHours":24,"offerResponseMinutes":null},
+         "instructors":[{"membershipId":"\(membershipID.uuidString.lowercased())","displayName":"Camille Exemple"},
+          {"membershipId":"\(other.uuidString.lowercased())","displayName":"Camille Exemple"}]}
+        """
+        return try JSONDecoder().decode(SchoolCourseCatalogue.self, from: Data(json.utf8))
+    }
+
+    @Test func twoDistinctIdentitiesWithTheSameLabelAreStillADifferenceWithoutRawIdentifiers() throws {
+        let catalogue = try catalogue(sameNames: true)
+        let current = SchoolCourseForm(series: try series(4, title: "Titre"))
+        let otherInstructor = UUID(uuidString: "66666666-6666-4666-8666-666666666666")!
+        let otherType = UUID(uuidString: "88888888-8888-4888-8888-888888888888")!
+
+        var mine = current; mine.responsibleID = otherInstructor
+        var diff = mine.differences(from: current, catalogue: catalogue, timeZone: "Europe/Zurich")
+        #expect(diff.map(\.label) == ["Responsable"] && diff[0].mine != diff[0].current)
+
+        mine = current; mine.typeID = otherType
+        diff = mine.differences(from: current, catalogue: catalogue, timeZone: "Europe/Zurich")
+        #expect(diff.map(\.label) == ["Type"] && diff[0].mine != diff[0].current)
+
+        // Moniteur de séance : même nom, autre compte.
+        mine = current; mine.occurrences[0].instructorID = otherInstructor
+        diff = mine.differences(from: current, catalogue: catalogue, timeZone: "Europe/Zurich")
+        #expect(diff.map(\.label) == ["Séances"] && diff[0].mine != diff[0].current)
+
+        // Deux comptes introuvables restent deux comptes ; aucun identifiant brut n'est affiché.
+        mine = current; mine.responsibleID = UUID()
+        diff = mine.differences(from: current, catalogue: nil, timeZone: "Europe/Zurich")
+        #expect(diff.map(\.label) == ["Responsable"] && diff[0].mine != diff[0].current)
+        var unknownA = current, unknownB = current
+        unknownA.responsibleID = UUID(); unknownB.responsibleID = UUID()
+        diff = unknownA.differences(from: unknownB, catalogue: nil, timeZone: "Europe/Zurich")
+        #expect(diff.map(\.label) == ["Responsable"] && diff[0].mine != diff[0].current)
+        for line in diff.flatMap({ [$0.mine, $0.current] }) { #expect(UUID(uuidString: line) == nil) }
+        // Rien ne change : aucune différence annoncée.
+        #expect(current.differences(from: current, catalogue: catalogue, timeZone: "Europe/Zurich").isEmpty)
+    }
+
+    private func learnerCommand(_ action: SchoolCourseLearnerAction, series: UUID) throws -> PendingSchoolCommand {
+        try SchoolCourseLearnerRecord(action: action, operation: UUID()).command(scope: scope(), seriesID: series, createdAt: Date())
+    }
+
+    @Test func aLearnerReplacementReplayedAfterAPostWriteFaultIsIdempotentInBothStoresButOtherIntentsStillBlock() throws {
+        let series = UUID()
+        let offer = UUID()
+        let folder = directory(); defer { try? FileManager.default.removeItem(at: folder) }
+        let durable = EncryptedSchoolCourseIntentStore(directory: folder, keyData: key)
+        let memory = SchoolCourseIntentMemoryStore()
+        let stores: [any SchoolCourseIntentStoring] = [durable, memory]
+        for store in stores {
+            let bystander = try intentCommand(series: UUID(), title: "autre geste")      // éditeur : hors de la voie de l'élève
+            let old = try learnerCommand(.enroll, series: series), new = try learnerCommand(.decline(offerID: offer), series: series)
+            try store.replace(nil, with: bystander); try store.replace(nil, with: old)
+            if store === durable { durable.outbox.faultAfterFileWrite = { throw URLError(.cannotWriteToFile) } }
+            if store === durable { #expect(throws: (any Error).self) { try store.replace(old, with: new) } }
+            else { try store.replace(old, with: new) }
+            durable.outbox.faultAfterFileWrite = nil
+            #expect(Set(try store.commands(scope: scope()).map(\.id)) == [bystander.id, new.id])
+
+            // Reprise après la faute : la même intention de l'élève, déjà là à l'identique, ne se bloque pas elle-même.
+            try store.replace(old, with: new)
+            #expect(Set(try store.commands(scope: scope()).map(\.id)) == [bystander.id, new.id])
+
+            // Même identifiant, autre contenu : refusé, rien ne bouge.
+            let altered = PendingSchoolCommand(id: new.id, scope: new.scope, kind: new.kind, resourceVersion: 0, createdAt: new.createdAt,
+                body: Data("{}".utf8), resourceID: new.resourceID, routeResourceID: new.routeResourceID)
+            #expect(throws: (any Error).self) { try store.replace(old, with: altered) }
+            #expect(try store.commands(scope: scope()).contains(new))
+
+            // Une AUTRE intention de l'élève sur la même série garde son refus.
+            let intruder = try learnerCommand(.joinWaitlist, series: series)
+            #expect(throws: (any Error).self) { try store.replace(nil, with: intruder) }
+            #expect(Set(try store.commands(scope: scope()).map(\.id)) == [bystander.id, new.id])
+        }
+    }
+
+    @Test func theMemoryStoreChecksTheContentOfTheOldIntentLikeTheDurableOne() throws {
+        let memory = SchoolCourseIntentMemoryStore()
+        let old = try intentCommand(series: UUID(), title: "ancien")
+        try memory.replace(nil, with: old)
+        let impostor = PendingSchoolCommand(id: old.id, scope: old.scope, kind: old.kind, resourceVersion: 0, createdAt: old.createdAt,
+            body: Data("{}".utf8), resourceID: old.resourceID, routeResourceID: old.routeResourceID)
+        let new = try intentCommand(series: UUID(), title: "nouveau")
+        #expect(throws: (any Error).self) { try memory.replace(impostor, with: new) }
+        #expect(memory.stored == [old])
+        try memory.replace(old, with: new)
+        #expect(memory.stored == [new])
+    }
+
     @Test func aRecordKnowsWhetherItCanBeReplayedExactly() throws {
         let body = SchoolCourseSeriesBody(operationId: UUID(), typeId: CourseReplayFixture.type, title: "t", description: "", location: "",
             conditions: "", teachingLanguage: nil, responsibleMembershipId: membershipID, capacity: 5, minParticipants: nil,
@@ -537,9 +690,18 @@ private actor CourseReplayServer: SchoolHTTPTransport {
     private var lose = false
     private var applyWhenLost = false
     private var applied: (key: String, identity: String, version: Int)?
+    private var holdReads = false
+    private var failRead = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    /// Lectures de série suspendues par `holdSeriesReads`.
+    private(set) var heldReads = 0
 
     init(version: Int, title: String) { self.version = version; self.title = title }
 
+    /// Les lectures du cours restent suspendues jusqu'à `releaseSeriesReads` : une réponse tardive de l'école.
+    func holdSeriesReads() { holdReads = true }
+    func releaseSeriesReads() { holdReads = false; let all = waiting; waiting = []; for continuation in all { continuation.resume() } }
+    func failNextSeriesRead() { failRead = true }
     func loseNextWrite(applying: Bool) { lose = true; applyWhenLost = applying }
     /// Une autre personne modifie le cours.
     func otherEdit(title: String) { version += 1; self.title = title; mutations += 1 }
@@ -548,7 +710,10 @@ private actor CourseReplayServer: SchoolHTTPTransport {
         guard let url = request.url else { throw URLError(.badURL) }
         let method = request.httpMethod ?? "GET"
         if method == "GET" {
-            return url.path.hasSuffix("course-catalogue") ? ok(CourseReplayFixture.catalogueJSON, url) : ok(seriesData(), url)
+            if url.path.hasSuffix("course-catalogue") { return ok(CourseReplayFixture.catalogueJSON, url) }
+            if failRead { failRead = false; throw URLError(.networkConnectionLost) }
+            if holdReads { heldReads += 1; await withCheckedContinuation { waiting.append($0) } }
+            return ok(seriesData(), url)
         }
         let write = Write(method: method, path: url.path, key: request.value(forHTTPHeaderField: "Idempotency-Key"),
             ifMatch: request.value(forHTTPHeaderField: "If-Match"), body: request.httpBody ?? Data())

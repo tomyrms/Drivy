@@ -94,9 +94,9 @@ NON COMPILÉ, NON EXÉCUTÉ (poste Windows). Lecture de `git show 2878e141` et d
 | #439 | `COURSE_POSITIONS_MISMATCH` : la replanification de cours n'existe pas dans l'app (aucun appel client, aucune vue). | Aucun mapping ajouté (code inatteignable) ; traité par le bureau web. |
 | #444 | `canManage` vient de `exam_manage` (droit pédagogique, indépendant de l'état de la formation). La section reste visible et le menu Actions (modifier, reporter) ne dépend que du statut de l'examen. | Aucun changement de gate : un examen futur reste corrigeable après pause, fin, annulation ou archivage. |
 
-Limite connue : `SchoolExamState` ne porte pas l'état de la formation. Sur une formation non active, « Prévoir » reste proposé (canManage vrai) et le serveur refuse avec `TRAINING_NOT_ACTIVE`, message déjà traduit ; il n'y a pas de masquage préventif, à décider avec le coordinateur.
+Mise à jour (§ 5) : « Prévoir » n'est plus proposé que pour une formation connue active (`SchoolExamModel.allowsCreation`) ; le serveur reste l'arbitre (`TRAINING_NOT_ACTIVE`, message traduit). Cette ligne remplace l'ancienne limite « Prévoir non masqué ».
 
-Tests ajoutés : `SchoolExamTests` (`anEscortRefusedForALeaveIsNotCalledAnAppointment`, `aFutureExamStaysManageableWhateverTheTrainingBecame`), `SchoolCourseClientTests` (mapping `COURSE_INSTRUCTOR_CLOSED`). Sélection : `unit_test_scope=agenda` contient désormais `SchoolExamTests` en plus de `SchoolCourseClientTests`.
+Tests ajoutés : `SchoolExamTests` (`anEscortRefusedForALeaveIsNotCalledAnAppointment`, `aFutureExamStaysManageableWhateverTheTrainingBecame`), `SchoolCourseClientTests` (mapping `COURSE_INSTRUCTOR_CLOSED`). Sélection : `SchoolExamTests` et `SchoolIntentExactnessTests` ne figurent que dans `unit_test_scope=agenda` (`scripts/ios/test-selection.sh`) ; `reports` et `reactivity` ne les exécutent pas.
 
 ## Retour correctif groupé 1/2 (sur 7a4d70b4, budget E1/2 pour #431 et #438)
 
@@ -176,8 +176,7 @@ Livré dans 823f4410, redit ici : `COURSE_INSTRUCTOR_CLOSED` traduit (`SchoolCou
 Examens existants après clôture de formation : le menu Actions de `SchoolExamsUI` ne dépend que de `canManage` (droit pédagogique) et du
 statut de l'examen ; l'API accepte `UPDATE_EXAM`/`POSTPONE_EXAM` (`existingTraining`). La création reste limitée : « Prévoir » exige
 `canManage` et une épreuve planifiable, le serveur refuse hors formation active (`TRAINING_NOT_ACTIVE`, message traduit). Aucune
-administration ajoutée à l'app. Limite connue inchangée : l'état de la formation n'est pas dans `SchoolExamState`, donc pas de
-masquage préventif de « Prévoir ».
+administration ajoutée à l'app. (Le masquage préventif de « Prévoir » est livré depuis : voir § 5.)
 
 ### Contrôles exécutés
 
@@ -193,9 +192,57 @@ Aucun Swift compilé ni exécuté, aucune CI, aucun test API. Relecture de code 
   une note d'erreur l'explique. Les feuilles de modification, report et résultat ne sont pas touchées.
 - La gestion des examens existants (modifier, reporter, résultat) est inchangée. Aucune nouvelle API ; le serveur reste l'arbitre
   (`TRAINING_NOT_ACTIVE`).
-- Test ajouté : `SchoolExamTests/schedulingIsOnlyOfferedForAKnownActiveTraining` (à ajouter à la sélection `agenda`/`reports`/`reactivity`
-  déjà couverte par `SchoolExamTests`).
+- Test ajouté : `SchoolExamTests/schedulingIsOnlyOfferedForAKnownActiveTraining`, exécuté par `unit_test_scope=agenda` seulement
+  (`reports` et `reactivity` ne contiennent pas `SchoolExamTests`).
 - **Scénario UI : non écrit.** Aucun harnais visuel d'examens n'existe (aucune référence à `exams-schedule` dans les UITests) ; en créer
   un dépasse « minimal ». À décider par le coordinateur.
-- **Impeccable et Uncodixfy : introuvables dans cette session.** Le changement n'ajoute aucun composant, seulement une condition et une
-  note d'erreur existante (`DrivyActionNote`) ; la revue visuelle reste à faire.
+- **Impeccable et Uncodixfy** : cherchés d'abord au mauvais endroit, ils existent bien (`~/.codex/skills/impeccable`, `uncodixfy`) ;
+  lus au retour 2/2 (§ 6). Le changement n'ajoute aucun composant, seulement une condition et une note d'erreur existante
+  (`DrivyActionNote`). Rendu jamais vu tourner.
+
+## Retour correctif groupé 2/2 (sur d4cfc1f5)
+
+**NON COMPILÉ, NON EXÉCUTÉ** : aucun Swift n'a été compilé ni lancé ici, aucune CI. Les tests ci-dessous sont écrits, pas passés.
+Sélection inchangée : `unit_test_scope=agenda` (seule à contenir `SchoolIntentExactnessTests` et `SchoolExamTests`) ; `reports` et
+`reactivity` restent à lancer pour le reste du lot mais n'exécutent pas ces suites. Scénario UI de reprise
+(`SchoolCourseJourneyUITests/testBlockedCourseEditIsComparedThenKeptOnPurpose`) conservé tel quel ; aucun scénario UI d'examen
+(limite d'exécution conservée).
+
+### 1. #431 — l'abandon verrouille l'éditeur de bout en bout
+
+`abandonUnconfirmed` ne mettait jamais `isBusy`. Pendant sa relecture suspendue, « Enregistrer ma saisie » pouvait remplacer `kept`, puis la
+réponse tardive de l'abandon retirait la NOUVELLE intention. Maintenant : `isBusy` est levé avant la lecture et tenu jusqu'au retrait
+(comparer, garder, réessayer, publier, enregistrer et un second abandon sont refusés par leurs gardes). Le travail est dans
+`abandonLocked`, qui capture `kept` et l'opération au départ et ne retire que si les deux sont inchangés. Annulation ou erreur de
+lecture : retour sans rien changer (message de relecture pour l'erreur), `isBusy` relâché dans tous les cas. La relecture de l'agenda
+(`load`) part après le déverrouillage.
+Tests : `aSuspendedAbandonLocksEveryOtherGestureAndRemovesOnlyItsOwnIntent` (lecture suspendue du serveur simulé dans le vrai
+workspace et le coffre chiffré : aucun envoi, aucun retrait pendant l'attente, l'autre intention intacte, puis seule la sienne retirée),
+`anAbandonThatFailsToReadUnlocksTheEditorAndChangesNothing`.
+
+### 2. #431 — la comparaison se décide sur les identités
+
+`SchoolCourseForm.differences` comparait des chaînes formatées. Elle compare désormais les valeurs métier : identifiants de type, de
+responsable et de moniteur de séance, dates réelles (à la seconde), présence, puis formate en français. Deux identités de même libellé
+restent une différence, marquée « (autre type) » ou « (autre compte) » du côté de la saisie ; un identifiant absent du catalogue se
+lit « Type introuvable » / « Moniteur introuvable », jamais un UUID. Les valeurs envoyées et l'oracle du serveur simulé ne changent pas.
+Test : `twoDistinctIdentitiesWithTheSameLabelAreStillADifferenceWithoutRawIdentifiers` (responsable, type, moniteur de séance, deux comptes
+introuvables, aucune différence quand rien ne change). Limite : deux séances à la même minute mais à des secondes différentes sont
+une différence réelle dont les deux lignes affichées sont identiques.
+Impeccable et Uncodixfy lus : aucune surface nouvelle, mêmes lignes `course-reconcile-*` ; seul le texte de comparaison change, sans
+badge ni note ajoutés.
+
+### 3. #438 — l'idempotence vaut pour toute intention
+
+`EncryptedSchoolCommandOutbox.replace` et le coffre mémoire passaient `new` elle-même à l'admission : une intention de l'élève
+(`courseLearnerIntent`) déjà écrite se bloquait sur la même série. Désormais seule la commande EXACTEMENT identique à `new` est
+exclue de l'admission ; une commande de même identifiant et de contenu différent, ou toute autre intention, garde son refus.
+Le coffre mémoire est réécrit sur une copie : il exige l'égalité exacte de `old` quand son identifiant existe (avant, il l'écrasait),
+refuse la substitution périmée, et n'écrit qu'à la fin.
+Tests (les deux coffres, intention de l'élève, faute après écriture sur le coffre chiffré réel, autre intention intacte) :
+`aLearnerReplacementReplayedAfterAPostWriteFaultIsIdempotentInBothStoresButOtherIntentsStillBlock`,
+`theMemoryStoreChecksTheContentOfTheOldIntentLikeTheDurableOne`.
+
+### Contrôles exécutés
+
+Aucun Swift compilé ni exécuté. Relecture de code seulement.

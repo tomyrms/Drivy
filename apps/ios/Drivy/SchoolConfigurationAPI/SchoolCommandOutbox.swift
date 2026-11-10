@@ -450,7 +450,9 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
                 throw SchoolConfigurationFailure.storage
             }
         }
-        guard !commands.contains(where: { $0.scope.belongsToWorkspace(new.scope) && admission($0) }) else {
+        // La commande exacte déjà conservée (rejeu après une faute post-écriture) ne se bloque pas elle-même ; toute AUTRE
+        // commande, y compris une de même identifiant mais de contenu différent, garde son refus.
+        guard !commands.contains(where: { $0 != new && $0.scope.belongsToWorkspace(new.scope) && admission($0) }) else {
             throw SchoolConfigurationFailure.pendingCommand
         }
         if let kept = commands.first(where: { $0.id == new.id }) {

@@ -91,16 +91,29 @@ final class SchoolCourseIntentMemoryStore: SchoolCourseIntentStoring {
 
     func replace(_ old: PendingSchoolCommand?, with new: PendingSchoolCommand) throws {
         guard !refusesToStore else { throw SchoolConfigurationFailure.storage }
-        // Même règle que le coffre chiffré : les deux implémentations ne peuvent pas diverger (#106, tâche 5).
-        if try commands(scope: new.scope).contains(where: { $0.id != old?.id && SchoolCourseLearnerLane.blocks(new, $0) }) {
+        // Même sémantique que le coffre chiffré (#438), sur une copie écrite d'un seul geste à la fin : rien n'est modifié si un
+        // contrôle échoue.
+        var next = stored
+        if let old {
+            if let index = next.firstIndex(where: { $0.id == old.id }) {
+                // L'ancienne doit être celle que l'appelant croit retirer, à l'identique.
+                guard next[index] == old else { throw SchoolConfigurationFailure.storage }
+                next.remove(at: index)
+            } else if !next.contains(new) {
+                // Ni l'ancienne ni la nouvelle : substitution périmée. Seule la nouvelle déjà là, exacte, reste idempotente.
+                throw SchoolConfigurationFailure.storage
+            }
+        }
+        // Même règle d'admission que le coffre chiffré ; la commande exacte déjà conservée ne se bloque pas elle-même.
+        if next.contains(where: { $0.kind.isCourse && $0.scope.sharesMembership(with: new.scope) && $0 != new && SchoolCourseLearnerLane.blocks(new, $0) }) {
             throw SchoolConfigurationFailure.pendingCommand
         }
-        // Même sémantique que le coffre chiffré : une substitution périmée (ni l'ancienne ni la nouvelle) est refusée ;
-        // la nouvelle déjà présente à l'identique reste acceptée (idempotence après une faute après écriture).
-        if let old, !stored.contains(where: { $0.id == old.id }), !stored.contains(new) { throw SchoolConfigurationFailure.storage }
-        if let old { stored.removeAll { $0.id == old.id } }
-        stored.removeAll { $0.id == new.id }
-        stored.append(new)
+        if let same = next.first(where: { $0.id == new.id }) {
+            guard same == new else { throw SchoolConfigurationFailure.pendingCommand }
+        } else {
+            next.append(new)
+        }
+        stored = next
     }
 
     func remove(_ command: PendingSchoolCommand) throws { stored.removeAll { $0.id == command.id } }
