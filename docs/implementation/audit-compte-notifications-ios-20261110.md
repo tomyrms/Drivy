@@ -118,3 +118,15 @@ ce lot suivent cette règle (aucun `await` à droite d'un `&&`).
 
 Rien n'a été vu tourner. Aucune interface modifiée (Impeccable et Uncodixfy sans objet). Aucun résultat APNs physique, GPS, batterie
 ou VoiceOver.
+
+## Oracle Python de sélection (retour natif 1/2)
+
+Après intégration de 6e6870ee, `python -m unittest scripts/ios/test_test_selection.py` : 25 exécutés, **2 ÉCHECS**
+(`test_unit_build_and_test_share_exact_selection_and_never_run_ui_or_ipad` pour le périmètre `reactivity`, et
+`test_reactivity_selects_preferences_and_domain_scheduling_regressions`). Cause : `test-selection.sh` sélectionnait déjà
+`SchoolPushCenterTests` et `SchoolPushRegistrationTests`, mais la constante `REACTIVITY_SUITES` du test Python ne les listait pas.
+Correction : ces deux suites sont inscrites explicitement dans `REACTIVITY_SUITES`, aucune suite retirée, égalités inchangées.
+Nouvelle exécution : 25 exécutés, **RÉUSSI** (code 0).
+
+Limite : cela ne qualifie que la sélection de suites. Swift reste NON EXÉCUTÉ sur ce poste Windows ; `reactivity` et `profile`
+restent à lancer sur Apple après la compilation de l'agenda.
