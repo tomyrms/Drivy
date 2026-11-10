@@ -176,22 +176,6 @@ struct SchoolTrainingScreen: View {
         .onChange(of: isCurrent) { _, _ in openTargetedLesson() }
     }
 
-    /// L'examen visé depuis une boîte, s'il appartient à cet élève et à cette formation.
-    private func examTarget(in model: SchoolTrainingWorkspace) -> SchoolBoxTarget? {
-        guard let target = workspace.boxTarget, target.learnerID == learner.id, target.trainingID == model.trainingID,
-              target.examID != nil else { return nil }
-        return target
-    }
-
-    private func resolveExamTarget(in model: SchoolTrainingWorkspace, _ outcome: SchoolExamFocusOutcome) {
-        guard let target = examTarget(in: model) else { return }
-        switch outcome {
-        case .found: workspace.resolveBoxTarget(target)
-        case .missing: workspace.resolveBoxTarget(target, message: "Cet examen n’est plus dans la liste de la formation.")
-        case .unavailable: workspace.resolveBoxTarget(target, message: "Les examens de cette formation ne sont pas accessibles.")
-        }
-    }
-
     /// La demande choisie dans une boîte de l'onglet Élèves : la fiche de sa leçon s'ouvre, une seule fois, sur le bon élève.
     private func openTargetedLesson() {
         guard isCurrent, let target = workspace.boxTarget, target.learnerID == learner.id, let lessonID = target.lessonID else { return }
@@ -936,6 +920,22 @@ private struct SchoolTrainingContent: View {
     private func instructorName(of lesson: SchoolLesson) -> String? {
         lesson.instructorMembershipId == workspace.membership?.membershipId ? nil : lesson.providedInstructorName
     }
+    /// L'examen visé depuis une boîte, s'il appartient à cet élève et à cette formation.
+    private func examTarget(in model: SchoolTrainingWorkspace) -> SchoolBoxTarget? {
+        guard let target = workspace.boxTarget, target.learnerID == learner.id, target.trainingID == model.trainingID,
+              target.examID != nil else { return nil }
+        return target
+    }
+
+    private func resolveExamTarget(in model: SchoolTrainingWorkspace, _ outcome: SchoolExamFocusOutcome) {
+        guard let target = examTarget(in: model) else { return }
+        switch outcome {
+        case .found: workspace.resolveBoxTarget(target)
+        case .missing: workspace.resolveBoxTarget(target, message: "Cet examen n’est plus dans la liste de la formation.")
+        case .unavailable: workspace.resolveBoxTarget(target, message: "Les examens de cette formation ne sont pas accessibles.")
+        }
+    }
+
     /// Une compétence relève du référentiel de sa catégorie : la progression se lit un permis à la fois, sans rien
     /// additionner d’un permis à l’autre. `namesPermit` : le filtre voisin dit « Tous les permis », le permis montré
     /// est donc nommé ici.

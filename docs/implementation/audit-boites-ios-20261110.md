@@ -96,3 +96,4 @@ retour garde la liste dépliée et le contexte.
   pendant un `await`.
 - Les tests de vrais clients simulent 401 sans renouvellement de jeton (`invalidateAccessToken` rend faux) ; le renouvellement n'est pas couvert ici.
 - Aucun résultat VoiceOver ni recette physique.
+- Raccord de cible d'examen : `examTarget(in:)` et `resolveExamTarget(in:_:)` vivent dans `SchoolTrainingContent`, qui les appelle (ils étaient privés de `SchoolTrainingScreen`, type distinct). Logique, gardes et acquittement inchangés. Non compilé, non exécuté.
