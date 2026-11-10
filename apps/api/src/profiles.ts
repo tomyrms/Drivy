@@ -144,9 +144,10 @@ async function saveProfile(db:PoolClient,actor:CommandActor,school:SchoolRow,lea
   const displayName=legacy?null:identityDisplayName(row,body);
   if(displayName!==null) {values.push(displayName);assignments.push(`display_name=$${values.length}`);}
   if(assignments.length) {
-    await db.query("SELECT set_config('app.school_profile','true',true)");
+    // Ce dossier avance déjà d'un cran ci-dessous ; la base fait avancer les dossiers des autres écoles de la personne (migration 20261107).
+    await db.query("SELECT set_config('app.school_profile','true',true),set_config('app.identity_origin_profile',$1,true)",[learnerId]);
     const written=await db.query(`UPDATE drivy.person SET ${assignments.join(',')},version=version+1 WHERE id=$1`,values);
-    await db.query("SELECT set_config('app.school_profile','',true)");
+    await db.query("SELECT set_config('app.school_profile','',true),set_config('app.identity_origin_profile','',true)");
     if(written.rowCount!==1) throw forbidden();
   }
   await db.query(`UPDATE drivy.learner_profile SET version=version+1,administrative_policy_id=$3,entered_by_membership_id=$4,entry_source=$5,profile_updated_at=now() WHERE id=$1 AND school_id=$2`,

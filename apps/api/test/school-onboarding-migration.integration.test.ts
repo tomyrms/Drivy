@@ -57,7 +57,7 @@ it('031/032 préservent une copie synthétique peuplée à030 et ne relancent pa
     const tables=(await pool.query<{name:string}>("SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND c.relkind='r' ORDER BY c.relname")).rows.map(row=>row.name);
     const newColumns=['draft_version','draft_step','draft_content','draft_updated_at','draft_updated_by','draft_applied_at'];
     // 041 déplace l’identité du dossier vers le compte : ces colonnes sont vérifiées à part, le reste doit être identique.
-    const identityColumns=['first_name','last_name','contact_phone','photo_version','contact_email','birth_date','postal_address'];
+    const identityColumns=['first_name','last_name','contact_phone','photo_version','photo_generation','contact_email','birth_date','postal_address'];
     const movedColumns=['display_name','contact_email','contact_phone','first_name','last_name','birth_date','postal_address','profile_photo_document_id','profile_readiness','version'];
     const ignored=(table:string)=>table==='school_setup'?newColumns:table==='offering_version'?['label']:table==='school_policy_version'?['cancellation_rules']:table==='person'?[...identityColumns,'version']:table==='learner_profile'?movedColumns:[];
     const snapshot=async()=>{
