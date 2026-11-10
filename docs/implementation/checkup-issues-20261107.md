@@ -119,6 +119,16 @@ suisse ni un résultat physique ne peuvent être déduits de ce rapprochement.
 Le coordinateur est l’unique auteur de STATUS.md et de ce suivi transversal.
 Les workers livrent leurs preuves dans leur rapport de lot.
 
+Qualification serveur/web intégrée du 10 novembre : candidat poussé
+`57899be76c9fdfe1117c0fd250422ae6df9af823`, runs
+[42786457056](https://github.com/tomyrms/Drivy/actions/runs/42786457056)
+(API/web/contrats) et
+[42786461696](https://github.com/tomyrms/Drivy/actions/runs/42786461696)
+(navigateur, ouverture et formations). Justification : interactions entre
+les lots A/C/D/F/G et qualification du SIGTERM sur Linux, après les preuves
+ciblées ; une seule exécution lancée, résultats en cours. Les sources iOS
+encore en réalisation ne justifient pas de relancer ces suites inchangées.
+
 ## Première revue du lot B
 
 Sonnet A : `ctx_c87ad04aa597`. Sonnet B : `ctx_73ee36443ecc`.

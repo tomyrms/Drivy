@@ -108,6 +108,13 @@ messaging-keys-440-migration), compilation API avec émission réussie (code 0).
 Blobs produit G identiques au candidat qualifié, aucune campagne globale.
 Budget G #448 : 2/2 consommés, aucun nouveau retour demandé.
 
+Candidat serveur/web intégré et poussé `57899be7` : qualification commune
+lancée une fois pour les interactions entre lots et le SIGTERM POSIX :
+[vérifications API/web/contrats 42786457056](https://github.com/tomyrms/Drivy/actions/runs/42786457056)
+et [ouverture navigateur avec formations 42786461696](https://github.com/tomyrms/Drivy/actions/runs/42786461696).
+Les deux runs sont en cours ; aucun résultat anticipé. Pas de nouvelle
+campagne iOS globale, IPA, fusion master ou déploiement.
+
 Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
 À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
 `ctx_ecd1e22c16ef`, puis reprise de la même tâche en nouvelle session Sonnet 5.5
