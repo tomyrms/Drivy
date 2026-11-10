@@ -58,6 +58,13 @@ révoquer un appareil renouvelé sur une réponse tardive, qualifier le test de
 processus avec Node 24 déjà disponible et préciser la fenêtre avant COMMIT.
 Aucune preuve APNs physique ; la livraison au moins une fois reste assumée.
 
+Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
+À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
+`ctx_ecd1e22c16ef`, puis reprise de la même tâche en nouvelle session Sonnet 5.5
+(`ctx_70e83e255031`) avec le compte alternatif sélectionné dans Orca. Worktree,
+quatre fichiers partiels et compteur de correction conservés ; aucun résultat
+de qualification supplémentaire revendiqué.
+
 Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
 conservation d'une règle sans délai, base du déplacement restauré et preuves
 navigateur des parcours complets #437/#443 ; création d'examen ouverte pendant
