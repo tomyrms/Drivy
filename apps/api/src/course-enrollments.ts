@@ -17,7 +17,7 @@ const id=z.uuid(),empty=z.object({}).strict(),operation=z.object({operationId:id
 const staffEnroll=z.object({operationId:id,learnerId:id}).strict();
 const staffCancel=z.object({operationId:id,reason:z.string().trim().min(1).max(1000)}).strict();
 const reschedule=z.object({operationId:id,occurrences:z.array(z.object({position:z.number().int().min(1).max(64),startsAt:z.iso.datetime({offset:true}),endsAt:z.iso.datetime({offset:true}),
- instructorMembershipId:id}).strict()).min(1).max(64)}).strict();
+ instructorMembershipId:id}).strict()).min(1).max(64).refine(items=>new Set(items.map(item=>item.position)).size===items.length,{message:'Une position est répétée.'})}).strict();
 
 const failures:Record<string,[number,string]>={
  NOT_FOUND:[404,'Objet introuvable dans le périmètre autorisé.'],
@@ -38,6 +38,8 @@ const failures:Record<string,[number,string]>={
  COURSE_REASON_REQUIRED:[422,'Indiquez le motif.'],
  COURSE_NOT_PUBLISHED:[409,'Ce cours n’est pas publié.'],
  COURSE_OCCURRENCE_COUNT:[422,'Indiquez chaque séance du cours, une seule fois.'],
+ COURSE_POSITIONS_MISMATCH:[422,'Les positions reçues ne correspondent pas une à une aux séances du cours. Rien n’a été modifié.'],
+ COURSE_INSTRUCTOR_CLOSED:[409,'Un moniteur est absent (fermeture) pendant une séance. Rien n’a été modifié.'],
  COURSE_IN_PAST:[422,'Une séance serait dans le passé.'],
  INSTRUCTOR_NOT_ACTIVE:[422,'Choisissez un moniteur actif de l’école.']
 };
