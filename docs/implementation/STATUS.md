@@ -35,7 +35,13 @@ conservées), puis une seule relance Apple agenda. Après quota et reprise sur
 le compte Claude alternatif confirmé, `d077a758` est livré puis intégré seul
 en `1ff5c148` et poussé. L'unique relance autorisée est
 [42781642234](https://github.com/tomyrms/Drivy/actions/runs/42781642234), sur ce
-SHA : **compilation réussie**, tests agenda en cours. Les deux retours et
+SHA : **compilation réussie, tests en ÉCHEC (154/155)**. Les 24 tests de
+SchoolIntentExactnessTests réussissent. Le seul scénario en échec est
+`aGestureLeftByAStoppedAppComesBackUnconfirmedAndIsNeverSentByItself`
+(SchoolCourseIntentPersistenceTests, assertions 78/79). Hypothèse tirée des
+sources : le test rouvre le coffre avant que la tâche d'envoi de la première
+instance soit suspendue, puis cette tâche modifie l'archive ; sa confirmation
+et une éventuelle correction restent à autoriser. Les deux retours et
 l'extension unique restent comptabilisés. Sur le candidat intégré/poussé
 `cb60fd27`, les qualifications restantes ont été déclenchées une fois :
 [reports 42783615631](https://github.com/tomyrms/Drivy/actions/runs/42783615631),
@@ -71,7 +77,12 @@ révoquer un appareil renouvelé sur une réponse tardive, qualifier le test de
 processus avec Node 24 déjà disponible et préciser la fenêtre avant COMMIT.
 Aucune preuve APNs physique ; la livraison au moins une fois reste assumée.
 Après quota de l'ancienne session, reprise du même retour sur le compte
-alternatif confirmé : `ctx_6baa07cfdc9b`, modifications conservées.
+alternatif confirmé : `ctx_6baa07cfdc9b`, modifications conservées. Livraison
+`6e12f103` puis `994b953b` : 170 tests réussis et un SIGTERM POSIX ignoré sous
+Windows, puis 16 tests messagerie ciblés réussis, Node 24.22.2. Revue du delta :
+la première destination d'une seconde alerte en reprise conserve encore les
+faits lus avant l'attente de la première alerte. Retour **2/2** confié à
+`ctx_75edea23b390` pour cette revalidation et sa preuve PostgreSQL. Non intégré.
 
 Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
 À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
@@ -82,7 +93,12 @@ quatre fichiers partiels et compteur de correction conservés. Livraison
 PostgreSQL ciblés et 6 de migration/harnais rapportés réussis, mais runtime
 Node du PATH hors cible. Retour groupé 1/2 `ctx_42698fd80f90` pour Node 24,
 typage/build, migration de clés préexistantes et ordre de mise à jour.
-Non intégré ; raccord de restauration natif encore à réaliser.
+Retour `40fa87a8` accepté et intégré sans conflit en `da9be6e8`, blobs API
+identiques au candidat livré. **29/29 tests PostgreSQL sous Node 24.22.2,
+typage et build réussis** : pagination/reprise (14), régression des clés (11),
+migration peuplée (4). Arrêt des anciennes instances exigé avant migration ;
+consommations antérieures sans trace non reconstituables. Aucun déploiement.
+Raccord de restauration natif encore à réaliser ; retour serveur 1/2 résolu.
 
 Complément web : retour 1/2 `cfb05e33` relu et intégré en `0fd890ea`, blobs
 web identiques au candidat du worker. Règles sans délai conservées exactement,
@@ -97,6 +113,11 @@ Boîtes Élèves #447/#449 : lot H attribué à `ctx_bc707e452029` sur la base
 intégrée `ee04722f`, budget initial 0/2. Accès à toutes les demandes/examens,
 actualisation des trois sections, erreurs locales et garde de contexte ;
 preuves Swift/UI à obtenir sur Apple après livraison.
+Livraison `8586e5f6` reçue, non intégrée, Swift NON COMPILÉ/NON EXÉCUTÉ.
+Premier retour **1/2**, `ctx_27ea04d2b3a0` : ouvrir la demande/examen exact
+plutôt que le seul dossier ; compléter les preuves des deux boîtes (identités
+distinctes, actualisation modifiant les données, panne et reprise locale,
+clients réels et réponses tardives). Sélecteur Python livré : 25/25 réussis.
 Le worker s'est arrêté après un inventaire général, sans livraison H ; la
 consigne d'implémentation lui a été renvoyée sur la même dispatch. Le checkout
 est bien avancé à `ee04722f` via `ca98a782`, sans correctif H à ce contrôle.
