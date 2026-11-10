@@ -64,7 +64,10 @@ distinct des compléments de messagerie non encore intégrés. Livraison native
 `6e6870ee` reçue, relue et intégrée en `c4cb1e0e` : file d'enregistrement APNs, secret durable avant
 confirmation, révocation du record exact et génération de photo dans le cache
 et les intentions. Neuf tests d'enregistrement et sept tests de portrait
-écrits ; **NON COMPILÉS, NON EXÉCUTÉS**. Deux échecs du sélecteur Python après
+ajoutés. Sur `cb60fd27`, [profile 42783630248](https://github.com/tomyrms/Drivy/actions/runs/42783630248)
+est **RÉUSSI : compilation et 17/17 tests SchoolSelfProfileIntentTests**, dont
+les sept nouveaux cas de portrait ; aucune recette physique déduite.
+Reactivity reste en cours à ce relevé. Deux échecs du sélecteur Python après
 intégration venaient des deux suites ajoutées au script mais absentes de son
 oracle. Retour natif 1/2 : `c0e95ce1`, intégré en `ee04722f`, rétablit les
 **25 tests Python réussis**, sans retirer de suite ni affaiblir les égalités.
@@ -82,7 +85,17 @@ alternatif confirmé : `ctx_6baa07cfdc9b`, modifications conservées. Livraison
 Windows, puis 16 tests messagerie ciblés réussis, Node 24.22.2. Revue du delta :
 la première destination d'une seconde alerte en reprise conserve encore les
 faits lus avant l'attente de la première alerte. Retour **2/2** confié à
-`ctx_75edea23b390` pour cette revalidation et sa preuve PostgreSQL. Non intégré.
+`ctx_75edea23b390` pour cette revalidation et sa preuve PostgreSQL. Retour
+`77dca790` accepté : revalidation avant chaque destination, première comprise ;
+test de deux alertes en reprise réussi, contrôle négatif donnant deux envois
+au lieu d'un. **41 tests ciblés réussis sous Node 24**, deux typages réussis.
+Fusion acceptée : seul conflit du filtre de migrations résolu en conservant
+skipMigrations et l'exclusion push_delivery du mode deferCourseMigrations ;
+**10/10 tests de migration réussis** sur PostgreSQL 17 jetable sous Node
+24.22.2 (identity-migration, course-upgrade, messaging-migrations,
+messaging-keys-440-migration), compilation API avec émission réussie (code 0).
+Blobs produit G identiques au candidat qualifié, aucune campagne globale.
+Budget G #448 : 2/2 consommés, aucun nouveau retour demandé.
 
 Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
 À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
