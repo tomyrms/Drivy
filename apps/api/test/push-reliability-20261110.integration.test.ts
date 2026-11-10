@@ -283,4 +283,98 @@ describe('#448 chemin cours : état par destination',()=>{
   expect(run.calls).toEqual([b]);
   expect(run.count(late)).toBe(0);
  });
+
+ /** Transport suspendu sur le premier envoi : une autre connexion peut alors modifier la base avant la destination suivante. */
+ function suspended(firstResult:'SENT'|'INVALID_TOKEN'='SENT'){
+  const calls:string[]=[];let release!:()=>void,enter!:(device:string)=>void;
+  const released=new Promise<void>(resolve=>{release=resolve;}),entered=new Promise<string>(resolve=>{enter=resolve;});
+  const sender:PushSender={async send(device){calls.push(device);if(calls.length===1){enter(device);await released;return firstResult;}return 'SENT';},close(){}};
+  return {sender,calls,release,entered};
+ }
+ const concurrently=async(plan:ReturnType<typeof suspended>,during:(first:string)=>Promise<void>)=>{
+  const batch=processPushBatch(worker,plan.sender);
+  const first=await plan.entered;
+  await during(first);plan.release();await batch;
+  return first;
+ };
+ it('#448 appareil révoqué par une autre connexion pendant l’envoi précédent : il n’est jamais envoyé',async()=>{
+  const {series,a,b}=await enrolled();
+  const plan=suspended();
+  const first=await concurrently(plan,async(sent)=>{await pool.query('UPDATE drivy.push_device SET revoked_at=now() WHERE token=$1',[sent===a?b:a]);});
+  const other=first===a?b:a;
+  expect(plan.calls).toEqual([first]);
+  expect(await deliveries((await own(series.id)).id)).toMatchObject({[first]:{status:'SENT'},[other]:{status:'REVOKED',failure_code:'DEVICE_UNAVAILABLE'}});
+  expect((await own(series.id)).status).toBe('SENT');
+ });
+ it('#448 appareil réattribué à une autre personne pendant l’envoi précédent : il n’est jamais envoyé',async()=>{
+  const {series,a,b}=await enrolled();
+  const plan=suspended();
+  const first=await concurrently(plan,async(sent)=>{await pool.query('UPDATE drivy.push_device SET person_id=$2 WHERE token=$1',[sent===a?b:a,id.bob]);});
+  expect(plan.calls).toEqual([first]);
+  expect(await deliveries((await own(series.id)).id)).toMatchObject({[first===a?b:a]:{status:'REVOKED'}});
+ });
+ it('#448 préférence retirée pendant l’envoi précédent : la destination suivante n’est pas envoyée, la notification est ignorée',async()=>{
+  const {series,a,b}=await enrolled();
+  const plan=suspended();
+  const first=await concurrently(plan,async()=>{await pool.query('INSERT INTO drivy.notification_preference(person_id,course_changes) VALUES($1,false) ON CONFLICT(person_id) DO UPDATE SET course_changes=false',[id.alice]);});
+  expect(plan.calls).toEqual([first]);
+  const n=await own(series.id);
+  expect(n).toMatchObject({status:'SKIPPED',failure_code:'PREFERENCE_DISABLED'});
+  expect(await deliveries(n.id)).toMatchObject({[first]:{status:'SENT'},[first===a?b:a]:{status:'REVOKED',failure_code:'PREFERENCE_DISABLED'}});
+  await pool.query('DELETE FROM drivy.notification_preference WHERE person_id=$1',[id.alice]);
+ });
+ it('#448 droit retiré (adhésion révoquée) pendant l’envoi précédent : la destination suivante n’est pas envoyée',async()=>{
+  const {series,a,b}=await enrolled();
+  const plan=suspended();
+  const first=await concurrently(plan,async()=>{await pool.query("UPDATE drivy.membership SET status='REVOKED' WHERE person_id=$1 AND school_id=$2",[id.alice,id.schoolA]);});
+  expect(plan.calls).toEqual([first]);
+  const n=await own(series.id);
+  expect(n.status).not.toBe('PENDING');
+  expect((await deliveries(n.id))[first===a?b:a]).toMatchObject({status:'REVOKED'});
+  await pool.query("UPDATE drivy.membership SET status='ACTIVE' WHERE person_id=$1 AND school_id=$2",[id.alice,id.schoolA]);
+ });
+ it('#448 échéance dépassée pendant l’envoi précédent : la destination suivante est clôturée EXPIRED sans envoi',async()=>{
+  const {series,a,b}=await enrolled();
+  // La ligne de la notification est verrouillée par le service pendant l'envoi : l'échéance ne peut être modifiée depuis
+  // une autre connexion, elle ne peut que passer. Fenêtre courte, dépassée pendant la suspension du transport.
+  await tick();
+  await pool.query("UPDATE drivy.push_notification SET valid_until=now()+interval '3 seconds' WHERE person_id=$1 AND series_id=$2 AND category='CHANGE'",[id.alice,series.id]);
+  const plan=suspended();
+  const first=await concurrently(plan,async()=>{await new Promise(resolve=>setTimeout(resolve,3500));});
+  expect(plan.calls).toEqual([first]);
+  const n=await own(series.id);
+  expect(n.status).toBe('EXPIRED');
+  expect((await deliveries(n.id))[first===a?b:a]).toMatchObject({status:'EXPIRED'});
+ },20000);
+for(const [label,renew] of [
+  ['même personne, nouveau secret',"SET last_seen_at=now()+interval '1 second',revocation_digest=decode(repeat('ab',32),'hex')"],
+  ['repris par une autre personne et un autre environnement',"SET person_id=$2::uuid,environment='PRODUCTION',last_seen_at=now()+interval '1 second'"]] as const)
+ it(`#448 réponse INVALID_TOKEN tardive sur un enregistrement renouvelé pendant l’envoi (${label}) : l’appareil n’est pas révoqué`,async()=>{
+  const {series,a,b}=await enrolled();
+  const plan=suspended('INVALID_TOKEN');
+  const first=await concurrently(plan,async(sent)=>{await pool.query(`UPDATE drivy.push_device ${renew} WHERE token=$1`,renew.includes('$2')?[sent,id.bob]:[sent]);});
+  const n=await own(series.id);
+  expect(plan.calls[0]).toBe(first);
+  expect([a,b]).toContain(first);
+  expect((await pool.query<{revoked_at:Date|null}>('SELECT revoked_at FROM drivy.push_device WHERE token=$1',[first])).rows[0]!.revoked_at).toBeNull();
+  expect((await deliveries(n.id))[first]).toMatchObject({status:'REJECTED',failure_code:'INVALID_TOKEN'});
+ });
+ it('#448 deux notifications concurrentes sur les mêmes appareils : pas d’interblocage, états et compteurs conservés',async()=>{
+  const first=await enrolled();
+  const secondSeries=await published();
+  await enroll(secondSeries,'demo-alice');
+  // Deux passages simultanés (deux instances du service) : chacun détient une notification avec une destination par appareil.
+  // Barrière : les deux premiers envois sont en vol en même temps, puis les deux rejettent les mêmes appareils.
+  const other=workerPool();
+  let arrived=0;let open!:()=>void;const both=new Promise<void>(resolve=>{open=resolve;});
+  try{
+   const bothInvalid:PushSender={async send(){if(++arrived===2)open();await Promise.race([both,new Promise(resolve=>setTimeout(resolve,3000))]);return 'INVALID_TOKEN';},close(){}};
+   await Promise.all([processPushBatch(worker,bothInvalid),processPushBatch(other,bothInvalid)]);
+  }finally{await other.end();}
+  for(const series of [first.series,secondSeries]){
+   const n=await own(series.id);
+   expect(n).toMatchObject({status:'FAILED',attempts:1,failure_code:'NO_VALID_DEVICE'});
+  }
+  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL",[id.alice])).rows[0].n).toBe(0);
+ },30000);
 });

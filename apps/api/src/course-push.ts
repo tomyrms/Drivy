@@ -86,7 +86,6 @@ const MAX_DELIVERY_ATTEMPTS=5;
 
 /** `recorded` : au moins un résultat de destination est écrit dans la transaction courante (voir `inWorkerTransaction`). */
 interface UnitState{recorded:boolean}
-interface DeliveryTarget{device_id:string;token:string;environment:'SANDBOX'|'PRODUCTION';attempts:number;revoked_at:Date|null;owned:boolean}
 interface NotificationToSend{id:string;person_id:string;valid_until:Date|null;dedupe_key:string}
 
 /** Une unité de travail (une notification de cours, un groupe de messagerie) par transaction, sous le rôle du service.
@@ -149,24 +148,38 @@ const finishDelivery=(db:PoolClient,notificationId:string,deviceId:string,status
  db.query('UPDATE drivy.push_delivery SET status=$3,failure_code=$4,attempts=attempts+$5,completed_at=statement_timestamp() WHERE notification_id=$1 AND device_id=$2',
   [notificationId,deviceId,status,code,status==='REVOKED'?0:1]);
 
-/** Envoie aux seules destinations encore en attente et écrit le résultat de chacune. Le droit d'envoyer à l'appareil est relu
- * ici : un appareil révoqué ou repris par une autre personne depuis le dernier passage est clos sans envoi. */
-async function attemptDeliveries(db:PoolClient,sender:PushSender,notification:NotificationToSend,payload:object,state:UnitState):Promise<void>{
- const targets=(await db.query<DeliveryTarget>(
-  `SELECT d.device_id,d.attempts,p.token,p.environment,p.revoked_at,(p.person_id=$2) AS owned
-   FROM drivy.push_delivery d JOIN drivy.push_device p ON p.id=d.device_id
-   WHERE d.notification_id=$1 AND d.status='PENDING' ORDER BY d.created_at,d.device_id FOR UPDATE OF d`,[notification.id,notification.person_id])).rows;
+/** Envoie aux seules destinations encore en attente et écrit le résultat de chacune.
+ * Autorisation par tentative : après tout envoi attendu (pendant lequel droits, préférences, échéance ou appareils ont pu
+ * changer dans une autre connexion), `revalidate` est relu AVANT la destination suivante ; s'il refuse, la fonction SQL a déjà
+ * clos la notification et, par déclencheur, ses destinations restantes. L'appareil est relu juste avant son envoi (jamais depuis
+ * un instantané pris avant la boucle) : révoqué ou repris par une autre personne, il est clos sans envoi.
+ * Retourne faux quand l'autorisation est perdue : l'appelant ne doit alors pas clore la notification lui-même. */
+async function attemptDeliveries(db:PoolClient,sender:PushSender,notification:NotificationToSend,payload:object,state:UnitState,
+ revalidate:()=>Promise<boolean>):Promise<boolean>{
+ const targets=(await db.query<{device_id:string;attempts:number}>(
+  `SELECT device_id,attempts FROM drivy.push_delivery WHERE notification_id=$1 AND status='PENDING' ORDER BY device_id FOR UPDATE`,[notification.id])).rows;
+ let awaited=false;
  for(const target of targets){
-  if(target.revoked_at!==null||!target.owned){await finishDelivery(db,notification.id,target.device_id,'REVOKED','DEVICE_UNAVAILABLE');state.recorded=true;continue;}
-  const result=await sender.send(target.token,target.environment,payload,notification.valid_until,collapseIdFor(notification.dedupe_key));
+  if(awaited){if(!(await revalidate()))return false;awaited=false;}
+  const device=(await db.query<{token:string;environment:'SANDBOX'|'PRODUCTION';revoked_at:Date|null;owned:boolean;version:string}>(
+   'SELECT token,environment,revoked_at,(person_id=$2) AS owned,last_seen_at::text AS version FROM drivy.push_device WHERE id=$1',[target.device_id,notification.person_id])).rows[0];
+  if(!device||device.revoked_at!==null||!device.owned){await finishDelivery(db,notification.id,target.device_id,'REVOKED','DEVICE_UNAVAILABLE');state.recorded=true;continue;}
+  const result=await sender.send(device.token,device.environment,payload,notification.valid_until,collapseIdFor(notification.dedupe_key));
+  awaited=true;
   if(result==='SENT')await finishDelivery(db,notification.id,target.device_id,'SENT',null);
   else if(result==='INVALID_TOKEN'){
    await finishDelivery(db,notification.id,target.device_id,'REJECTED','INVALID_TOKEN');
-   await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE id=$1',[target.device_id]);
+   // Garde de version : `last_seen_at` change à chaque (ré)enregistrement du jeton, y compris par la même personne avec un
+   // nouveau secret. Une réponse tardive portant sur l'état lu avant l'envoi ne révoque pas un enregistrement renouvelé.
+   // Les destinations sont traitées par identifiant d'appareil croissant : deux notifications concurrentes verrouillent les
+   // appareils communs dans le même ordre (pas d'interblocage).
+   await db.query('UPDATE drivy.push_device SET revoked_at=now() WHERE id=$1 AND token=$2 AND person_id=$3 AND environment=$4 AND last_seen_at::text=$5 AND revoked_at IS NULL',
+    [target.device_id,device.token,notification.person_id,device.environment,device.version]);
   }else if(target.attempts+1>=MAX_DELIVERY_ATTEMPTS)await finishDelivery(db,notification.id,target.device_id,'EXPIRED','RETRY_EXHAUSTED');
   else await db.query("UPDATE drivy.push_delivery SET attempts=attempts+1,failure_code='APNS_RETRY' WHERE notification_id=$1 AND device_id=$2",[notification.id,target.device_id]);
   state.recorded=true;
  }
+ return true;
 }
 
 /** Clôture globale : seulement quand aucune destination n'a de reprise valide. Un envoi accepté par APNs ne vaut ni lecture ni
@@ -194,9 +207,25 @@ async function sendCourseNotification(db:PoolClient,sender:PushSender,id:string,
  // Demandes et examens n'emportent que le texte et la catégorie ; les cours gardent leur charge déployée.
  const payload=isLessonExamCategory(n.category)?{aps:{alert:{title:n.title,body:n.body}},category:n.category}
   :{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category};
- await attemptDeliveries(db,sender,n,payload,state);
- await settleNotification(db,n.id);
+ if(await attemptDeliveries(db,sender,n,payload,state,async()=>(await db.query<{allowed:boolean}>('SELECT drivy.push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed===true))
+  await settleNotification(db,n.id);
  return true;
+}
+
+/** Relit les faits d'une alerte de messagerie et décide. Retourne la charge à envoyer, ou null : l'alerte est alors close
+ * (SKIPPED avec son motif, ou déjà EXPIRED/non PENDING par la fonction SQL) et ses destinations restantes avec elle. */
+async function evaluateMessagingAlert(db:PoolClient,alert:LockedMessagingAlert,personId:string,schoolId:string,conversationId:string):Promise<ReturnType<typeof messagingPushPayload>|null>{
+ const hasDevice=(await db.query('SELECT 1 FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL LIMIT 1',[personId])).rowCount!==0;
+ const facts=(await db.query<MessagingSnapshotRow>('SELECT * FROM drivy.push_messaging_snapshot($1::uuid)',[alert.id])).rows[0];
+ // Plus en attente ou périmée (la fonction l'a alors marquée) : rien à envoyer.
+ if(!facts)return null;
+ const {event,snapshot}=messagingNotificationInputs({person_id:personId,school_id:schoolId,conversation_id:conversationId,message_id:alert.message_id},facts,hasDevice);
+ const decision=decideMessagingNotification(event,snapshot),sequence=Number(alert.message_sequence);
+ // La catégorie mise en file doit rester celle de l'événement relu : une mention ne devient jamais une alerte du général.
+ const skip=!decision.allowed?messagingSkipCode(decision.reason)
+  :queuedMessagingCategories[alert.category]!==decision.category||!Number.isSafeInteger(sequence)||sequence<1?'EVENT_OBSOLETE':undefined;
+ if(skip!==undefined||!decision.allowed){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code=$2 WHERE id=$1",[alert.id,skip??'EVENT_OBSOLETE']);return null;}
+ return messagingPushPayload(event,decision,sequence,{title:alert.title,body:alert.body});
 }
 
 /** Regroupement anti-rafale de la messagerie (#74) : au plus une alerte par personne et par conversation.
@@ -237,26 +266,17 @@ async function sendCoalescedMessaging(db:PoolClient,sender:PushSender,personId:s
    [deferred,lastSentAt,MESSAGING_PUSH_QUIET_WINDOW_SECONDS]);
   if(!examined.length)return rows.length;
  }
- // Messagerie : faits relus alerte par alerte ici, décision par decideMessagingNotification. Aucun accès direct aux tables métier.
- const hasDevice=(await db.query('SELECT 1 FROM drivy.push_device WHERE person_id=$1 AND revoked_at IS NULL LIMIT 1',[personId])).rowCount!==0;
+ // Messagerie : faits relus alerte par alerte (et avant chaque destination), décision par decideMessagingNotification.
  const allowed:{alert:LockedMessagingAlert;payload:ReturnType<typeof messagingPushPayload>}[]=[];
  for(const alert of examined){
-  const facts=(await db.query<MessagingSnapshotRow>('SELECT * FROM drivy.push_messaging_snapshot($1::uuid)',[alert.id])).rows[0];
-  // Plus en attente ou périmée (la fonction l'a alors marquée) : rien à envoyer.
-  if(!facts)continue;
-  const {event,snapshot}=messagingNotificationInputs({person_id:personId,school_id:schoolId,conversation_id:conversationId,message_id:alert.message_id},facts,hasDevice);
-  const decision=decideMessagingNotification(event,snapshot),sequence=Number(alert.message_sequence);
-  // La catégorie mise en file doit rester celle de l'événement relu : une mention ne devient jamais une alerte du général.
-  const skip=!decision.allowed?messagingSkipCode(decision.reason)
-   :queuedMessagingCategories[alert.category]!==decision.category||!Number.isSafeInteger(sequence)||sequence<1?'EVENT_OBSOLETE':undefined;
-  if(skip!==undefined||!decision.allowed){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code=$2 WHERE id=$1",[alert.id,skip??'EVENT_OBSOLETE']);continue;}
-  allowed.push({alert,payload:messagingPushPayload(event,decision,sequence,{title:alert.title,body:alert.body})});
+  const payload=await evaluateMessagingAlert(db,alert,personId,schoolId,conversationId);
+  if(payload)allowed.push({alert,payload});
  }
  const toSend=(item:typeof allowed[number])=>({id:item.alert.id,person_id:personId,valid_until:item.alert.valid_until,dedupe_key:item.alert.dedupe_key});
  // Reprises : chaque alerte déjà entamée garde ses destinations en attente, sans regroupement.
  for(const item of allowed.filter(item=>resuming.has(item.alert.id))){
-  await attemptDeliveries(db,sender,toSend(item),item.payload,state);
-  await settleNotification(db,item.alert.id);
+  if(await attemptDeliveries(db,sender,toSend(item),item.payload,state,async()=>(await evaluateMessagingAlert(db,item.alert,personId,schoolId,conversationId))!==null))
+   await settleNotification(db,item.alert.id);
  }
  const fresh=allowed.filter(item=>!resuming.has(item.alert.id));
  const chosen=chooseCoalescedMessagingAlert(fresh.map(item=>({...item,category:item.alert.category})));
@@ -268,7 +288,7 @@ async function sendCoalescedMessaging(db:PoolClient,sender:PushSender,personId:s
   await db.query("UPDATE drivy.push_notification SET status='FAILED',attempts=attempts+1,failure_code='NO_VALID_DEVICE' WHERE id=$1",[chosen.alert.id]);
   return rows.length;
  }
- await attemptDeliveries(db,sender,toSend(chosen),chosen.payload,state);
- await settleNotification(db,chosen.alert.id);
+ if(await attemptDeliveries(db,sender,toSend(chosen),chosen.payload,state,async()=>(await evaluateMessagingAlert(db,chosen.alert,personId,schoolId,conversationId))!==null))
+  await settleNotification(db,chosen.alert.id);
  return rows.length;
 }
