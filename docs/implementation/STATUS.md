@@ -31,8 +31,11 @@ en **ÉCHEC de compilation des tests** sur `d19e978f` : deux assertions de
 `SchoolIntentExactnessTests` emploient `await` à droite de `&&` (lignes 485/494).
 Aucun test exécuté. Le porteur a explicitement autorisé une extension unique,
 limitée à l'extraction des lectures d'acteur avant ces assertions (conditions
-conservées), puis une seule relance Apple agenda. Reprise `ctx_e61113f91727`
-en cours ; les deux retours antérieurs restent comptabilisés. Reports,
+conservées), puis une seule relance Apple agenda. Après quota et reprise sur
+le compte Claude alternatif confirmé, `d077a758` est livré puis intégré seul
+en `1ff5c148` et poussé. L'unique relance autorisée est
+[42781642234](https://github.com/tomyrms/Drivy/actions/runs/42781642234), en cours
+sur ce SHA ; les deux retours et l'extension unique restent comptabilisés. Reports,
 reactivity et scénario UI iPhone/iPad suivront après compilation. Le budget #431/#438
 reste à deux retours sur deux. Aucune recette physique revendiquée.
 
@@ -45,11 +48,14 @@ combine deux options de sélection ; contrôle d'intégration confié au même
 worker avant #436/#440. La suite complète précédente reste interrompue sans
 résultat final. Le raccord natif #450 est attribué avec #441 au worker iOS,
 distinct des compléments de messagerie non encore intégrés. Livraison native
-`6e6870ee` reçue et relue : file d'enregistrement APNs, secret durable avant
+`6e6870ee` reçue, relue et intégrée en `c4cb1e0e` : file d'enregistrement APNs, secret durable avant
 confirmation, révocation du record exact et génération de photo dans le cache
 et les intentions. Neuf tests d'enregistrement et sept tests de portrait
-écrits ; **NON COMPILÉS, NON EXÉCUTÉS**, non intégrés à ce stade. Sélections
-Apple nécessaires : `reactivity` et `profile`.
+écrits ; **NON COMPILÉS, NON EXÉCUTÉS**. Deux échecs du sélecteur Python après
+intégration venaient des deux suites ajoutées au script mais absentes de son
+oracle. Retour natif 1/2 : `c0e95ce1`, intégré en `ee04722f`, rétablit les
+**25 tests Python réussis**, sans retirer de suite ni affaiblir les égalités.
+Sélections Apple nécessaires après agenda : `reactivity` et `profile`.
 
 Notifications serveur #429/#448 : `59d86540` livré, non intégré. Le worker
 rapporte 20 tests PostgreSQL ciblés, typage/build réussis. Retour groupé 1/2
@@ -57,18 +63,30 @@ rapporte 20 tests PostgreSQL ciblés, typage/build réussis. Retour groupé 1/2
 révoquer un appareil renouvelé sur une réponse tardive, qualifier le test de
 processus avec Node 24 déjà disponible et préciser la fenêtre avant COMMIT.
 Aucune preuve APNs physique ; la livraison au moins une fois reste assumée.
+Après quota de l'ancienne session, reprise du même retour sur le compte
+alternatif confirmé : `ctx_6baa07cfdc9b`, modifications conservées.
 
 Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
 À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
 `ctx_ecd1e22c16ef`, puis reprise de la même tâche en nouvelle session Sonnet 5.5
 (`ctx_70e83e255031`) avec le compte alternatif sélectionné dans Orca. Worktree,
-quatre fichiers partiels et compteur de correction conservés ; aucun résultat
-de qualification supplémentaire revendiqué.
+quatre fichiers partiels et compteur de correction conservés. Livraison
+`c74b93b9` relue : pagination et preuve durable de consommation ; 14 tests
+PostgreSQL ciblés et 6 de migration/harnais rapportés réussis, mais runtime
+Node du PATH hors cible. Retour groupé 1/2 `ctx_42698fd80f90` pour Node 24,
+typage/build, migration de clés préexistantes et ordre de mise à jour.
+Non intégré ; raccord de restauration natif encore à réaliser.
 
 Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
 conservation d'une règle sans délai, base du déplacement restauré et preuves
 navigateur des parcours complets #437/#443 ; création d'examen ouverte pendant
-un changement de statut à vérifier. Reprise acceptée par Orca (`ctx_d7858b74a297`).
+un changement de statut à vérifier. Après quota, même retour repris dans une
+nouvelle session sur le compte alternatif (`ctx_93c8e6bbc26a`).
+
+Boîtes Élèves #447/#449 : lot H attribué à `ctx_bc707e452029` sur la base
+intégrée `ee04722f`, budget initial 0/2. Accès à toutes les demandes/examens,
+actualisation des trois sections, erreurs locales et garde de contexte ;
+preuves Swift/UI à obtenir sur Apple après livraison.
 
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 
