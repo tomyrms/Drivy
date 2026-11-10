@@ -1,5 +1,17 @@
 # État de la réalisation
 
+## 10 novembre 2026 — Reprise des lots interrompus
+
+Le porteur autorise GPT-6-Astra et permet également de continuer avec Sonnet
+5.5. Consignes envoyées aux quatre sessions Sonnet conservées : planning API,
+identité/portraits, compléments web et intentions iOS. GPT-6-Astra est autorisé
+en secours ; le choix du modèle ne bloque plus la reprise. Les reçus Orca
+confirment les envois, sans nouvelle preuve d'exécution à ce stade.
+Branches, commits, fichiers partiels et compteurs de correction sont conservés.
+La compilation Apple des derniers changements iOS reste à effectuer après
+correction ; les résultats du 7 novembre restent attachés à leurs commits.
+Voir le [suivi des lots](checkup-issues-20261107.md).
+
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 
 Inventaire GitHub : 30 anomalies #421–#450 et neuf sujets antérieurs encore ouverts,

@@ -21,11 +21,11 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 2878e141 + b0215d88 relus, non intégrés ; retour 1/2 #423/#424 en cours, ctx_ec6c6bd171dc |
+| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | Retour 1/2 interrompu par quota ; reprise envoyée le 10 novembre à ctx_ec6c6bd171dc, cinq fichiers partiels conservés |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Interrompu par quota Claude ; sept fichiers conservés, non committés/non intégrés ; choix de reprise demandé |
-| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments et raccords A en cours, ctx_44befd0463cc |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Retour 1/2 interrompu par quota Claude ; 7a4d70b4 et 823f4410 conservés, deux fichiers partiels non committés ; Swift non compilé/non intégré |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Reprise envoyée le 10 novembre à ctx_611681e7d5be ; sept fichiers conservés, non committés/non intégrés |
+| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; reprise des compléments envoyée le 10 novembre à ctx_44befd0463cc, cinq fichiers partiels conservés |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Reprise du retour 1/2 envoyée le 10 novembre à ctx_b8241b8cfecb ; deux fichiers partiels conservés, Swift non compilé/non intégré |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
@@ -269,3 +269,25 @@ La réconciliation explicite, l'abandon durable, l'oracle de rejeu et le raccord
 du bouton Prévoir restent à terminer, puis à qualifier sur Apple.
 Les compteurs restent à un retour sur deux pour #431/#438 et pour le raccord
 #444 ; l'interruption de fournisseur n'est pas un nouvel échec produit.
+
+## Reprise autorisée le 10 novembre
+
+Le porteur autorise explicitement GPT-6-Astra, puis précise que Sonnet 5.5
+peut également continuer. Les quatre sessions existantes reçoivent donc une
+consigne de reprise avec Sonnet 5.5 ; GPT-6-Astra est autorisé en secours si
+le fournisseur bloque encore. La décision de routage n'est plus en attente.
+Un changement éventuel exige toujours de gérer l'ancien worker selon le
+guide Orca, sans deux auteurs sur le même worktree.
+
+État relu avant reprise : A conserve cinq fichiers modifiés sur `b0215d88`,
+D cinq sur `e5224959`, E deux sur `823f4410`, C sept sur `b8354517`.
+La limite Claude a aussi interrompu A et D. Aucun delta partiel n'a été
+committé, écrasé ou déclaré qualifié par le coordinateur. La modification
+utilisateur de package-lock.json reste seule hors commits dans son checkout.
+
+Orca a accepté les consignes dans les mêmes dispatchs : A `msg_6a924496eb84`,
+C `msg_98afdf643c37`, D `msg_5031616f464d`, E `msg_1f970daaf6b4`.
+Ces reçus prouvent l'envoi, pas encore une nouvelle exécution ou livraison.
+Le périmètre et les compteurs précédents restent inchangés ; aucune campagne
+dupliquée ni nouveau résultat de test revendiqué. Les quatre périmètres
+conservés sont indépendants : planning API, identité API, web et Swift.
