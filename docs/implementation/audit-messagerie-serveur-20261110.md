@@ -18,12 +18,19 @@ Transition : les clés consommées avant la migration ont été supprimées sans
 
 Retour arrière (API arrêtée, jamais exécuté en production) : supprimer les lignes `consumed_at IS NOT NULL`, rétablir la politique `messaging_otk_peer_read` d'origine et la fonction de `20261023f`, puis `DROP COLUMN consumed_at, key_digest` et l'index `messaging_one_time_key_available`. Rétablir la suppression ressuscite le risque #440.
 
-## Preuves (PostgreSQL 17 réelle, base `drivy_test` synthétique, Docker local)
+## Ordre de mise à jour (#440)
 
-| Contrôle | Résultat |
+La migration n'est pas compatible avec d'anciennes instances encore actives : après `ADD COLUMN key_digest … SET NOT NULL`, l'ancien `INSERT` sans `key_digest` échoue, et l'ancienne réclamation (`DELETE`) n'est plus couverte par la politique de lecture. Ordre exigé : arrêter toutes les instances de l'API, sauvegarder la base, appliquer la migration, démarrer la nouvelle version. Pas de déploiement progressif. Aucun déploiement n'a été fait ni n'est demandé par ce lot.
+
+## Preuves (PostgreSQL 17 réelle, base `drivy_test` synthétique, Docker local, 2026-11-10)
+
+Runtime requalifié sous Node **v24.22.2** (npm 11.19.1, `node24-extract/node-v24.22.2-win-x64`), cible de `apps/api/package.json` (>=24 <25). Les premiers résultats du lot (14/14 et `messaging-keys`) avaient été obtenus sous Node v26.8.1, hors cible : ils sont remplacés par les lignes ci-dessous. Le préfixe `PATH` n'est pas pris en compte par le shell sur cette machine : les commandes appellent `node.exe` 24 par chemin complet (`node ..\..\node_modules\vitest\vitest.mjs`, `node ..\..\node_modules\typescript\bin\tsc`).
+
+| Contrôle (Node 24.22.2) | Résultat |
 | --- | --- |
-| `npx tsc --noEmit` (apps/api) | RÉUSSI |
-| `messaging-keys-436-440.integration.test.ts` (14 tests : 5001 sessions identifiants/contenus exacts, interruption puis reprise avec nouveau service, 409 changement pendant lecture, curseurs/limites invalides, autre compte, taille en octets ; #440 upload→claim→rejeu→redémarrage, concurrence, conflit, RLS, plafond) | RÉUSSI 14/14 (deux tests corrigés dans leur propre énoncé : limite 700 > 500, plafond de 200 mal posé) |
-| `messaging-keys.integration.test.ts` (régression) | RÉUSSI |
-| `identity-migration`, `course-upgrade`, `messaging-migrations` (combinaison harness `skipMigrations` + `deferCourseMigrations`) | RÉUSSI 6/6 |
+| `tsc --noEmit` (apps/api) | RÉUSSI, code 0 |
+| `tsc -p tsconfig.build.json` (build) | RÉUSSI, code 0 |
+| `vitest run` de `messaging-keys-436-440` (14 tests), `messaging-keys` (11 tests, non chiffré jusque-là) et `messaging-keys-440-migration` (4 tests) | RÉUSSI : 3 fichiers, 29/29 |
 | Campagne complète, CI, déploiement, clients Swift/web | NON EXÉCUTÉ |
+
+`messaging-keys-440-migration.integration.test.ts` (nouveau, patron `identity-migration`) : `freshDatabase({ skipMigrations: /^20261110_messaging_otk_consumption_proof/ })`, schéma antérieur vérifié sans `consumed_at`/`key_digest`, deux clés synthétiques non consommées insérées, puis `migrate()` sous `drivy_harness_migrator` (non superuser, sans BYPASSRLS). Prouvé : empreinte SHA-256 de chaque clé présente (recalculée côté Node) et contenu conservé, toutes disponibles, compteur 2 ; rejeu identique 200, claim, rejeu, claim, claim vide, rejeu final sans résurrection ; contenu différent sur un identifiant consommé `409 ONE_TIME_KEY_CONFLICT` ; nouvelle clé distincte acceptée puis distribuée une fois ; limite : un identifiant consommé avant la migration n'a aucune trace et se republie comme une clé neuve (aucun tombstone inventé).
