@@ -14,6 +14,15 @@ La compilation Apple des derniers changements iOS reste à effectuer après
 correction ; les résultats du 7 novembre restent attachés à leurs commits.
 Voir le [suivi des lots](checkup-issues-20261107.md).
 
+Planning API #423/#424/#439/#444/#446 : dernier correctif `9864cc86` relu
+et intégré sans conflit en `5d98a126`. Les blobs API correspondent au candidat
+qualifié : **22 tests planning, 64 tests g1c avec Mailpit et 80 tests voisins
+réussis**, typage/build réussis. Les deux anciens échecs SMTP sont requalifiés ;
+la suite globale n'a pas été répétée et le test SIGTERM non applicable sous
+Windows reste ignoré. Raccords clients en cours, aucune issue fermée ni nouveau
+déploiement. Le worker serveur poursuit #429/#448 (identité des notifications
+et reprise persistante par appareil) ; #441/#445 restent au parcours natif.
+
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 
 Inventaire GitHub : 30 anomalies #421–#450 et neuf sujets antérieurs encore ouverts,

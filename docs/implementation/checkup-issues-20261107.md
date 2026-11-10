@@ -21,13 +21,13 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | Retour 1/2 repris ; worker actif vérifié le 10 novembre, ctx_b8f0bc19c7cf ; delta conservé |
+| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 9864cc86 relu et intégré en 5d98a126 ; 166 tests ciblés, typage/build réussis ; raccords clients encore en cours |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Worker actif vérifié le 10 novembre, ctx_3dcf57d0a714 ; delta conservé, non intégré |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments repris par worker actif ctx_beb71e0a56a1 |
 | E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Retour 1/2 repris par worker actif ctx_83558700fe70 ; delta conservé, Swift non compilé/non intégré |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
-| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
+| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur #429/#448 attribué à ctx_2af4deb01ea6 ; natif #441/#445 à prendre après E |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
 | I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | À rapprocher des critères et commentaires actuels |
 
@@ -309,3 +309,40 @@ transcriptions confirme `terminal: running`, `liveness: live` et des appels
 Bash/PowerShell datés du 10 novembre vers 08 h 28 Europe/Zurich dans chaque
 lot. Contexte conservé et contrat worker retransmis ; budgets inchangés.
 Ce constat prouve l'exécution en cours, pas la réussite des correctifs.
+
+## Intégration finale du serveur planning — 10 novembre
+
+Le retour A livre finalement `9864cc86` avec rapport à jour, au-dessus de
+`2878e141` et `b0215d88`. Le premier message de livraison indiquait encore
+des fichiers non committés ; l'état Git ensuite observé est propre et le
+commit contient bien les cinq fichiers du correctif et le rapport.
+Revue du delta : fonction SQL de disponibilité réservée au personnel actif
+de l'école, sans exposition des lignes/motifs de congés ; affectation de
+l'accompagnateur vérifiée avant disponibilité ; comparaison sémantique des
+règles d'annulation ; vrai no-op et échéance de nouvelle inscription couverts ;
+test SQL de bijection avec témoin positif et erreur précise.
+
+Sorties de tests du worker consultées : planning **22/22**, g1c **64/64**
+avec Mailpit isolé, suites voisines **80/80**. Typage et build réussis après
+delta. Les deux anciens échecs SMTP sont donc requalifiés ; le cas SIGTERM
+ignoré sous Windows reste distinct. Suite globale non répétée et aucune
+qualification Linux/Apple nouvelle attribuée à ce commit.
+
+Fusion sans conflit en `5d98a126` dans la branche coordinatrice ; comparaison
+`git diff --exit-code 9864cc86 HEAD -- apps/api` vide, mêmes sources que les
+preuves du worker. Package-lock utilisateur conservé. Pas de push, clôture
+d'issue ni déploiement à cette étape. Raccords web/Swift encore en réalisation.
+Le compteur reste à un retour correctif sur deux pour #423/#424, résolu.
+
+## Suite G serveur : #429 et #448
+
+Après intégration A, même worker/session/worktree repris sur le lot serveur
+de notifications, tâche `task_b1c240750aac`, dispatch `ctx_2af4deb01ea6`.
+Les issues GitHub ont été relues : ouvertes, sans commentaire ni changement
+depuis le relevé initial. Travail : identité distincte des événements avec
+transition des anciennes clés, puis reprise persistante par appareil dans
+les chemins métier et messagerie, sans réexpédition des destinations acquises.
+PostgreSQL réelle, transport synthétique, cas de redémarrage/révocation et
+contrôles ciblés ; aucun résultat APNs physique attendu ou inventé.
+Nouveau problème, zéro retour consommé. Aucun changement Swift attribué à ce
+worker ; #441/#445 seront repris par le propriétaire natif après son lot E.
