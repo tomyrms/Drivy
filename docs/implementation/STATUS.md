@@ -34,9 +34,16 @@ limitée à l'extraction des lectures d'acteur avant ces assertions (conditions
 conservées), puis une seule relance Apple agenda. Après quota et reprise sur
 le compte Claude alternatif confirmé, `d077a758` est livré puis intégré seul
 en `1ff5c148` et poussé. L'unique relance autorisée est
-[42781642234](https://github.com/tomyrms/Drivy/actions/runs/42781642234), en cours
-sur ce SHA ; les deux retours et l'extension unique restent comptabilisés. Reports,
-reactivity et scénario UI iPhone/iPad suivront après compilation. Le budget #431/#438
+[42781642234](https://github.com/tomyrms/Drivy/actions/runs/42781642234), sur ce
+SHA : **compilation réussie**, tests agenda en cours. Les deux retours et
+l'extension unique restent comptabilisés. Sur le candidat intégré/poussé
+`cb60fd27`, les qualifications restantes ont été déclenchées une fois :
+[reports 42783615631](https://github.com/tomyrms/Drivy/actions/runs/42783615631),
+[reactivity 42783623109](https://github.com/tomyrms/Drivy/actions/runs/42783623109),
+[profile 42783630248](https://github.com/tomyrms/Drivy/actions/runs/42783630248)
+et [UI de reprise 42783636166](https://github.com/tomyrms/Drivy/actions/runs/42783636166)
+(une méthode SchoolCourseJourneyUITests, iPhone et iPad). Résultats encore
+inconnus ; pas de campagne globale ni IPA. Le budget #431/#438
 reste à deux retours sur deux. Aucune recette physique revendiquée.
 
 Identité serveur : `a05f457d` puis `caa97d5d` relus et intégrés en `441b261d`.
@@ -90,6 +97,9 @@ Boîtes Élèves #447/#449 : lot H attribué à `ctx_bc707e452029` sur la base
 intégrée `ee04722f`, budget initial 0/2. Accès à toutes les demandes/examens,
 actualisation des trois sections, erreurs locales et garde de contexte ;
 preuves Swift/UI à obtenir sur Apple après livraison.
+Le worker s'est arrêté après un inventaire général, sans livraison H ; la
+consigne d'implémentation lui a été renvoyée sur la même dispatch. Le checkout
+est bien avancé à `ee04722f` via `ca98a782`, sans correctif H à ce contrôle.
 
 Neuf anciennes issues : rapprochement des critères GitHub et preuves confié
 en lecture seule à `ctx_82ec49650369`. Aucun nouveau test ni changement d'issue
