@@ -52,7 +52,9 @@ et [UI de reprise 42783636166](https://github.com/tomyrms/Drivy/actions/runs/427
 Reports : **121/121 tests dans six suites réussis** sur cb60fd27 ;
 SchoolLessonHubTests, SchoolLessonLifecycleTests et SchoolTrainingRefreshTests
 passent donc sur ce candidat. Profile : 17/17 réussi. Reactivity : **139/140**,
-un échec SchoolPushRegistrationTests détaillé ci-dessous ; UI encore en cours.
+un échec SchoolPushRegistrationTests détaillé ci-dessous. UI de reprise :
+**RÉUSSI, 1/1 sur iPhone et 1/1 sur iPad** (52,76 s et 42,76 s), sur cb60fd27.
+Cette exécution ne vaut pas recette physique ni revue des captures.
 Pas de campagne globale ni IPA. Le budget #431/#438
 reste à deux retours sur deux. Aucune recette physique revendiquée.
 
@@ -82,7 +84,11 @@ Apple sera regroupée sur le candidat stable. Deux échecs du sélecteur Python 
 intégration venaient des deux suites ajoutées au script mais absentes de son
 oracle. Retour natif 1/2 : `c0e95ce1`, intégré en `ee04722f`, rétablit les
 **25 tests Python réussis**, sans retirer de suite ni affaiblir les égalités.
-Profile est qualifié ; reactivity attend cette correction ciblée.
+Profile est qualifié. Retour #441 2/2 livré en `5e5b4a7a`, delta relu :
+le premier PUT est retenu par une barrière, le compteur exact est vérifié en
+vol, puis la file est drainée ; le refus du coffre et le secret exact à la
+reprise restent vérifiés. Aucun code produit modifié. Swift NON EXÉCUTÉ pour
+ce delta ; intégration et reactivity regroupées avec le candidat natif stable.
 
 Notifications serveur #429/#448 : `59d86540` livré, non intégré. Le worker
 rapporte 20 tests PostgreSQL ciblés, typage/build réussis. Retour groupé 1/2
@@ -112,8 +118,16 @@ Candidat serveur/web intégré et poussé `57899be7` : qualification commune
 lancée une fois pour les interactions entre lots et le SIGTERM POSIX :
 [vérifications API/web/contrats 42786457056](https://github.com/tomyrms/Drivy/actions/runs/42786457056)
 et [ouverture navigateur avec formations 42786461696](https://github.com/tomyrms/Drivy/actions/runs/42786461696).
-Les deux runs sont en cours ; aucun résultat anticipé. Pas de nouvelle
-campagne iOS globale, IPA, fusion master ou déploiement.
+Vérifications **RÉUSSIES** : API **1149/1149 tests, 102 fichiers**, dont les
+sept tests de processus et le SIGTERM POSIX effectivement exécuté ; web
+**905 réussis et un échec attendu préexistant, 83 fichiers**. Cet échec déclaré
+dans course-model-fuseaux-limites.test.ts conserve le défaut de l'heure doublée ;
+il n'est pas présenté comme un correctif. Contrats, typages et builds verts.
+Ouverture navigateur **ÉCHEC** après création durable d'un tarif et perte de
+réponse : la recette attend le formulaire, la capture montre une ligne
+« À confirmer ». Cause produit/oracle à départager ; retour catalogue #422
+**2/2**, `ctx_f0381ec5e53e`, sans relance distante avant résultat exploitable.
+Pas de campagne iOS globale, IPA, fusion master ou déploiement.
 
 Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
 À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
@@ -133,6 +147,12 @@ Retour serveur 1/2 résolu. Raccord natif #428/#435/#436 et réception #445
 confiés au même worker Sonnet (`ctx_d039d4038603`, budget natif initial 0/2)
 sur `6a7ac8d0` : ordonnanceur commun, activation de sauvegarde récupérable,
 restauration paginée et alerte foreground liée à la visibilité réelle.
+Livraison `2de2b4fa` NON COMPILÉE/NON EXÉCUTÉE, non intégrée. Revue groupée
+et retour natif **1/2** `ctx_55ba986b1412` : verrou synchrone hors contexte
+async, preuve de la séquence exacte et de la présentation pour #445,
+ordonnancement sous transport retenu pour #428, sélection Apple réellement
+exécutable avec oracle Python. Les suites média/READINESS existantes gardent
+leurs échecs et leurs budgets ; aucune suppression ni relance implicite.
 
 Complément web : retour 1/2 `cfb05e33` relu et intégré en `0fd890ea`, blobs
 web identiques au candidat du worker. Règles sans délai conservées exactement,
@@ -160,9 +180,15 @@ lecture, purger la cible au changement de contexte, rendre cohérent le GET de
 demande des fixtures learners-boxes (actuellement vide), et sortir les appels
 NSLock.lock/unlock du contexte async Swift 6. Preuves de deux cibles réellement
 ouvrables demandées dans le même harnais ; aucune nouvelle campagne lancée.
-Le worker s'est arrêté après un inventaire général, sans livraison H ; la
-consigne d'implémentation lui a été renvoyée sur la même dispatch. Le checkout
-est bien avancé à `ee04722f` via `ca98a782`, sans correctif H à ce contrôle.
+Retour 2/2 `fc3ef2ab` reçu et delta relu : cible exam.id après lecture,
+fixtures de demandes cohérentes, deux examens distincts et verrou synchrone.
+NON COMPILÉ/NON EXÉCUTÉ et non intégré. Blocage statique précis : examTarget
+et resolveExamTarget sont privés de SchoolTrainingScreen, alors que leur
+appel est dans le type séparé SchoolTrainingContent (ligne 956). Une extension
+limitée à ce raccord puis à la compilation et qualification Apple ciblée a été
+soumise au porteur ; aucune correction ni CI supplémentaire avant réponse.
+Limites conservées : une seule cible de demande ouvrable, lecture lente
+simulée par deux secondes dans le serveur fictif, défilement jamais observé.
 
 Neuf anciennes issues : rapprochement en lecture seule livré par
 `ctx_82ec49650369`. Aucune n'est sans implémentation ; des critères de

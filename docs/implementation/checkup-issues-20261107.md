@@ -24,11 +24,11 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 9864cc86 relu et intégré en 5d98a126 ; 166 tests ciblés, typage/build réussis ; raccords clients encore en cours |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | API qualifiée et intégrée en 441b261d ; natif intégré, compilation et 17/17 tests profile réussis sur cb60fd27 (42783630248) |
-| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières intégrées en 9a159fb2 ; complément cfb05e33 intégré en 0fd890ea : 13 contrôles navigateur, 20 tests, typage/build réussis ; pas de serveur réel ni CI |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Agenda 42781642234 en échec (154/155, les 24 exactness passent), extension soumise au porteur. Sur cb60fd27 : reports 121/121 réussi ; reactivity échoue sur le lot #441, UI de reprise encore en cours |
-| F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | Serveur 40fa87a8 intégré en da9be6e8 ; Node 24, typage/build et 29/29 tests PostgreSQL réussis ; retour serveur 1/2 résolu. Natif avec #445 attribué à ctx_d039d4038603 sur 6a7ac8d0, budget neuf 0/2 |
-| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur intégré en 82c05f35, 41 tests ciblés réussis ; harnais qualifié (10/10 PostgreSQL, build Node24), #448 2/2 résolu. Reactivity 139/140 : retour natif #441 2/2 confié au propriétaire F avec #445 |
-| H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | bbbf5cc1 relu, non intégré/non compilé ; retour 2/2 ctx_d9874e329b80 : examen exact après lecture, fixtures de demandes cohérentes et verrou Swift6 hors async |
+| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Intégré ; CI web verte sur 57899be7. Recette réelle formations en échec à la récupération d'un tarif ; retour catalogue #422 2/2 ctx_f0381ec5e53e pour départager produit et oracle |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Agenda 42781642234 en échec (154/155, les 24 exactness passent), extension soumise au porteur. Sur cb60fd27 : reports 121/121 et UI de reprise 1/1 iPhone + 1/1 iPad réussis ; reactivity échoue sur le lot #441 |
+| F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | Serveur intégré et CI verte. Natif 2de2b4fa non compilé/non intégré ; retour 1/2 ctx_55ba986b1412 sur compilation, preuve de réception, ordre des envois et sélection Apple |
+| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur intégré et CI verte, #448 2/2 résolu. Reactivity 139/140 : retour #441 2/2 livré en 5e5b4a7a, barrière du test relue, qualification Apple en attente du candidat natif stable |
+| H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | fc3ef2ab, retour 2/2 relu, non intégré/non compilé : deux helpers déclarés dans le mauvais composant Swift ; extension ciblée demandée au porteur avant correction et Apple |
 | I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | Rapprochement ctx_82ec49650369 livré ; compléments 6c1f8957 récupérés dans le candidat, échecs UI média et READINESS conservés |
 
 Les lots A et B sont indépendants : deux workers isolés suffisent pour commencer.
@@ -126,7 +126,14 @@ Qualification serveur/web intégrée du 10 novembre : candidat poussé
 [42786461696](https://github.com/tomyrms/Drivy/actions/runs/42786461696)
 (navigateur, ouverture et formations). Justification : interactions entre
 les lots A/C/D/F/G et qualification du SIGTERM sur Linux, après les preuves
-ciblées ; une seule exécution lancée, résultats en cours. Les sources iOS
+ciblées ; une seule exécution lancée. Refonte : **RÉUSSI**, API 1149/1149
+(102 fichiers), web 905 réussis + un échec attendu préexistant (83 fichiers),
+SIGTERM Linux exécuté avec succès. L'échec attendu conserve le défaut documenté
+de relecture d'une heure doublée ; il n'est pas compté comme un correctif.
+Ouverture/formations : **ÉCHEC**, timeout de l'oracle qui attend le formulaire
+après le POST durable du tarif ; capture d'une ligne « À confirmer ». Retour
+catalogue 2/2 attribué au même worker, cause produit/oracle encore à confirmer.
+Les sources iOS
 encore en réalisation ne justifient pas de relancer ces suites inchangées.
 
 ## Première revue du lot B
