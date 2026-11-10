@@ -25,7 +25,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Worker actif vérifié le 10 novembre, ctx_3dcf57d0a714 ; delta conservé, non intégré |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments repris par worker actif ctx_beb71e0a56a1 |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Retour 1/2 repris par worker actif ctx_83558700fe70 ; delta conservé, Swift non compilé/non intégré |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | d4cfc1f5 relu, non intégré/non compilé ; retour groupé 2/2 #431/#438 à ctx_43ff1abb5af1 |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur #429/#448 attribué à ctx_2af4deb01ea6 ; natif #441/#445 à prendre après E |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
@@ -346,3 +346,34 @@ PostgreSQL réelle, transport synthétique, cas de redémarrage/révocation et
 contrôles ciblés ; aucun résultat APNs physique attendu ou inventé.
 Nouveau problème, zéro retour consommé. Aucun changement Swift attribué à ce
 worker ; #441/#445 seront repris par le propriétaire natif après son lot E.
+
+## Deuxième retour sur le lot E — 10 novembre
+
+Livraison `d4cfc1f5` (rapports successifs `ctx_83558700fe70` et
+`ctx_38877eb20654`) : comparaison puis conservation explicite de la saisie,
+retrait durable avant abandon annoncé, oracle canonique de rejeu et gate de
+création d'examen connu ACTIVE. Ce dernier raccord #444 est accepté à la
+lecture ; sa preuve reste un helper et le branchement source, pas un test UI.
+Le Swift reste **NON COMPILÉ / NON EXÉCUTÉ**, delta non intégré.
+
+Revue du delta uniquement, retour groupé **2/2 #431/#438**, dispatch
+`ctx_43ff1abb5af1`, tâche `task_b8d4f7106aa7` :
+
+- Abandon : la relecture suspendue ne pose pas isBusy ; un choix de conservation
+  peut remplacer kept et envoyer une nouvelle demande, ensuite retirée à tort
+  par la réponse tardive de l'abandon. Sérialiser le geste et tester le vrai
+  workspace avec transport suspendu.
+- Comparaison : la différence est déduite des libellés, pas des identités ; deux
+  moniteurs homonymes, deux types au même titre ou inconnus peuvent masquer une
+  affectation différente avant réécriture. Comparer les valeurs métier avant
+  formatage, sans exposer d'identifiants techniques dans l'UI.
+- Rejeu du coffre : old absent/new exact déjà présent est encore refusé pour
+  une intention élève, parce que l'admission considère new comme sa propre
+  concurrente. Préserver idempotence exacte et refus des autres intentions,
+  dans les deux coffres ; aligner aussi l'égalité de old du coffre mémoire.
+
+Les chemins Impeccable et Uncodixfy existent et ont été revérifiés puis fournis
+au worker ; son rapport doit retirer les affirmations contradictoires. Pas
+de nouveau harnais d'examen exigé. Compilation/tests Apple ciblés préparés
+(agenda, reports, reactivity et scénario UI de reprise), à lancer sur le delta
+stable. Aucun nouveau résultat ni succès d'exécution revendiqué ici.

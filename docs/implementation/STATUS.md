@@ -23,6 +23,12 @@ Windows reste ignoré. Raccords clients en cours, aucune issue fermée ni nouvea
 déploiement. Le worker serveur poursuit #429/#448 (identité des notifications
 et reprise persistante par appareil) ; #441/#445 restent au parcours natif.
 
+Intentions iOS : `d4cfc1f5` livré et delta relu, **non intégré, non compilé,
+non exécuté**. La création d'examen exige désormais un statut connu ACTIVE
+dans le code. Retour groupé 2/2 #431/#438 sur concurrence de l'abandon,
+comparaison d'identités masquées par un même libellé et rejeu idempotent d'une
+intention élève. Tests Apple ciblés à lancer une fois ces points corrigés.
+
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 
 Inventaire GitHub : 30 anomalies #421–#450 et neuf sujets antérieurs encore ouverts,
