@@ -482,7 +482,8 @@ import Testing
         await reopened.retryUnconfirmed()
         await reopened.abandonUnconfirmed()                  // second abandon : sans effet
         _ = await reopened.saveDraft(); await reopened.publish()
-        #expect(await server.writes.count == writes && await server.heldReads == 1)
+        let writesDuringHold = await server.writes.count, heldDuringHold = await server.heldReads
+        #expect(writesDuringHold == writes && heldDuringHold == 1)
         #expect(try ids(EncryptedSchoolCourseIntentStore(directory: folder, keyData: key)) == vault)
         #expect(reopened.hasUnconfirmedOperation && reopened.reconciliation != nil)
 
@@ -491,7 +492,8 @@ import Testing
         await abandon.value
         #expect(!reopened.isBusy && !reopened.hasUnconfirmedOperation && reopened.reconciliation == nil)
         #expect(try ids(store) == [bystander.id])
-        #expect(await server.writes.count == writes && await server.mutations == 1)
+        let writesAfter = await server.writes.count, mutationsAfter = await server.mutations
+        #expect(writesAfter == writes && mutationsAfter == 1)
     }
 
     @Test func anAbandonThatFailsToReadUnlocksTheEditorAndChangesNothing() async throws {
