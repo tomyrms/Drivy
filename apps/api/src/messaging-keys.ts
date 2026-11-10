@@ -59,7 +59,7 @@ export async function bindDevice(db: PoolClient, actor: KeyActor): Promise<void>
 
 async function oneTimeKeyCounts(db: PoolClient, actor: KeyActor): Promise<Record<string, number>> {
   const rows = await db.query<{ algorithm: string; count: number }>(`SELECT algorithm,count(*)::int AS count FROM drivy.messaging_one_time_key
-    WHERE school_id=$1 AND person_id=$2 AND device_id=$3 GROUP BY algorithm`, [actor.schoolId, actor.personId, actor.deviceId]);
+    WHERE school_id=$1 AND person_id=$2 AND device_id=$3 AND consumed_at IS NULL GROUP BY algorithm`, [actor.schoolId, actor.personId, actor.deviceId]);
   return Object.fromEntries(rows.rows.map(row => [row.algorithm, row.count]));
 }
 
@@ -90,17 +90,20 @@ export async function uploadKeys(db: PoolClient, actor: KeyActor, body: unknown)
     if (entries.length > limits.oneTimeKeysPerUpload) throw invalid('Trop de clés à usage unique.');
     for (const [keyId, key] of entries) {
       if (!keyIdPattern.test(keyId) || !(isObject(key) || typeof key === 'string') || bytes(key) > 2048) throw invalid();
-      // Idempotent pour un renvoi identique ; une clé différente sous le même identifiant est refusée.
-      const inserted = await db.query(`INSERT INTO drivy.messaging_one_time_key(school_id,person_id,device_id,key_id,key)
-        VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, [actor.schoolId, actor.personId, actor.deviceId, keyId, JSON.stringify(key)]);
+      // Idempotent pour un renvoi identique, y compris d'une clé déjà distribuée (la ligne reste, marquée consommée :
+      // elle n'est jamais ressuscitée). Un autre contenu sous le même identifiant est refusé, disponible ou consommé.
+      const inserted = await db.query(`INSERT INTO drivy.messaging_one_time_key(school_id,person_id,device_id,key_id,key,key_digest)
+        VALUES($1,$2,$3,$4,$5::jsonb,sha256(convert_to($5::jsonb::text,'UTF8'))) ON CONFLICT DO NOTHING`,
+        [actor.schoolId, actor.personId, actor.deviceId, keyId, JSON.stringify(key)]);
       if (inserted.rowCount === 0) {
-        const same = await db.query<{ same: boolean }>(`SELECT key=$5::jsonb AS same FROM drivy.messaging_one_time_key
+        const same = await db.query<{ same: boolean }>(`SELECT key_digest=sha256(convert_to($5::jsonb::text,'UTF8')) AS same FROM drivy.messaging_one_time_key
           WHERE school_id=$1 AND person_id=$2 AND device_id=$3 AND key_id=$4`, [actor.schoolId, actor.personId, actor.deviceId, keyId, JSON.stringify(key)]);
         if (same.rows[0] && !same.rows[0].same) throw new ApiError(409, 'ONE_TIME_KEY_CONFLICT', 'Clé à usage unique déjà publiée.');
       }
     }
+    // Plafond sur les clés disponibles seulement : les preuves de consommation ne comptent pas.
     const total = await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM drivy.messaging_one_time_key
-      WHERE school_id=$1 AND person_id=$2 AND device_id=$3`, [actor.schoolId, actor.personId, actor.deviceId]);
+      WHERE school_id=$1 AND person_id=$2 AND device_id=$3 AND consumed_at IS NULL`, [actor.schoolId, actor.personId, actor.deviceId]);
     if ((total.rows[0]?.count ?? 0) > limits.oneTimeKeysPerDevice) throw invalid('Trop de clés à usage unique.');
   }
   if (input.fallback_keys !== undefined) {
@@ -462,16 +465,72 @@ export async function putBackupKeys(db: PoolClient, actor: KeyActor, versionText
   return { etag: String(safeId(etag.rows[0]?.etag ?? 0)), count: count.rows[0]?.count ?? 0 };
 }
 
-export async function getBackupKeys(db: PoolClient, actor: KeyActor, versionText: string | undefined) {
+/** Lecture paginée (#436) : `limit` ≤ 500 sessions et ≤ 2 Mio de contenu par page ; le curseur est opaque pour le client. */
+export const backupPage = { defaultLimit: 200, maxLimit: 500, maxBytes: 2 * 1024 * 1024, legacyMax: 5000 };
+const roomPattern = /^![0-9a-f-]{36}:drivy$/, sessionPattern = /^[A-Za-z0-9+/=_-]{1,128}$/;
+const cursorInvalid = () => new ApiError(400, 'BACKUP_CURSOR_INVALID', 'Curseur de sauvegarde invalide : recommencez la lecture depuis le début.');
+
+function encodeCursor(actor: KeyActor, version: number, etag: number, room: string, session: string): string {
+  return Buffer.from(JSON.stringify([1, actor.schoolId, actor.personId, version, etag, room, session])).toString('base64url');
+}
+/** Le curseur ne porte que portée, version, état de la sauvegarde et position : jamais de contenu. Tout écart est refusé. */
+function decodeCursor(actor: KeyActor, version: number, text: string): { etag: number; room: string; session: string } {
+  if (text.length > 600 || !/^[A-Za-z0-9_-]+$/.test(text)) throw cursorInvalid();
+  let parsed: unknown;
+  try { parsed = JSON.parse(Buffer.from(text, 'base64url').toString('utf8')); } catch { throw cursorInvalid(); }
+  if (!Array.isArray(parsed) || parsed.length !== 7) throw cursorInvalid();
+  const [format, school, person, cursorVersion, etag, room, session] = parsed as unknown[];
+  if (format !== 1 || school !== actor.schoolId || person !== actor.personId || cursorVersion !== version
+    || typeof etag !== 'number' || !Number.isSafeInteger(etag) || etag < 0
+    || typeof room !== 'string' || !roomPattern.test(room) || typeof session !== 'string' || !sessionPattern.test(session)) throw cursorInvalid();
+  return { etag, room, session };
+}
+
+export async function getBackupKeys(db: PoolClient, actor: KeyActor, versionText: string | undefined, paging?: { limit?: number; from?: string }) {
   const version = parseVersion(versionText);
-  const backup = await db.query('SELECT 1 FROM drivy.messaging_key_backup WHERE school_id=$1 AND person_id=$2 AND version=$3',
+  const backup = await db.query<{ etag: string }>('SELECT etag FROM drivy.messaging_key_backup WHERE school_id=$1 AND person_id=$2 AND version=$3',
     [actor.schoolId, actor.personId, version]);
   if (!backup.rows[0]) throw notFound();
-  const rows = await db.query<{ room: string; session: string; data: Json }>(`SELECT room_id AS room,session_id AS session,data
-    FROM drivy.messaging_key_backup_session WHERE school_id=$1 AND person_id=$2 AND version=$3 ORDER BY room_id,session_id LIMIT 5001`,
+  const etag = safeId(backup.rows[0].etag);
+  const total = (await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM drivy.messaging_key_backup_session
+    WHERE school_id=$1 AND person_id=$2 AND version=$3`, [actor.schoolId, actor.personId, version])).rows[0]?.count ?? 0;
+  const toRooms = (rows: { room: string; session: string; data: Json }[]) => {
+    const rooms: Record<string, { sessions: Record<string, Json> }> = {};
+    for (const row of rows) (rooms[row.room] ??= { sessions: {} }).sessions[row.session] = row.data;
+    return rooms;
+  };
+  if (!paging || (paging.limit === undefined && paging.from === undefined)) {
+    // Forme historique pour les sauvegardes qui tiennent dans une réponse ; au-delà, refus explicite (jamais une lecture partielle).
+    if (total > backupPage.legacyMax)
+      throw new ApiError(422, 'BACKUP_PAGINATION_REQUIRED', 'Sauvegarde volumineuse : lisez-la page par page avec limit et from.');
+    const rows = await db.query<{ room: string; session: string; data: Json }>(`SELECT room_id AS room,session_id AS session,data
+      FROM drivy.messaging_key_backup_session WHERE school_id=$1 AND person_id=$2 AND version=$3 ORDER BY room_id,session_id LIMIT ${backupPage.legacyMax + 1}`,
+      [actor.schoolId, actor.personId, version]);
+    if (rows.rows.length > backupPage.legacyMax)
+      throw new ApiError(422, 'BACKUP_PAGINATION_REQUIRED', 'Sauvegarde volumineuse : lisez-la page par page avec limit et from.');
+    return { rooms: toRooms(rows.rows) };
+  }
+  const limit = Math.min(paging.limit ?? backupPage.defaultLimit, backupPage.maxLimit);
+  const after = paging.from === undefined ? undefined : decodeCursor(actor, version, paging.from);
+  // La sauvegarde a changé depuis la première page : la suite ne serait pas cohérente avec ce qui a déjà été lu.
+  if (after && after.etag !== etag)
+    throw new ApiError(409, 'BACKUP_CHANGED_DURING_READ', 'La sauvegarde a changé pendant la lecture : recommencez depuis le début.');
+  const rows = await db.query<{ room: string; session: string; data: Json; size: number }>(`SELECT room_id AS room,session_id AS session,data,
+      octet_length(data::text) AS size FROM drivy.messaging_key_backup_session WHERE school_id=$1 AND person_id=$2 AND version=$3
+      AND ($4::text IS NULL OR (room_id,session_id) > ($4,$5)) ORDER BY room_id,session_id LIMIT $6`,
+    [actor.schoolId, actor.personId, version, after?.room ?? null, after?.session ?? null, limit + 1]);
+  const page: typeof rows.rows = [];
+  let bytes = 0;
+  for (const row of rows.rows.slice(0, limit)) {
+    if (page.length > 0 && bytes + row.size > backupPage.maxBytes) break;
+    page.push(row); bytes += row.size;
+  }
+  const more = rows.rows.length > page.length, lastRow = page[page.length - 1];
+  // Relecture de l'état : une écriture concurrente entre les deux lectures rend la page incohérente.
+  const again = await db.query<{ etag: string }>('SELECT etag FROM drivy.messaging_key_backup WHERE school_id=$1 AND person_id=$2 AND version=$3',
     [actor.schoolId, actor.personId, version]);
-  if (rows.rows.length > 5000) throw new ApiError(503, 'SERVICE_UNAVAILABLE', 'Sauvegarde trop volumineuse.');
-  const rooms: Record<string, { sessions: Record<string, Json> }> = {};
-  for (const row of rows.rows) (rooms[row.room] ??= { sessions: {} }).sessions[row.session] = row.data;
-  return { rooms };
+  if (!again.rows[0] || safeId(again.rows[0].etag) !== etag)
+    throw new ApiError(409, 'BACKUP_CHANGED_DURING_READ', 'La sauvegarde a changé pendant la lecture : recommencez depuis le début.');
+  return { rooms: toRooms(page), next_from: more && lastRow ? encodeCursor(actor, version, etag, lastRow.room, lastRow.session) : null,
+    complete: !more, etag: String(etag), count: total };
 }
