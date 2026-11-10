@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import type { GeneralDraft, WizardDraft } from '../../console/formation-model';
+import { rulesDraft, type GeneralDraft, type WizardDraft } from '../../console/formation-model';
 import type { Programme } from '../../formation-api';
 import {
   formationMarkLabels, formationTag, isOpenable, isProvisional, projectCategories, projectProgramme, programmeRefusal,
@@ -30,7 +30,7 @@ function programme(over: Partial<Programme> = {}): Programme {
 const wizard = (over: Partial<WizardDraft> = {}): WizardDraft => ({
   category: 'B', intent: 'NEW', programmeLabel: '', source: null,
   competencies: [{ uid: 'c1', key: null, label: 'Préparer la moto', description: 'Contrôles avant le départ.' }],
-  rules: { procedureText: 'Déroulement saisi.', cancellationPolicyText: 'Annulation saisie.', sources: '' },
+  rules: { ...rulesDraft(null), procedureText: 'Déroulement saisi.', cancellationPolicyText: 'Annulation saisie.' },
   tariff: { type: 'INDIVIDUAL_LESSON', label: 'Leçon de 45 minutes', duration: '45', unitLabel: 'leçon', price: '95', validFrom: '2026-11-03', validUntil: '', enabled: true, termsText: 'Conditions saisies.' },
   ...over,
 });

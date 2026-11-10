@@ -6,6 +6,7 @@ import { assignmentSchema, catalogPolicySchema, learnerSchema, memberSchema, off
 import { applicableProducts, assignmentCovers, canEditPlannedLesson, initialLessonForm, individualCancellationDeadline, lessonCommercial, lessonInterval, lessonLocalInstants,
   lessonWriteBody, planningLessonSchema, planningProductSchema, planningTrainingLabel, slotAvailabilitySchema, type LessonForm, type PlanningLesson } from '../../lesson-planning-model';
 import type { LessonIntention, PlannedLessonDraft } from '../../console/agenda-intentions';
+import { rebaseConfirmedDraft } from '../../console/draft-model';
 import { readError, useCommandLane, useConsole, useLoad, useUnsavedChanges, type Outcome } from '../../console/context';
 import { distinctLabel, homonymReferences } from '../../person-reference';
 import { RequestFailure } from '../../protocol';
@@ -59,10 +60,14 @@ export interface LessonEditorInput {
  * `requestId` : la demande de déplacement de l'élève que ce déplacement accepte ; l'école la ferme avec la leçon.
  */
 export function useLessonEditor(input: LessonEditorInput) {
-  const { original, learnerId, catalogue, requestId, restored, onQueued, onRefused } = input;
+  const { original: loadedOriginal, learnerId, catalogue, requestId, restored, onQueued, onRefused } = input;
   const { schoolId, school, membership } = useConsole();
   const lane = useCommandLane();
-  const initial = useRef(initialLessonForm(original, learnerId));
+  // `base` est la leçon sur laquelle la saisie repose : elle seule part dans If-Match. Elle n'avance que par une relecture réconciliée (#442).
+  const [base, setBase] = useState(loadedOriginal);
+  const original = base;
+  const [rebased, setRebased] = useState(false);
+  const initial = useRef(initialLessonForm(loadedOriginal, learnerId));
   const [form, setForm] = useState(restored?.draft.form ?? initial.current);
   const [step, setStep] = useState<'people' | 'appointment' | 'review'>(original || restored ? 'appointment' : 'people');
   const [review, setReview] = useState<Record<string, unknown> | null>(null);
@@ -172,13 +177,18 @@ export function useLessonEditor(input: LessonEditorInput) {
       if (!mounted.current) return;
       if (current.id !== original.id || current.schoolId !== schoolId || current.trainingId !== original.trainingId) throw new RequestFailure('INVALID_RESPONSE');
       lane.clearOutcome();
+      // Les valeurs de l'école (base V1 -> V2) sont réconciliées champ par champ avec la saisie : un champ touché d'un seul côté est
+      // gardé, un champ changé des deux côtés garde la saisie et est signalé. Base et version avancent ensemble, la confirmation reste explicite.
+      const { value, conflicts } = rebaseConfirmedDraft(initialLessonForm(original), initialLessonForm(current), form);
+      initial.current = initialLessonForm(current, learnerId);
+      setBase(current); setRebased(true);
       setReview(null); setStep('appointment');
-      setForm(previous => ({ ...previous, buffer: String(current.bufferMinutesSnapshot), duration: previous.commercialChange ? previous.duration : String((Date.parse(current.plannedEnd) - Date.parse(current.plannedStart)) / 60_000), agreement: false }));
-      setProblem('Version actuelle relue. Votre proposition est conservée ; relisez les conditions et confirmez de nouveau l’accord.');
+      setForm({ ...value, agreement: false });
+      setProblem(`Version actuelle relue. Votre proposition est conservée${conflicts.length ? ' là où l’école a aussi changé la leçon' : ''} ; relisez les conditions et confirmez de nouveau l’accord.`);
     } catch (error) { if (mounted.current) setProblem(readError(error)); }
     finally { requestInFlight.current = false; if (mounted.current) setChecking(false); }
   };
-  return { original, school, form, change, step, setStep, review, checking, problem, outcome, blocked, blockedReason: blocked
+  return { original, rebased, school, form, change, step, setStep, review, checking, problem, outcome, blocked, blockedReason: blocked
       ? 'Une demande de planification attend sa confirmation (voir en haut de la page).' : null,
     locked, dirty, release, trainingRead, assignmentRead,
     learners, trainings, instructors, offering, policy, interval, cancellationDeadline, localInstants, learnerOptions, trainingOptions, instructorOptions,

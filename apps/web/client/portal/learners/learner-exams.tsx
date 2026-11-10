@@ -12,7 +12,7 @@ import { useCommandSnapshot } from '../../command-store';
 import { useCommandRunner, useConsole, useLoad } from '../../console/context';
 import {
   draftFromExam, emptyExamDraft, EXAM_LOCATION_LIMIT, EXAM_TEXT_LIMIT, examActions, examBody, examKindLabels, examListSchema, examProblems, examStateSchema, nextStep,
-  resultBody, resultDraft, resultLabels, resultProblems, rowTitle, schedulableKinds, statusText,
+  resultBody, resultDraft, resultLabels, resultProblems, rowTitle, schedulableKinds, statusText, upcomingExamCount,
   type Exam, type ExamDraft, type ExamKind, type ExamState, type ResultChoice, type ResultDraft,
 } from '../../exam-model';
 import { readSchool } from '../../school-api';
@@ -46,19 +46,24 @@ export function LearnerExams({ state, openFormations }: { state: LearnerControll
   const busy = runner.busy || !!runner.pending;
   const data = loaded.data;
   const kinds = data ? schedulableKinds(data) : [];
-  const canManage = !!data?.canManage && !state.current?.archivedAt && training?.status === 'ACTIVE';
+  // Créer un examen exige une formation active et un dossier non archivé ; gérer un examen déjà prévu (date, report, accompagnement,
+  // résultat) reste ouvert après une pause ou une clôture, comme côté école (#444).
+  const canManage = !!data?.canManage;
+  const canCreate = canManage && !state.current?.archivedAt && training?.status === 'ACTIVE';
+  const remaining = data && training?.status !== 'ACTIVE' ? upcomingExamCount(data.exams) : 0;
   const open = (next: ExamDialog) => { runner.clearOutcome(); setDialog(next); };
   const close = () => { if (!busy) setDialog(null); };
   if (!training) return <div className="student-empty"><CalendarClock aria-hidden="true" /><h2>Aucune formation ouverte</h2><p>Les examens se suivent par formation.</p></div>;
   return <section className="student-section exam-section">
     {trainings.length > 1 && <div className="student-training-picker"><PortalSelect id="exam-training" label="Formation" value={training.id} onValueChange={setChoice} options={trainings.map(item => ({ value: item.id, label: state.title(item) }))} /></div>}
     <header className="student-section-heading"><h2>Examens</h2>
-      {canManage && kinds.length > 0 && <div className="exam-schedule-actions">{kinds.map(kind => <Button key={kind} variant="outline" disabled={busy} onClick={() => open({ kind: 'create', exam: kind })}><Plus data-icon="inline-start" />{examKindLabels[kind]}</Button>)}</div>}
+      {remaining > 0 && <Badge variant="secondary">{remaining === 1 ? '1 examen à venir' : `${remaining} examens à venir`}</Badge>}
+      {canCreate && kinds.length > 0 && <div className="exam-schedule-actions">{kinds.map(kind => <Button key={kind} variant="outline" disabled={busy} onClick={() => open({ kind: 'create', exam: kind })}><Plus data-icon="inline-start" />{examKindLabels[kind]}</Button>)}</div>}
     </header>
     <ReadFeedback loaded={loaded} />
     <CommandFeedback runner={runner} />
     {data && data.exams.length === 0 && <p className="student-muted">Aucun examen suivi pour cette formation.</p>}
-    {data && canManage && (step => step && <div className="exam-next-step" data-step={step.kind}><p>{step.text}</p>
+    {data && canCreate && (step => step && <div className="exam-next-step" data-step={step.kind}><p>{step.text}</p>
       {step.kind === 'CLOSE' && <Button size="sm" variant="outline" onClick={openFormations}>Voir la formation</Button>}</div>)(nextStep(data))}
     {data && <ul className="exam-list">{data.exams.map(exam => {
       const status = statusText(exam, data.canManage), actions = canManage ? examActions(exam) : [];

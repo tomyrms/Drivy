@@ -77,6 +77,14 @@ export function statusText(exam: Pick<Exam, 'status' | 'needsResult'>, canManage
   return { label: examStatusLabels[exam.status], attention: false };
 }
 
+/**
+ * Engagements restants d'une formation : examens prévus dont la date ou l'accompagnement est à venir. Une formation close ou en pause
+ * les garde (l'école ne les efface pas) ; ils restent corrigeables sans la réactiver (#444).
+ */
+export function upcomingExamCount(exams: readonly Pick<Exam, 'status' | 'startsAt' | 'escort'>[], now = Date.now()): number {
+  return exams.filter(exam => exam.status === 'SCHEDULED' && (Date.parse(exam.startsAt) > now || (exam.escort ? Date.parse(exam.escort.endsAt) > now : false))).length;
+}
+
 /** Actions proposées au personnel pour un examen : un examen reporté n'en a aucune. */
 export function examActions(exam: Pick<Exam, 'status' | 'startsAt'>, now = Date.now()): ('result' | 'edit' | 'postpone' | 'correct')[] {
   if (exam.status === 'SCHEDULED') return [...(Date.parse(exam.startsAt) <= now ? ['result' as const] : []), 'edit', 'postpone'];
