@@ -178,9 +178,20 @@ protocol SchoolAPI: AnyObject {
     func personPhoto(personID: UUID) async throws -> Data?
 }
 
+/// Photo de profil en cache : elle n'est valable que pour la personne, la version ET la génération qui l'ont fait lire.
+/// `photoVersion` revient à une même valeur après un retrait puis un ajout ailleurs ; la génération, elle, ne revient jamais.
 struct SchoolProfilePhoto: Sendable, Equatable {
+    let personID: UUID
     let version: Int
+    /// `nil` : l'école qui l'a servie ne publie pas de génération (ancienne API).
+    var generation: Int? = nil
     let data: Data
+
+    /// Vrai seulement si ce cache est exactement la photo que ce profil désigne. Génération absente d'un seul côté :
+    /// aucune égalité n'est supposée, la photo est relue.
+    func matches(_ profile: SchoolSelfProfile) -> Bool {
+        profile.personId == personID && profile.photoVersion == version && profile.photoGeneration == generation
+    }
 }
 
 struct SchoolSelfProfileEdit: Encodable, Sendable, Equatable {
@@ -230,7 +241,22 @@ struct SchoolSelfProfile: Codable, Sendable, Equatable {
     var birthDate: String? = nil
     var postalAddress: SchoolPostalAddress? = nil
     var photoVersion: Int? = nil
+    /// Compteur monotone des changements de photo (ajout, remplacement, retrait). `nil` : ancienne API ou archive d'avant.
+    var photoGeneration: Int? = nil
     let version: Int
+
+    /// La photo de `other` est-elle prouvée la même que celle-ci ? Avec une génération des deux côtés, elle seule
+    /// tranche (un retrait puis un ajout ailleurs laissent `photoVersion` à `nil` ou à une valeur déjà vue). Sans
+    /// génération des deux côtés (ancienne API), seule la version de photo existe : limite connue, un aller-retour
+    /// sans photo → photo → sans photo y reste invisible. Génération d'un seul côté : non prouvé, donc différent.
+    func hasSamePhotoState(as other: SchoolSelfProfile) -> Bool {
+        guard personId == other.personId, photoVersion == other.photoVersion else { return false }
+        switch (photoGeneration, other.photoGeneration) {
+        case (nil, nil): return true
+        case let (mine?, theirs?): return mine == theirs
+        default: return false
+        }
+    }
 }
 
 enum SchoolSelfProfileFailure: Error, LocalizedError, Equatable {

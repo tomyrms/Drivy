@@ -411,7 +411,11 @@ final class SchoolWorkspace {
     private func finishSelfIntent(_ intent: SchoolSelfProfileIntent, profile: SchoolSelfProfile, photo: Data?) throws {
         apply(profile)
         if intent.kind == .photo, confirmedSelfProfile?.version == profile.version {
-            selfPhoto = photo.flatMap { bytes in profile.photoVersion.map { SchoolProfilePhoto(version: $0, data: bytes) } }
+            selfPhoto = photo.flatMap { bytes in
+                profile.photoVersion.map {
+                    SchoolProfilePhoto(personID: profile.personId, version: $0, generation: profile.photoGeneration, data: bytes)
+                }
+            }
             peoplePhotos.removeValue(forKey: profile.personId)
         }
         var next = selfIntents
@@ -457,11 +461,13 @@ final class SchoolWorkspace {
     private func refreshSelfPhoto() async {
         guard let profile = confirmedSelfProfile else { return }
         guard let version = profile.photoVersion else { selfPhoto = nil; return }
-        if selfPhoto?.version == version { return }
+        if selfPhoto?.matches(profile) == true { return }
         selfPhoto = nil
-        if let data = try? await api.personPhoto(personID: profile.personId), confirmedSelfProfile?.personId == profile.personId,
-           confirmedSelfProfile?.photoVersion == version {
-            selfPhoto = SchoolProfilePhoto(version: version, data: data)
+        // Une réponse tardive n'est rangée que si le profil confirmé désigne encore exactement cette photo : même
+        // personne, même version ET même génération (un retrait puis un ajout ailleurs ramènent la même version).
+        if let data = try? await api.personPhoto(personID: profile.personId), let latest = confirmedSelfProfile,
+           latest.personId == profile.personId, latest.photoVersion == version, latest.photoGeneration == profile.photoGeneration {
+            selfPhoto = SchoolProfilePhoto(personID: profile.personId, version: version, generation: profile.photoGeneration, data: data)
         }
     }
 
