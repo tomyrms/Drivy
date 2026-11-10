@@ -130,3 +130,13 @@ Nouvelle exécution : 25 exécutés, **RÉUSSI** (code 0).
 
 Limite : cela ne qualifie que la sélection de suites. Swift reste NON EXÉCUTÉ sur ce poste Windows ; `reactivity` et `profile`
 restent à lancer sur Apple après la compilation de l'agenda.
+
+## #441 — retour Apple 2/2 (compteur distinct)
+
+Résultat Apple existant (reactivity 42783623109, SHA cb60fd27) : compilation OK, 139/140 tests ; seul échec `SchoolPushRegistrationTests.aKeychainThatCannotStoreLeavesTheDeviceUnregisteredUntilItWorksAgain`, ligne 169 (`eventually { server.puts == 1 }`).
+
+**Cause : défaut de synchronisation du scénario, pas du produit.** `openSession` appelle `sessionStarted()`, qui lance une `Task` (`refreshAuthorization` puis `upload`) non attendue. Cette tâche peut s'exécuter après `didRegister`, quand le jeton est déjà connu : elle envoie alors un PUT, puis la tâche de `didRegister` en envoie un second. Le Trousseau refusant le secret, `registeredToken` reste vide, ce qui est voulu : le second PUT n'est pas dédupliqué. Le test observait donc `puts == 1` sans barrière et pouvait voir 2.
+
+**Correction (test seulement, produit inchangé)** : le premier PUT est retenu en vol (`hold`) ; le test attend `waiting == 1` et vérifie `puts == 1`, `registeredToken == nil`, `record == nil`. `RotatingPushServer.unhold` libère ensuite les envois en file. `upload()` passe après toute la file (FIFO) : à son retour tout est terminé, on vérifie l'absence de `registeredToken` et de secret conservé, `puts >= 2` (le PUT explicite est garanti) et `maxConcurrentPuts == 1`. Reprise du Trousseau : `registeredToken == tokenA` et secret conservé exactement égal à celui de l'école ; un `upload()` de plus n'envoie rien. Sérialisation et idempotence non relâchées ; le cas de panne reste testé. Le `>= 2` ne porte que sur le nombre de PUT en file, que l'ordonnancement ne fixe pas, après barrière.
+
+**Qualification** : NON COMPILÉ / NON EXÉCUTÉ localement. À requalifier par le coordinateur : `DrivyTests/SchoolPushRegistrationTests`.
