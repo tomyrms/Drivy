@@ -98,7 +98,10 @@ identiques au candidat livré. **29/29 tests PostgreSQL sous Node 24.22.2,
 typage et build réussis** : pagination/reprise (14), régression des clés (11),
 migration peuplée (4). Arrêt des anciennes instances exigé avant migration ;
 consommations antérieures sans trace non reconstituables. Aucun déploiement.
-Raccord de restauration natif encore à réaliser ; retour serveur 1/2 résolu.
+Retour serveur 1/2 résolu. Raccord natif #428/#435/#436 et réception #445
+confiés au même worker Sonnet (`ctx_d039d4038603`, budget natif initial 0/2)
+sur `6a7ac8d0` : ordonnanceur commun, activation de sauvegarde récupérable,
+restauration paginée et alerte foreground liée à la visibilité réelle.
 
 Complément web : retour 1/2 `cfb05e33` relu et intégré en `0fd890ea`, blobs
 web identiques au candidat du worker. Règles sans délai conservées exactement,
@@ -132,6 +135,8 @@ le seul conflit documentaire conserve les deux historiques. Cette intégration
 ne valide pas les scénarios UI : run 42135745083 compilé mais 4/6 par appareil,
 budget UI 2/2 consommé ; run métier 42123124944 à 220/221, READINESS en échec
 de cause inconnue. Aucune relance média ni clôture d'issue engagée.
+Fusion `6a7ac8d0` : blobs messagerie identiques à `6c1f8957`, sélecteur Python
+intégré **25/25 réussi**. Aucun test Swift supplémentaire lancé pour cette fusion.
 
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 

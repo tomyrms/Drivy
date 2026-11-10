@@ -26,7 +26,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | API qualifiée et intégrée en 441b261d ; raccord natif 6e6870ee intégré en c4cb1e0e, non compilé |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières intégrées en 9a159fb2 ; complément cfb05e33 intégré en 0fd890ea : 13 contrôles navigateur, 20 tests, typage/build réussis ; pas de serveur réel ni CI |
 | E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 1ff5c148 compilé ; agenda 42781642234 en échec (154/155, les 24 tests exactness passent). Extension du scénario de redémarrage soumise au porteur ; reports/reactivity/UI en cours sur cb60fd27 |
-| F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | Serveur 40fa87a8 intégré en da9be6e8 ; Node 24, typage/build et 29/29 tests PostgreSQL dont migration peuplée réussis ; retour 1/2 résolu, natif à réaliser |
+| F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | Serveur 40fa87a8 intégré en da9be6e8 ; Node 24, typage/build et 29/29 tests PostgreSQL réussis ; retour serveur 1/2 résolu. Natif avec #445 attribué à ctx_d039d4038603 sur 6a7ac8d0, budget neuf 0/2 |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur 994b953b relu : Node 24 qualifié, retour 2/2 ctx_75edea23b390 (première destination des alertes suivantes) ; natif #441/#450 intégré, sélecteur 25/25, Swift en qualification |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | 8586e5f6 non intégré/non compilé ; retour 1/2 ctx_27ea04d2b3a0 : cible exacte et preuves des deux boîtes |
 | I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | Rapprochement ctx_82ec49650369 livré ; compléments 6c1f8957 récupérés dans le candidat, échecs UI média et READINESS conservés |
@@ -74,6 +74,10 @@ sans conflit produit ; seul STATUS.md réunit les deux historiques. Aucun
 changement dans l'ancien worktree. Le raccord média typé déjà relu reste
 disponible pour le travail natif #428/#435/#436/#445 ; l'intégration ne vaut
 ni qualification UI ni autorisation d'une nouvelle reprise média.
+Fusion `6a7ac8d0`, blobs messagerie identiques au candidat antérieur et
+25 tests Python du sélecteur intégré réussis. Le lot natif F possède seul
+les sources messagerie et réception push ; le lot H garde les boîtes Élèves,
+le lot G l'API des notifications. Aucun chevauchement d'écriture prévu.
 
 ### Reste des neuf anciennes issues
 
