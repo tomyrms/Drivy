@@ -3,10 +3,12 @@
 ## 10 novembre 2026 — Reprise des lots interrompus
 
 Le porteur autorise GPT-6-Astra et permet également de continuer avec Sonnet
-5.5. Consignes envoyées aux quatre sessions Sonnet conservées : planning API,
-identité/portraits, compléments web et intentions iOS. GPT-6-Astra est autorisé
-en secours ; le choix du modèle ne bloque plus la reprise. Les reçus Orca
-confirment les envois, sans nouvelle preuve d'exécution à ce stade.
+5.5. Les premiers messages de reprise n'ont pas redémarré les anciens agents.
+Après constat de leur sortie et arrêt confirmé par Orca, les quatre mêmes
+tâches ont été redémarrées avec Sonnet sur leurs worktrees conservés : planning
+API, identité/portraits, compléments web et intentions iOS. Vers 08 h 28,
+les quatre transcriptions confirment une activité nouvelle et des appels
+d'outils, état `running/live`. GPT-6-Astra reste autorisé en secours.
 Branches, commits, fichiers partiels et compteurs de correction sont conservés.
 La compilation Apple des derniers changements iOS reste à effectuer après
 correction ; les résultats du 7 novembre restent attachés à leurs commits.

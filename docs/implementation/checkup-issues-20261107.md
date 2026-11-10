@@ -21,11 +21,11 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 
 | Lot | Issues | Résultat attendu | État |
 |---|---|---|---|
-| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | Retour 1/2 interrompu par quota ; reprise envoyée le 10 novembre à ctx_ec6c6bd171dc, cinq fichiers partiels conservés |
+| A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | Retour 1/2 repris ; worker actif vérifié le 10 novembre, ctx_b8f0bc19c7cf ; delta conservé |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Reprise envoyée le 10 novembre à ctx_611681e7d5be ; sept fichiers conservés, non committés/non intégrés |
-| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; reprise des compléments envoyée le 10 novembre à ctx_44befd0463cc, cinq fichiers partiels conservés |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Reprise du retour 1/2 envoyée le 10 novembre à ctx_b8241b8cfecb ; deux fichiers partiels conservés, Swift non compilé/non intégré |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Worker actif vérifié le 10 novembre, ctx_3dcf57d0a714 ; delta conservé, non intégré |
+| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments repris par worker actif ctx_beb71e0a56a1 |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | Retour 1/2 repris par worker actif ctx_83558700fe70 ; delta conservé, Swift non compilé/non intégré |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | À réaliser |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
@@ -291,3 +291,21 @@ Ces reçus prouvent l'envoi, pas encore une nouvelle exécution ou livraison.
 Le périmètre et les compteurs précédents restent inchangés ; aucune campagne
 dupliquée ni nouveau résultat de test revendiqué. Les quatre périmètres
 conservés sont indépendants : planning API, identité API, web et Swift.
+
+### Redémarrage effectif après contrôle d'activité
+
+À la demande de statut du porteur, les transcriptions établissent que les
+anciens agents sont sortis (`terminal: exited`, `liveness: exited`) ; aucune
+exécution nouvelle n'avait suivi les quatre messages acceptés. Les envois
+seuls n'ont donc pas relancé ces sessions. Les quatre anciens dispatchs ont
+été arrêtés par la commande gardée Orca : résultat `state: stopped` et
+`processAction: closed_agent_terminal` pour chacun, sans toucher aux fichiers.
+
+Reprise avec `worker-start --task ... --retry-of ...`, sur les mêmes tâches
+et worktrees, Claude Sonnet 5.5, effort medium : A `ctx_b8f0bc19c7cf`,
+C `ctx_3dcf57d0a714`, D `ctx_beb71e0a56a1`, E `ctx_83558700fe70`.
+Les quatre reçus indiquent `ready`. Un contrôle unique des nouvelles
+transcriptions confirme `terminal: running`, `liveness: live` et des appels
+Bash/PowerShell datés du 10 novembre vers 08 h 28 Europe/Zurich dans chaque
+lot. Contexte conservé et contrat worker retransmis ; budgets inchangés.
+Ce constat prouve l'exécution en cours, pas la réussite des correctifs.
