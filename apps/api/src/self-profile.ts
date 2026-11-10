@@ -46,11 +46,12 @@ const update = z.object({
 const empty = z.object({}).strict();
 
 interface PersonRow { id: string; display_name: string; first_name: string | null; last_name: string | null; contact_phone: string | null;
-  contact_email: string | null; birth_date: string | null; postal_address: Address | null; version: number; photo_version: number }
+  contact_email: string | null; birth_date: string | null; postal_address: Address | null; version: number; photo_version: number; photo_generation: number }
 const projection = (row: PersonRow) => ({ personId: row.id, displayName: row.display_name, firstName: row.first_name, lastName: row.last_name,
   contactPhone: row.contact_phone, contactEmail: row.contact_email, birthDate: row.birth_date, postalAddress: row.postal_address,
-  photoVersion: row.photo_version > 0 ? row.photo_version : null, version: row.version });
-const columns = `id,display_name,first_name,last_name,contact_phone,contact_email,to_char(birth_date,'YYYY-MM-DD') AS birth_date,postal_address,version,photo_version`;
+  // photoVersion : génération de la photo présente, null sans photo. photoGeneration : dernière génération émise, jamais réutilisée ni remise à 0.
+  photoVersion: row.photo_version > 0 ? row.photo_version : null, photoGeneration: row.photo_generation, version: row.version });
+const columns = `id,display_name,first_name,last_name,contact_phone,contact_email,to_char(birth_date,'YYYY-MM-DD') AS birth_date,postal_address,version,photo_version,photo_generation`;
 const addressKey = (a: Address | null) => a === null ? 'null'
   : JSON.stringify([a.line1, a.line2 ?? null, a.postalCode, a.locality, a.countryCode]);
 const sameAddress = (a: Address | null, b: Address | null) => addressKey(a) === addressKey(b);
@@ -154,13 +155,14 @@ export function registerSelfProfile(app: FastifyInstance, options: { pool: Pool;
     const identity = await options.verifyToken(request.headers.authorization);
     const data = await own(identity, async (db, person) => {
       if (person.version !== expected) throw conflict();
-      const photoVersion = person.photo_version + 1;
+      // Le compteur émis ne retombe jamais : après un retrait, le remplacement ne reprend pas une génération antérieure.
+      const photoVersion = person.photo_generation + 1;
       const encrypted = sealPhoto(config, image.data, photoAAD(person.id, photoVersion));
       await db.query(`INSERT INTO drivy.person_photo(person_id,photo_version,key_id,encrypted_image,byte_size,width,height) VALUES($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT(person_id) DO UPDATE SET photo_version=EXCLUDED.photo_version,key_id=EXCLUDED.key_id,encrypted_image=EXCLUDED.encrypted_image,
         byte_size=EXCLUDED.byte_size,width=EXCLUDED.width,height=EXCLUDED.height,updated_at=now()`,
         [person.id, photoVersion, config.encryptionKeyId, encrypted, image.data.length, image.width, image.height]);
-      const row = (await db.query<PersonRow>(`UPDATE drivy.person SET photo_version=$2,version=version+1 WHERE id=$1 RETURNING ${columns}`,
+      const row = (await db.query<PersonRow>(`UPDATE drivy.person SET photo_version=$2,photo_generation=$2,version=version+1 WHERE id=$1 RETURNING ${columns}`,
         [person.id, photoVersion])).rows[0]!;
       return projection(row);
     });
