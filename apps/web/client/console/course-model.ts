@@ -202,6 +202,8 @@ export function courseErrorMessage(code: string): string | null {
   const messages: Record<string, string> = {
     COURSE_ACCESS_REQUIRED: 'Vos accès ne permettent pas de gérer les cours.',
     COURSE_INSTRUCTOR_CONFLICT: 'Un moniteur est déjà pris pendant une séance.',
+    COURSE_INSTRUCTOR_CLOSED: 'Un moniteur est absent (fermeture) pendant une séance.',
+    COURSE_POSITIONS_MISMATCH: 'Les séances ne correspondent plus à celles du cours. Rien n’a été modifié ; relisez le cours.',
     COURSE_OCCURRENCES_OVERLAP: 'Deux séances se chevauchent.',
     COURSE_OCCURRENCES_REQUIRED: 'Ajoutez au moins une séance.',
     COURSE_IN_PAST: 'La première séance est déjà passée.',

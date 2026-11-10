@@ -21,7 +21,9 @@ export const formationListSchema = z.object({
 export const competencySchema = z.object({ id, key: z.string().min(1).max(80), label: z.string().max(200), description: z.string().max(4000), sortOrder: z.number().int() });
 export const curriculumContentSchema = z.object({ id, revision: z.number().int().positive(), approved: z.boolean(), categoryCode: z.string(), createdAt: timestamp, competencies: z.array(competencySchema).max(200) });
 export const procedureContentSchema = z.object({ id, version: z.number().int().positive(), approved: z.boolean(), categoryCode: z.string(), createdAt: timestamp,
-  procedureText: z.string().max(4000), cancellationPolicyText: z.string().max(4000), sourceUrls: z.array(z.string().max(2048)).max(30) });
+  procedureText: z.string().max(4000), cancellationPolicyText: z.string().max(4000), sourceUrls: z.array(z.string().max(2048)).max(30),
+  /** Règle structurée d'annulation (#424) ; absente d'une école qui n'en a pas ou d'une ancienne lecture. */
+  cancellationRules: z.object({ cancellationHours: z.number().int().min(0).max(8760).nullable(), lateAction: z.enum(['CONTACT', 'NO_FEE']) }).nullable().optional() });
 const headSchema = z.object({ id, version: z.number().int().positive(), enabled: z.boolean(), label: z.string().max(120).nullable(), defaultDurationMinutes: z.number().int().min(1).max(480).nullable(),
   hasReferencePrice: z.boolean(), createdAt: timestamp, ready: z.boolean(), complete: z.boolean() });
 export const programmeSchema = z.object({

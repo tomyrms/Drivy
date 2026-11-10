@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createCommand } from '../../command-core';
+import { useCommandSnapshot } from '../../command-store';
 import { courseErrorMessage, emptyForm, emptySession, formFromSeries, hasProblems, LIMITS, preview, seriesBody, validate,
   type CourseCatalogue, type CourseSeries, type CourseType, type SeriesForm, type SessionForm } from '../../console/course-model';
 import { useCommandRunner, useConsole, useUnsavedChanges } from '../../console/context';
@@ -15,7 +16,7 @@ export interface Refusal { code: string; message: string }
  * Draft of a series. State and commands only: every write goes through the shared command engine (version and operation id
  * kept), nothing is shown as saved before the school's receipt, and a refusal keeps the whole draft.
  */
-export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCatalogue, done: (series: CourseSeries | null, message: string) => void) {
+export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCatalogue, done: (series: CourseSeries | null, message: string) => void, created?: (id: string) => void) {
   const { schoolId, school, membership } = useConsole();
   const timeZone = school.timeZone;
   // `current` est la version sur laquelle le brouillon repose : elle seule part dans If-Match. Une relecture plus récente ne
@@ -53,12 +54,24 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   const [addedTypes, setAddedTypes] = useState<CourseType[]>([]);
   const runner = useCommandRunner();
   const guard = useRef(false);
+  // Une création dont la réponse s'est perdue est confirmée plus tard par le reçu (#437) : le formulaire se rattache alors à la série
+  // créée, il ne reste jamais un formulaire de création déverrouillé qui en émettrait une seconde.
+  const creation = useRef<string | null>(null);
+  const snapshot = useCommandSnapshot();
+  const attached = creation.current ? snapshot.confirmations.find(item => item.operationId === creation.current && item.resourceId)?.resourceId ?? null : null;
+  const createdRef = useRef(created); createdRef.current = created;
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!attached || announced.current === attached) return;
+    announced.current = attached;
+    createdRef.current?.(attached);
+  }, [attached]);
   const saved = useMemo(() => current ? formSignature(formFromSeries(current, timeZone)) : formSignature(emptyForm(catalogue, initial.responsible)), [current, timeZone]);
   const dirty = formSignature(form) !== saved;
   const pendingKind = runner.pending?.meta.kind;
   const sent = pendingKind === 'createCourseSeries' || pendingKind === 'updateCourseSeries' || pendingKind === 'publishCourseSeries';
   const releaseGuard = useUnsavedChanges(dirty && !sent);
-  const locked = runner.busy || Boolean(runner.pending) || concurrent !== null;
+  const locked = runner.busy || Boolean(runner.pending) || concurrent !== null || attached !== null;
   const problems = validate(form, timeZone);
   const shown = touched ? problems : { fields: {}, sessions: {} };
   const overview = preview(form, timeZone);
@@ -91,9 +104,11 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
     const body = seriesBody(form, timeZone);
     if (!body || locked || concurrent) return undefined;
     setRefusal(null);
-    const result = await runner.run(createCommand(current
+    const command = createCommand(current
       ? { schoolId, kind: 'updateCourseSeries', path: `course-series/${current.id}`, ifMatch: current.version, resourceId: current.id, resourceVersion: current.version, body }
-      : { schoolId, kind: 'createCourseSeries', path: 'course-series', resourceVersion: 0, body }), 'Le brouillon est enregistré.');
+      : { schoolId, kind: 'createCourseSeries', path: 'course-series', resourceVersion: 0, body });
+    if (!current) creation.current = command.operationId;
+    const result = await runner.run(command, 'Le brouillon est enregistré.');
     if (result.status === 'rejected') { if (!result.needsLogin) runner.clearOutcome(); refuse(result.code, result.message); return undefined; }
     if (result.status !== 'confirmed') return undefined;
     const confirmed = confirmedSeries(result.body);

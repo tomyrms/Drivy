@@ -52,10 +52,10 @@ function LeaveDialog({ open, canSave, busy, onStay, onSave, onDiscard }: { open:
 }
 
 /** Draft of a series, in three compositions: the course, one session at a time, then the review that precedes publication. */
-export function CourseEditor({ series, catalogue, canManage, notice, onClose, onDone, onReread }: {
-  series: CourseSeries | null; catalogue: CourseCatalogue; canManage: boolean; notice: string | null; onClose: () => void; onDone: (series: CourseSeries | null, message: string) => void; onReread: () => void;
+export function CourseEditor({ series, catalogue, canManage, notice, onClose, onDone, onCreated, onReread }: {
+  series: CourseSeries | null; catalogue: CourseCatalogue; canManage: boolean; notice: string | null; onClose: () => void; onDone: (series: CourseSeries | null, message: string) => void; onCreated?: (id: string) => void; onReread: () => void;
 }) {
-  const draft = useCourseDraft(series, catalogue, onDone);
+  const draft = useCourseDraft(series, catalogue, onDone, onCreated);
   const { form, shown, stage, locked, runner, refusal } = draft;
   const [typeOpen, setTypeOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);

@@ -72,5 +72,5 @@ export function changedSessions(before: readonly SessionForm[], after: readonly 
 
 /** Refusals that concern the sessions rather than a single field: shown beside the session list. */
 export const sessionRefusalCodes = ['COURSE_INSTRUCTOR_CONFLICT', 'COURSE_SCHEDULE_CONFLICT', 'COURSE_OCCURRENCES_OVERLAP', 'COURSE_OCCURRENCES_REQUIRED', 'COURSE_IN_PAST',
-  'COURSE_CONFLICT', 'INVALID_INTERVAL', 'INSTRUCTOR_NOT_ACTIVE', 'COURSE_OCCURRENCE_COUNT'] as const;
+  'COURSE_CONFLICT', 'INVALID_INTERVAL', 'INSTRUCTOR_NOT_ACTIVE', 'COURSE_OCCURRENCE_COUNT', 'COURSE_INSTRUCTOR_CLOSED', 'COURSE_POSITIONS_MISMATCH'] as const;
 export const isSessionRefusal = (code: string | undefined) => code !== undefined && (sessionRefusalCodes as readonly string[]).includes(code);
