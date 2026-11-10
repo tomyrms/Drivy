@@ -41,8 +41,12 @@ SchoolIntentExactnessTests réussissent. Le seul scénario en échec est
 (SchoolCourseIntentPersistenceTests, assertions 78/79). Hypothèse tirée des
 sources : le test rouvre le coffre avant que la tâche d'envoi de la première
 instance soit suspendue, puis cette tâche modifie l'archive ; sa confirmation
-et une éventuelle correction restent à autoriser. Les deux retours et
-l'extension unique restent comptabilisés. Sur le candidat intégré/poussé
+et une éventuelle correction étaient en attente d'autorisation. Le porteur
+autorise le 10 novembre une seconde extension bornée : confirmer cette course,
+synchroniser le scénario si elle est avérée, puis une seule relance Apple
+agenda, sans affaiblir les assertions ni les gardes du coffre. Travail confié
+à `ctx_23e87f9ebfbd` avec l'extension H, dans le même checkout ; commits distincts.
+Les deux retours et l'extension précédente restent comptabilisés. Sur le candidat intégré/poussé
 `cb60fd27`, les qualifications restantes ont été déclenchées une fois :
 [reports 42783615631](https://github.com/tomyrms/Drivy/actions/runs/42783615631),
 [reactivity 42783623109](https://github.com/tomyrms/Drivy/actions/runs/42783623109),
@@ -153,6 +157,14 @@ async, preuve de la séquence exacte et de la présentation pour #445,
 ordonnancement sous transport retenu pour #428, sélection Apple réellement
 exécutable avec oracle Python. Les suites média/READINESS existantes gardent
 leurs échecs et leurs budgets ; aucune suppression ni relance implicite.
+Retour `29bad339` reçu : verrou corrigé, époque de présentation et séquence
+exacte, ordonnanceur sans attente et tests de transport retenu, scope Apple
+messaging-recovery. Python et workflows rapportés réussis, Swift NON COMPILÉ.
+Delta relu ; dernier retour **2/2** `ctx_bc8a55345bc8` sur deux chemins :
+l'absence de code d'erreur de déchiffrement ne prouve pas que le contenu est
+disponible, et resumeSends précède encore le traitement d'une restauration du
+journal en échec. Correction et qualification Apple ciblée dans ce retour,
+sans nouveau contrôle général ni nouvelle tentative média/READINESS.
 
 Complément web : retour 1/2 `cfb05e33` relu et intégré en `0fd890ea`, blobs
 web identiques au candidat du worker. Règles sans délai conservées exactement,
@@ -185,8 +197,11 @@ fixtures de demandes cohérentes, deux examens distincts et verrou synchrone.
 NON COMPILÉ/NON EXÉCUTÉ et non intégré. Blocage statique précis : examTarget
 et resolveExamTarget sont privés de SchoolTrainingScreen, alors que leur
 appel est dans le type séparé SchoolTrainingContent (ligne 956). Une extension
-limitée à ce raccord puis à la compilation et qualification Apple ciblée a été
-soumise au porteur ; aucune correction ni CI supplémentaire avant réponse.
+limitée à ce raccord puis à la compilation et qualification Apple ciblée est
+explicitement autorisée par le porteur le 10 novembre. Attribution à
+`ctx_23e87f9ebfbd`, même propriétaire, avec le test agenda E ; un commit par
+correctif. La qualification Apple sera lancée par le coordinateur après
+intégration du candidat stable. Aucun élargissement de cette autorisation.
 Limites conservées : une seule cible de demande ouvrable, lecture lente
 simulée par deux secondes dans le serveur fictif, défilement jamais observé.
 
