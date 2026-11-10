@@ -26,8 +26,13 @@ et reprise persistante par appareil) ; #441/#445 restent au parcours natif.
 Intentions iOS : retour `8764579b` relu et intégré en `35f97720`. Les trois
 points retournés sont corrigés dans le code : abandon verrouillé, comparaison
 des identités et rejeu exact dans les deux coffres. Compilation Apple agenda
-[42778603013](https://github.com/tomyrms/Drivy/actions/runs/42778603013) en cours
-sur `d19e978f` ; tests non encore exécutés au dernier contrôle. Reports,
+[42778603013](https://github.com/tomyrms/Drivy/actions/runs/42778603013) terminée
+en **ÉCHEC de compilation des tests** sur `d19e978f` : deux assertions de
+`SchoolIntentExactnessTests` emploient `await` à droite de `&&` (lignes 485/494).
+Aucun test exécuté. Le porteur a explicitement autorisé une extension unique,
+limitée à l'extraction des lectures d'acteur avant ces assertions (conditions
+conservées), puis une seule relance Apple agenda. Reprise `ctx_e61113f91727`
+en cours ; les deux retours antérieurs restent comptabilisés. Reports,
 reactivity et scénario UI iPhone/iPad suivront après compilation. Le budget #431/#438
 reste à deux retours sur deux. Aucune recette physique revendiquée.
 
@@ -39,7 +44,19 @@ arrière n'est pas transparent, procédure corrigée. Une fusion du harnais
 combine deux options de sélection ; contrôle d'intégration confié au même
 worker avant #436/#440. La suite complète précédente reste interrompue sans
 résultat final. Le raccord natif #450 est attribué avec #441 au worker iOS,
-distinct des compléments de messagerie non encore intégrés.
+distinct des compléments de messagerie non encore intégrés. Livraison native
+`6e6870ee` reçue et relue : file d'enregistrement APNs, secret durable avant
+confirmation, révocation du record exact et génération de photo dans le cache
+et les intentions. Neuf tests d'enregistrement et sept tests de portrait
+écrits ; **NON COMPILÉS, NON EXÉCUTÉS**, non intégrés à ce stade. Sélections
+Apple nécessaires : `reactivity` et `profile`.
+
+Notifications serveur #429/#448 : `59d86540` livré, non intégré. Le worker
+rapporte 20 tests PostgreSQL ciblés, typage/build réussis. Retour groupé 1/2
+`ctx_b1c4601c78a8` : revalider chaque destinataire après une attente, ne pas
+révoquer un appareil renouvelé sur une réponse tardive, qualifier le test de
+processus avec Node 24 déjà disponible et préciser la fenêtre avant COMMIT.
+Aucune preuve APNs physique ; la livraison au moins une fois reste assumée.
 
 Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
 conservation d'une règle sans délai, base du déplacement restauré et preuves
