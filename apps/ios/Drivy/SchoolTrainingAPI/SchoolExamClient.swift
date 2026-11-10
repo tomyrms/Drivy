@@ -235,7 +235,7 @@ final class SchoolExamClient {
             "EXAM_CLOSED": "Cet examen n’est plus modifiable.",
             "EXAM_NOT_STARTED": "La date de l’examen n’est pas encore passée.",
             "EXAM_REASON_REQUIRED": "Indique le motif de la correction.",
-            "EXAM_ESCORT_CONFLICT": "Le moniteur a déjà un rendez-vous pendant l’accompagnement.",
+            "EXAM_ESCORT_CONFLICT": "Le moniteur est absent ou a déjà un rendez-vous pendant l’accompagnement. Choisis un autre créneau ou un autre moniteur.",
             "INVALID_EXAM_DATE": "Choisis une date d’examen récente ou à venir.",
             "INVALID_ESCORT": "L’accompagnement doit durer au plus 12 heures.",
             "INSTRUCTOR_NOT_ASSIGNED": "Le moniteur d’accompagnement doit être affecté à cette formation.",

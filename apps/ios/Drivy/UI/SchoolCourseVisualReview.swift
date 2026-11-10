@@ -4,7 +4,7 @@ import SwiftUI
 /// Vraies vues et clients ; transport synthétique, sans réseau ni persistance utilisateur.
 /// Les scènes historiques gardent leurs mutations en échec ; les parcours #37 ont un script explicite.
 struct SchoolCourseVisualReview: View {
-    static let screens: Set<String> = ["course-learner", "course-enrolled", "course-list", "course-editor", "course-roster", "course-attendance", "course-payments-before-start",
+    static let screens: Set<String> = ["course-learner", "course-enrolled", "course-list", "course-editor", "course-editor-held", "course-roster", "course-attendance", "course-payments-before-start",
         "course-payments-history", "course-list-empty", "course-list-error", "course-list-loading", "course-learner-error", "course-learner-loading",
         "course-offered", "course-offer-expired", "course-cancel-success", "course-after-deadline", "course-facts", "course-attendance-only"]
     let screen: String
@@ -15,7 +15,7 @@ struct SchoolCourseVisualReview: View {
         Group {
             if let fixture {
                 Group { switch screen {
-                case "course-editor": SchoolCourseEditorView(model: fixture.editor)
+                case "course-editor", "course-editor-held": SchoolCourseEditorView(model: fixture.editor)
                 case "course-roster":
                     NavigationStack { Form { SchoolCourseRosterSection(model: fixture.roster) }.navigationTitle("Participants") }
                 case "course-list", "course-list-empty", "course-list-error", "course-list-loading": SchoolLearnerCoursesView(model: fixture.courses)
@@ -29,7 +29,7 @@ struct SchoolCourseVisualReview: View {
                     return .handled
                 })
                 .safeAreaInset(edge: .bottom) {
-                    if fixture.isJourney {
+                    if fixture.isJourney || screen == "course-editor-held" {
                         Text(fixture.probe.summary).font(.caption2).monospacedDigit()
                             .accessibilityIdentifier("course-fixture-witness")
                     }
@@ -79,14 +79,15 @@ struct SchoolCourseVisualReview: View {
                 endsAt: iso.string(from: first.addingTimeInterval(Double(index) * 7 * 86_400 + 7_200)),
                 timeZone: "Europe/Zurich", instructorMembershipId: member, instructorDisplayName: "Camille Exemple", attendanceRequired: true)
         }
-        let series = SchoolCourseSeries(id: seriesID, schoolId: school, version: 1, status: screen == "course-editor" ? .draft : .published,
+        let editing = screen == "course-editor" || screen == "course-editor-held"
+        let series = SchoolCourseSeries(id: seriesID, schoolId: school, version: 1, status: editing ? .draft : .published,
             typeId: type, typeTitle: "Sensibilisation", title: "Sensibilisation du soir",
             description: "Anticiper les dangers et partager la route. Exercices en groupe et échanges autour de situations concrètes.",
             location: "Salle des Tilleuls", conditions: "Apporte ton permis d’élève. Le règlement se fait sur place à la première séance.", teachingLanguage: "fr",
             responsibleMembershipId: member, responsibleDisplayName: "Camille Exemple", capacity: 12, seatsTaken: 3, remainingSeats: 9,
             minParticipants: 4, policyVersion: 1, selfCancelHours: 24, selfCancellationDeadline: iso.string(from: first.addingTimeInterval(-86_400)),
             firstStartsAt: occurrences[0].startsAt, lastEndsAt: occurrences[3].endsAt, totalMinutes: 480,
-            publishedAt: screen == "course-editor" ? nil : iso.string(from: now.addingTimeInterval(-14 * 86_400)), occurrences: occurrences,
+            publishedAt: editing ? nil : iso.string(from: now.addingTimeInterval(-14 * 86_400)), occurrences: occurrences,
             canManage: !isJourney || facts || screen == "course-attendance-only")
         let catalogue = SchoolCourseCatalogue(schoolId: school, canManage: true,
             types: [SchoolCourseType(id: type, schoolId: school, stableKey: nil, title: "Sensibilisation", description: "", version: 1, predefined: false)],
@@ -171,7 +172,29 @@ struct SchoolCourseVisualReview: View {
             transport: SchoolCourseVisualTransport(responses: responses, screen: screen, steps: steps, probe: probe))
         learner = SchoolCourseLearnerWorkspace(schoolID: school, seriesID: seriesID, timeZone: "Europe/Zurich", client: client)
         courses = SchoolLearnerCoursesWorkspace(schoolID: school, timeZone: "Europe/Zurich", client: client)
-        editor = SchoolCourseEditorWorkspace(schoolID: school, membershipID: member, timeZone: "Europe/Zurich", client: client, catalogue: catalogue, series: series)
+        if screen == "course-editor-held" {
+            // Ancienne archive sans base (d'avant #431), restée sur l'appareil : la demande est bloquée dès la reprise et la
+            // saisie conservée attend la comparaison, puis le choix de la personne. L'école, elle, est passée à la version 2.
+            let current = try Self.series(series, version: 2, title: "Sensibilisation (modifiée par l’école)")
+            let advanced = try Self.series(series, version: 3, title: "Sensibilisation du soir (ma saisie)")
+            var typed = SchoolCourseForm(series: series); typed.title = "Sensibilisation du soir (ma saisie)"
+            let held = SchoolCourseEditorRecord(operationId: SchoolVisualData.identifier(770), intent: .draft, closing: true,
+                key: "draft|visual-held", seriesId: seriesID, form: typed, newTypeTitle: "", newTypeDescription: "")
+            let scope = SchoolCommandScope(personID: SchoolVisualData.identifier(771), schoolID: school, membershipID: member,
+                accessEpoch: 1, apiBaseURL: "https://visual.drivy.invalid")
+            let store = SchoolCourseIntentMemoryStore()
+            try store.replace(nil, with: held.command(scope: scope, createdAt: now))
+            responses["course-series/\(seriesID)"] = try encoded(current)
+            steps.append(SchoolCourseVisualStep(method: "PUT", route: "course-series/\(seriesID)", status: 200, data: try encoded(advanced),
+                readRoute: "course-series/\(seriesID)", event: "draft", bodyField: "title", bodyValue: "Sensibilisation du soir (ma saisie)",
+                ifMatch: "\"2\""))
+            let heldClient = SchoolCourseClient(baseURL: URL(string: "https://visual.drivy.invalid")!, tokenSource: SchoolCourseVisualToken(),
+                transport: SchoolCourseVisualTransport(responses: responses, screen: screen, steps: steps, probe: probe))
+            editor = SchoolCourseEditorWorkspace(schoolID: school, membershipID: member, timeZone: "Europe/Zurich", client: heldClient,
+                catalogue: catalogue, series: current, persistence: SchoolCourseIntentPersistence(store: store, scope: scope))
+        } else {
+            editor = SchoolCourseEditorWorkspace(schoolID: school, membershipID: member, timeZone: "Europe/Zurich", client: client, catalogue: catalogue, series: series)
+        }
         let candidates = (1...32).map { index in
             SchoolLearner(id: SchoolVisualData.identifier(800 + index), schoolId: school, personId: SchoolVisualData.identifier(900 + index), version: 1,
                 displayName: index >= 31 ? "Zoé Exemple" : String(format: "Élève Exemple %02d", index), contactEmail: nil, contactPhone: nil,
@@ -190,6 +213,14 @@ struct SchoolCourseVisualReview: View {
 }
 
 private struct SchoolCourseVisualPage: Encodable { let items: [SchoolCourseSeries] }
+extension SchoolCourseVisualFixture {
+    /// Même cours, autre version et autre titre : ce que l'école renvoie après une modification faite ailleurs.
+    fileprivate static func series(_ base: SchoolCourseSeries, version: Int, title: String) throws -> SchoolCourseSeries {
+        var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(base)) as! [String: Any]
+        object["version"] = version; object["title"] = title
+        return try JSONDecoder().decode(SchoolCourseSeries.self, from: JSONSerialization.data(withJSONObject: object))
+    }
+}
 @MainActor private final class SchoolCourseVisualToken: AccessTokenSource {
     func accessToken() async throws -> String { "synthetic-course-visual-token" }
 }
@@ -220,6 +251,8 @@ private struct SchoolCourseVisualStep: Sendable {
     let data: Data
     let readRoute: String, event: String
     let bodyField: String?, bodyValue: String?
+    /// `If-Match` attendu quand la commande porte une version.
+    var ifMatch: String? = nil
 }
 
 private actor SchoolCourseVisualTransport: SchoolHTTPTransport {
@@ -242,6 +275,7 @@ private actor SchoolCourseVisualTransport: SchoolHTTPTransport {
                   let body = request.httpBody,
                   let object = try JSONSerialization.jsonObject(with: body) as? [String: Any],
                   let operation = object["operationId"] as? String, UUID(uuidString: operation) != nil,
+                  step.ifMatch == nil || request.value(forHTTPHeaderField: "If-Match") == step.ifMatch,
                   step.bodyField == nil || object[step.bodyField!].map({ String(describing: $0) }) == step.bodyValue else {
                 await MainActor.run { probe.unexpected += 1 }
                 throw URLError(.notConnectedToInternet)

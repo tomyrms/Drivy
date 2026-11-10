@@ -1146,6 +1146,9 @@ import Observation
         do { try outbox.remove(pending) }
         catch { storageAccessible = false; fail(error); return }
         self.pending = nil; absentPendingID = nil; errorMessage = nil
+        // Retrait confirmé : la barrière se relit sur ce qui reste, sans attendre la lecture de la leçon. Une autre
+        // commande réellement bloquante la garde fermée (#427).
+        rereadBlockingCommand()
         await load()
     }
     private func prepare<Value: Encodable>(_ value: Value, id: UUID, kind: SchoolCommandKind, version: Int, resourceID: UUID? = nil, routeID: UUID? = nil, expectedVersion: Int? = nil) async -> Bool {
@@ -1219,6 +1222,7 @@ import Observation
                 // retenu ni annoncé dans l’ancienne portée, la demande quitte le coffre comme avant #114.
                 if leftWhileClosureIsSent {
                     rememberRefusedClosure(command)
+                    if !invalidated { rereadBlockingCommand() }
                     return false
                 }
                 guard request == generation, !invalidated else { return false }
