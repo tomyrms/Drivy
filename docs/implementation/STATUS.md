@@ -48,8 +48,12 @@ l'extension unique restent comptabilisés. Sur le candidat intégré/poussé
 [reactivity 42783623109](https://github.com/tomyrms/Drivy/actions/runs/42783623109),
 [profile 42783630248](https://github.com/tomyrms/Drivy/actions/runs/42783630248)
 et [UI de reprise 42783636166](https://github.com/tomyrms/Drivy/actions/runs/42783636166)
-(une méthode SchoolCourseJourneyUITests, iPhone et iPad). Résultats encore
-inconnus ; pas de campagne globale ni IPA. Le budget #431/#438
+(une méthode SchoolCourseJourneyUITests, iPhone et iPad).
+Reports : **121/121 tests dans six suites réussis** sur cb60fd27 ;
+SchoolLessonHubTests, SchoolLessonLifecycleTests et SchoolTrainingRefreshTests
+passent donc sur ce candidat. Profile : 17/17 réussi. Reactivity : **139/140**,
+un échec SchoolPushRegistrationTests détaillé ci-dessous ; UI encore en cours.
+Pas de campagne globale ni IPA. Le budget #431/#438
 reste à deux retours sur deux. Aucune recette physique revendiquée.
 
 Identité serveur : `a05f457d` puis `caa97d5d` relus et intégrés en `441b261d`.
@@ -67,11 +71,18 @@ et les intentions. Neuf tests d'enregistrement et sept tests de portrait
 ajoutés. Sur `cb60fd27`, [profile 42783630248](https://github.com/tomyrms/Drivy/actions/runs/42783630248)
 est **RÉUSSI : compilation et 17/17 tests SchoolSelfProfileIntentTests**, dont
 les sept nouveaux cas de portrait ; aucune recette physique déduite.
-Reactivity reste en cours à ce relevé. Deux échecs du sélecteur Python après
+Reactivity 42783623109 : compilation réussie, **139/140 tests dans neuf suites**,
+échec de `aKeychainThatCannotStoreLeavesTheDeviceUnregisteredUntilItWorksAgain`
+à l'assertion ligne 169 (`server.puts == 1`). Hypothèse : deux déclenchements
+upload (démarrage et didRegister) avancent avant l'observation lorsque le coffre
+refuse. Retour **#441 2/2**, message msg_801fa77b29ca au propriétaire natif F
+ctx_d039d4038603 : confirmer la cause et conserver les invariants de stockage
+et de sérialisation, aucun simple relâchement du compteur attendu. La reprise
+Apple sera regroupée sur le candidat stable. Deux échecs du sélecteur Python après
 intégration venaient des deux suites ajoutées au script mais absentes de son
 oracle. Retour natif 1/2 : `c0e95ce1`, intégré en `ee04722f`, rétablit les
 **25 tests Python réussis**, sans retirer de suite ni affaiblir les égalités.
-Sélections Apple nécessaires après agenda : `reactivity` et `profile`.
+Profile est qualifié ; reactivity attend cette correction ciblée.
 
 Notifications serveur #429/#448 : `59d86540` livré, non intégré. Le worker
 rapporte 20 tests PostgreSQL ciblés, typage/build réussis. Retour groupé 1/2
@@ -89,7 +100,7 @@ faits lus avant l'attente de la première alerte. Retour **2/2** confié à
 `77dca790` accepté : revalidation avant chaque destination, première comprise ;
 test de deux alertes en reprise réussi, contrôle négatif donnant deux envois
 au lieu d'un. **41 tests ciblés réussis sous Node 24**, deux typages réussis.
-Fusion acceptée : seul conflit du filtre de migrations résolu en conservant
+Fusion `82c05f35` : seul conflit du filtre de migrations résolu en conservant
 skipMigrations et l'exclusion push_delivery du mode deferCourseMigrations ;
 **10/10 tests de migration réussis** sur PostgreSQL 17 jetable sous Node
 24.22.2 (identity-migration, course-upgrade, messaging-migrations,
