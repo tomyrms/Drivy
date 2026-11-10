@@ -77,16 +77,24 @@ Node du PATH hors cible. Retour groupé 1/2 `ctx_42698fd80f90` pour Node 24,
 typage/build, migration de clés préexistantes et ordre de mise à jour.
 Non intégré ; raccord de restauration natif encore à réaliser.
 
-Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
-conservation d'une règle sans délai, base du déplacement restauré et preuves
-navigateur des parcours complets #437/#443 ; création d'examen ouverte pendant
-un changement de statut à vérifier. Après quota, même retour repris dans une
-nouvelle session sur le compte alternatif (`ctx_93c8e6bbc26a`).
+Complément web : retour 1/2 `cfb05e33` relu et intégré en `0fd890ea`, blobs
+web identiques au candidat du worker. Règles sans délai conservées exactement,
+base de saisie de leçon transportée jusqu'à la reprise, fermeture du dialogue
+d'examen hors formation active. **13 contrôles navigateur, 20 tests ciblés,
+deux typages et build réussis** rapportés sur ce candidat. Parcours réels
+CourseWorkspace/LessonWorkspace avec transport synthétique ; agenda complet
+non monté, pas de PostgreSQL, de CI ni d'appareil dans ce lot. Aucun RED
+revendiqué. Ancien défaut #422/#430 et ce retour sont des compteurs distincts.
 
 Boîtes Élèves #447/#449 : lot H attribué à `ctx_bc707e452029` sur la base
 intégrée `ee04722f`, budget initial 0/2. Accès à toutes les demandes/examens,
 actualisation des trois sections, erreurs locales et garde de contexte ;
 preuves Swift/UI à obtenir sur Apple après livraison.
+
+Neuf anciennes issues : rapprochement des critères GitHub et preuves confié
+en lecture seule à `ctx_82ec49650369`. Aucun nouveau test ni changement d'issue
+autorisé par cette mission ; les budgets et échecs média/readiness antérieurs
+restent visibles et conservés.
 
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 
