@@ -95,6 +95,9 @@ final class SchoolCourseIntentMemoryStore: SchoolCourseIntentStoring {
         if try commands(scope: new.scope).contains(where: { $0.id != old?.id && SchoolCourseLearnerLane.blocks(new, $0) }) {
             throw SchoolConfigurationFailure.pendingCommand
         }
+        // Même sémantique que le coffre chiffré : une substitution périmée (ni l'ancienne ni la nouvelle) est refusée ;
+        // la nouvelle déjà présente à l'identique reste acceptée (idempotence après une faute après écriture).
+        if let old, !stored.contains(where: { $0.id == old.id }), !stored.contains(new) { throw SchoolConfigurationFailure.storage }
         if let old { stored.removeAll { $0.id == old.id } }
         stored.removeAll { $0.id == new.id }
         stored.append(new)

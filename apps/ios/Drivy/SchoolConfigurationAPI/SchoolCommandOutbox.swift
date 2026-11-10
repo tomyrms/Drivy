@@ -439,10 +439,16 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
         try validate(new)
         var commands = try read()
         var changed = false
-        if let old, let index = commands.firstIndex(where: { $0.id == old.id }) {
-            guard commands[index] == old else { throw SchoolConfigurationFailure.storage }
-            commands.remove(at: index)
-            changed = true
+        if let old {
+            if let index = commands.firstIndex(where: { $0.id == old.id }) {
+                guard commands[index] == old else { throw SchoolConfigurationFailure.storage }
+                commands.remove(at: index)
+                changed = true
+            } else if !commands.contains(where: { $0 == new }) {
+                // Ni l'ancienne ni la nouvelle : substitution périmée (déjà retirée ailleurs), rien n'est ajouté.
+                // Seule l'idempotence d'après une faute après écriture (la nouvelle est déjà là, exacte) reste permise.
+                throw SchoolConfigurationFailure.storage
+            }
         }
         guard !commands.contains(where: { $0.scope.belongsToWorkspace(new.scope) && admission($0) }) else {
             throw SchoolConfigurationFailure.pendingCommand

@@ -128,6 +128,31 @@ import XCTest
         XCTAssertTrue((title.value as? String)?.contains("modifié") == true)
     }
 
+    /// #431 : une ancienne demande conservée est bloquée, la saisie reste figée ; la personne compare à la version à jour,
+    /// puis choisit de la garder. Une seule écriture part, après ce choix et sur la version relue.
+    func testBlockedCourseEditIsComparedThenKeptOnPurpose() throws {
+        let app = launch("course-editor-held")
+        defer { app.terminate() }
+        let compare = app.buttons["course-compare-held"]
+        XCTAssertTrue(compare.waitForExistence(timeout: 15), app.debugDescription)
+        XCTAssertFalse(app.buttons["course-retry-command"].isEnabled)
+        XCTAssertTrue(app.buttons["course-abandon-command"].exists)
+        XCTAssertFalse(app.buttons["course-keep-mine"].exists)
+        assertWitness("mutations=0; events=; unexpected=0; mail=0; messages=0", in: app)
+
+        compare.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["course-reconcile-Titre"].waitForExistence(timeout: 10), app.debugDescription)
+        let keep = app.buttons["course-keep-mine"]
+        reveal(keep, in: app)
+        assertWitness("mutations=0; events=; unexpected=0; mail=0; messages=0", in: app)
+
+        keep.tap()
+        XCTAssertTrue(app.buttons["course-save-draft"].waitForExistence(timeout: 10), app.debugDescription)
+        XCTAssertFalse(app.buttons["course-compare-held"].exists)
+        XCTAssertFalse(app.buttons["course-retry-command"].exists)
+        assertWitness("mutations=1; events=draft; unexpected=0; mail=0; messages=0", in: app)
+    }
+
     func testPriorityOfferRequiresReviewAndExplicitAcceptance() {
         let app = launch("course-offered")
         defer { app.terminate() }

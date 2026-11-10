@@ -167,4 +167,12 @@ import Testing
         #expect(state.canManage && state.exams.first?.examStatus == .scheduled)
         #expect(SchoolExamClient.failure(422, "TRAINING_NOT_ACTIVE") == .rejected("La formation doit être active dans un dossier non archivé."))
     }
+
+    /// Lot E (#444) : la création n'est proposée que pour une formation connue active.
+    @Test func schedulingIsOnlyOfferedForAKnownActiveTraining() {
+        #expect(SchoolExamModel.allowsCreation(trainingStatus: "ACTIVE"))
+        for status in [nil, "PAUSED", "COMPLETED", "CANCELLED", "ARCHIVED", ""] as [String?] {
+            #expect(!SchoolExamModel.allowsCreation(trainingStatus: status))
+        }
+    }
 }

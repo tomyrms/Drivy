@@ -97,3 +97,105 @@ NON COMPILÉ, NON EXÉCUTÉ (poste Windows). Lecture de `git show 2878e141` et d
 Limite connue : `SchoolExamState` ne porte pas l'état de la formation. Sur une formation non active, « Prévoir » reste proposé (canManage vrai) et le serveur refuse avec `TRAINING_NOT_ACTIVE`, message déjà traduit ; il n'y a pas de masquage préventif, à décider avec le coordinateur.
 
 Tests ajoutés : `SchoolExamTests` (`anEscortRefusedForALeaveIsNotCalledAnAppointment`, `aFutureExamStaysManageableWhateverTheTrainingBecame`), `SchoolCourseClientTests` (mapping `COURSE_INSTRUCTOR_CLOSED`). Sélection : `unit_test_scope=agenda` contient désormais `SchoolExamTests` en plus de `SchoolCourseClientTests`.
+
+## Retour correctif groupé 1/2 (sur 7a4d70b4, budget E1/2 pour #431 et #438)
+
+**NON COMPILÉ, NON EXÉCUTÉ** (poste Windows, aucune CI lancée). Les 25 tests de la sélection restent applicables : la sélection
+(`agenda`, `reports`, `reactivity`) est inchangée, `SchoolIntentExactnessTests` y figure déjà.
+
+### 1. #438 — substitution périmée refusée, idempotence conservée
+
+`replace(old, with: new)` n'ajoutait plus rien d'utile quand `old` était absent : le retrait était sauté puis `new` ajouté, contrairement
+à `replacingAnIntentNotInTheVaultFailsAndChangesNothing`. Règle, identique dans le coffre chiffré
+(`EncryptedSchoolCommandOutbox.replace`) et le coffre mémoire (`SchoolCourseIntentMemoryStore.replace`) :
+
+- `old` présent : égalité exacte exigée, retrait et ajout en une seule écriture atomique (inchangé) ;
+- `old` absent **et** `new` absent : refus (`SchoolConfigurationFailure.storage`), rien n'est écrit ;
+- `old` absent mais `new` déjà là **à l'identique** (faute après écriture, rejeu) : réussite sans changement ;
+- `new` de même identité mais de contenu différent : refus.
+
+L'admission (`refusing:`) reste évaluée avant l'écriture. Test : `aStaleReplacementIsRefusedByBothStoresButAnExactNewIntentStaysIdempotent`
+(les deux coffres, autres intentions préservées). `replacingAnIntentNotInTheVaultFailsAndChangesNothing` n'est pas modifié.
+
+### 2. #431 — reprise d'une demande bloquée : comparer, puis décider
+
+Avant : message « saisie conservée », champs et actions figés, seule sortie « Abandonner » (jette la saisie). Maintenant, dans
+`SchoolCourseEditorWorkspace` et `SchoolCourseEditorView` :
+
+- **Comparer avec la version à jour** (`compareHeldInput`) : relit le cours, ne change ni `series`, ni la saisie, ni le coffre, ne
+  renvoie rien. Produit une `SchoolCourseReconciliation` : champs qui diffèrent entre la saisie conservée et la version relue
+  (`SchoolCourseForm.differences`). Pour une ancienne archive sans base, **aucune modification n'est supposée** : on compare deux états,
+  on ne dit pas qui a changé quoi.
+- **Enregistrer ma saisie sur la version à jour** (`keepMyInputOnCurrentVersion`, seulement après la comparaison, cours encore brouillon,
+  droit de gestion) : nouvelle opération (nouvel identifiant) sur la version relue ; la demande bloquée est **remplacée en une seule
+  écriture du coffre** (`replace(kept, with:)`), jamais rejouée, `If-Match` = version relue affichée. Un nouveau conflit suit la voie
+  normale (refus, aucune avance silencieuse). La publication reste un geste séparé.
+- **Abandonner ma saisie** (ancien « Abandonner la demande ») reste la sortie destructive, distincte, avec son annonce.
+- `load()` ne remplace plus saisie et série tant qu'une demande est en attente (`pending == nil`).
+- Messages de blocage : renvoient à la comparaison, plus à « abandonne ».
+
+Tests unitaires (`SchoolIntentExactnessTests`) : `aBlockedEditIsComparedThenKeptOnTheReadVersionAsANewOperation` (comparaison sans écriture,
+puis une écriture `If-Match "4"`, autre clé, une mutation de plus, coffre vidé), `keepingMineIsRefusedWithoutAComparisonAndNeverAdvancesTheVersionOnItsOwn`,
+`anOldArchiveWithoutBaseIsComparedWithoutInventingItsEditsThenKeptOnPurpose`, `abandoningABlockedEditStaysDistinctAndDiscardsOnlyAfterTheComparison`,
+`theFormComparisonNamesOnlyTheFieldsThatDiffer`.
+
+Scénario UI ciblé, harnais actuel (`SchoolCourseVisualReview`, écran `course-editor-held`, coffre mémoire, transport synthétique) :
+`SchoolCourseJourneyUITests/testBlockedCourseEditIsComparedThenKeptOnPurpose` — archive ancienne bloquée à l'ouverture, « Réessayer »
+inactif, témoin à 0 mutation ; Comparer → ligne `course-reconcile-Titre` ; toujours 0 mutation ; Enregistrer ma saisie → une seule
+mutation (`PUT`, `If-Match "2"`, titre saisi) ; plus de demande en attente. Sélection : `ui_test_suite="SchoolCourseJourneyUITests/testBlockedCourseEditIsComparedThenKeptOnPurpose"`.
+
+**Oracle du double (qualification)** : `SchoolCourseClient` réencode avec `JSONEncoder` à chaque appel ; l'ancien `CourseReplayServer`
+décidait son reçu par égalité d'octets, sans `If-Match`. Il décide maintenant sur `canonical({body, expectedVersion})` (clés triées,
+version tirée de `If-Match`) comme `commands.ts`, et refuse 409 `IDEMPOTENCY_CONFLICT` une même clé avec une autre identité. Les
+tests comparent `identity` (version, opération, champs) et vérifient `operationId`, `title`, `If-Match`, donc une modification
+effective n'est pas masquée. **Confirmation de source (lecture, pas une exécution API)** : `schoolCommand` vérifie les droits puis le
+reçu/hash avant `work` et `checkVersion` ; `PUT course-series` et `publish` passent par ce chemin ; `courses.integration` couvre le
+rejeu de `publish`. Aucun test API relancé ici.
+
+### 3. Abandon bloqué par le coffre
+
+`clearPending()` vidait `pending/sent/kept` puis ignorait l'erreur de `remove` (`try?`) ; `abandonUnconfirmed` annonçait alors
+« Demande abandonnée » et remplaçait la saisie. Maintenant `clearPending()` rend un booléen et ne touche **rien** si le retrait
+durable échoue (référence `kept`, saisie, blocage conservés). Conséquences :
+
+- `abandonUnconfirmed` : relecture du cours, puis retrait ; en cas d'échec, message `removalFailedMessage`, aucune annonce de retrait,
+  aucun remplacement de saisie, aucun envoi. Les autres intentions du coffre ne sont pas touchées (`remove` ne retire que la sienne).
+- Un reçu de l'école n'est pas une suppression locale : brouillon, publication et création de type mémorisent la réponse acquise
+  (`series`, catalogue) mais, si le coffre refuse le retrait, la feuille ne se ferme pas, la demande reste « à reprendre » ; « Réessayer »
+  rejoue la même enveloppe, l'école rend son reçu, puis le retrait est retenté. Un refus définitif de l'école suit la même règle.
+
+Tests (coffre chiffré réel, panne via `faultBeforeFileWrite`) : `anAbandonThatTheVaultCannotRecordKeepsTheReferenceTheInputAndEveryOtherIntent`,
+`anUnblockedAbandonThatTheVaultCannotRecordIsNotAnnouncedEither`, `aServerReceiptIsNotALocalRemoval`.
+
+### 4. Raccord Swift du lot A (#423, #439, #444) — constat
+
+Livré dans 823f4410, redit ici : `COURSE_INSTRUCTOR_CLOSED` traduit (`SchoolCourseClient.failure`, test `SchoolCourseClientTests`) ;
+`EXAM_ESCORT_CONFLICT` n'est plus décrit comme un simple rendez-vous (absence **ou** rendez-vous, `SchoolExamClient`, test
+`anEscortRefusedForALeaveIsNotCalledAnAppointment`) ; `COURSE_POSITIONS_MISMATCH` : aucun appel de replanification n'existe dans
+`SchoolCourseClient` ni dans les vues (recherche `reschedule` vide), donc **pas de delta nécessaire**, code traité par le bureau web.
+Examens existants après clôture de formation : le menu Actions de `SchoolExamsUI` ne dépend que de `canManage` (droit pédagogique) et du
+statut de l'examen ; l'API accepte `UPDATE_EXAM`/`POSTPONE_EXAM` (`existingTraining`). La création reste limitée : « Prévoir » exige
+`canManage` et une épreuve planifiable, le serveur refuse hors formation active (`TRAINING_NOT_ACTIVE`, message traduit). Aucune
+administration ajoutée à l'app. Limite connue inchangée : l'état de la formation n'est pas dans `SchoolExamState`, donc pas de
+masquage préventif de « Prévoir ».
+
+### Contrôles exécutés
+
+Aucun Swift compilé ni exécuté, aucune CI, aucun test API. Relecture de code et de la source `commands.ts` seulement.
+
+### 5. Raccord #444 — création d'examen conditionnée à la formation active
+
+**NON COMPILÉ, NON EXÉCUTÉ.** `SchoolTrainingExamsSection` lit `SchoolTrainingWorkspace.training?.status` via
+`SchoolExamModel.allowsCreation(trainingStatus:)` (vrai seulement pour `"ACTIVE"` ; statut inconnu ou autre = fermé).
+
+- « Prévoir » et l'invite de prochaine étape ne sont proposés que si la formation est connue active.
+- Une feuille de création déjà ouverte reçoit `creationOpen` : si le statut devient inactif, le bouton d'envoi est désactivé et
+  une note d'erreur l'explique. Les feuilles de modification, report et résultat ne sont pas touchées.
+- La gestion des examens existants (modifier, reporter, résultat) est inchangée. Aucune nouvelle API ; le serveur reste l'arbitre
+  (`TRAINING_NOT_ACTIVE`).
+- Test ajouté : `SchoolExamTests/schedulingIsOnlyOfferedForAKnownActiveTraining` (à ajouter à la sélection `agenda`/`reports`/`reactivity`
+  déjà couverte par `SchoolExamTests`).
+- **Scénario UI : non écrit.** Aucun harnais visuel d'examens n'existe (aucune référence à `exams-schedule` dans les UITests) ; en créer
+  un dépasse « minimal ». À décider par le coordinateur.
+- **Impeccable et Uncodixfy : introuvables dans cette session.** Le changement n'ajoute aucun composant, seulement une condition et une
+  note d'erreur existante (`DrivyActionNote`) ; la revue visuelle reste à faire.

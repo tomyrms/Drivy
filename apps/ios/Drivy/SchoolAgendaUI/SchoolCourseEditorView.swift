@@ -29,6 +29,7 @@ struct SchoolCourseEditorView: View {
                             .drivyFormRows().id("course-occurrence-unavailable")
                             .accessibilityIdentifier("course-occurrence-unavailable")
                     }
+                    if let reconciliation = model.reconciliation { reconciliationSection(reconciliation) }
                     if !model.accessUnavailable {
                         if model.catalogue == nil {
                             if model.isLoading { Section { DrivyLoadingState(title: "Chargement…") }.drivyFormRows() }
@@ -212,12 +213,43 @@ struct SchoolCourseEditorView: View {
         .drivyFormRows()
     }
 
+    /// Saisie conservée face à la version à jour : le choix est à la personne, rien ne part avant (#431).
+    @ViewBuilder private func reconciliationSection(_ reconciliation: SchoolCourseReconciliation) -> some View {
+        Section {
+            if reconciliation.differences.isEmpty {
+                Text("Ta saisie est identique à la version à jour.").accessibilityIdentifier("course-reconcile-identical")
+            }
+            ForEach(reconciliation.differences) { difference in
+                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
+                    Text(difference.label).font(.headline)
+                    Text("Ma saisie : \(difference.mine)").foregroundStyle(DrivyTheme.text)
+                    Text("Version à jour : \(difference.current)").foregroundStyle(DrivyTheme.muted)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("course-reconcile-\(difference.id)")
+            }
+            if reconciliation.canKeepMine && !reconciliation.differences.isEmpty {
+                Button("Enregistrer ma saisie sur la version à jour") { Task { await model.keepMyInputOnCurrentVersion() } }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .disabled(model.isBusy)
+                    .accessibilityIdentifier("course-keep-mine")
+            }
+        } header: { Text("Ma saisie et la version à jour").drivyFormSectionHeader() }
+            .drivyFormRows()
+    }
+
     @ViewBuilder private var actions: some View {
         if model.hasUnconfirmedOperation {
             Button("Réessayer la demande") { Task { await model.retryUnconfirmed() } }
                 .buttonStyle(DrivyPrimaryButtonStyle()).disabled(model.isBusy || model.replayBlocked)
                 .accessibilityIdentifier("course-retry-command")
-            Button("Abandonner la demande", role: .destructive) { Task { await model.abandonUnconfirmed() } }
+            if model.replayBlocked && model.reconciliation == nil {
+                Button("Comparer avec la version à jour") { Task { await model.compareHeldInput() } }
+                    .buttonStyle(DrivySecondaryButtonStyle())
+                    .disabled(model.isBusy)
+                    .accessibilityIdentifier("course-compare-held")
+            }
+            Button(model.replayBlocked ? "Abandonner ma saisie" : "Abandonner la demande", role: .destructive) { Task { await model.abandonUnconfirmed() } }
                 .disabled(model.isBusy)
                 .frame(minHeight: DrivyLayout.tapTarget)
                 .accessibilityIdentifier("course-abandon-command")
