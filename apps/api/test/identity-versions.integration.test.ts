@@ -145,17 +145,19 @@ describe('Identité partagée : version des projections modifiables (#421)', () 
     expect(mismatch.statusCode).toBe(409);
   });
 
-  it('écritures simultanées avec la même version : une seule gagne, l’autre reçoit 412, sans interblocage', async () => {
+  it('trois intentions simultanées fondées sur les versions initiales de la même identité : un seul 200, deux 412, valeur du gagnant persistée', async () => {
     for (let round = 0; round < 3; round++) {
       const opened = await adminRead(dossierA, 'demo-admin'), openedB = await adminRead(dossierB, 'demo-instructor'), mine = await me('demo-alice');
+      const phones = [`+41 79 100 0${round}01`, `+41 79 100 0${round}02`, `+41 79 100 0${round}03`];
       const results = await Promise.all([
-        adminWrite(dossierA, policyA, { contactPhone: `+41 79 100 0${round}01` }, opened.version, 'demo-admin'),
-        adminWrite(dossierB, policyB, { contactPhone: `+41 79 100 0${round}02` }, openedB.version, 'demo-instructor'),
-        saveMe({ contactPhone: `+41 79 100 0${round}03` }, mine.version, 'demo-alice')]);
-      const codes = results.map(r => r.statusCode).sort();
-      // Au moins un succès ; aucun 5xx (interblocage, délai de verrou) ; tout perdant est un conflit de version explicite.
-      expect(codes.filter(c => c === 200).length, results.map(r => r.body).join('|')).toBeGreaterThanOrEqual(1);
-      for (const r of results) expect([200, 412]).toContain(r.statusCode);
+        adminWrite(dossierA, policyA, { contactPhone: phones[0] }, opened.version, 'demo-admin'),
+        adminWrite(dossierB, policyB, { contactPhone: phones[1] }, openedB.version, 'demo-instructor'),
+        saveMe({ contactPhone: phones[2] }, mine.version, 'demo-alice')]);
+      const bodies = results.map(r => `${r.statusCode}:${r.body}`).join('|');
+      expect(results.map(r => r.statusCode).sort(), bodies).toEqual([200, 412, 412]);
+      for (const r of results.filter(r => r.statusCode === 412)) expect(r.json().code).toBe('VERSION_CONFLICT');
+      // Le perdant n'a rien écrit : la valeur persistée est exactement celle du gagnant.
+      expect(await phoneInDb(), bodies).toBe(phones[results.findIndex(r => r.statusCode === 200)]);
     }
   });
 });

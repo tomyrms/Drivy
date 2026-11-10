@@ -78,23 +78,56 @@ Règles pour le client :
 4. Une intention ancienne (PUT/DELETE avec l'ancien `If-Match`) est refusée en 412 : chaque changement de photo avance `person.version`.
 5. Pour détecter « une photo a existé puis a disparu » sans la photo, comparer `photoGeneration` à la dernière valeur vue.
 
-## Migration et retour arrière
+## Migration, ordre de déploiement et retour arrière
 
 Migration additive, appliquée dans une transaction ; la politique RLS temporaire de rattrapage est supprimée dans la même migration.
 
-Retour arrière (non automatisé, à jouer sur sauvegarde) :
+**Aucun retour arrière transparent n'est revendiqué.** Le code précédent n'est pas compatible avec le schéma migré pour les photos : son PUT augmente `photo_version` sans toucher `photo_generation`, et `CHECK photo_generation >= photo_version` refuse alors l'écriture. Constaté sur la base de recette migrée : `UPDATE drivy.person SET photo_version=photo_version+1` sur un compte à la génération 4 → `ERROR: new row … violates check constraint "person_photo_generation_covers_version"`. Les lectures (`GET /me/profile`, `GET /people/{id}/photo`) et les écritures d'identité de l'ancien code continuent de fonctionner, mais l'ajout et le remplacement de photo y échouent (5xx) tant que la contrainte existe.
+
+Ordre à suivre :
+
+- **Déploiement avant** : migration et nouveau code API ensemble (même fenêtre) ; entre les deux, ajout/remplacement de photo indisponible, le reste inchangé. Sauvegarde de la base avant (autorisation du 28 septembre 2026).
+- **Retour arrière** (sur sauvegarde, API arrêtée ou en maintenance) : 1. arrêter la version nouvelle ; 2. jouer le SQL ci-dessous ; 3. seulement ensuite démarrer l'ancien code. Le nouveau code lit `photo_generation` : il ne peut pas tourner sur le schéma rétabli.
 
 ```sql
+BEGIN;
 DROP TRIGGER person_identity_bumps_profiles ON drivy.person;
 DROP FUNCTION drivy.bump_identity_dependents();
 DROP TRIGGER person_photo_generation_guard ON drivy.person;
 DROP FUNCTION drivy.guard_photo_generation();
 ALTER TABLE drivy.person DROP CONSTRAINT person_photo_generation_covers_version;
 ALTER TABLE drivy.person DROP COLUMN photo_generation;
+DELETE FROM public.drivy_migrations WHERE name='20261107_identity_versions_photo_generation.sql';
+COMMIT;
 ```
 
-Le code précédent ignore `photo_generation` : il fonctionne sur le schéma migré (déploiement API après base, retour arrière du code possible sans toucher la base, avec la réserve que le remplacement suivant un retrait reprendrait alors la numérotation d'avant — d'où l'ordre : retirer le code avant la colonne).
+Conséquences du retour arrière : les portraits chiffrés présents restent lisibles (`photo_version` et l'AAD n'ont jamais changé) ; la monotonie est perdue, donc un retrait suivi d'un remplacement peut de nouveau réutiliser un numéro (le défaut #450 revient) ; les versions de dossier déjà avancées par le trigger ne reculent pas (elles ne font que croître).
 
-## Qualification
+## Qualification (commandes réellement exécutées)
 
-Tests : `apps/api/test/identity-versions.integration.test.ts` (12 cas, vraie PostgreSQL 17, données synthétiques) : inter-routes dans les deux sens, route historique, deux écoles dans les deux sens, photo sans effet sur les dossiers, élève tiers non concerné, droits par champ et isolation d'école, rejeu idempotent, écritures simultanées sans 5xx, génération monotone, appareil périmé, portraits existants. Non qualifié ici : raccord iOS/web, déploiement, appareils réels.
+Environnement : Node 24.22.2 portable ; PostgreSQL 17-alpine isolé (conteneur propre au lot, port 55421, base `drivy_test`) ; Mailpit v1.31.2 isolé (SMTP 55426, HTTP 55826) pour `g1c` ; données synthétiques uniquement. Rien en production, ni push, ni CI.
+
+| Contrôle | Résultat |
+| --- | --- |
+| `npx tsc --noEmit` (apps/api) | RÉUSSI, code 0 |
+| `vitest run test/identity-versions.integration.test.ts` (cycle 1) | RÉUSSI, 12/12 |
+| Même fichier avec le trigger `person_identity_bumps_profiles` désactivé (RED attendu) | 4 échecs attendus (cas #421), fichier restauré |
+| `vitest run test/g1c.integration.test.ts test/identity-versions.integration.test.ts` avec Mailpit isolé | RÉUSSI, 76/76 |
+| Run complet antérieur du coordinateur (hors Mailpit) | 1069 réussis, 2 échecs SMTP (g1c), 1 ignoré ; les 2 échecs sont verts avec Mailpit (ligne précédente) |
+| Suite complète lancée par ce worker | INTERROMPUE à la limite de 30 min, aucun résultat final ; non relancée |
+| Retour 1/2 : `vitest run test/identity-migration.integration.test.ts test/identity-versions.integration.test.ts --no-file-parallelism` | RÉUSSI, 15/15 (3 migration + 12 identité) |
+| Test « trois intentions » rejoué seul 2 fois en plus | RÉUSSI à chaque fois |
+
+### Preuve de migration sur base peuplée (`identity-migration.integration.test.ts`)
+
+Le harnais existant (`freshDatabase`, option additive `skipMigrations`) construit le schéma antérieur sans la migration 20261107, sous le propriétaire non privilégié `drivy_harness_migrator`. Une base synthétique est peuplée avant migration : un portrait chiffré (AES-256-GCM, AAD `{personId, kind:'profile-photo', photoVersion:3}`, `photo_version=3`) et un compte sans photo. Puis `migrate()` applique seulement la migration manquante. Vérifié : backfill (`photo_generation` = 3 et 0), ligne chiffrée inchangée, portrait toujours déchiffré à l'identique (200, `ETag "photo-3"`, octets égaux), absence toujours 404, puis retrait (`null`, génération 3) → remplacement (4) pour le compte migré et 0 → 1 → retrait → 2 pour le compte sans photo.
+
+### Concurrence
+
+Le cas de concurrence envoie, trois fois, trois commandes simultanées fondées sur les versions initiales de la même identité (administrateur école A, administrateur école B, la personne via `/me`) : exactement un 200 et deux 412 `VERSION_CONFLICT`, et la valeur persistée est celle du gagnant. Les verrous existants suffisent (le compte est verrouillé en écriture avant la vérification de version) ; aucune modification de verrou.
+
+## Limites
+
+- Ni raccord client ni cache iOS/web : #450 reste ouverte, dépendance distincte à attribuer après stabilisation de ce lot.
+- Pas de qualification physique ni de déploiement.
+- Suite globale non terminée (interrompue) : seuls les contrôles ci-dessus sont établis.
