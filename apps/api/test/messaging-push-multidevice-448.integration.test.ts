@@ -159,4 +159,27 @@ describe('#448 messagerie : état par destination', () => {
     const [row] = await notification();
     expect((await deliveries(row!.id))[run.sent]).toMatchObject({ status: 'REJECTED', failure_code: 'INVALID_TOKEN' });
   });
+  it('deux alertes déjà entamées du même groupe : la préférence retirée pendant l’envoi de la première bloque la première destination de la seconde', async () => {
+    await sendPrivate();
+    await processPushBatch(worker, scripted({ [tokenA]: ['SENT'], [tokenB]: ['RETRY'] }).sender);
+    await sendPrivate();
+    const rows = (await pool.query<{ id: string }>("SELECT id FROM drivy.push_notification WHERE category LIKE 'MESSAGE_%' AND person_id=$1 ORDER BY created_at,id", [id.alice])).rows;
+    expect(rows).toHaveLength(2);
+    // La seconde alerte est elle aussi entamée : A acceptée, B en attente de reprise.
+    await pool.query(`INSERT INTO drivy.push_delivery(notification_id,device_id,status,attempts,completed_at)
+      SELECT $1,id,CASE WHEN token=$2 THEN 'SENT' ELSE 'PENDING' END,1,CASE WHEN token=$2 THEN now() END FROM drivy.push_device WHERE person_id=$3`, [rows[1]!.id, tokenA, id.alice]);
+    await due();
+    const run = await suspendedBatch('SENT', async () => {
+      await pool.query('INSERT INTO drivy.notification_preference(person_id,messaging_private) VALUES($1,false) ON CONFLICT(person_id) DO UPDATE SET messaging_private=false', [id.alice]);
+    });
+    // Un seul envoi (la première alerte traitée) : aucune destination de l'autre alerte ne part sur des faits périmés.
+    expect(run.calls).toHaveLength(1);
+    const states = (await pool.query<{ id: string; status: string; failure_code: string | null }>(
+      "SELECT id,status,failure_code FROM drivy.push_notification WHERE category LIKE 'MESSAGE_%' AND person_id=$1", [id.alice])).rows;
+    const sentOnes = (await pool.query<{ n: number }>("SELECT count(*)::int AS n FROM drivy.push_delivery WHERE status='SENT' AND device_id IN (SELECT id FROM drivy.push_device WHERE token=$1)", [tokenB])).rows[0]!.n;
+    expect(sentOnes).toBe(1);
+    for (const row of states) expect(await pool.query("SELECT count(*)::int AS n FROM drivy.push_delivery WHERE notification_id=$1 AND status='PENDING'", [row.id]).then((r) => r.rows[0]!.n)).toBe(0);
+    expect(states.filter((row) => row.status === 'SKIPPED' && row.failure_code === 'PREFERENCE_DISABLED').length).toBeGreaterThanOrEqual(1);
+    expect(states.every((row) => row.status !== 'PENDING')).toBe(true);
+  });
 });

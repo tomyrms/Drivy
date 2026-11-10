@@ -150,7 +150,7 @@ const finishDelivery=(db:PoolClient,notificationId:string,deviceId:string,status
 
 /** Envoie aux seules destinations encore en attente et écrit le résultat de chacune.
  * Autorisation par tentative : après tout envoi attendu (pendant lequel droits, préférences, échéance ou appareils ont pu
- * changer dans une autre connexion), `revalidate` est relu AVANT la destination suivante ; s'il refuse, la fonction SQL a déjà
+ * changer dans une autre connexion), `revalidate` est relu AVANT chaque destination, la première comprise ; s'il refuse, la fonction SQL a déjà
  * clos la notification et, par déclencheur, ses destinations restantes. L'appareil est relu juste avant son envoi (jamais depuis
  * un instantané pris avant la boucle) : révoqué ou repris par une autre personne, il est clos sans envoi.
  * Retourne faux quand l'autorisation est perdue : l'appelant ne doit alors pas clore la notification lui-même. */
@@ -158,14 +158,13 @@ async function attemptDeliveries(db:PoolClient,sender:PushSender,notification:No
  revalidate:()=>Promise<boolean>):Promise<boolean>{
  const targets=(await db.query<{device_id:string;attempts:number}>(
   `SELECT device_id,attempts FROM drivy.push_delivery WHERE notification_id=$1 AND status='PENDING' ORDER BY device_id FOR UPDATE`,[notification.id])).rows;
- let awaited=false;
  for(const target of targets){
-  if(awaited){if(!(await revalidate()))return false;awaited=false;}
+  // Avant CHAQUE envoi, première destination comprise : l'appelant a pu attendre (autre alerte du groupe) depuis sa propre lecture.
+  if(!(await revalidate()))return false;
   const device=(await db.query<{token:string;environment:'SANDBOX'|'PRODUCTION';revoked_at:Date|null;owned:boolean;version:string}>(
    'SELECT token,environment,revoked_at,(person_id=$2) AS owned,last_seen_at::text AS version FROM drivy.push_device WHERE id=$1',[target.device_id,notification.person_id])).rows[0];
   if(!device||device.revoked_at!==null||!device.owned){await finishDelivery(db,notification.id,target.device_id,'REVOKED','DEVICE_UNAVAILABLE');state.recorded=true;continue;}
   const result=await sender.send(device.token,device.environment,payload,notification.valid_until,collapseIdFor(notification.dedupe_key));
-  awaited=true;
   if(result==='SENT')await finishDelivery(db,notification.id,target.device_id,'SENT',null);
   else if(result==='INVALID_TOKEN'){
    await finishDelivery(db,notification.id,target.device_id,'REJECTED','INVALID_TOKEN');
