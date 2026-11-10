@@ -246,3 +246,15 @@ Tests (les deux coffres, intention de l'élève, faute après écriture sur le c
 ### Contrôles exécutés
 
 Aucun Swift compilé ni exécuté. Relecture de code seulement.
+
+### Extension E : deux assertions qui ne compilaient pas
+
+Run Apple 42778603013 (SHA d19e978f, job 129702904628) : l'app compile, puis la cible `DrivyTests` échoue sur
+`SchoolIntentExactnessTests.swift` lignes 485 et 494 (`await` à droite de `&&` dans `#expect`). ÉCHEC de compilation ; aucun test
+n'a été exécuté.
+
+Le porteur a autorisé une extension unique après les deux retours E, limitée à ces deux assertions, suivie d'une seule relance Apple
+agenda par le coordinateur. Correction de syntaxe seulement : les acteurs sont lus dans des `let` (`writesDuringHold`/`heldDuringHold`,
+`writesAfter`/`mutationsAfter`) avant les mêmes `#expect`, conditions et appels métier inchangés.
+
+Contrôle local : `git diff --check` seulement. Swift reste NON EXÉCUTÉ sur ce poste Windows ; la compilation n'est pas qualifiée.
