@@ -111,6 +111,7 @@ import SwiftUI
             try? outbox.remove(command)
             queued.removeAll { $0.id == command.id }
             state = next; pending = nil
+            SchoolBoxesSignal.shared.settled()
             return true
         } catch is CancellationError {
             return false

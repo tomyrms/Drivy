@@ -69,6 +69,26 @@ extension SchoolVisualData {
             "request": pendingForStaff,
             "lesson": ["id": plannedLessonID.uuidString, "plannedStart": "2026-09-28T08:00:00Z", "plannedEnd": "2026-09-28T08:50:00Z", "timeZone": "Europe/Zurich",
                        "version": 1, "instructorMembershipId": membershipID.uuidString, "learnerId": learnerID.uuidString, "learnerDisplayName": learnerName]]]]
+        // Boîtes de l'onglet Élèves au-delà de huit lignes (#447) : N demandes et N examens distincts, un élève nommé par ligne.
+        if !learnerRole, let screen, screen.hasPrefix("learners-boxes-"), let count = Int(screen.dropFirst("learners-boxes-".count)) {
+            func named(_ value: [String: Any], number: Int) -> [String: Any] {
+                var copy = value
+                copy["id"] = identifier(1_000 + number).uuidString
+                return copy
+            }
+            objects["\(root)/exams?filter=PENDING_RESULT"] = ["filter": "PENDING_RESULT", "items": (1...count).map { number -> [String: Any] in
+                var item = listItem(named(waiting, number: number))
+                item["learnerDisplayName"] = "Élève examen \(number)"
+                return item
+            }]
+            objects["\(root)/lesson-change-requests"] = ["items": (1...count).map { number -> [String: Any] in
+                var item: [String: Any] = ["request": named(pendingForStaff, number: number)]
+                item["lesson"] = ["id": plannedLessonID.uuidString, "plannedStart": "2026-09-28T08:00:00Z", "plannedEnd": "2026-09-28T08:50:00Z",
+                                  "timeZone": "Europe/Zurich", "version": 1, "instructorMembershipId": membershipID.uuidString,
+                                  "learnerId": learnerID.uuidString, "learnerDisplayName": "Élève demande \(number)"]
+                return item
+            }]
+        }
         return objects
     }
 }

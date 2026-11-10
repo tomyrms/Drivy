@@ -60,6 +60,7 @@ import SwiftUI
         isSending = true; errorMessage = nil; defer { isSending = false }
         do {
             state = try await work(); operation = nil
+            SchoolBoxesSignal.shared.settled()
             return true
         } catch is CancellationError {
             return false
@@ -81,22 +82,73 @@ import SwiftUI
     }
 }
 
-/// Demandes des élèves en attente, lues pour le personnel qui gère des leçons. Une panne garde la dernière lecture : ne rien afficher de plus
-/// n'est pas dire qu'il n'y a rien à traiter.
-@MainActor @Observable final class SchoolLessonRequestInboxModel {
-    private(set) var items: [SchoolLessonChangeInboxItem] = []
+/// Signal local : un traitement confirmé (demande de leçon, résultat d'examen) demande une relecture des boîtes de l'onglet Élèves.
+/// Un compteur, pas de minuterie : la relecture suit l'événement.
+@MainActor @Observable final class SchoolBoxesSignal {
+    static let shared = SchoolBoxesSignal()
+    private(set) var revision = 0
+    func settled() { revision += 1 }
+}
 
-    func load(client: SchoolLessonChangeClient?, schoolID: UUID?) async {
-        guard let client, let schoolID else { items = []; return }
-        guard let loaded = try? await client.inbox(schoolID: schoolID) else { return }
-        items = loaded
+/// Lecture d'une boîte du personnel : dernière lecture conservée en cas de panne, réponse tardive d'un autre contexte ignorée,
+/// accès perdu purgé. `context` nomme compte, école, époque et droits ; il change dès que l'un d'eux change.
+@MainActor @Observable final class SchoolBoxReading<Item> {
+    private(set) var items: [Item] = []
+    private(set) var errorMessage: String?
+    private(set) var isLoading = false
+    private var generation = 0
+    private var context: String?
+
+    func load(context: String, failure: String, fetch: (() async throws -> [Item])?) async {
+        generation += 1
+        let mine = generation
+        if self.context != context { items = []; errorMessage = nil; self.context = context }
+        guard let fetch else { items = []; errorMessage = nil; isLoading = false; return }
+        isLoading = true
+        defer { if mine == generation { isLoading = false } }
+        do {
+            let loaded = try await fetch()
+            guard mine == generation, self.context == context else { return }
+            items = loaded; errorMessage = nil
+        } catch is CancellationError {
+            return
+        } catch {
+            guard mine == generation, self.context == context else { return }
+            switch error as? SchoolPlanningFailure {
+            case .forbidden?, .notFound?, .unauthorized?:
+                items = []                                       // l'accès n'existe plus : rien d'interdit ne reste à l'écran
+            default: break                                       // une panne garde la dernière lecture, signalée comme telle
+            }
+            errorMessage = failure
+        }
     }
+}
+
+typealias SchoolLessonRequestInboxModel = SchoolBoxReading<SchoolLessonChangeInboxItem>
+
+extension SchoolBoxReading where Item == SchoolLessonChangeInboxItem {
+    func load(client: SchoolLessonChangeClient?, schoolID: UUID?, context: String) async {
+        let fetch: (() async throws -> [SchoolLessonChangeInboxItem])?
+        if let client, let schoolID { fetch = { try await client.inbox(schoolID: schoolID) } } else { fetch = nil }
+        await load(context: context, failure: "Les demandes n’ont pas pu être relues.", fetch: fetch)
+    }
+}
+
+/// Plus de huit lignes : les huit premières, puis un contrôle qui déplie la liste complète.
+enum SchoolBoxExpansion {
+    static let collapsedCount = 8
+    static func visible<T>(_ items: [T], expanded: Bool) -> ArraySlice<T> {
+        expanded ? items[...] : items.prefix(collapsedCount)
+    }
+    static func hiddenCount(_ total: Int, expanded: Bool) -> Int { expanded ? 0 : max(0, total - collapsedCount) }
+    static func canExpand(_ total: Int) -> Bool { total > collapsedCount }
 }
 
 /// « Demandes des élèves », en tête de la liste d'élèves : chaque ligne ouvre le dossier de l'élève, où la leçon porte la demande.
 struct SchoolPendingRequestRows: View {
     let items: [SchoolLessonChangeInboxItem]
     let open: (UUID) -> Void
+    @State private var expanded = false
 
     @MainActor private func summary(_ item: SchoolLessonChangeInboxItem) -> String {
         let what = item.request.requestKind == .cancel ? "Annulation demandée" : "Déplacement demandé"
@@ -113,7 +165,7 @@ struct SchoolPendingRequestRows: View {
                 .accessibilityAddTraits(.isHeader)
                 .listRowSeparator(.hidden)
                 .drivyPlainRows()
-            ForEach(items.prefix(8)) { item in
+            ForEach(SchoolBoxExpansion.visible(items, expanded: expanded)) { item in
                 Button { open(item.lesson.learnerId) } label: {
                     DrivyEntityRow(title: item.lesson.learnerDisplayName.isEmpty ? "Élève" : item.lesson.learnerDisplayName,
                         meta: summary(item), leading: .symbol("arrow.left.arrow.right"), showsChevron: true)
@@ -124,14 +176,34 @@ struct SchoolPendingRequestRows: View {
                 .listRowSeparator(.hidden)
                 .drivyPlainRows()
             }
-            if items.count > 8 {
-                Text("\(items.count - 8) autres demandes")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .listRowSeparator(.hidden)
-                    .drivyPlainRows()
+            if SchoolBoxExpansion.canExpand(items.count) {
+                SchoolBoxExpansionButton(expanded: $expanded, hidden: SchoolBoxExpansion.hiddenCount(items.count, expanded: expanded),
+                    noun: "demandes", identifier: "pending-requests-expansion")
             }
         }
+    }
+}
+
+/// Déplier ou replier une boîte de plus de huit lignes : un bouton réel, annoncé avec son état.
+struct SchoolBoxExpansionButton: View {
+    @Binding var expanded: Bool
+    let hidden: Int
+    let noun: String
+    let identifier: String
+
+    var body: some View {
+        Button { expanded.toggle() } label: {
+            Text(expanded ? "Réduire" : "Afficher les \(hidden) autres")
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.drivyText)
+        .accessibilityLabel(expanded ? "Réduire la liste des \(noun)" : "Afficher les \(hidden) autres \(noun)")
+        .accessibilityValue(expanded ? "Liste complète" : "Liste réduite")
+        .accessibilityIdentifier(identifier)
+        .listRowSeparator(.hidden)
+        .drivyPlainRows()
     }
 }
 
