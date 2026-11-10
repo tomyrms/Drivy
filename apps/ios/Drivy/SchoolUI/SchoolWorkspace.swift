@@ -22,6 +22,8 @@ final class SchoolWorkspace {
     private(set) var selectedLearnerID: UUID?
     /// La leçon ou l'examen choisi dans une boîte de l'onglet Élèves, consommé par le dossier de cet élève.
     var boxTarget: SchoolBoxTarget?
+    /// Dit pourquoi la cible d'une boîte n'a pas pu s'ouvrir (examen disparu, formation inaccessible) ; effacé à l'ouverture suivante.
+    private(set) var boxTargetMessage: String?
     private(set) var searchText = ""
     /// Seulement les dossiers dont le profil est à compléter (#153) : un filtre du serveur, jamais de la page chargée.
     private(set) var showsIncompleteProfilesOnly = false
@@ -119,6 +121,7 @@ final class SchoolWorkspace {
     }
 
     func reset() {
+        boxTarget = nil; boxTargetMessage = nil
         SchoolTrainingModelCache.reset()
         accountRequest = UUID()
         accountRefresh = UUID()
@@ -529,6 +532,7 @@ final class SchoolWorkspace {
             // Même école, mêmes droits (nouvel essai, retour d'une adhésion) : la portée reste en place pour que les
             // écrans ouverts ne se ferment pas. Les réponses en vol de l'ancienne lecture sont écartées par le nouveau scope.
             schoolScope = UUID()
+            boxTarget = nil; boxTargetMessage = nil
             schoolError = nil
             isLoadingSchool = false
             // Une lecture du dossier écartée ici ne rend jamais la main : ses indicateurs repartent de zéro et le
@@ -744,7 +748,16 @@ final class SchoolWorkspace {
     /// Ouvre le dossier de l'élève de la ligne et retient la leçon ou l'examen visé.
     func open(_ target: SchoolBoxTarget) {
         selectLearner(target.learnerID)
+        boxTargetMessage = nil
         boxTarget = target
+    }
+
+    /// Acquitte la cible, jamais avant qu'elle soit résolue. Une action tardive d'un autre contexte (autre élève, école ou compte,
+    /// cible déjà remplacée) ne trouve plus la même cible et n'a aucun effet.
+    func resolveBoxTarget(_ target: SchoolBoxTarget, message: String? = nil) {
+        guard boxTarget == target, selectedLearnerID == target.learnerID else { return }
+        boxTarget = nil
+        boxTargetMessage = message
     }
 
     func selectLearner(_ id: UUID?) {
@@ -909,6 +922,7 @@ final class SchoolWorkspace {
     }
 
     private func clearLearner() {
+        boxTarget = nil; boxTargetMessage = nil
         learnerRequest = UUID()
         trainingsRequest = UUID()
         selectedLearnerID = nil

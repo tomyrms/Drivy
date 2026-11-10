@@ -215,8 +215,9 @@ struct SchoolVisualShell: View {
         let transport: any SchoolHTTPTransport
         if let agendaScenario, SchoolAgendaVisualData.screens.contains(agendaScenario) {
             transport = try SchoolAgendaVisualData.transport(overriding: fixtures, scenario: agendaScenario)
-        } else if agendaScenario == "learners-boxes-refresh" {
-            transport = SchoolBoxesScriptTransport(base: SchoolVisualTransport(responses: fixtures))
+        } else if let boxes = agendaScenario, boxes.hasPrefix("learners-boxes-") {
+            // Lectures des examens lentes pour tous les écrans des boîtes ; lectures qui changent pour « refresh » seulement.
+            transport = SchoolBoxesScriptTransport(base: SchoolVisualTransport(responses: fixtures), scriptsReads: boxes == "learners-boxes-refresh")
         } else {
             transport = SchoolVisualTransport(responses: fixtures)
         }

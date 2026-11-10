@@ -100,7 +100,6 @@ struct SchoolLearnerDossierView: View {
     private var dossier: some View {
         // The page is refreshable and now often shorter than the screen: it keeps the
         // system bounce, without which the pull gesture has nothing to pull.
-        ScrollViewReader { proxy in
         ScrollView {
             VStack(alignment: .leading, spacing: DrivySpacing.l) {
                 // Rien de lu pour cet élève : l’attente, aussi après une lecture interrompue que la prochaine reprend.
@@ -109,6 +108,9 @@ struct SchoolLearnerDossierView: View {
                 }
                 if let error = workspace.learnerError {
                     SchoolErrorNotice(message: error, retry: { Task { await reload() } })
+                }
+                if let message = workspace.boxTargetMessage {
+                    DrivyActionNote(text: message, isError: true).accessibilityIdentifier("box-target-missing")
                 }
                 if let learner = workspace.learner, learner.id == workspace.selectedLearnerID {
                     header(learner)
@@ -123,34 +125,34 @@ struct SchoolLearnerDossierView: View {
         .refreshable { await refresh() }
         .accessibilityIdentifier("learner-dossier")
         .safeAreaInset(edge: .bottom, spacing: 0) { actions }
-        .onChange(of: workspace.boxTarget, initial: true) { _, _ in applyBoxTarget(proxy) }
-        .onChange(of: workspace.trainings.map(\.id)) { _, _ in applyBoxTarget(proxy) }
-        .onChange(of: workspace.isLoadingTrainings) { _, _ in applyBoxTarget(proxy) }
-        }
+        .onChange(of: workspace.boxTarget, initial: true) { _, _ in applyBoxTarget() }
+        .onChange(of: workspace.trainings.map(\.id)) { _, _ in applyBoxTarget() }
+        .onChange(of: workspace.isLoadingTrainings) { _, _ in applyBoxTarget() }
     }
 
-    /// Depuis une boîte de l'onglet Élèves : la leçon s'ouvre par l'écran des formations ; l'examen ramène à sa formation, section
-    /// Progression, et le dossier y défile. Le filtre de permis suit la cible ; la cible est retirée une fois appliquée.
-    private func applyBoxTarget(_ proxy: ScrollViewProxy) {
+    /// Depuis une boîte de l'onglet Élèves : la leçon s'ouvre par l'écran des formations ; pour un examen, le dossier choisit la formation
+    /// et la section Progression, puis la section des examens lit, défile et acquitte la cible. Ici, la cible n'est retirée que si sa
+    /// formation n'existe pas (ou plus) chez cet élève.
+    private func applyBoxTarget() {
         guard let target = workspace.boxTarget, target.learnerID == workspace.selectedLearnerID,
               workspace.learner?.id == target.learnerID, !workspace.isLoadingTrainings else { return }
         if target.lessonID != nil {
-            section = .lessons; permit = nil
+            if section != .lessons { section = .lessons }
+            if permit != nil { permit = nil }
             return
         }
-        guard let trainingID = target.trainingID, target.examID != nil else { workspace.boxTarget = nil; return }
-        guard workspace.trainings.contains(where: { $0.id == trainingID }) else {
-            if workspace.nextTrainingsCursor == nil { workspace.boxTarget = nil }
+        guard let trainingID = target.trainingID, target.examID != nil else {
+            workspace.resolveBoxTarget(target, message: "Cet examen n’a pas pu être ouvert.")
             return
         }
-        permit = trainingID; section = .progress
-        workspace.boxTarget = nil
-        Task {
-            // La section Progression se compose après la lecture de la formation : un défilement à la pose, un autre une fois lue.
-            for delay in [0.3, 1.2] {
-                try? await Task.sleep(for: .seconds(delay))
-                withAnimation { proxy.scrollTo("exams-\(trainingID.uuidString)", anchor: .top) }
-            }
+        if workspace.trainings.contains(where: { $0.id == trainingID }) {
+            if permit != trainingID { permit = trainingID }
+            if section != .progress { section = .progress }
+        } else if workspace.nextTrainingsCursor != nil {
+            // La formation peut figurer sur une page suivante : la page arrivée relance ce contrôle.
+            if workspace.trainingsError == nil, !workspace.isLoadingMoreTrainings { Task { await workspace.loadMoreTrainings() } }
+        } else if workspace.trainingsError == nil {
+            workspace.resolveBoxTarget(target, message: "La formation de cet examen n’est plus dans le dossier.")
         }
     }
 

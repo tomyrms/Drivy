@@ -248,4 +248,65 @@ import Testing
         await late.value
         #expect(box.items.isEmpty && box.errorMessage == nil)
     }
+
+    // MARK: Cible d'une boîte : acquittée à la résolution, purgée au changement de contexte
+
+    private final class UnreadAPI: SchoolAPI {
+        func me() async throws -> SchoolPerson { throw SchoolAPIError.invalidResponse }
+        func school(id: UUID) async throws -> SchoolDetails { throw SchoolAPIError.invalidResponse }
+        func learners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner> { throw SchoolAPIError.invalidResponse }
+        func incompleteLearners(schoolID: UUID, query: String, cursor: String?) async throws -> SchoolPage<SchoolLearner> { throw SchoolAPIError.invalidResponse }
+        func learner(schoolID: UUID, id: UUID) async throws -> SchoolLearner { throw SchoolAPIError.invalidResponse }
+        func trainings(schoolID: UUID, learnerID: UUID, cursor: String?) async throws -> SchoolPage<SchoolTraining> { throw SchoolAPIError.invalidResponse }
+        func training(schoolID: UUID, id: UUID) async throws -> SchoolTraining { throw SchoolAPIError.invalidResponse }
+        func ownLearners(schoolID: UUID) async throws -> SchoolPage<SchoolLearner> { throw SchoolAPIError.invalidResponse }
+        func learnersToComplete(schoolID: UUID) async throws -> [SchoolLearner]? { nil }
+        func selfProfile() async throws -> SchoolSelfProfile { throw SchoolAPIError.invalidResponse }
+        func saveSelfProfile(_ edit: SchoolSelfProfileEdit, version: Int) async throws -> SchoolSelfProfile { throw SchoolAPIError.invalidResponse }
+        func setSelfPhoto(_ jpeg: Data?, version: Int) async throws -> SchoolSelfProfile { throw SchoolAPIError.invalidResponse }
+        func personPhoto(personID: UUID) async throws -> Data? { nil }
+    }
+
+    private let learnerOne = UUID(uuidString: "11110000-0000-4000-8000-000000000001")!
+    private let learnerTwo = UUID(uuidString: "22220000-0000-4000-8000-000000000002")!
+    private let trainingOne = UUID(uuidString: "33330000-0000-4000-8000-000000000003")!
+    private let examOne = UUID(uuidString: "44440000-0000-4000-8000-000000000004")!
+    private let examTwo = UUID(uuidString: "55550000-0000-4000-8000-000000000005")!
+
+    private func examTarget(_ exam: UUID, learner: UUID? = nil) -> SchoolBoxTarget {
+        SchoolBoxTarget(learnerID: learner ?? learnerOne, trainingID: trainingOne, examID: exam)
+    }
+
+    @Test func aBoxTargetStaysUntilItIsResolvedAndOnlyTheSameTargetResolvesIt() {
+        let workspace = SchoolWorkspace(api: UnreadAPI())
+        workspace.open(examTarget(examOne))
+        #expect(workspace.boxTarget == examTarget(examOne) && workspace.selectedLearnerID == learnerOne)
+        // Une action tardive portant une autre cible, ou un autre élève, ne l'acquitte pas.
+        workspace.resolveBoxTarget(examTarget(examTwo))
+        workspace.resolveBoxTarget(examTarget(examOne, learner: learnerTwo))
+        #expect(workspace.boxTarget == examTarget(examOne))
+        workspace.resolveBoxTarget(examTarget(examOne), message: "Cet examen n’est plus dans la liste de la formation.")
+        #expect(workspace.boxTarget == nil && workspace.boxTargetMessage != nil)
+        // La cible suivante efface le message précédent.
+        workspace.open(examTarget(examTwo))
+        #expect(workspace.boxTargetMessage == nil && workspace.boxTarget == examTarget(examTwo))
+    }
+
+    @Test func aBoxTargetIsPurgedWhenTheLearnerChangesOrTheWorkspaceIsReset() {
+        let workspace = SchoolWorkspace(api: UnreadAPI())
+        workspace.open(examTarget(examOne))
+        workspace.selectLearner(learnerTwo)
+        #expect(workspace.boxTarget == nil, "un autre élève ne reçoit pas la cible du précédent")
+        workspace.open(examTarget(examOne))
+        workspace.selectLearner(nil)
+        #expect(workspace.boxTarget == nil && workspace.boxTargetMessage == nil)
+        workspace.open(examTarget(examTwo))
+        workspace.resolveBoxTarget(examTarget(examTwo), message: "perdu")
+        workspace.open(examTarget(examOne))
+        workspace.reset()
+        #expect(workspace.boxTarget == nil && workspace.boxTargetMessage == nil && workspace.selectedLearnerID == nil)
+        // Après la remise à zéro, la réponse tardive de l'ancienne section n'a plus rien à acquitter.
+        workspace.resolveBoxTarget(examTarget(examOne), message: "tardif")
+        #expect(workspace.boxTargetMessage == nil)
+    }
 }

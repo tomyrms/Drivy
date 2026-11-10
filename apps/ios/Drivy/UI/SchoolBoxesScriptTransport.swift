@@ -1,27 +1,43 @@
 #if DEBUG && targetEnvironment(simulator)
 import Foundation
 
-/// Écran de contrôle « learners-boxes-refresh » (#449) : le serveur fictif change entre deux lectures des boîtes de l'onglet Élèves.
+/// Écrans de contrôle « learners-boxes-* » (#447, #449) : le serveur fictif simule une lecture lente et, pour « learners-boxes-refresh »,
+/// change entre deux lectures des boîtes de l'onglet Élèves.
 ///
-/// - Demandes : la 1re lecture donne neuf lignes ; les suivantes retirent la première et ajoutent une dixième ; après un refus confirmé,
-///   la demande de la leçon planifiée n'y est plus.
-/// - Examens : la 1re lecture donne neuf lignes, la 2e échoue (panne locale), les suivantes retirent la première et ajoutent une dixième.
-/// - Le refus d'une demande (POST) est accepté une fois et rend l'état refusé de la leçon planifiée.
+/// - Tous les écrans : la première lecture des examens d'une formation arrive après une courte attente, comme une lecture lente. Le
+///   dossier doit ouvrir l'examen visé quand elle arrive, sans défilement manuel ni attente côté produit.
+/// - Avec `scriptsReads` — demandes : la 1re lecture donne neuf lignes ; les suivantes retirent la première et ajoutent une dixième ;
+///   après un refus confirmé, la demande de la leçon planifiée n'y est plus. Examens : la 1re lecture donne neuf lignes, la 2e échoue
+///   (panne locale), les suivantes retirent la première et ajoutent une dixième. Le refus d'une demande (POST) est accepté et rend l'état
+///   refusé de la leçon planifiée.
 ///
 /// Données fictives uniquement, comme le reste du harnais ; l'ordre des lectures est celui de l'écran (une lecture initiale par boîte).
 final class SchoolBoxesScriptTransport: SchoolHTTPTransport, @unchecked Sendable {
+    /// Durée de la première lecture des examens d'une formation (simulée par le harnais, jamais par le produit).
+    static let slowExamStateSeconds = 2.0
+
     private let base: SchoolVisualTransport
+    private let scriptsReads: Bool
     private let lock = NSLock()
     private var requestReads = 0
     private var examReads = 0
+    private var stateReads = 0
     private var refused = false
 
-    init(base: SchoolVisualTransport) { self.base = base }
+    init(base: SchoolVisualTransport, scriptsReads: Bool) {
+        self.base = base
+        self.scriptsReads = scriptsReads
+    }
 
     func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
         guard let url = request.url else { throw SchoolAPIError.invalidResponse }
-        if (request.httpMethod ?? "GET") == "POST", url.lastPathComponent == "refuse" { return try await refuse(request, url: url) }
+        if scriptsReads, (request.httpMethod ?? "GET") == "POST", url.lastPathComponent == "refuse" { return try await refuse(request, url: url) }
+        if (request.httpMethod ?? "GET") == "GET", url.lastPathComponent == "exams", url.pathComponents.contains("trainings"),
+           nextStateRead() == 1 {
+            try await Task.sleep(for: .seconds(Self.slowExamStateSeconds))
+        }
         let response = try await base.send(request)
+        guard scriptsReads else { return response }
         if url.lastPathComponent == "lesson-change-requests" {
             let (read, wasRefused) = nextRequestRead()
             return try rewrite(response, nameStem: "Élève demande") { items in
@@ -38,21 +54,25 @@ final class SchoolBoxesScriptTransport: SchoolHTTPTransport, @unchecked Sendable
         return response
     }
 
-    /// Compte la lecture de demandes qui commence, sous verrou.
+    // Les compteurs se touchent par des fonctions synchrones : aucun verrou n'est tenu pendant un `await`.
     private func nextRequestRead() -> (Int, Bool) {
-        lock.lock(); defer { lock.unlock() }
-        requestReads += 1
-        return (requestReads, refused)
+        lock.withLock { requestReads += 1; return (requestReads, refused) }
     }
 
     private func nextExamRead() -> Int {
-        lock.lock(); defer { lock.unlock() }
-        examReads += 1
-        return examReads
+        lock.withLock { examReads += 1; return examReads }
+    }
+
+    private func nextStateRead() -> Int {
+        lock.withLock { stateReads += 1; return stateReads }
+    }
+
+    private func markRefused() {
+        lock.withLock { refused = true }
     }
 
     private func refuse(_ request: URLRequest, url: URL) async throws -> SchoolHTTPResponse {
-        lock.lock(); refused = true; lock.unlock()
+        markRefused()
         var parts = url.pathComponents
         guard let index = parts.firstIndex(of: "lesson-change-requests") else { throw SchoolAPIError.invalidResponse }
         parts.removeSubrange(index...)

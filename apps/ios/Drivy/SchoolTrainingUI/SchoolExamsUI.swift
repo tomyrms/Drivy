@@ -174,14 +174,37 @@ private func examKindTitle(_ kind: SchoolExam.Kind?) -> String {
     }
 }
 
+/// Ce que la lecture des examens dit de l'examen visé depuis une boîte de l'onglet Élèves.
+enum SchoolExamFocusOutcome: Equatable { case found, missing, unavailable }
+
 /// Les examens d'une formation, sous sa progression : prévus, reportés, absents, réussis ou échoués, chacun avec sa tentative.
 struct SchoolTrainingExamsSection: View {
     let training: SchoolTrainingWorkspace
     let schoolTimeZone: String
     /// Vrai sur la page de l'élève, où chaque bloc est une carte ; faux dans le dossier du moniteur, lu à plat.
     var grouped = false
+    /// L'examen visé par une boîte de l'onglet Élèves : la section défile jusqu'à sa ligne une fois les examens lus, puis le dit.
+    var focusExamID: UUID?
+    var resolveFocus: (SchoolExamFocusOutcome) -> Void = { _ in }
     @State private var model: SchoolExamModel?
     @State private var sheet: SchoolExamSheet?
+    /// Vrai quand la lecture en main date de l'ouverture de la cible actuelle.
+    @State private var freshForFocus = false
+    @State private var refused = false
+
+    /// Tout ce qui peut faire avancer la résolution de la cible ; aucune minuterie.
+    private struct FocusSignal: Equatable {
+        var focus: UUID?
+        var fresh: Bool
+        var refused: Bool
+        var loading: Bool
+        var ids: [UUID]?
+        var failed: Bool
+    }
+    private var focusSignal: FocusSignal {
+        FocusSignal(focus: focusExamID, fresh: freshForFocus, refused: refused, loading: model?.isLoading ?? false,
+            ids: model?.state?.exams.map(\.id), failed: model?.errorMessage != nil)
+    }
 
     /// Prévoir un examen exige une formation connue active : tant que son statut n'est pas lu, ou dès qu'il ne l'est plus, la
     /// création n'est pas proposée (#444). Les examens déjà prévus restent gérables, l'école tranchant au serveur.
@@ -190,25 +213,57 @@ struct SchoolTrainingExamsSection: View {
     var body: some View {
         // Un conteneur, pas un `Group` : tant que le modèle n'existe pas, la section est vide, et SwiftUI ne lance ni `.task` ni `.onAppear`
         // sur une vue vide. Le chargement ne démarrerait alors jamais (constaté sur les captures de la progression).
-        VStack(spacing: 0) {
-            if let model {
-                if let state = model.state {
-                    if state.canManage || !state.exams.isEmpty || model.pending != nil { content(model, state) }
-                } else if let message = model.errorMessage {
-                    SchoolErrorNotice(message: message, retry: { Task { await model.load() } }, retryIdentifier: "exams-retry")
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                if let model {
+                    if let state = model.state {
+                        if state.canManage || !state.exams.isEmpty || model.pending != nil { content(model, state) }
+                    } else if let message = model.errorMessage {
+                        SchoolErrorNotice(message: message, retry: { Task { await model.load() } }, retryIdentifier: "exams-retry")
+                    }
                 }
             }
+            .task(id: training.trainingID) { await prepare() }
+            .sheet(item: $sheet) { sheet in sheetView(sheet) }
+            .onChange(of: focusExamID) { _, new in reloadForFocus(new) }
+            .onChange(of: focusSignal, initial: true) { _, _ in settleFocus(proxy) }
         }
-        .task(id: training.trainingID) { await prepare() }
-        .sheet(item: $sheet) { sheet in sheetView(sheet) }
+    }
+
+    /// Une nouvelle cible sur une section déjà lue : les examens sont relus avant de dire si l'examen y est.
+    private func reloadForFocus(_ focus: UUID?) {
+        freshForFocus = false
+        guard focus != nil, let model else { return }
+        Task { await model.load(); freshForFocus = true }
+    }
+
+    /// Résout la cible sur une lecture terminée : l'examen est là (la page y défile), n'y est plus, ou la formation refuse la lecture.
+    /// Une panne avec Réessayer garde la cible : la reprise réussie la résout.
+    private func settleFocus(_ proxy: ScrollViewProxy) {
+        guard let focus = focusExamID else { return }
+        if refused { resolveFocus(.unavailable); return }
+        guard freshForFocus, let model, !model.isLoading else { return }
+        if let state = model.state {
+            if state.exams.contains(where: { $0.id == focus }) {
+                proxy.scrollTo(focus, anchor: .top)
+                resolveFocus(.found)
+            } else {
+                resolveFocus(.missing)
+            }
+        } else if model.errorMessage == nil {
+            // Lecture refusée ou inconnue de l'école : la section se tait, la cible le dit.
+            resolveFocus(.unavailable)
+        }
     }
 
     private func prepare() async {
-        guard training.hasPedagogicalRole, !training.invalidated, !training.accessRevoked else { return }
+        guard training.hasPedagogicalRole, !training.invalidated, !training.accessRevoked else { refused = true; return }
+        refused = false
         if model == nil || model?.trainingID != training.trainingID {
             model = SchoolExamModel(client: training.client.examClient, scope: training.scope, trainingID: training.trainingID)
         }
         await model?.load()
+        freshForFocus = true
     }
 
     @ViewBuilder private func content(_ model: SchoolExamModel, _ state: SchoolExamState) -> some View {
@@ -293,6 +348,7 @@ struct SchoolTrainingExamsSection: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .id(exam.id)
         .accessibilityIdentifier("exam-\(exam.id.uuidString)")
     }
 

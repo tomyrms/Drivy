@@ -2,12 +2,17 @@ import XCTest
 
 /// Boîtes de l'onglet Élèves (#447, #449) sur le vrai écran, serveur fictif en lecture seule sauf l'écran « learners-boxes-refresh » :
 /// - 9 et 20 lignes, demandes ET examens : la liste complète s'ouvre, la dernière ligne arrive sur sa cible exacte (la fiche de la leçon
-///   qui porte la demande ; la section Progression de la formation qui porte l'examen) et le retour retrouve la liste dépliée ;
+///   qui porte la demande ; l'examen de sa formation, parmi deux examens de la même formation dont aucun n'est le premier de la liste)
+///   et le retour retrouve la liste dépliée. Le serveur fictif rend la première lecture des examens d'une formation avec retard : aucun
+///   test ne défile à la main jusqu'à l'examen, il doit être là, visible, une fois la lecture arrivée ;
+/// - un examen absent de sa formation est dit, sans en ouvrir un autre ;
 /// - actualisation qui change les boîtes (retrait, ajout), une boîte en panne qui garde sa lecture puis reprend sur Réessayer pendant que
 ///   l'autre boîte aboutit ;
 /// - un refus de demande confirmé dans la fiche de la leçon relit la boîte au retour, sans tirage.
 @MainActor final class SchoolBoxesUITests: XCTestCase {
-    private let targetExamIdentifier = "exam-10000000-0000-4000-8000-000000000153"
+    /// Deux examens à renseigner de la même formation du dossier fictif ; 155 est la dernière ligne de la boîte.
+    private let earlierExamIdentifier = "exam-10000000-0000-4000-8000-000000000153"
+    private let laterExamIdentifier = "exam-10000000-0000-4000-8000-000000000155"
 
     private func launch(_ screen: String) -> XCUIApplication {
         let app = XCUIApplication()
@@ -27,6 +32,16 @@ import XCTest
             app.swipeUp()
         }
         return element.exists && element.isHittable
+    }
+
+    /// Attend une condition de l'interface ; sondage court, sans durée fixe à attendre.
+    private func waitUntil(_ timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return condition()
     }
 
     private func scrollToTop(_ app: XCUIApplication) {
@@ -80,16 +95,35 @@ import XCTest
         XCTAssertEqual(toggle.value as? String, "Liste réduite")
         toggle.tap()
         XCTAssertEqual(toggle.value as? String, "Liste complète")
-        let last = row(app, "Élève examen", count)
-        XCTAssertTrue(scrollTo(last, in: app), "Dernier examen inaccessible : \(app.debugDescription)")
-        last.tap()
-        // La cible : la section Progression de la formation de l'examen, avec cet examen.
-        XCTAssertTrue(app.scrollViews["learner-dossier"].waitForExistence(timeout: 30), app.debugDescription)
-        let exam = app.descendants(matching: .any)[targetExamIdentifier]
-        XCTAssertTrue(scrollTo(exam, in: app) || exam.waitForExistence(timeout: 30), "Examen visé introuvable : \(app.debugDescription)")
-        backToList(app)
-        XCTAssertTrue(scrollTo(app.buttons["pending-exams-expansion"], in: app), app.debugDescription)
-        XCTAssertEqual(app.buttons["pending-exams-expansion"].value as? String, "Liste complète", "Le retour a perdu le dépliage")
+        // Deux examens de la même formation : l'avant-dernière ligne, puis la dernière (jamais le premier de la formation).
+        for (number, identifier) in [(count - 1, earlierExamIdentifier), (count, laterExamIdentifier)] {
+            let line = row(app, "Élève examen", number)
+            XCTAssertTrue(scrollTo(line, in: app), "Examen \(number) inaccessible : \(app.debugDescription)")
+            line.tap()
+            let dossier = app.scrollViews["learner-dossier"]
+            XCTAssertTrue(dossier.waitForExistence(timeout: 30), app.debugDescription)
+            XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].waitForExistence(timeout: 30), app.debugDescription)
+            XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].label.contains("Camille"), app.debugDescription)
+            // La première lecture des examens arrive avec retard : l'examen visé doit être là, visible, sans défilement manuel.
+            let exam = app.descendants(matching: .any)[identifier]
+            XCTAssertTrue(exam.waitForExistence(timeout: 40), "Examen visé absent : \(app.debugDescription)")
+            XCTAssertTrue(waitUntil(10) { exam.isHittable && dossier.frame.contains(exam.frame) },
+                "L'examen visé n'est pas amené à l'écran : \(app.debugDescription)")
+            XCTAssertFalse(app.descendants(matching: .any)["box-target-missing"].exists, "Message d'examen disparu à tort")
+            backToList(app)
+            XCTAssertTrue(scrollTo(app.buttons["pending-exams-expansion"], in: app), app.debugDescription)
+            XCTAssertEqual(app.buttons["pending-exams-expansion"].value as? String, "Liste complète", "Le retour a perdu le dépliage")
+        }
+    }
+
+    /// L'avant-avant-dernière ligne désigne un examen que la formation de l'élève ne liste pas : il est dit, aucun autre n'est ouvert.
+    func testAnExamMissingFromItsTrainingIsSaidInsteadOfOpeningAnotherOne() {
+        let app = launch("learners-boxes-9")
+        let line = row(app, "Élève examen", 7)
+        XCTAssertTrue(scrollTo(line, in: app), app.debugDescription)
+        line.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["box-target-missing"].waitForExistence(timeout: 60), app.debugDescription)
+        XCTAssertTrue(app.scrollViews["learner-dossier"].exists, app.debugDescription)
     }
 
     // MARK: Actualisation, panne locale, traitement
