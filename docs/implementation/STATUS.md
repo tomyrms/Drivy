@@ -25,17 +25,21 @@ et reprise persistante par appareil) ; #441/#445 restent au parcours natif.
 
 Intentions iOS : retour `8764579b` relu et intégré en `35f97720`. Les trois
 points retournés sont corrigés dans le code : abandon verrouillé, comparaison
-des identités et rejeu exact dans les deux coffres. **Swift non compilé et
-tests non exécutés à ce stade** ; lancement Apple agenda préparé, puis reports,
-reactivity et scénario UI iPhone/iPad après compilation. Le budget #431/#438
+des identités et rejeu exact dans les deux coffres. Compilation Apple agenda
+[42778603013](https://github.com/tomyrms/Drivy/actions/runs/42778603013) en cours
+sur `d19e978f` ; tests non encore exécutés au dernier contrôle. Reports,
+reactivity et scénario UI iPhone/iPad suivront après compilation. Le budget #431/#438
 reste à deux retours sur deux. Aucune recette physique revendiquée.
 
-Identité serveur : `a05f457d` livré, revue groupée effectuée, non intégré.
-Le worker rapporte 12 tests identité et 76 tests g1c+identité réussis sur
-PostgreSQL avec Mailpit. Retour 1/2 pour prouver la migration d'un portrait
-préexistant, renforcer l'oracle concurrent et corriger la procédure de retour
-arrière. La suite complète lancée par ce worker a été interrompue sans résultat
-final. Le raccord des caches et intentions clients #450 reste à réaliser.
+Identité serveur : `a05f457d` puis `caa97d5d` relus et intégrés en `441b261d`.
+Le retour 1/2 prouve la migration d'un portrait préexistant et l'unique gagnant
+de trois écritures concurrentes : **15 tests identité/migration réussis** sur
+PostgreSQL, en plus des 76 g1c+identité précédents avec Mailpit. Le retour
+arrière n'est pas transparent, procédure corrigée. Une fusion du harnais
+combine deux options de sélection ; contrôle d'intégration confié au même
+worker avant #436/#440. La suite complète précédente reste interrompue sans
+résultat final. Le raccord natif #450 est attribué avec #441 au worker iOS,
+distinct des compléments de messagerie non encore intégrés.
 
 Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
 conservation d'une règle sans délai, base du déplacement restauré et preuves

@@ -23,11 +23,11 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 |---|---|---|---|
 | A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 9864cc86 relu et intégré en 5d98a126 ; 166 tests ciblés, typage/build réussis ; raccords clients encore en cours |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | a05f457d livré/relu, non intégré ; retour 1/2 ctx_a3e4b3e13b62 pour preuve de migration et rapport |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | caa97d5d relu/intégré en 441b261d, migration et concurrence qualifiées ; raccord natif ctx_5bda33764428 |
 | D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières intégrées en 9a159fb2 ; complément 1430b7c4 relu, retour 1/2 ctx_d7858b74a297 |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 8764579b relu et intégré en 35f97720 ; qualification Apple à lancer, budget 2/2 conservé |
-| F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
-| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur #429/#448 attribué à ctx_2af4deb01ea6 ; natif #441/#445 à prendre après E |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 8764579b relu et intégré en 35f97720 ; compilation Apple 42778603013 en cours, budget 2/2 conservé |
+| F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | Serveur #436/#440 attribué à ctx_ecd1e22c16ef ; natif à coordonner avec travaux existants |
+| G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur #429/#448 attribué à ctx_2af4deb01ea6 ; natif #441 avec #450 à ctx_5bda33764428 ; #445 après rapprochement média |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
 | I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | À rapprocher des critères et commentaires actuels |
 
@@ -407,3 +407,22 @@ identités avant formatage, admission qui exclut seulement le rejeu exact et
 blobs apps/ios et scripts/ios identiques au worker. Ces observations ne sont
 pas une preuve Swift : compilation/tests Apple à exécuter. Rendu de la note
 d'examen non observé ; aucune recette physique. Budget #431/#438 : 2/2.
+
+C retour `caa97d5d` accepté : migration réellement traversée sous propriétaire
+non privilégié, portrait antérieur déchiffré à l'identique, absence et cycle
+retrait/remplacement qualifiés ; trois commandes concurrentes produisent un
+200 et deux 412. Quinze tests ciblés réussis, preuves g1c précédentes conservées.
+Fusion `441b261d` : conflit du seul filtre harness.ts résolu en conservant à
+la fois skipMigrations et l'exclusion planning du mode deferCourseMigrations.
+Le worker reprend ce commit pour qualification de la combinaison puis lot F
+serveur #436/#440 : `task_a2b155fe5167`, `ctx_ecd1e22c16ef`, budget neuf 0/2.
+
+Apple E : branche poussée à `d19e978f`, run agenda `42778603013`, job
+`129702904628` observé en compilation (préparation réussie), aucun test encore
+qualifié. Aucun doublon lancé. Le worker natif poursuit #441 et le raccord
+#450 (`task_4465e8845016`, `ctx_5bda33764428`), budgets nouveaux 0/2 ; il peut
+recueillir le résultat existant à sa livraison, sans relance ni polling.
+#445 reste distinct tant que le complément média antérieur n'est pas rapproché.
+Le worktree integration-issues-20261105 est propre à 6c1f8957 au contrôle en
+lecture ; aucun fichier API dans son delta, mais plusieurs fichiers natifs
+messagerie partagés. Aucune modification ni reprise de ses workers ici.
