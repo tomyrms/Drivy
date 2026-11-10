@@ -1385,4 +1385,86 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
         XCTAssertEqual(decoded.media?.file, media.file, "La clé de fichier reste explicite pour l'administrateur")
         XCTAssertNil(MessagingPlainContent.decode(clear)?.media, "Le décodeur legacy ne fabrique aucun média")
     }
+
+    /// Lot typé (#97) : texte legacy et média dans **une seule** session, ordre conservé, et l'administrateur
+    /// lit la provenance de chacun — le texte tel quel, le média avec sa légende et ses métadonnées.
+    func testTypedBatchSealsLegacyAndMediaInOneSession() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+
+        let legacy = try MessagingPlainContent(text: "Texte signalé").encoded()
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x31, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x52, count: 32)))
+        let value = try MessagingMediaContentV3(text: "Preuve signalée", media: media)
+        let sealed = try await reporter.sealReport([.legacy(legacy), .media(value)], scope: scope(alice),
+                                                   conversationID: conversation)
+        XCTAssertEqual(sealed.count, 2)
+        XCTAssertEqual(sealed[0].keyID, sealed[1].keyID, "Une seule session pour tout le signalement")
+        XCTAssertEqual(sealed[0].scheme, "megolm.v1")
+
+        let legacyContent = try await administrator.decryptContent(wire(sealed[0]), scope: scope(admin))
+        XCTAssertEqual(legacyContent.provenance, .legacyBody)
+        XCTAssertEqual(legacyContent.bytes, legacy, "Les octets legacy du signalement ne changent pas")
+        XCTAssertNil(MessagingPlainContent.decode(legacyContent.bytes)?.media)
+
+        let mediaContent = try await administrator.decryptContent(wire(sealed[1]), scope: scope(admin))
+        XCTAssertEqual(mediaContent.provenance, .matrixContent)
+        let decoded = try XCTUnwrap(MessagingPlainContent.decodeMatrixContent(mediaContent.bytes))
+        XCTAssertEqual(decoded.text, "Preuve signalée")
+        XCTAssertEqual(decoded.media?.name, "bilan.pdf")
+        XCTAssertEqual(decoded.media?.mime, .pdf)
+        XCTAssertEqual(decoded.media?.size, 4_096)
+        XCTAssertEqual(decoded.media?.file, media.file, "La clé de fichier reste dans l'enveloppe destinataire")
+        // Le body du média porte un repli lisible, jamais du JSON technique ; ni le nom ni la légende
+        // n'apparaissent en clair dans le chiffré transporté.
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: mediaContent.bytes) as? [String: Any])
+        XCTAssertEqual(object["body"] as? String, "Preuve signalée")
+        XCTAssertFalse(String(decoding: sealed[1].payload, as: UTF8.self).contains("bilan.pdf"))
+        XCTAssertFalse(String(decoding: sealed[1].payload, as: UTF8.self).contains("Preuve signalée"))
+    }
+
+    /// Un ancien `body` qui reproduit exactement un contenu v3 reste du texte dans un signalement typé :
+    /// le scellement n'interprète jamais les octets legacy.
+    func testTypedBatchKeepsALegacyBodyLookingLikeV3AsText() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+
+        let lookalike = Data(#"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"text":null,"media":{"id":"5c1f","size":10,"mime":"image/jpeg","name":"a.jpg","width":1,"height":1,"file":{}}}}"#.utf8)
+        let sealed = try await reporter.sealReport([.legacy(lookalike)], scope: scope(alice), conversationID: conversation)
+        let decrypted = try await administrator.decryptContent(wire(sealed[0]), scope: scope(admin))
+        XCTAssertEqual(decrypted.provenance, .legacyBody, "Un contenu déclaré legacy le reste")
+        XCTAssertEqual(decrypted.bytes, lookalike, "Le texte utilisateur est transmis tel quel")
+        XCTAssertNil(MessagingPlainContent.decode(decrypted.bytes)?.media, "Aucune pièce jointe n'est déduite")
+    }
+
+    /// Un contenu média au-delà du plafond est refusé **avant** toute session de signalement.
+    func testTypedBatchRefusesAMediaBeyondTheBoundBeforeSealing() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+
+        let heavy = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x32, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x53, count: 32)))
+        let value = try MessagingMediaContentV3(text: heavy, media: media)
+        do {
+            _ = try await reporter.sealReport([.media(value)], scope: scope(alice), conversationID: conversation)
+            XCTFail("Un contenu média au-delà du plafond ne doit pas être scellé")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+    }
 }

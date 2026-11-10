@@ -29,7 +29,7 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | Serveur 40fa87a8 intégré en da9be6e8 ; Node 24, typage/build et 29/29 tests PostgreSQL dont migration peuplée réussis ; retour 1/2 résolu, natif à réaliser |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur 994b953b relu : Node 24 qualifié, retour 2/2 ctx_75edea23b390 (première destination des alertes suivantes) ; natif #441/#450 intégré, sélecteur 25/25, Swift en qualification |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | 8586e5f6 non intégré/non compilé ; retour 1/2 ctx_27ea04d2b3a0 : cible exacte et preuves des deux boîtes |
-| I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | Rapprochement en lecture seule ctx_82ec49650369 ; échecs UI média et readiness conservés |
+| I · Restes antérieurs | #37, #50, #65, #68, #78, #97, #105, #106, #131 | Réutiliser les lots existants, compléter code et preuves manquantes, distinguer contraintes externes | Rapprochement ctx_82ec49650369 livré ; compléments 6c1f8957 récupérés dans le candidat, échecs UI média et READINESS conservés |
 
 Les lots A et B sont indépendants : deux workers isolés suffisent pour commencer.
 Le routage initial était OpenCode Go pour A et Codex GPT-6-Astra pour B.
@@ -68,6 +68,33 @@ compléments média ; aucune relance ni correction supplémentaire engagée.
 Le budget antérieur de deux retours UI reste conservé. Les preuves web/API
 réussies sur `f81ba3d0` et le succès métier 1814/1814 sur `d1be4068` restent
 attachés à leurs candidats ; ils ne rendent pas verts ces nouveaux scénarios.
+
+Récupération du candidat `6c1f8957` le 10 novembre : fusion locale additive,
+sans conflit produit ; seul STATUS.md réunit les deux historiques. Aucun
+changement dans l'ancien worktree. Le raccord média typé déjà relu reste
+disponible pour le travail natif #428/#435/#436/#445 ; l'intégration ne vaut
+ni qualification UI ni autorisation d'une nouvelle reprise média.
+
+### Reste des neuf anciennes issues
+
+Rapprochement du worker I (lecture seule, critères GitHub et documents) :
+
+| Issue | Réalisé | Reste vérifiable ou décision externe |
+|---|---|---|
+| #37 | Cœur cours et sous-issues livrés, processus exercé sur PostgreSQL | SIGTERM sur POSIX et rapprochement de la matrice #83 ; APNs/appareil distincts |
+| #50 | Récupération et garde qualifiées sur Keycloak/Mailpit synthétiques | Choix SMTP reporté par le porteur, activation de la garde, parcours fournisseur/Face ID réel |
+| #65 | Socle messagerie et sous-issues livrés | Dépend des critères #68/#78/#97 ; ne pas clore sur les seuls tests du socle |
+| #68 | Cartographie et restauration PostgreSQL synthétique | Lieux/sous-traitants, destinations réseau, logs/crash, sauvegarde indépendante, conservation et frontière APNs à décider/vérifier |
+| #78 | Nombreux parcours métier/UI exercés sur leurs SHA | Qualification intégrée après correctifs, média UI encore rouge, essais physiques et #68 |
+| #97 | Serveur, crypto et parcours média présents ; raccord typé récupéré | Deux scénarios UI mixtes en échec, relais média réel et frontières de file à qualifier ; aucune nouvelle reprise automatique |
+| #105 | Sous-issues de réactivité largement livrées | Critères propres de #106/#131 et mesures sur appareil |
+| #106 | Admission, reprises et annulations présentes | Rapprocher les critères encore ouverts avec les preuves récentes ; les anciens tests rouges ne sont pas déclarés encore rouges sans résultat actuel |
+| #131 | Mesures web synthétiques et campagnes natives existantes | Mesures iOS sous fautes/latences sur candidat intégré, READINESS non résolu, appareil/VoiceOver |
+
+Aucune issue fermée. Le relevé I ne relisait pas tous les runs et mélangeait
+par endroits des limites anciennes et des preuves plus récentes : les SHA et
+résultats vérifiés par le coordinateur ci-dessus priment. Ni la résidence
+suisse ni un résultat physique ne peuvent être déduits de ce rapprochement.
 
 ## Validation et limites initiales
 

@@ -161,6 +161,55 @@ final class MatrixMessagingSealedReportRelayTests: XCTestCase {
             _ = try await adminHTTP.setReportStatus(scope: adminScope, reportID: record.id, status: .dismissed, expected: .open)
             XCTFail("Un statut attendu périmé doit être refusé.")
         } catch { XCTAssertEqual(error as? MessagingFailure, .stateConflict) }
+
+        // #97 : un message média suit le même parcours typé. L'administrateur lit la légende et les
+        // métadonnées ; aucun octet de fichier, aucune clé ni URL n'entre dans la présentation.
+        stage = "MEDIA-REPORT"
+        let mediaName = "bilan-\(run.prefix(8)).pdf"
+        let mediaCaption = "SYNTHETIC_REPORTED_MEDIA_\(run)"
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: mediaName,
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x41, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x62, count: 32)))
+        let mediaValue = try MessagingMediaContentV3(text: mediaCaption, media: media)
+        let sealedMedia = try await a.encryptMatrixContent(mediaValue, mentions: [], scope: aScope, conversationID: conversation)
+        let mediaAck = try await aHTTP.send(scope: aScope, conversationID: conversation,
+            body: MessagingSendDTO(clientMessageId: UUID(), ciphertext: sealedMedia, mentionPersonIds: []))
+        let mediaPage = try await MessagingAPIClient(transport: bHTTP).messages(scope: bScope, conversationID: conversation, before: nil)
+        guard let mediaMessage = mediaPage.items.first(where: { $0.id == mediaAck.serverMessageId }) else {
+            XCTFail("L'élève doit relire le message média."); return
+        }
+        let mediaClear = try await b.decryptContent(mediaMessage, scope: bScope)
+        XCTAssertEqual(mediaClear.provenance, .matrixContent)
+        XCTAssertEqual(MessagingPlainContent.decodeMatrixContent(mediaClear.bytes)?.media?.name, mediaName)
+
+        stage = "MEDIA-SEAL-AND-POST"
+        let sealedMediaReport = try await b.sealReport([.media(mediaValue)], scope: bScope, conversationID: conversation)
+        XCTAssertEqual(sealedMediaReport.count, 1)
+        XCTAssertNil(sealedMediaReport[0].payload.range(of: Data(mediaName.utf8)), "Aucun nom de fichier en clair.")
+        XCTAssertNil(sealedMediaReport[0].payload.range(of: Data(mediaCaption.utf8)), "Aucune légende en clair.")
+        try await bHTTP.report(scope: bScope, conversationID: conversation, clientReportID: UUID(),
+                               items: [MessagingReportItem(messageID: mediaAck.serverMessageId, ciphertext: sealedMediaReport[0])])
+
+        stage = "ADMIN-MEDIA-INBOX"
+        let mediaInbox = MessagingReportInboxModel(scope: adminScope, moderation: adminHTTP, cryptography: admin,
+                                                   currentScope: { adminScope })
+        await mediaInbox.load()
+        guard let mediaRecord = mediaInbox.reports.first(where: { $0.id != record.id }) else {
+            XCTFail("Le signalement média doit apparaître dans la boîte."); return
+        }
+        await mediaInbox.open(mediaRecord)
+        let mediaLine = try XCTUnwrap(mediaInbox.lines[mediaRecord.id]?.first)
+        XCTAssertNil(mediaLine.unreadable)
+        XCTAssertEqual(mediaLine.text, mediaCaption, "La légende est lue par l'administrateur.")
+        XCTAssertEqual(mediaLine.media?.nature, .pdf)
+        XCTAssertEqual(mediaLine.media?.name, mediaName)
+        XCTAssertEqual(mediaLine.media?.caption, mediaCaption)
+        XCTAssertEqual(mediaLine.media?.bytesTransmitted, false, "Aucun octet de fichier n'est transmis.")
+        let presented = String(describing: mediaLine)
+        for secret in [media.file.key.k, media.file.iv, media.file.hashes.sha256] {
+            XCTAssertFalse(presented.contains(secret), "Aucune valeur de fichier dans la présentation.")
+        }
         // Aucun contenu, clé ni jeton n'est affiché par ce test. Le simulateur est jetable.
     }
 }

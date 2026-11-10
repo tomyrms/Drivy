@@ -66,8 +66,10 @@ elif [[ "$unit_only" == 1 ]]; then
     done
   elif [[ "$unit_test_scope" == messaging ]]; then
     # Signalements (#77) : scellement pour les administrateurs, boîte, transport, puis le même parcours contre le vrai relais.
+    # #97 : contenu média typé, provenance et scellement de lot typé (texte, sondage, image, PDF).
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
-      MessagingExyteThreadTests MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
+      MessagingExyteThreadTests MessagingThreadTests MessagingMediaContentTests MatrixMessagingCryptographyTests \
+      MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
       MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests RelayReadinessDiagnosticTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done

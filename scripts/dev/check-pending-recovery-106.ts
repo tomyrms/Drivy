@@ -154,9 +154,14 @@ try {
     const recovered = await fixture('write'); await action(recovered, 'submit');
     await recovered.evaluate(() => { (window as any).storageFailure = ''; });
     await recovered.getByRole('button', { name: 'Vérifier le résultat' }).click();
-    await recovered.waitForFunction(() => (window as any).fixture.state().metadata.durability === 'saved');
-    assert.doesNotMatch(await text(recovered), /suivi local.*pu être enregistré/i, 'real successful write clears notice');
+    // Persisting the verification start is not its result, nor a React commit.
+    await recovered.waitForFunction(() => {
+      const state = (window as any).fixture.state(), entry = state.entries[0];
+      return state.metadata.durability === 'saved' && entry && entry.phase !== 'verifying' && entry.phase !== 'sending';
+    });
     const entryMessage = (await state(recovered)).entries[0].message;
+    await recovered.getByText(entryMessage, { exact: true }).waitFor();
+    assert.doesNotMatch(await text(recovered), /suivi local.*pu être enregistré/i, 'real successful write clears notice');
     assert.equal(await recovered.getByText(entryMessage, { exact: true }).count(), 1, 'pending already explained by entry is not duplicated');
     await recovered.close(); checks.push('focus arrival, Tab/Shift-Tab, stable live content, failed write after receipt, saved write');
     const page = await fixture();

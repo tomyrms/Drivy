@@ -206,7 +206,18 @@ struct MessagingReportDetailView: View {
             Text(line.senderName ?? "Auteur inconnu")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(DrivyTheme.text)
-            if let text = line.text {
+            if let media = line.media {
+                Text("\(media.nature == .photo ? "Photo" : "PDF") · \(media.name)")
+                    .foregroundStyle(DrivyTheme.text)
+                if let caption = media.caption {
+                    Text(caption).foregroundStyle(DrivyTheme.text)
+                }
+                if !media.bytesTransmitted {
+                    Text("Pièce jointe non transmise aux administrateurs")
+                        .font(.footnote)
+                        .foregroundStyle(DrivyTheme.muted)
+                }
+            } else if let text = line.text {
                 Text(text).foregroundStyle(DrivyTheme.text)
             } else {
                 Text(line.unreadable ?? "Ce message ne peut pas être lu sur cet appareil.")
