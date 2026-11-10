@@ -45,14 +45,15 @@ const profileIdentity=(identity:Identity,roles:readonly string[])=>roles.include
  */
 async function createLearnerProfile(db:PoolClient,schoolId:string,personId:string,email:string|null,identity:Identity) {
   const names=profileIdentity(identity,['LEARNER']).profileIdentity;
-  await db.query('INSERT INTO drivy.learner_profile(id,school_id,person_id) VALUES($1,$2,$3)',[randomUUID(),schoolId,personId]);
-  await db.query("SELECT set_config('app.school_profile','true',true)");
+  const learnerId=randomUUID();
+  await db.query('INSERT INTO drivy.learner_profile(id,school_id,person_id) VALUES($1,$2,$3)',[learnerId,schoolId,personId]);
+  await db.query("SELECT set_config('app.school_profile','true',true),set_config('app.identity_origin_profile',$1,true)",[learnerId]);
   await db.query(`UPDATE drivy.person SET first_name=COALESCE(first_name,$2),last_name=COALESCE(last_name,$3),contact_email=COALESCE(contact_email,$4),
       display_name=CASE WHEN first_name IS NULL AND last_name IS NULL AND $2::text IS NOT NULL AND $3::text IS NOT NULL THEN $2||' '||$3 ELSE display_name END,
       version=version+1
     WHERE id=$1 AND ((first_name IS NULL AND $2::text IS NOT NULL) OR (last_name IS NULL AND $3::text IS NOT NULL) OR (contact_email IS NULL AND $4::text IS NOT NULL))`,
     [personId,names?.firstName ?? null,names?.lastName ?? null,email]);
-  await db.query("SELECT set_config('app.school_profile','',true)");
+  await db.query("SELECT set_config('app.school_profile','',true),set_config('app.identity_origin_profile','',true)");
 }
 interface InvitationRow {
   id:string;school_id:string;email:string|null;delivery:'EMAIL'|'CODE';roles:string[];token_hash:string;status:'PENDING'|'ACCEPTED'|'REVOKED';version:number;

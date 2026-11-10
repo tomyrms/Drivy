@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:drivy:contract:self-profile:3",
-  "$comment": "Extension du 21 octobre 2026 (issue #64). Profil personnel de la personne connectée, quel que soit son rôle : données du compte Drivy, distinctes du dossier d'élève d'une école et de l'adresse de connexion (fournisseur d'identité). OpenAPI canonique 3.11.0 conservé. GET /v1/me/profile ; PATCH /v1/me/profile (If-Match : version de la personne ; un champ absent reste inchangé, null ou vide l'efface ; un renvoi identique répond 200 sans incrémenter) ; PUT /v1/me/profile/photo (corps image/jpeg, 64 à 1024 px par côté, 256 Kio au plus après nettoyage ; EXIF, XMP, ICC et commentaires retirés ; chiffré AES-256-GCM) ; DELETE /v1/me/profile/photo ; GET /v1/people/{personId}/photo (image/jpeg, soi-même ou membre actif d'une même école, sinon 404). Refus : 412 VERSION_CONFLICT, 428 PRECONDITION_REQUIRED, 400 INVALID_REQUEST, 415, 422 PHOTO_INVALID, 503 PHOTO_STORAGE_UNAVAILABLE, 403 IDENTITY_NOT_LINKED.",
+  "$id": "urn:drivy:contract:self-profile:4",
+  "$comment": "Extension du 21 octobre 2026 (issue #64), complétée le 7 novembre 2026 (#421, #450 : photoGeneration additif ; la version de chaque dossier scolaire avance aussi quand l'identité de la personne change). Profil personnel de la personne connectée, quel que soit son rôle : données du compte Drivy, distinctes du dossier d'élève d'une école et de l'adresse de connexion (fournisseur d'identité). OpenAPI canonique 3.11.0 conservé. GET /v1/me/profile ; PATCH /v1/me/profile (If-Match : version de la personne ; un champ absent reste inchangé, null ou vide l'efface ; un renvoi identique répond 200 sans incrémenter) ; PUT /v1/me/profile/photo (corps image/jpeg, 64 à 1024 px par côté, 256 Kio au plus après nettoyage ; EXIF, XMP, ICC et commentaires retirés ; chiffré AES-256-GCM) ; DELETE /v1/me/profile/photo ; GET /v1/people/{personId}/photo (image/jpeg, soi-même ou membre actif d'une même école, sinon 404). Refus : 412 VERSION_CONFLICT, 428 PRECONDITION_REQUIRED, 400 INVALID_REQUEST, 415, 422 PHOTO_INVALID, 503 PHOTO_STORAGE_UNAVAILABLE, 403 IDENTITY_NOT_LINKED.",
   "$defs": {
     "PostalAddress": {
       "type": "object",
@@ -42,7 +42,8 @@
         "contactEmail": {"type": ["string", "null"]},
         "birthDate": {"type": ["string", "null"], "format": "date"},
         "postalAddress": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/PostalAddress"}]},
-        "photoVersion": {"type": ["integer", "null"], "minimum": 1, "description": "null : aucune photo, les initiales s'affichent."},
+        "photoVersion": {"type": ["integer", "null"], "minimum": 1, "description": "null : aucune photo, les initiales s'affichent. Sinon génération du contenu de la photo présente : jamais réutilisée après un retrait (voir photoGeneration)."},
+        "photoGeneration": {"type": "integer", "minimum": 0, "description": "Extension additive du 7 novembre 2026 (#450). Dernière génération de photo émise pour la personne : ne diminue jamais, n'est pas remise à 0 par un retrait. 0 : aucune photo n'a jamais été envoyée. Un appareil compare (photoVersion, photoGeneration) à ce qu'il a en cache ; un client qui ignore ce champ reste correct. Si photoVersion n'est pas null, photoVersion = photoGeneration."},
         "version": {"type": "integer", "minimum": 1}
       }
     },

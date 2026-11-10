@@ -23,11 +23,52 @@ Windows reste ignoré. Raccords clients en cours, aucune issue fermée ni nouvea
 déploiement. Le worker serveur poursuit #429/#448 (identité des notifications
 et reprise persistante par appareil) ; #441/#445 restent au parcours natif.
 
-Intentions iOS : `d4cfc1f5` livré et delta relu, **non intégré, non compilé,
-non exécuté**. La création d'examen exige désormais un statut connu ACTIVE
-dans le code. Retour groupé 2/2 #431/#438 sur concurrence de l'abandon,
-comparaison d'identités masquées par un même libellé et rejeu idempotent d'une
-intention élève. Tests Apple ciblés à lancer une fois ces points corrigés.
+Intentions iOS : retour `8764579b` relu et intégré en `35f97720`. Les trois
+points retournés sont corrigés dans le code : abandon verrouillé, comparaison
+des identités et rejeu exact dans les deux coffres. Compilation Apple agenda
+[42778603013](https://github.com/tomyrms/Drivy/actions/runs/42778603013) terminée
+en **ÉCHEC de compilation des tests** sur `d19e978f` : deux assertions de
+`SchoolIntentExactnessTests` emploient `await` à droite de `&&` (lignes 485/494).
+Aucun test exécuté. Le porteur a explicitement autorisé une extension unique,
+limitée à l'extraction des lectures d'acteur avant ces assertions (conditions
+conservées), puis une seule relance Apple agenda. Reprise `ctx_e61113f91727`
+en cours ; les deux retours antérieurs restent comptabilisés. Reports,
+reactivity et scénario UI iPhone/iPad suivront après compilation. Le budget #431/#438
+reste à deux retours sur deux. Aucune recette physique revendiquée.
+
+Identité serveur : `a05f457d` puis `caa97d5d` relus et intégrés en `441b261d`.
+Le retour 1/2 prouve la migration d'un portrait préexistant et l'unique gagnant
+de trois écritures concurrentes : **15 tests identité/migration réussis** sur
+PostgreSQL, en plus des 76 g1c+identité précédents avec Mailpit. Le retour
+arrière n'est pas transparent, procédure corrigée. Une fusion du harnais
+combine deux options de sélection ; contrôle d'intégration confié au même
+worker avant #436/#440. La suite complète précédente reste interrompue sans
+résultat final. Le raccord natif #450 est attribué avec #441 au worker iOS,
+distinct des compléments de messagerie non encore intégrés. Livraison native
+`6e6870ee` reçue et relue : file d'enregistrement APNs, secret durable avant
+confirmation, révocation du record exact et génération de photo dans le cache
+et les intentions. Neuf tests d'enregistrement et sept tests de portrait
+écrits ; **NON COMPILÉS, NON EXÉCUTÉS**, non intégrés à ce stade. Sélections
+Apple nécessaires : `reactivity` et `profile`.
+
+Notifications serveur #429/#448 : `59d86540` livré, non intégré. Le worker
+rapporte 20 tests PostgreSQL ciblés, typage/build réussis. Retour groupé 1/2
+`ctx_b1c4601c78a8` : revalider chaque destinataire après une attente, ne pas
+révoquer un appareil renouvelé sur une réponse tardive, qualifier le test de
+processus avec Node 24 déjà disponible et préciser la fenêtre avant COMMIT.
+Aucune preuve APNs physique ; la livraison au moins une fois reste assumée.
+
+Messagerie serveur #436/#440 : le worker a atteint la limite de session Claude.
+À la demande du porteur d'utiliser l'autre compte, arrêt confirmé de
+`ctx_ecd1e22c16ef`, puis reprise de la même tâche en nouvelle session Sonnet 5.5
+(`ctx_70e83e255031`) avec le compte alternatif sélectionné dans Orca. Worktree,
+quatre fichiers partiels et compteur de correction conservés ; aucun résultat
+de qualification supplémentaire revendiqué.
+
+Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
+conservation d'une règle sans délai, base du déplacement restauré et preuves
+navigateur des parcours complets #437/#443 ; création d'examen ouverte pendant
+un changement de statut à vérifier. Reprise acceptée par Orca (`ctx_d7858b74a297`).
 
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 
