@@ -51,12 +51,14 @@ export type RulesSource = { procedureText: string; cancellationPolicyText: strin
 export interface RulesDraft {
   readonly procedureText: string; readonly cancellationPolicyText: string; readonly sources: string;
   readonly delayHours: string; readonly lateAction: CancellationRules['lateAction']; readonly decided: boolean;
+  /** « Conserver » : la règle de la version de base est renvoyée telle quelle (même sans délai). Toute retouche du délai ou de la suite l'annule. */
+  readonly kept: boolean;
   readonly baseRules: CancellationRules | null; readonly baseText: string;
 }
 export const rulesDraft = (value: RulesSource | null): RulesDraft => ({
   procedureText: value?.procedureText ?? '', cancellationPolicyText: value?.cancellationPolicyText ?? '', sources: value?.sourceUrls.join('\n') ?? '',
   delayHours: value?.cancellationRules?.cancellationHours == null ? '' : String(value.cancellationRules.cancellationHours),
-  lateAction: value?.cancellationRules?.lateAction ?? 'CONTACT', decided: false, baseRules: value?.cancellationRules ?? null, baseText: value?.cancellationPolicyText.trim() ?? '',
+  lateAction: value?.cancellationRules?.lateAction ?? 'CONTACT', decided: false, kept: false, baseRules: value?.cancellationRules ?? null, baseText: value?.cancellationPolicyText.trim() ?? '',
 });
 export const cancellationRulesLabel = (rules: CancellationRules | null | undefined): string => !rules ? 'Aucun délai structuré'
   : `${rules.cancellationHours === null ? 'Sans délai' : `Annulation jusqu’à ${rules.cancellationHours} h avant`} · ensuite : ${rules.lateAction === 'NO_FEE' ? 'sans frais' : 'contacter l’école'}`;
@@ -78,9 +80,23 @@ export function rulesProblems(draft: RulesDraft) {
   };
   return { ...problems, valid: Object.values(problems).every(value => value === null) };
 }
+/** Conserver exactement la règle de la base (y compris une règle sans délai) : c'est une décision, distincte du retrait. */
+export const keepRules = (draft: RulesDraft): RulesDraft => ({ ...draft, decided: true, kept: true, delayHours: draft.baseRules?.cancellationHours == null ? '' : String(draft.baseRules.cancellationHours), lateAction: draft.baseRules?.lateAction ?? draft.lateAction });
+/** Retrait explicite de la règle structurée. */
+export const removeRules = (draft: RulesDraft): RulesDraft => ({ ...draft, decided: true, kept: false, delayHours: '' });
+/**
+ * Une version plus récente de l'école devient la base : la conservation exacte suit la règle actuelle de l'école, les retouches et le retrait
+ * restent ceux de la personne, et la décision requise est recalculée contre le texte actuel.
+ */
+export function rebaseRules(draft: RulesDraft, current: RulesSource | null): RulesDraft {
+  const next = rulesDraft(current);
+  const base = { ...draft, baseRules: next.baseRules, baseText: next.baseText };
+  return draft.kept ? { ...keepRules(base) } : base;
+}
 /** La règle structurée voulue : `undefined` = non envoyée (reprise de la version précédente), `null` = retrait explicite. */
 export function rulesDecision(draft: RulesDraft): CancellationRules | null | undefined {
   if (!draft.decided) return undefined;
+  if (draft.kept && draft.baseRules) return draft.baseRules;
   const hours = hoursValue(draft.delayHours);
   if (hours === 'invalid' || hours === null) return null;
   return { cancellationHours: hours, lateAction: draft.lateAction };

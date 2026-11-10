@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CalendarClock, ChevronRight, Plus } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
@@ -51,6 +51,11 @@ export function LearnerExams({ state, openFormations }: { state: LearnerControll
   const canManage = !!data?.canManage;
   const canCreate = canManage && !state.current?.archivedAt && training?.status === 'ACTIVE';
   const remaining = data && training?.status !== 'ACTIVE' ? upcomingExamCount(data.exams) : 0;
+  // Une formation devenue inactive pendant que le dialogue de création est ouvert : plus aucune création n'est proposée ni envoyée ;
+  // les gestes sur les examens existants (modifier, reporter, résultat) restent ouverts (#444).
+  const creationClosed = data !== undefined && !canCreate;
+  useEffect(() => { if (creationClosed && dialog?.kind === 'create') setDialog(null); }, [creationClosed, dialog]);
+  const shownDialog = dialog && !(creationClosed && dialog.kind === 'create') ? dialog : null;
   const open = (next: ExamDialog) => { runner.clearOutcome(); setDialog(next); };
   const close = () => { if (!busy) setDialog(null); };
   if (!training) return <div className="student-empty"><CalendarClock aria-hidden="true" /><h2>Aucune formation ouverte</h2><p>Les examens se suivent par formation.</p></div>;
@@ -85,9 +90,9 @@ export function LearnerExams({ state, openFormations }: { state: LearnerControll
         </div>
       </li>;
     })}</ul>}
-    {dialog && data && (dialog.kind === 'result'
-      ? <ResultDialog exam={dialog.exam} runner={runner} close={close} />
-      : <ScheduleDialog dialog={dialog} trainingId={training.id} candidates={data.escortCandidates} timeZone={school.timeZone} runner={runner} close={close} />)}
+    {shownDialog && data && (shownDialog.kind === 'result'
+      ? <ResultDialog exam={shownDialog.exam} runner={runner} close={close} />
+      : <ScheduleDialog dialog={shownDialog} trainingId={training.id} candidates={data.escortCandidates} timeZone={school.timeZone} runner={runner} close={close} />)}
   </section>;
 }
 

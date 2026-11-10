@@ -12,6 +12,25 @@ import { distinctLabel, homonymReferences } from '../../person-reference';
 import { RequestFailure } from '../../protocol';
 import type { LessonRefusal, LessonRestored } from './lesson-intentions-model';
 
+const lessonFieldLabels: Readonly<Record<keyof LessonForm, string>> = {
+  learnerId: 'Élève', trainingId: 'Formation', instructorId: 'Moniteur', localStart: 'Début', duration: 'Durée', buffer: 'Battement', meetingPoint: 'Lieu',
+  productId: 'Tarif', commercialChange: 'Conditions', reason: 'Motif', agreement: 'Accord', localChoice: 'Heure choisie',
+};
+const lessonFieldOrder = Object.keys(lessonFieldLabels) as (keyof LessonForm)[];
+/**
+ * Rapproche la saisie de la leçon actuelle de l'école. `base` : le formulaire de la version sur laquelle la saisie reposait. Un champ touché
+ * d'un seul côté est gardé, un champ changé des deux côtés garde la saisie et est signalé. Base inconnue (`null`) : aucun champ ne peut être
+ * dit « non retouché », donc chaque écart avec l'école est signalé et la saisie reste intacte.
+ */
+export function reconcileLessonForm(base: LessonForm | null, current: PlanningLesson, learnerId: string | undefined, form: LessonForm): { value: LessonForm; conflicts: (keyof LessonForm)[] } {
+  const school = initialLessonForm(current, learnerId);
+  if (!base) return { value: { ...form, agreement: false }, conflicts: lessonFieldOrder.filter(key => key !== 'agreement' && form[key] !== school[key] && !(key === 'reason' || key === 'productId' || key === 'commercialChange')) };
+  const { value, conflicts } = rebaseConfirmedDraft(base, school, form);
+  return { value: { ...value, agreement: false }, conflicts: conflicts as (keyof LessonForm)[] };
+}
+const conflictMessage = (conflicts: readonly (keyof LessonForm)[]) => `Version actuelle relue. Votre proposition est conservée${conflicts.length
+  ? ` ; l’école a aussi changé : ${conflicts.map(key => lessonFieldLabels[key].toLowerCase()).join(', ')}` : ''} ; relisez les conditions et confirmez de nouveau l’accord.`;
+
 export async function readPlanningCatalogue(schoolId: string) {
   const [learners, members, offerings, policies, products, terms] = await Promise.all([
     readAll(schoolId, 'learners', learnerSchema), readAll(schoolId, 'members', memberSchema), readAll(schoolId, 'offerings', offeringSchema),
@@ -66,12 +85,19 @@ export function useLessonEditor(input: LessonEditorInput) {
   // `base` est la leçon sur laquelle la saisie repose : elle seule part dans If-Match. Elle n'avance que par une relecture réconciliée (#442).
   const [base, setBase] = useState(loadedOriginal);
   const original = base;
-  const [rebased, setRebased] = useState(false);
   const initial = useRef(initialLessonForm(loadedOriginal, learnerId));
-  const [form, setForm] = useState(restored?.draft.form ?? initial.current);
+  // Reprise après refus : la leçon lue maintenant peut être plus récente que celle sur laquelle la saisie reposait. La base de la saisie
+  // voyage avec elle ; la réconciliation se fait avant le premier affichage, jamais en comparant la saisie à la version déjà relue (#442).
+  const [resumed] = useState(() => {
+    const draft = restored?.draft;
+    if (!draft || !loadedOriginal || draft.baseVersion === loadedOriginal.version) return null;
+    return reconcileLessonForm(draft.baseForm ?? null, loadedOriginal, learnerId, draft.form);
+  });
+  const [rebased, setRebased] = useState(resumed !== null);
+  const [form, setForm] = useState(resumed?.value ?? restored?.draft.form ?? initial.current);
   const [step, setStep] = useState<'people' | 'appointment' | 'review'>(original || restored ? 'appointment' : 'people');
   const [review, setReview] = useState<Record<string, unknown> | null>(null);
-  const [checking, setChecking] = useState(false), [problem, setProblem] = useState('');
+  const [checking, setChecking] = useState(false), [problem, setProblem] = useState(() => resumed ? conflictMessage(resumed.conflicts) : '');
   const requestInFlight = useRef(false), submitInFlight = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const tag = original ? `lesson:${original.id}` : 'lesson:new';
@@ -156,6 +182,7 @@ export function useLessonEditor(input: LessonEditorInput) {
       learnerDisplayName: catalogue.learners.find(item => item.id === form.learnerId)?.displayName ?? original?.learnerDisplayName ?? 'Élève',
       instructorDisplayName: catalogue.members.find(item => item.id === form.instructorId)?.displayName ?? original?.instructorDisplayName ?? 'Moniteur',
       meetingPoint: form.meetingPoint.trim(), timeZone: school.timeZone, plannedStart: interval.plannedStart, plannedEnd: interval.plannedEnd, form,
+      baseForm: original ? initial.current : null, baseVersion: original?.version ?? null,
     };
     const intention: LessonIntention = original
       ? { tag, operationId: command.operationId, kind: 'lesson-move', lessonId: original.id, draft }
@@ -179,12 +206,12 @@ export function useLessonEditor(input: LessonEditorInput) {
       lane.clearOutcome();
       // Les valeurs de l'école (base V1 -> V2) sont réconciliées champ par champ avec la saisie : un champ touché d'un seul côté est
       // gardé, un champ changé des deux côtés garde la saisie et est signalé. Base et version avancent ensemble, la confirmation reste explicite.
-      const { value, conflicts } = rebaseConfirmedDraft(initialLessonForm(original), initialLessonForm(current), form);
+      const { value, conflicts } = reconcileLessonForm(initial.current, current, learnerId, form);
       initial.current = initialLessonForm(current, learnerId);
       setBase(current); setRebased(true);
       setReview(null); setStep('appointment');
-      setForm({ ...value, agreement: false });
-      setProblem(`Version actuelle relue. Votre proposition est conservée${conflicts.length ? ' là où l’école a aussi changé la leçon' : ''} ; relisez les conditions et confirmez de nouveau l’accord.`);
+      setForm(value);
+      setProblem(conflictMessage(conflicts));
     } catch (error) { if (mounted.current) setProblem(readError(error)); }
     finally { requestInFlight.current = false; if (mounted.current) setChecking(false); }
   };
