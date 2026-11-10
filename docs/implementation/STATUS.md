@@ -23,11 +23,24 @@ Windows reste ignoré. Raccords clients en cours, aucune issue fermée ni nouvea
 déploiement. Le worker serveur poursuit #429/#448 (identité des notifications
 et reprise persistante par appareil) ; #441/#445 restent au parcours natif.
 
-Intentions iOS : `d4cfc1f5` livré et delta relu, **non intégré, non compilé,
-non exécuté**. La création d'examen exige désormais un statut connu ACTIVE
-dans le code. Retour groupé 2/2 #431/#438 sur concurrence de l'abandon,
-comparaison d'identités masquées par un même libellé et rejeu idempotent d'une
-intention élève. Tests Apple ciblés à lancer une fois ces points corrigés.
+Intentions iOS : retour `8764579b` relu et intégré en `35f97720`. Les trois
+points retournés sont corrigés dans le code : abandon verrouillé, comparaison
+des identités et rejeu exact dans les deux coffres. **Swift non compilé et
+tests non exécutés à ce stade** ; lancement Apple agenda préparé, puis reports,
+reactivity et scénario UI iPhone/iPad après compilation. Le budget #431/#438
+reste à deux retours sur deux. Aucune recette physique revendiquée.
+
+Identité serveur : `a05f457d` livré, revue groupée effectuée, non intégré.
+Le worker rapporte 12 tests identité et 76 tests g1c+identité réussis sur
+PostgreSQL avec Mailpit. Retour 1/2 pour prouver la migration d'un portrait
+préexistant, renforcer l'oracle concurrent et corriger la procédure de retour
+arrière. La suite complète lancée par ce worker a été interrompue sans résultat
+final. Le raccord des caches et intentions clients #450 reste à réaliser.
+
+Complément web : `1430b7c4` livré, non intégré. Retour groupé 1/2 sur
+conservation d'une règle sans délai, base du déplacement restauré et preuves
+navigateur des parcours complets #437/#443 ; création d'examen ouverte pendant
+un changement de statut à vérifier. Reprise acceptée par Orca (`ctx_d7858b74a297`).
 
 ## 7 novembre 2026 — Check-up et reprise des 39 issues ouvertes
 

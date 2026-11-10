@@ -23,9 +23,9 @@ Aucun nouveau défaut vérifié hors backlog n’est encore établi.
 |---|---|---|---|
 | A · Planning API | #423, #424, #439, #444, #446 | Congés/réservations cohérents, conditions conservées, replanification atomique, examens traitables et rangs exacts | 9864cc86 relu et intégré en 5d98a126 ; 166 tests ciblés, typage/build réussis ; raccords clients encore en cours |
 | B · Confidentialité iOS | #425, #426 | Annotations revalidées, données et actions purgées sur refus d’accès | Intégré ; compilation Apple et 264 tests ciblés réussis sur 3d213e7c ; limites UI conservées |
-| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | Worker actif vérifié le 10 novembre, ctx_3dcf57d0a714 ; delta conservé, non intégré |
-| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières issues intégrées en 9a159fb2 ; compléments repris par worker actif ctx_beb71e0a56a1 |
-| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | d4cfc1f5 relu, non intégré/non compilé ; retour groupé 2/2 #431/#438 à ctx_43ff1abb5af1 |
+| C · Identité et portraits | #421, #450 | Versions cohérentes inter-écoles et générations de photos monotones ; API puis lecteurs clients coordonnés | a05f457d livré/relu, non intégré ; retour 1/2 ctx_a3e4b3e13b62 pour preuve de migration et rapport |
+| D · Reprise web et finances | #422, #430, #432, #433, #434, #437, #442, #443 | Saisies conservées, conflits explicites, historique financier accessible, créations rapprochées sans doublon | Cinq premières intégrées en 9a159fb2 ; complément 1430b7c4 relu, retour 1/2 ctx_d7858b74a297 |
+| E · Intentions natives | #427, #431, #438 | Reprise atomique sans verrou fantôme ni écrasement concurrent | 8764579b relu et intégré en 35f97720 ; qualification Apple à lancer, budget 2/2 conservé |
 | F · Messagerie et clés | #428, #435, #436, #440 | File récupérable, sauvegarde restaurable, clés à usage unique non redistribuées | À réaliser ; coordonner avec les travaux existants |
 | G · Notifications serveur et appareil | #429, #441, #445, #448 | Identités distinctes, reprises par appareil, révocation et réception active cohérentes | Serveur #429/#448 attribué à ctx_2af4deb01ea6 ; natif #441/#445 à prendre après E |
 | H · Boîtes natives | #447, #449 | Listes complètes et actualisation cohérente | À réaliser |
@@ -377,3 +377,33 @@ au worker ; son rapport doit retirer les affirmations contradictoires. Pas
 de nouveau harnais d'examen exigé. Compilation/tests Apple ciblés préparés
 (agenda, reports, reactivity et scénario UI de reprise), à lancer sur le delta
 stable. Aucun nouveau résultat ni succès d'exécution revendiqué ici.
+
+## Revue C/D et intégration E — 10 novembre
+
+C `a05f457d` : contrôle des versions inter-routes/inter-écoles accepté à la
+lecture, droits conservés. La preuve de portrait « migré » ne traversait pas
+la migration ; le retour 1/2 exige ce passage réel avec données chiffrées
+préexistantes et propriétaire non privilégié. L'oracle concurrent doit exiger
+exactement un gagnant. Le rapport annonce à tort un retour transparent de
+l'ancien code : son PUT ne fait pas avancer photo_generation et serait refusé
+par la nouvelle contrainte. Retour `ctx_a3e4b3e13b62`, tâche
+`task_ddd37116111f`, même worker/worktree ; aucun nouveau lancement global.
+
+D `1430b7c4` : typage/build et contrôles ciblés rapportés réussis, mais revue
+retournée en une fois (`ctx_d7858b74a297`, `task_54fac7b0e120`) :
+conserver une règle dont cancellationHours est null ne doit pas la supprimer ;
+la reprise réelle d'une leçon doit transporter sa base initiale et comparer
+les valeurs avant de renvoyer sous V2 ; les vrais composants doivent prouver
+503/reprise en édition et replanification, et AP72/GET échoué sans second POST.
+Vérifier aussi créer-puis-publier en réponse directe et le changement de statut
+pendant une feuille d'examen ouverte. Premier retour sur ce complément ;
+ancien retour #422/#430 résolu, compteur conservé. L'échec Orca de remise du
+courrier au worker terminé est suivi d'un envoi explicite accepté/reopened.
+
+E `8764579b` : delta du deuxième retour relu, sans nouveau blocage établi.
+Abandon sérialisé et retrait de la seule intention capturée, comparaison des
+identités avant formatage, admission qui exclut seulement le rejeu exact et
+égalité de l'ancienne intention en mémoire. Fusion sans conflit `35f97720` ;
+blobs apps/ios et scripts/ios identiques au worker. Ces observations ne sont
+pas une preuve Swift : compilation/tests Apple à exécuter. Rendu de la note
+d'examen non observé ; aucune recette physique. Budget #431/#438 : 2/2.
