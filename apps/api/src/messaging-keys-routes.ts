@@ -14,6 +14,9 @@ import { bindDevice, claimKeys, createBackupVersion, deviceIdPattern, getBackupK
 const id = z.uuid();
 const base = z.object({ schoolId: id });
 const versionQuery = z.object({ version: z.string().regex(/^[1-9][0-9]{0,14}$/) }).strict();
+/** #436 : `limit` (1..500) et `from` (curseur opaque renvoyé par la page précédente) ; sans eux, lecture historique. */
+const pagedQuery = z.object({ version: z.string().regex(/^[1-9][0-9]{0,14}$/),
+  limit: z.string().regex(/^[1-9][0-9]{0,2}$/).refine(value => Number(value) <= 500).optional(), from: z.string().min(1).max(600).optional() }).strict();
 
 /** Relais de clés Matrix : même garde que la messagerie, plus l'appareil déclaré par X-Drivy-Device-Id. */
 export function registerMessagingKeys(app: FastifyInstance, options: { pool: Pool; verifyToken: TokenVerifier } & MessagingAccessOptions) {
@@ -94,7 +97,8 @@ export function registerMessagingKeys(app: FastifyInstance, options: { pool: Poo
     return execute(request.headers, request.id, school(request.params), (db, actor) => putBackupKeys(db, actor, query.version, request.body));
   });
   app.get(`${path}/room_keys/keys`, request => {
-    const query = versionQuery.parse(request.query);
-    return execute(request.headers, request.id, school(request.params), (db, actor) => getBackupKeys(db, actor, query.version));
+    const query = pagedQuery.parse(request.query);
+    return execute(request.headers, request.id, school(request.params), (db, actor) => getBackupKeys(db, actor, query.version,
+      { ...(query.limit === undefined ? {} : { limit: Number(query.limit) }), ...(query.from === undefined ? {} : { from: query.from }) }));
   });
 }
