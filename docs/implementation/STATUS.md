@@ -152,6 +152,14 @@ Premier retour **1/2**, `ctx_27ea04d2b3a0` : ouvrir la demande/examen exact
 plutôt que le seul dossier ; compléter les preuves des deux boîtes (identités
 distinctes, actualisation modifiant les données, panne et reprise locale,
 clients réels et réponses tardives). Sélecteur Python livré : 25/25 réussis.
+Retour `bbbf5cc1` relu, toujours non intégré/non compilé : vrais clients et
+transport retenu ajoutés, leçon ciblée ; l'identifiant d'examen reste inutilisé
+après transmission et la cible est consommée avant deux délais de défilement.
+Dernier retour **2/2**, `ctx_d9874e329b80` : résoudre l'examen exact après sa
+lecture, purger la cible au changement de contexte, rendre cohérent le GET de
+demande des fixtures learners-boxes (actuellement vide), et sortir les appels
+NSLock.lock/unlock du contexte async Swift 6. Preuves de deux cibles réellement
+ouvrables demandées dans le même harnais ; aucune nouvelle campagne lancée.
 Le worker s'est arrêté après un inventaire général, sans livraison H ; la
 consigne d'implémentation lui a été renvoyée sur la même dispatch. Le checkout
 est bien avancé à `ee04722f` via `ca98a782`, sans correctif H à ce contrôle.
