@@ -11,8 +11,15 @@ et une valeur (« Liste réduite » / « Liste complète »). De zéro à huit l
 le dossier de l'élève par `workspace.selectLearner`, donc l'élève dont l'identifiant figure dans la ligne ; l'état déplié vit dans la vue
 des lignes, qui n'est pas recréée au retour du dossier.
 
-Limite : l'ouverture mène au dossier de l'élève, où la leçon ou la formation porte la demande ou l'examen. Aucun lien direct vers la leçon
-n'a été ajouté.
+### Cible exacte (retour 1/2)
+
+Une ligne ouvre la cible qu'elle porte, plus seulement l'élève : `SchoolBoxTarget` (élève, puis leçon d'une demande, ou formation et
+examen d'un examen) passe par `SchoolWorkspace.open(_:)`, qui sélectionne l'élève puis retient la cible. `selectLearner` l'efface si l'on
+change d'élève ; le dossier la consomme une seule fois, donc le retour garde la liste dépliée et le contexte.
+
+- Demande : `SchoolLearnerDossierView` passe sur la section Leçons, `SchoolTrainingScreen` ouvre la fiche de `lesson.id` (feuille
+  existante `OpenedLesson`) quand l'écran est courant et que l'élève correspond.
+- Examen : le dossier choisit la formation `exam.trainingId`, la section Progression, et défile jusqu'à l'ancre `exams-<trainingID>`.
 
 ## #449 — l'actualisation relit les trois lectures
 
@@ -30,13 +37,23 @@ n'a été ajouté.
 
 ## Tests ajoutés (NON COMPILÉS, NON EXÉCUTÉS)
 
-- `DrivyTests/SchoolBoxesRefreshTests` (sélection `reactivity`) : zéro à huit sans expansion ; 9 et 20 entièrement accessibles dans l'ordre ;
-  ajouts et retraits visibles à la relecture ; panne partielle (lecture précédente conservée, erreur, autre section actualisée) ; accès
-  perdu purgé ; nouveau contexte vidé ; réponse tardive d'un autre contexte ignorée (succès et échec) avec lecture retenue ; réponse
-  ancienne du même contexte ignorée ; signal de traitement.
-- `DrivyUITests/SchoolBoxesUITests` (écrans de fixture `learners-boxes-9` et `learners-boxes-20`, données fictives en lecture seule) :
-  9 et 20 demandes atteignables, ouverture du dossier, retour sur la liste dépliée ; actualisation par tirage sans erreur.
-- Sélecteur : `SchoolBoxesRefreshTests` ajouté à `reactivity` dans `test-selection.sh` et `test_test_selection.py`. Les suites UI se
+- `DrivyTests/SchoolBoxesRefreshTests` (sélection `reactivity`) :
+  - fermetures génériques conservées : zéro à huit sans expansion, 9 et 20 accessibles dans l'ordre, ajouts et retraits, panne
+    partielle, accès perdu purgé, nouveau contexte vidé, réponses tardives ignorées, signal de traitement ;
+  - vrais clients derrière un `SchoolHTTPTransport` synthétique (`BoxServer`, acteur qui retient une requête puis la libère) :
+    `SchoolLessonChangeClient.inbox` purge la boîte sur 401, 403 et 404 et la garde sur 503 ; `SchoolExamClient.list` purge sur 403 ;
+    une réponse d'inbox retenue qui arrive après un changement d'école ne remplace pas l'école courante ; une réponse d'examens retenue
+    qui arrive après la perte des droits (client absent) laisse la boîte vide. Pas de permutation équivalente multipliée.
+- `DrivyUITests/SchoolBoxesUITests` :
+  - écrans `learners-boxes-9` et `-20` : demandes ET examens ; la neuvième ligne n'existe qu'après dépliage ; la dernière ligne ouvre sa
+    cible (fiche de la leçon portant la demande ; examen `...0153` de sa formation) ; le retour retrouve la liste dépliée ;
+  - écran `learners-boxes-refresh` (`SchoolBoxesScriptTransport`, DEBUG simulateur) : le tirage retire une demande et en ajoute une
+    dixième, la boîte des examens échoue à cette lecture (lecture précédente gardée, `pending-exams-retry`, boîte des demandes sans
+    erreur), Réessayer relit et l'erreur disparaît ;
+  - refus confirmé dans la fiche de la leçon : la demande a disparu de la boîte au retour, sans tirage.
+- Fixtures : la dernière ligne de chaque boîte pointe la vraie cible du dossier fictif ; les autres lignes portent des élèves, leçons et
+  formations distincts (ids `1000+n`, `2000+n`, `3000+n`, `4000+n`).
+- Sélecteur : `SchoolBoxesRefreshTests` est déjà dans `reactivity` (`test-selection.sh` et `test_test_selection.py`) ; les suites UI se
   choisissent par `DRIVY_IOS_UI_TEST_SUITE=SchoolBoxesUITests`.
 
 ## Contrôles réellement exécutés
@@ -47,8 +64,14 @@ n'a été ajouté.
 
 ## Limites
 
-- Le transport « retenu » des tests est une porte sur la lecture (fermeture), pas un `SchoolHTTPTransport` : les clients réels ne sont pas
-  exercés par ces tests.
-- Le harnais visuel est en lecture seule : ajout et retrait d'éléments sur un autre appareil ne sont vérifiés qu'au niveau du modèle.
-- Tous les éléments de la fixture 9/20 pointent vers le même élève du dossier fictif ; la correspondance ligne → élève est portée par
-  `selectLearner(item.learnerId)`, non distinguée à l'écran dans ce scénario.
+- Swift n'a été ni compilé ni exécuté : tout ce qui précède est écrit mais non qualifié (compilation et exécution à faire sur CI Apple).
+- Le signal de traitement est prouvé au niveau de l'interface (refus confirmé puis boîte relue sans tirage), pas par un test unitaire de la
+  vue : seul le compteur est testé unitairement.
+- Le défilement vers l'examen utilise deux attentes (0,3 s et 1,2 s) faute de signal de fin de composition de la section ; à confirmer
+  à l'œil et sur CI.
+- Un seul élève du dossier fictif a un dossier ; les lignes autres que la dernière désignent des élèves sans dossier, donc la preuve de la
+  cible après la huitième ligne repose sur la dernière ligne de chaque boîte.
+- `SchoolBoxesScriptTransport` suppose une lecture initiale par boîte et un seul déclenchement du tirage ; un second déclenchement décalerait
+  les lectures scriptées.
+- Les tests de vrais clients simulent 401 sans renouvellement de jeton (`invalidateAccessToken` rend faux) ; le renouvellement n'est pas couvert ici.
+- Aucun résultat VoiceOver ni recette physique.

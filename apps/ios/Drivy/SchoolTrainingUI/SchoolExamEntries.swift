@@ -74,7 +74,7 @@ extension SchoolBoxReading where Item == SchoolExamListItem {
 /// Les examens à renseigner, en tête de la liste d'élèves : chaque ligne ouvre le dossier de l'élève.
 struct SchoolPendingExamRows: View {
     let items: [SchoolExamListItem]
-    let open: (UUID) -> Void
+    let open: (SchoolBoxTarget) -> Void
     @State private var expanded = false
 
     var body: some View {
@@ -86,7 +86,7 @@ struct SchoolPendingExamRows: View {
                 .listRowSeparator(.hidden)
                 .drivyPlainRows()
             ForEach(SchoolBoxExpansion.visible(items, expanded: expanded)) { item in
-                Button { open(item.learnerId) } label: {
+                Button { open(SchoolBoxTarget(learnerID: item.learnerId, trainingID: item.exam.trainingId, examID: item.exam.id)) } label: {
                     DrivyEntityRow(title: item.learnerDisplayName.isEmpty ? "Élève" : item.learnerDisplayName,
                         meta: SchoolExamText.summary(item.exam), leading: .symbol("exclamationmark.circle"), showsChevron: true)
                 }

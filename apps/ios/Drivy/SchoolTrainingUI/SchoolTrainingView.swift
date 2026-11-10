@@ -172,6 +172,15 @@ struct SchoolTrainingScreen: View {
             if phase == .active, isCurrent { Task { await SchoolLessonFeed(models: models).reload(ifOlderThan: 30) } }
         }
         .sheet(item: $opened, onDismiss: { Task { await refresh() } }) { lesson in lessonSheet(lesson) }
+        .onChange(of: workspace.boxTarget, initial: true) { _, _ in openTargetedLesson() }
+        .onChange(of: isCurrent) { _, _ in openTargetedLesson() }
+    }
+
+    /// La demande choisie dans une boîte de l'onglet Élèves : la fiche de sa leçon s'ouvre, une seule fois, sur le bon élève.
+    private func openTargetedLesson() {
+        guard isCurrent, let target = workspace.boxTarget, target.learnerID == learner.id, let lessonID = target.lessonID else { return }
+        workspace.boxTarget = nil
+        opened = OpenedLesson(id: lessonID)
     }
 
     @ViewBuilder private func lessonSheet(_ lesson: OpenedLesson) -> some View {

@@ -69,23 +69,32 @@ extension SchoolVisualData {
             "request": pendingForStaff,
             "lesson": ["id": plannedLessonID.uuidString, "plannedStart": "2026-09-28T08:00:00Z", "plannedEnd": "2026-09-28T08:50:00Z", "timeZone": "Europe/Zurich",
                        "version": 1, "instructorMembershipId": membershipID.uuidString, "learnerId": learnerID.uuidString, "learnerDisplayName": learnerName]]]]
-        // Boîtes de l'onglet Élèves au-delà de huit lignes (#447) : N demandes et N examens distincts, un élève nommé par ligne.
-        if !learnerRole, let screen, screen.hasPrefix("learners-boxes-"), let count = Int(screen.dropFirst("learners-boxes-".count)) {
-            func named(_ value: [String: Any], number: Int) -> [String: Any] {
-                var copy = value
-                copy["id"] = identifier(1_000 + number).uuidString
-                return copy
-            }
+        // Boîtes de l'onglet Élèves au-delà de huit lignes (#447) : N demandes et N examens distincts. La dernière ligne de chaque boîte
+        // désigne la vraie cible du dossier fictif (leçon planifiée, examen à renseigner de sa formation) ; les autres désignent d'autres
+        // élèves, leçons et formations, qui n'ont pas de dossier ici.
+        if !learnerRole, let screen, screen.hasPrefix("learners-boxes-"),
+           let count = screen == "learners-boxes-refresh" ? 9 : Int(screen.dropFirst("learners-boxes-".count)), count > 1 {
             objects["\(root)/exams?filter=PENDING_RESULT"] = ["filter": "PENDING_RESULT", "items": (1...count).map { number -> [String: Any] in
-                var item = listItem(named(waiting, number: number))
-                item["learnerDisplayName"] = "Élève examen \(number)"
-                return item
+                guard number < count else { return listItem(waiting).merging(["learnerDisplayName": "Élève examen \(number)"]) { _, new in new } }
+                var other = waiting
+                other["id"] = identifier(1_000 + number).uuidString
+                other["trainingId"] = identifier(2_000 + number).uuidString
+                return ["exam": other, "learnerId": identifier(4_000 + number).uuidString, "learnerDisplayName": "Élève examen \(number)"]
             }]
             objects["\(root)/lesson-change-requests"] = ["items": (1...count).map { number -> [String: Any] in
-                var item: [String: Any] = ["request": named(pendingForStaff, number: number)]
-                item["lesson"] = ["id": plannedLessonID.uuidString, "plannedStart": "2026-09-28T08:00:00Z", "plannedEnd": "2026-09-28T08:50:00Z",
-                                  "timeZone": "Europe/Zurich", "version": 1, "instructorMembershipId": membershipID.uuidString,
-                                  "learnerId": learnerID.uuidString, "learnerDisplayName": "Élève demande \(number)"]
+                var item: [String: Any] = ["request": pendingForStaff]
+                var lesson: [String: Any] = ["id": plannedLessonID.uuidString, "plannedStart": "2026-09-28T08:00:00Z", "plannedEnd": "2026-09-28T08:50:00Z",
+                    "timeZone": "Europe/Zurich", "version": 1, "instructorMembershipId": membershipID.uuidString,
+                    "learnerId": learnerID.uuidString, "learnerDisplayName": "Élève demande \(number)"]
+                if number < count {
+                    var request = pendingForStaff
+                    request["id"] = identifier(1_000 + number).uuidString
+                    request["lessonId"] = identifier(3_000 + number).uuidString
+                    item["request"] = request
+                    lesson["id"] = identifier(3_000 + number).uuidString
+                    lesson["learnerId"] = identifier(4_000 + number).uuidString
+                }
+                item["lesson"] = lesson
                 return item
             }]
         }

@@ -82,6 +82,15 @@ import SwiftUI
     }
 }
 
+/// Ce que la ligne choisie désigne : l'élève, puis la leçon d'une demande ou la formation et l'examen d'un examen à renseigner.
+/// Le dossier la consomme une fois, puis la retire : le retour garde le contexte de la liste.
+struct SchoolBoxTarget: Equatable {
+    let learnerID: UUID
+    var lessonID: UUID? = nil
+    var trainingID: UUID? = nil
+    var examID: UUID? = nil
+}
+
 /// Signal local : un traitement confirmé (demande de leçon, résultat d'examen) demande une relecture des boîtes de l'onglet Élèves.
 /// Un compteur, pas de minuterie : la relecture suit l'événement.
 @MainActor @Observable final class SchoolBoxesSignal {
@@ -147,7 +156,7 @@ enum SchoolBoxExpansion {
 /// « Demandes des élèves », en tête de la liste d'élèves : chaque ligne ouvre le dossier de l'élève, où la leçon porte la demande.
 struct SchoolPendingRequestRows: View {
     let items: [SchoolLessonChangeInboxItem]
-    let open: (UUID) -> Void
+    let open: (SchoolBoxTarget) -> Void
     @State private var expanded = false
 
     @MainActor private func summary(_ item: SchoolLessonChangeInboxItem) -> String {
@@ -166,7 +175,7 @@ struct SchoolPendingRequestRows: View {
                 .listRowSeparator(.hidden)
                 .drivyPlainRows()
             ForEach(SchoolBoxExpansion.visible(items, expanded: expanded)) { item in
-                Button { open(item.lesson.learnerId) } label: {
+                Button { open(SchoolBoxTarget(learnerID: item.lesson.learnerId, lessonID: item.lesson.id)) } label: {
                     DrivyEntityRow(title: item.lesson.learnerDisplayName.isEmpty ? "Élève" : item.lesson.learnerDisplayName,
                         meta: summary(item), leading: .symbol("arrow.left.arrow.right"), showsChevron: true)
                 }

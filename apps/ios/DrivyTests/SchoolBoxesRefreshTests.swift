@@ -132,4 +132,120 @@ import Testing
         signal.settled()
         #expect(signal.revision == before + 1)
     }
+
+    // MARK: Vrais clients derrière un transport retenu
+
+    /// Serveur synthétique : répond par suffixe de chemin, ou retient la prochaine requête jusqu'à ce que le test la libère.
+    private actor BoxServer: SchoolHTTPTransport {
+        private var held: [CheckedContinuation<(Int, Data), Never>] = []
+        private var holdSuffix: String?
+        private var answers: [String: (Int, Data)] = [:]
+        func answer(_ suffix: String, status: Int, body: Data) { answers[suffix] = (status, body) }
+        /// Retient la prochaine requête dont le chemin finit par `suffix` ; les suivantes passent.
+        func hold(_ suffix: String) { holdSuffix = suffix }
+        func heldCount() -> Int { held.count }
+        func release(status: Int, body: Data) {
+            let waiting = held
+            held = []
+            for next in waiting { next.resume(returning: (status, body)) }
+        }
+        func send(_ request: URLRequest) async throws -> SchoolHTTPResponse {
+            let url = request.url!
+            let result: (Int, Data)
+            if let suffix = holdSuffix, url.path.hasSuffix(suffix) {
+                holdSuffix = nil
+                result = await withCheckedContinuation { held.append($0) }
+            } else {
+                result = answers.first(where: { url.path.hasSuffix($0.key) })?.value ?? (404, Data())
+            }
+            return SchoolHTTPResponse(data: result.1, status: result.0, url: url, contentType: "application/json")
+        }
+    }
+
+    private let base = URL(string: "https://school.example")!
+    private let schoolA = UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!
+    private let schoolB = UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")!
+    private let requestA = UUID(uuidString: "aaaa0000-0000-4000-8000-000000000001")!
+    private let requestB = UUID(uuidString: "bbbb0000-0000-4000-8000-000000000002")!
+    private let examA = UUID(uuidString: "eeee0000-0000-4000-8000-000000000001")!
+
+    private func envelope(_ data: String) -> Data {
+        Data("{\"data\":\(data),\"requestId\":\"req-1\",\"serverTime\":\"2030-03-01T08:00:00.000Z\"}".utf8)
+    }
+
+    private func inboxBody(request: UUID, learner: String) -> Data {
+        envelope("""
+        {"items":[{"request":{"id":"\(request.uuidString.lowercased())","lessonId":"11111111-1111-4111-8111-111111111111","kind":"RESCHEDULE","status":"PENDING",
+         "note":"Plutôt jeudi","mine":false,"late":false,"deadlineAt":null,"cancellationHours":24,"policyVersionId":null,"resolvedAt":null,
+         "resolutionNote":null,"version":1,"createdAt":"2030-03-01T08:00:00.000Z"},
+         "lesson":{"id":"11111111-1111-4111-8111-111111111111","plannedStart":"2030-03-04T09:00:00.000Z","plannedEnd":"2030-03-04T09:50:00.000Z",
+         "timeZone":"Europe/Zurich","version":2,"instructorMembershipId":"33333333-3333-4333-8333-333333333333",
+         "learnerId":"44444444-4444-4444-8444-444444444444","learnerDisplayName":"\(learner)"}}]}
+        """)
+    }
+
+    private func examsBody(exam: UUID, learner: String) -> Data {
+        envelope("""
+        {"filter":"PENDING_RESULT","items":[{"exam":{"id":"\(exam.uuidString.lowercased())","trainingId":"55555555-5555-4555-8555-555555555555","kind":"PRACTICAL",
+         "categoryCode":"B","status":"SCHEDULED","startsAt":"2030-03-04T09:00:00.000Z","timeZone":"Europe/Zurich","location":"Lausanne","escort":null,
+         "resultNote":"","resultRecordedAt":null,"postponedToExamId":null,"attempt":1,"needsResult":true,"version":1,
+         "createdAt":"2030-03-01T08:00:00.000Z"},"learnerId":"44444444-4444-4444-8444-444444444444","learnerDisplayName":"\(learner)"}]}
+        """)
+    }
+
+    @Test func theRealInboxClientPurgesTheBoxOn401And403And404ButKeepsItOnAnOutage() async {
+        for (status, purges) in [(401, true), (403, true), (404, true), (503, false)] {
+            let server = BoxServer()
+            let client = SchoolLessonChangeClient(baseURL: base, tokenSource: HubToken(), transport: server)
+            await server.answer("lesson-change-requests", status: 200, body: inboxBody(request: requestA, learner: "Camille"))
+            let box = SchoolLessonRequestInboxModel()
+            await box.load(client: client, schoolID: schoolA, context: "a")
+            #expect(box.items.map(\.id) == [requestA], "lecture initiale, statut \(status)")
+            await server.answer("lesson-change-requests", status: status, body: Data())
+            await box.load(client: client, schoolID: schoolA, context: "a")
+            #expect(box.items.isEmpty == purges, "statut \(status)")
+            #expect(box.errorMessage != nil, "statut \(status)")
+        }
+    }
+
+    @Test func theRealExamClientPurgesTheBoxWhenAccessIsRefused() async {
+        let server = BoxServer()
+        let client = SchoolExamClient(baseURL: base, tokenSource: HubToken(), transport: server)
+        await server.answer("exams", status: 200, body: examsBody(exam: examA, learner: "Camille"))
+        let box = SchoolPendingExamsModel()
+        await box.load(client: client, schoolID: schoolA, context: "a")
+        #expect(box.items.map(\.id) == [examA])
+        await server.answer("exams", status: 403, body: Data())
+        await box.load(client: client, schoolID: schoolA, context: "a")
+        #expect(box.items.isEmpty && box.errorMessage != nil)
+    }
+
+    @Test func aHeldInboxAnswerArrivingAfterASchoolChangeNeverReplacesTheNewSchool() async {
+        let server = BoxServer()
+        let client = SchoolLessonChangeClient(baseURL: base, tokenSource: HubToken(), transport: server)
+        let box = SchoolLessonRequestInboxModel()
+        await server.hold("lesson-change-requests")
+        let late = Task { await box.load(client: client, schoolID: schoolA, context: "école A") }
+        while await server.heldCount() == 0 { await Task.yield() }
+        await server.answer("lesson-change-requests", status: 200, body: inboxBody(request: requestB, learner: "École B"))
+        await box.load(client: client, schoolID: schoolB, context: "école B")
+        #expect(box.items.map(\.id) == [requestB])
+        await server.release(status: 200, body: inboxBody(request: requestA, learner: "École A"))
+        await late.value
+        #expect(box.items.map(\.id) == [requestB] && box.errorMessage == nil)
+    }
+
+    @Test func aHeldExamAnswerArrivingAfterTheRightsAreLostLeavesTheBoxEmpty() async {
+        let server = BoxServer()
+        let client = SchoolExamClient(baseURL: base, tokenSource: HubToken(), transport: server)
+        let box = SchoolPendingExamsModel()
+        await server.hold("exams")
+        let late = Task { await box.load(client: client, schoolID: schoolA, context: "gère les examens") }
+        while await server.heldCount() == 0 { await Task.yield() }
+        // Les droits ont changé : plus de client pour ce contexte.
+        await box.load(client: nil, schoolID: schoolA, context: "ne gère plus les examens")
+        await server.release(status: 200, body: examsBody(exam: examA, learner: "Camille"))
+        await late.value
+        #expect(box.items.isEmpty && box.errorMessage == nil)
+    }
 }

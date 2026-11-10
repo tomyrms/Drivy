@@ -20,6 +20,8 @@ final class SchoolWorkspace {
     private(set) var confirmedLearner: SchoolLearner?
     private(set) var trainings: [SchoolTraining] = []
     private(set) var selectedLearnerID: UUID?
+    /// La leçon ou l'examen choisi dans une boîte de l'onglet Élèves, consommé par le dossier de cet élève.
+    var boxTarget: SchoolBoxTarget?
     private(set) var searchText = ""
     /// Seulement les dossiers dont le profil est à compléter (#153) : un filtre du serveur, jamais de la page chargée.
     private(set) var showsIncompleteProfilesOnly = false
@@ -739,7 +741,14 @@ final class SchoolWorkspace {
         return projectedLearner(value).displayName
     }
 
+    /// Ouvre le dossier de l'élève de la ligne et retient la leçon ou l'examen visé.
+    func open(_ target: SchoolBoxTarget) {
+        selectLearner(target.learnerID)
+        boxTarget = target
+    }
+
     func selectLearner(_ id: UUID?) {
+        if boxTarget?.learnerID != id { boxTarget = nil }
         guard selectedLearnerID != id else { return }
         clearLearner()
         selectedLearnerID = id

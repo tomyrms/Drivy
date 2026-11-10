@@ -184,13 +184,13 @@ struct SchoolBrowserView: View {
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
-            SchoolPendingRequestRows(items: requestInbox.items) { workspace.selectLearner($0) }
+            SchoolPendingRequestRows(items: requestInbox.items) { workspace.open($0) }
             if let message = pendingExams.errorMessage {
                 SchoolErrorNotice(message: message, retry: { Task { await reloadExams() } }, retryIdentifier: "pending-exams-retry")
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
-            SchoolPendingExamRows(items: pendingExams.items) { workspace.selectLearner($0) }
+            SchoolPendingExamRows(items: pendingExams.items) { workspace.open($0) }
             let references = homonymReferences
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
