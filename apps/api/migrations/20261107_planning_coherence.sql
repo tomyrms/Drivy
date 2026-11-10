@@ -1,4 +1,21 @@
 -- Audit du 7 novembre 2026, lot A (#423, #439). Migration additive : aucune migration livrée n'est modifiée.
+-- 0. Indisponibilité d'un moniteur, répondue par oui/non à tout membre actif du personnel de l'école (ADMIN ou INSTRUCTOR).
+--    La lecture des congés reste réservée (RLS schedule_read : administration ou moniteur lui-même) : un moniteur qui publie un cours
+--    avec un collègue, ou choisit un autre accompagnateur, doit pourtant être refusé quand ce collègue est en congé, sans en lire ni
+--    le motif ni les lignes (#423). Un appelant hors de l'école, ou sans rôle de personnel, reçoit ACCESS_DENIED sans aucune réponse ;
+--    un moniteur inconnu de l'école donne `false`, comme un moniteur sans congé.
+CREATE FUNCTION drivy.instructor_unavailable(school uuid,instructor uuid,starts timestamptz,ends timestamptz) RETURNS boolean
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=pg_catalog,drivy AS $$
+BEGIN
+ IF NOT drivy.current_school_member(school) OR NOT EXISTS(SELECT 1 FROM drivy.membership m JOIN drivy.person p ON p.id=m.person_id
+   WHERE m.school_id=school AND m.person_id=nullif(current_setting('app.person_id',true),'')::uuid AND m.status='ACTIVE' AND p.status='ACTIVE'
+   AND m.roles&&ARRAY['ADMIN','INSTRUCTOR']::text[]) THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='ACCESS_DENIED'; END IF;
+ RETURN EXISTS(SELECT 1 FROM drivy.closure c WHERE c.school_id=school AND c.instructor_membership_id=instructor AND c.removed_at IS NULL
+  AND tstzrange(c.starts_at,c.ends_at,'[)')&&tstzrange(starts,ends,'[)'));
+END $$;
+REVOKE ALL ON FUNCTION drivy.instructor_unavailable(uuid,uuid,timestamptz,timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION drivy.instructor_unavailable(uuid,uuid,timestamptz,timestamptz) TO drivy_app;
+
 -- 1. Engagements d'un moniteur qui chevauchent une période de fermeture (congé) : leçons planifiées, séances de cours publiées,
 --    accompagnements d'examens prévus. Lecture seule, réservée à qui peut gérer ce moniteur (même droit que la création du congé).
 --    Intervalles semi-ouverts [début, fin) : un engagement qui commence quand le congé finit ne le chevauche pas.
@@ -45,8 +62,7 @@ BEGIN
  FOR item IN SELECT * FROM jsonb_array_elements(changes) LOOP
   IF (item->>'startsAt')::timestamptz<=statement_timestamp() THEN PERFORM drivy.course_fail('COURSE_IN_PAST'); END IF;
   IF NOT EXISTS(SELECT 1 FROM drivy.course_instructors(s.school_id) i WHERE i.membership_id=(item->>'instructorMembershipId')::uuid) THEN PERFORM drivy.course_fail('INSTRUCTOR_NOT_ACTIVE'); END IF;
-  IF EXISTS(SELECT 1 FROM drivy.closure c WHERE c.school_id=s.school_id AND c.instructor_membership_id=(item->>'instructorMembershipId')::uuid AND c.removed_at IS NULL
-    AND tstzrange(c.starts_at,c.ends_at,'[)')&&tstzrange((item->>'startsAt')::timestamptz,(item->>'endsAt')::timestamptz,'[)')) THEN PERFORM drivy.course_fail('COURSE_INSTRUCTOR_CLOSED'); END IF;
+  IF drivy.instructor_unavailable(s.school_id,(item->>'instructorMembershipId')::uuid,(item->>'startsAt')::timestamptz,(item->>'endsAt')::timestamptz) THEN PERFORM drivy.course_fail('COURSE_INSTRUCTOR_CLOSED'); END IF;
   UPDATE drivy.course_occurrence SET starts_at=(item->>'startsAt')::timestamptz,ends_at=(item->>'endsAt')::timestamptz,
    instructor_membership_id=(item->>'instructorMembershipId')::uuid WHERE series_id=series AND position=(item->>'position')::integer;
   IF NOT FOUND THEN PERFORM drivy.course_fail('COURSE_POSITIONS_MISMATCH'); END IF;

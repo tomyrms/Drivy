@@ -9,8 +9,8 @@ import type {PoolClient} from 'pg';
  * Intervalles semi-ouverts [début, fin) : un engagement qui commence quand le congé finit reste possible.
  */
 export async function overlapsClosure(db:PoolClient,schoolId:string,instructorMembershipId:string,startsAt:string,endsAt:string):Promise<boolean>{
- return (await db.query(`SELECT 1 FROM drivy.closure c WHERE c.school_id=$1 AND c.instructor_membership_id=$2 AND c.removed_at IS NULL
-  AND tstzrange(c.starts_at,c.ends_at,'[)')&&tstzrange($3::timestamptz,$4::timestamptz,'[)') LIMIT 1`,[schoolId,instructorMembershipId,startsAt,endsAt])).rowCount!==0;
+ // Fonction autorisée (oui/non) : la table des congés reste illisible pour un moniteur qui n'est pas ce collègue (RLS schedule_read).
+ return (await db.query<{unavailable:boolean}>('SELECT drivy.instructor_unavailable($1,$2,$3::timestamptz,$4::timestamptz) AS unavailable',[schoolId,instructorMembershipId,startsAt,endsAt])).rows[0]!.unavailable;
 }
 export interface ClosureBookings {lessons:number;courses:number;exams:number}
 /** Engagements existants du moniteur recouvrant une fermeture à créer (fonction SQL réservée à qui gère ce moniteur). */

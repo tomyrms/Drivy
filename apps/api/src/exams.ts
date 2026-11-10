@@ -127,10 +127,10 @@ function validateSchedule(value:Schedule,school:SchoolRow,now:Date){
  }
 }
 async function holdEscort(db:PoolClient,schoolId:string,exam:{id:string;training_id:string},escort:NonNullable<Schedule['escort']>){
- if(await overlapsClosure(db,schoolId,escort.instructorMembershipId,escort.startsAt,escort.endsAt))
-  throw new ApiError(409,'EXAM_ESCORT_CONFLICT','Le moniteur est absent (fermeture) pendant l’accompagnement.');
  const person=(await db.query<{person:string|null}>('SELECT drivy.exam_escort_person($1,$2) AS person',[exam.training_id,escort.instructorMembershipId])).rows[0]?.person;
  if(!person)throw new ApiError(422,'INSTRUCTOR_NOT_ASSIGNED','Le moniteur d’accompagnement doit être actif et affecté à cette formation.');
+ if(await overlapsClosure(db,schoolId,escort.instructorMembershipId,escort.startsAt,escort.endsAt))
+  throw new ApiError(409,'EXAM_ESCORT_CONFLICT','Le moniteur est absent (fermeture) pendant l’accompagnement.');
  await db.query(`INSERT INTO drivy.reservation(school_id,exam_id,resource_id,resource_role,during) VALUES($1,$2,$3,'INSTRUCTOR',tstzrange($4::timestamptz,$5::timestamptz,'[)'))`,
   [schoolId,exam.id,person,escort.startsAt,escort.endsAt]);
 }

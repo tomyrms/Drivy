@@ -1,15 +1,15 @@
 import {randomUUID} from 'node:crypto';
 import {afterAll,beforeAll,describe,expect,it} from 'vitest';
 import type {Pool} from 'pg';
-import {freshDatabase,harness,prepareCommercial,prepareSchool,slot,id,type Call} from './support/harness.js';
+import {freshDatabase,harness,prepareCommercial,prepareSchool,lessonBody,slot,id,type Call} from './support/harness.js';
 
 /**
  * Lot A de l'audit du 7 novembre 2026 (#423, #424, #439, #444). PostgreSQL réelle, données synthétiques.
  * Les commandes d'une école se sérialisent sur le verrou de l'école (commands.ts) : la concurrence est donc rejouée comme
  * dans course-concurrency.integration.test.ts, en retenant ce verrou jusqu'à ce que les deux requêtes y soient suspendues.
  */
-let pool:Pool,call:Call,app:Awaited<ReturnType<typeof harness>>['app'],school:Awaited<ReturnType<typeof prepareSchool>>;
-beforeAll(async()=>{pool=await freshDatabase();({call,app}=await harness(pool));school=await prepareSchool(pool);await prepareCommercial(call);});
+let pool:Pool,call:Call,app:Awaited<ReturnType<typeof harness>>['app'],school:Awaited<ReturnType<typeof prepareSchool>>,commercial:Awaited<ReturnType<typeof prepareCommercial>>;
+beforeAll(async()=>{pool=await freshDatabase();({call,app}=await harness(pool));school=await prepareSchool(pool);commercial=await prepareCommercial(call);});
 afterAll(async()=>{await app?.close();await pool?.end();});
 const admin='demo-admin',staff='demo-instructor';
 type Response=Awaited<ReturnType<Call>>;
@@ -61,6 +61,71 @@ const examBody=(day:number,escort?:{from:number;to:number},extra:Record<string,u
 const createExam=(training:string,day:number,escort?:{from:number;to:number})=>call('POST',`/trainings/${training}/exams`,{kind:'PRACTICAL',...examBody(day,escort)},null,staff);
 const heldBy=async(examId:string)=>(await pool.query<{n:number}>('SELECT count(*)::int AS n FROM drivy.reservation WHERE exam_id=$1 AND active',[examId])).rows[0]!.n;
 const examCount=async(training:string)=>(await pool.query<{n:number}>('SELECT count(*)::int AS n FROM drivy.exam WHERE training_id=$1',[training])).rows[0]!.n;
+
+/** Exécute une requête avec la vraie identité d'une personne : rôle drivy_app (RLS appliquée) et contexte d'école/personne posés comme le fait commands.ts. */
+async function asApp<T>(person:string,schoolId:string,sql:string,params:unknown[]=[]):Promise<T[]>{
+ const client=await pool.connect();
+ try{
+  await client.query('BEGIN');await client.query('SET LOCAL ROLE drivy_app');
+  await client.query("SELECT set_config('app.school_id',$1,true),set_config('app.person_id',$2,true)",[schoolId,person]);
+  return (await client.query(sql,params)).rows as T[];
+ }finally{await client.query('ROLLBACK');client.release();}
+}
+const unavailable=(person:string,schoolId:string,instructor:string,from:string,to:string)=>
+ asApp<{unavailable:boolean}>(person,schoolId,'SELECT drivy.instructor_unavailable($1,$2,$3::timestamptz,$4::timestamptz) AS unavailable',[id.schoolA,instructor,from,to]);
+
+describe('#423 un collègue non administrateur ne voit pas le congé, mais en subit le refus',()=>{
+ it('la publication d’un cours par un moniteur MANAGE_COURSES est refusée pour le congé d’un collègue',async()=>{
+  await pool.query("UPDATE drivy.membership SET grants=ARRAY['MANAGE_COURSES'] WHERE id=$1",[id.instructorMember]);
+  const day=nextDay++,series=await draft([{day,from:9,to:10}]);
+  expect((await closure(id.otherInstructorMember,at(day,8),at(day,17))).statusCode).toBe(201);
+  // Preuve de portée : ce moniteur ne lit aucune ligne de congé de son collègue (lecture générale inchangée).
+  expect(await asApp(id.instructor,id.schoolA,'SELECT 1 FROM drivy.closure WHERE instructor_membership_id=$1',[id.otherInstructorMember])).toHaveLength(0);
+  const res=await call('POST',`/course-series/${series.id}/publish`,{operationId:randomUUID()},series.version,staff);
+  expect(res.statusCode,res.body).toBe(409);expect(res.json().code).toBe('COURSE_INSTRUCTOR_CLOSED');
+  expect(await seriesRow(series.id)).toEqual({status:'DRAFT',version:series.version});expect(await seriesHolds(series.id)).toBe(0);
+  // Sans congé sur ce créneau, le même moniteur publie normalement.
+  const free=await draft([{day:nextDay++,from:9,to:10}]);
+  expect((await call('POST',`/course-series/${free.id}/publish`,{operationId:randomUUID()},free.version,staff)).statusCode).toBe(200);
+ });
+ it('la replanification par ce moniteur est refusée de la même façon',async()=>{
+  const day=nextDay++,other=nextDay++,series=await draft([{day,from:9,to:10}]);
+  const published=(await call('POST',`/course-series/${series.id}/publish`,{operationId:randomUUID()},series.version,staff)).json().data;
+  expect((await closure(id.otherInstructorMember,at(other,8),at(other,17))).statusCode).toBe(201);
+  const moved=await call('POST',`/course-series/${series.id}/reschedule`,{operationId:randomUUID(),occurrences:[{position:1,startsAt:at(other,9),endsAt:at(other,10),instructorMembershipId:id.otherInstructorMember}]},published.version,staff);
+  expect(moved.statusCode,moved.body).toBe(409);expect(moved.json().code).toBe('COURSE_INSTRUCTOR_CLOSED');
+  expect(await seriesRow(series.id)).toEqual({status:'PUBLISHED',version:published.version});
+ });
+ it('un accompagnateur affecté, en congé, est refusé à la création, à la modification et au report par un autre moniteur',async()=>{
+  const training=await freshTraining(),day=nextDay++,other=nextDay++;
+  await pool.query(`INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,now()-interval '1 day')`,[randomUUID(),id.schoolA,training,id.otherInstructorMember]);
+  expect((await closure(id.otherInstructorMember,at(day,8),at(day,17))).statusCode).toBe(201);
+  const withOther=(d:number,extra:Record<string,unknown>={})=>({...examBody(d,undefined,extra),escort:{instructorMembershipId:id.otherInstructorMember,startsAt:at(d,9),endsAt:at(d,11)}});
+  const refused=await call('POST',`/trainings/${training}/exams`,{kind:'PRACTICAL',...withOther(day)},null,staff);
+  expect(refused.statusCode,refused.body).toBe(409);expect(refused.json().code).toBe('EXAM_ESCORT_CONFLICT');expect(await examCount(training)).toBe(0);
+  const plain=await createExam(training,day);expect(plain.statusCode,plain.body).toBe(201);const exam=plain.json().data.exams[0];
+  const update=await call('POST',`/exams/${exam.id}/update`,withOther(day,{reason:''}),exam.version,staff);
+  expect(update.statusCode,update.body).toBe(409);expect(update.json().code).toBe('EXAM_ESCORT_CONFLICT');expect(await heldBy(exam.id)).toBe(0);
+  const postpone=await call('POST',`/exams/${exam.id}/postpone`,{...withOther(day),reason:'Report'},exam.version,staff);
+  expect(postpone.statusCode,postpone.body).toBe(409);expect(postpone.json().code).toBe('EXAM_ESCORT_CONFLICT');
+  expect((await pool.query("SELECT status FROM drivy.exam WHERE id=$1",[exam.id])).rows[0].status).toBe('SCHEDULED');
+  // Hors congé, le même accompagnateur est accepté.
+  const ok=await call('POST',`/exams/${exam.id}/update`,withOther(other,{reason:''}),exam.version,staff);expect(ok.statusCode,ok.body).toBe(200);
+ });
+ it('la fonction répond oui/non au personnel de l’école et ne dit rien à un autre appelant',async()=>{
+  const day=nextDay++;
+  expect((await closure(id.otherInstructorMember,at(day,8),at(day,17))).statusCode).toBe(201);
+  const [from,to]=[at(day,9),at(day,10)];
+  expect((await unavailable(id.instructor,id.schoolA,id.otherInstructorMember,from,to))[0]!.unavailable).toBe(true);
+  expect((await unavailable(id.instructor,id.schoolA,id.otherInstructorMember,at(day,17),at(day,18)))[0]!.unavailable).toBe(false);
+  expect((await unavailable(id.instructor,id.schoolA,id.adminMember,from,to))[0]!.unavailable).toBe(false);
+  // Élève de l'école, personne d'une autre école (contexte B ou contexte A), personne inconnue : refus sans réponse.
+  await expect(unavailable(id.alice,id.schoolA,id.otherInstructorMember,from,to)).rejects.toThrow(/ACCESS_DENIED/);
+  await expect(unavailable(id.foreign,id.schoolB,id.otherInstructorMember,from,to)).rejects.toThrow(/ACCESS_DENIED/);
+  await expect(unavailable(id.foreign,id.schoolA,id.otherInstructorMember,from,to)).rejects.toThrow(/ACCESS_DENIED/);
+  await expect(unavailable(randomUUID(),id.schoolA,id.otherInstructorMember,from,to)).rejects.toThrow(/ACCESS_DENIED/);
+ });
+});
 
 describe('#423 congés, cours et accompagnements d’examen',()=>{
  it('un congé couvrant le cours refuse la publication sans rien occuper',async()=>{
@@ -146,7 +211,7 @@ describe('#439 replanification : bijection des positions',()=>{
  it('refuse une position répétée, manquante ou inconnue de même longueur, sans aucune mutation',async()=>{
   const s=await published(),before=await state(s.id);
   for(const occurrences of [[change(1,nextDay++),change(1,nextDay++)],[change(1,nextDay++),change(3,nextDay++)],[change(2,nextDay++),change(2,nextDay++)]]){
-   const res=await resched(s,occurrences);expect(res.statusCode,res.body).toBeGreaterThanOrEqual(400);expect(res.statusCode).toBeLessThan(500);
+   const res=await resched(s,occurrences);expect(res.statusCode,res.body).toBeGreaterThanOrEqual(400);expect(res.statusCode).toBeLessThan(500);expect(res.json().code,res.body).toMatch(/^(COURSE_POSITIONS_MISMATCH|INVALID_REQUEST)$/);
    expect(await state(s.id)).toEqual(before);
   }
   expect((await pool.query("SELECT count(*)::int AS n FROM drivy.course_occurrence WHERE series_id=$1 AND starts_at>now()+interval '50 years'",[s.id])).rows[0].n).toBe(0);
@@ -155,12 +220,20 @@ describe('#439 replanification : bijection des positions',()=>{
   const s=await published(),before=await state(s.id);
   const db=await pool.connect();
   try{
-   for(const changes of [[change(1,nextDay++),change(1,nextDay++)],[change(1,nextDay++),change(7,nextDay++)],[{startsAt:at(nextDay++,9),endsAt:at(nextDay++,10),instructorMembershipId:id.otherInstructorMember},change(2,nextDay++)]]){
+   const asAdmin=async()=>{
     await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');
     await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject',$2,true),set_config('app.school_id',$3,true)",['https://harness-identity.example.invalid','demo-admin',id.schoolA]);
     const person=(await db.query('SELECT person_id FROM drivy.identity_link WHERE subject=$1',['demo-admin'])).rows[0].person_id;
     await db.query("SELECT set_config('app.person_id',$1,true)",[person]);
-    await expect(db.query('SELECT drivy.course_reschedule($1,$2::jsonb)',[s.id,JSON.stringify(changes)])).rejects.toThrow();
+   };
+   // Témoin : avec ce même contexte (droits, école, série, état publié, première séance à venir), une bijection correcte est acceptée,
+   // donc les refus ci-dessous ne viennent pas de la portée mais bien de la vérification des positions.
+   await asAdmin();
+   await expect(db.query('SELECT drivy.course_reschedule($1,$2::jsonb)',[s.id,JSON.stringify([change(1,nextDay++),change(2,nextDay++)])])).resolves.toBeDefined();
+   await db.query('ROLLBACK');
+   for(const changes of [[change(1,nextDay++),change(1,nextDay++)],[change(1,nextDay++),change(7,nextDay++)],[{startsAt:at(nextDay++,9),endsAt:at(nextDay++,10),instructorMembershipId:id.otherInstructorMember},change(2,nextDay++)]]){
+    await asAdmin();
+    await expect(db.query('SELECT drivy.course_reschedule($1,$2::jsonb)',[s.id,JSON.stringify(changes)])).rejects.toMatchObject({code:'P0001',message:'COURSE_POSITIONS_MISMATCH'});
     await db.query('ROLLBACK');
    }
   }finally{db.release();}
@@ -203,11 +276,51 @@ describe('#424 révision de programme et règles d’annulation',()=>{
   const removed=await revise(changed.json().data.id,{procedureText:'Nouveau déroulement.',cancellationPolicyText:'Annulation sans frais jusqu’à 48 heures avant la leçon.',sourceUrls:[],cancellationRules:null});
   expect(removed.statusCode,removed.body).toBe(201);expect((await policyOf(removed.json().data.id)).cancellation_rules).toBeNull();
  });
- it('relecture puis sauvegarde sans changement ne transforme jamais une règle en NULL',async()=>{
+ it('relecture puis sauvegarde avec une précision au texte ne transforme jamais une règle en NULL',async()=>{
   await pool.query('UPDATE drivy.school_policy_version SET cancellation_rules=$2 WHERE id=(SELECT policy_version_id FROM drivy.offering_version WHERE id=$1)',[(await sheetHead()).head.id,JSON.stringify(rules)]);
   const loaded=(await sheetHead()),p=loaded.procedure;
   const res=await revise(loaded.head.id,{procedureText:`${p.procedureText} Précision.`,cancellationPolicyText:p.cancellationPolicyText,sourceUrls:p.sourceUrls,cancellationRules:p.cancellationRules});
   expect(res.statusCode,res.body).toBe(201);expect((await policyOf(res.json().data.id)).cancellation_rules).toEqual(rules);
+ });
+ const policyCount=async()=>(await pool.query('SELECT count(*)::int AS n FROM drivy.school_policy_version WHERE school_id=$1',[id.schoolA])).rows[0].n;
+ const offeringCount=async()=>(await pool.query('SELECT count(*)::int AS n FROM drivy.offering_version WHERE school_id=$1',[id.schoolA])).rows[0].n;
+ it('relecture puis sauvegarde strictement identique : FORMATION_UNCHANGED, aucune version de plus (ordre des clés JSONB compris)',async()=>{
+  await pool.query('UPDATE drivy.school_policy_version SET cancellation_rules=$2 WHERE id=(SELECT policy_version_id FROM drivy.offering_version WHERE id=$1)',[(await sheetHead()).head.id,JSON.stringify(rules)]);
+  const loaded=await sheetHead(),p=loaded.procedure;
+  // Le DTO relu tel quel (clés dans l'ordre rendu par JSONB, lateAction avant cancellationHours) puis le même contenu dans l'ordre inverse.
+  expect(Object.keys(p.cancellationRules)).toContain('lateAction');
+  const reread={procedureText:p.procedureText,cancellationPolicyText:p.cancellationPolicyText,sourceUrls:p.sourceUrls,cancellationRules:p.cancellationRules};
+  const reordered={...reread,cancellationRules:{cancellationHours:p.cancellationRules.cancellationHours,lateAction:p.cancellationRules.lateAction}};
+  const omitted={procedureText:p.procedureText,cancellationPolicyText:p.cancellationPolicyText,sourceUrls:p.sourceUrls};
+  const policies=await policyCount(),offerings=await offeringCount();
+  for(const procedure of [reread,reordered,omitted]){
+   const res=await revise(loaded.head.id,procedure);
+   expect(res.statusCode,res.body).toBe(409);expect(res.json().code).toBe('FORMATION_UNCHANGED');
+  }
+  expect(await policyCount()).toBe(policies);expect(await offeringCount()).toBe(offerings);
+  expect((await sheetHead()).head.id).toBe(loaded.head.id);
+ });
+ it('un élève rattaché au programme révisé conserve l’échéance de 24 h et la qualification hors délai',async()=>{
+  await pool.query('UPDATE drivy.school_policy_version SET cancellation_rules=$2 WHERE id=(SELECT policy_version_id FROM drivy.offering_version WHERE id=$1)',[(await sheetHead()).head.id,JSON.stringify(rules)]);
+  const loaded=await sheetHead(),p=loaded.procedure;
+  const revised=await revise(loaded.head.id,{procedureText:`${p.procedureText} Révision.`,cancellationPolicyText:p.cancellationPolicyText,sourceUrls:p.sourceUrls});
+  expect(revised.statusCode,revised.body).toBe(201);
+  const offering=revised.json().data.id as string,policy=(await policyOf(offering)).id;
+  const training=randomUUID();
+  // Un seul parcours actif par élève et programme : l'ancien parcours de l'élève d'essai est clos pour rattacher un nouveau parcours au programme révisé.
+  await pool.query("UPDATE drivy.training SET status='COMPLETED' WHERE learner_id=$1 AND offering_key='category-b' AND status IN ('ACTIVE','PAUSED')",[id.bobLearner]);
+  await pool.query(`INSERT INTO drivy.training(id,school_id,learner_id,offering_id,offering_key,status,started_on) VALUES($1,$2,$3,$4,'category-b','ACTIVE',current_date)`,[training,id.schoolA,id.bobLearner,offering]);
+  await pool.query(`INSERT INTO drivy.instructor_assignment(id,school_id,training_id,instructor_membership_id,valid_from) VALUES($1,$2,$3,$4,now()-interval '1 day')`,[randomUUID(),id.schoolA,training,id.instructorMember]);
+  const plan=async()=>{const r=await call('POST','/lessons',lessonBody(commercial,policy,nextDay++,8,{trainingId:training}),null,staff);expect(r.statusCode,r.body).toBe(201);return r.json().data;};
+  const ask=(lessonId:string)=>call('POST',`/lessons/${lessonId}/change-requests`,{operationId:randomUUID(),kind:'CANCEL',note:''},null,'demo-bob');
+  const far=await plan();
+  const read=async(lessonId:string)=>(await call('GET',`/lessons/${lessonId}/change-requests`,undefined,null,'demo-bob')).json().data;
+  expect((await read(far.id)).conditions).toMatchObject({cancellationHours:24,lateAction:'CONTACT',late:false,policyVersionId:policy});
+  expect(Date.parse((await read(far.id)).conditions.deadlineAt)).toBe(Date.parse(far.plannedStart)-24*3_600_000);
+  const near=await plan();await pool.query("UPDATE drivy.lesson SET planned_start=now()+interval '3 hours',planned_end=now()+interval '4 hours' WHERE id=$1",[near.id]);
+  expect((await read(near.id)).conditions).toMatchObject({cancellationHours:24,late:true,canRequest:true});
+  const late=await ask(near.id);expect(late.statusCode,late.body).toBe(201);
+  expect(late.json().data.requests[0]).toMatchObject({late:true,cancellationHours:24,status:'PENDING',policyVersionId:policy});
  });
 });
 

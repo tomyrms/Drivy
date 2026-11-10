@@ -53,6 +53,9 @@ export const saveTariffCommand=z.discriminatedUnion('mode',[
 // au-delà de la mémoire allouée à la compilation de production. Les schémas restent l'unique validation à l'exécution.
 interface CompetencyInput {key:string|null;label:string;description:string}
 interface CancellationRules {cancellationHours:number|null;lateAction:'CONTACT'|'NO_FEE'}
+/** Égalité sémantique : l'ordre des clés rendu par JSONB (lateAction avant cancellationHours) ne doit pas créer de version. */
+const sameCancellationRules=(a:CancellationRules|null|undefined,b:CancellationRules|null|undefined)=>
+ a?b!=null&&a.cancellationHours===b.cancellationHours&&a.lateAction===b.lateAction:!b;
 interface ProcedureInput {procedureText:string;cancellationPolicyText:string;sourceUrls:string[];cancellationRules?:CancellationRules|null|undefined}
 interface ProgrammeCommand {operationId:string;offeringKey:string;expectedOfferingVersionId:string;label?:string|null|undefined;enabled?:boolean|undefined;
  defaultDurationMinutes?:number|undefined;competencies?:CompetencyInput[]|undefined;procedure?:ProcedureInput|undefined;source?:{templateId:string;templateVersion:string}|undefined}
@@ -393,7 +396,7 @@ async function updateProgramme(db:PoolClient,actor:CommandActor,school:SchoolRow
   if(body.procedure.cancellationRules===undefined&&previousRules&&textChanged)
    throw new ApiError(422,'CANCELLATION_RULES_DECISION_REQUIRED','Le texte d’annulation change : confirmez le nouveau délai structuré, ou retirez-le explicitement.');
   const rules=body.procedure.cancellationRules===undefined?previousRules:body.procedure.cancellationRules;
-  const same=current&&current.approved&&current.procedureText===body.procedure.procedureText&&!textChanged&&JSON.stringify(rules)===JSON.stringify(previousRules)
+  const same=current&&current.approved&&current.procedureText===body.procedure.procedureText&&!textChanged&&sameCancellationRules(rules,previousRules)
    &&current.sourceUrls.length===body.procedure.sourceUrls.length&&current.sourceUrls.every((value,index)=>value===body.procedure!.sourceUrls[index]);
   if(!same){policyVersionId=await insertProcedure(db,school.id,actor.membershipId,head.categoryCode,{...body.procedure,cancellationRules:rules});changed.push('procedure');}
  }
