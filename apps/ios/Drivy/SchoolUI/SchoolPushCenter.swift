@@ -106,9 +106,9 @@ struct SchoolPushRevocationStorageError: Error {}
     /// Conversation d’une alerte de messagerie touchée (#74) ; l’accueil change d’onglet, l’onglet Messages la consomme.
     private(set) var pendingMessagingTarget: MessagingNotificationTarget?
     @ObservationIgnored private(set) var client: SchoolNotificationClient?
-    @ObservationIgnored private var deviceToken: String?
+    @ObservationIgnored private(set) var deviceToken: String?
     /// Jeton accepté par l’école pour la session ouverte ; réenvoyé seulement s’il change.
-    @ObservationIgnored private var registeredToken: String?
+    @ObservationIgnored private(set) var registeredToken: String?
     @ObservationIgnored private var hasSession = false
     /// Secret de révocation et jeton de l’appareil inscrit (#120).
     @ObservationIgnored private let revocations: any SchoolPushRevocationStoring
@@ -116,20 +116,34 @@ struct SchoolPushRevocationStorageError: Error {}
     @ObservationIgnored private var isRevoking = false
     /// Trois secondes au plus pour une révocation : une fin de session n’attend pas un réseau absent.
     @ObservationIgnored private let revocationBudget: Duration
+    /// État système lu sans rien demander, et demande d'inscription APNs : injectés pour les tests, jamais le système réel.
+    @ObservationIgnored private let systemStatus: @MainActor () async -> UNAuthorizationStatus
+    @ObservationIgnored private let registersForRemote: @MainActor () -> Void
+    /// Génération de session : chaque début et chaque fin la font avancer. Une inscription lancée dans une génération
+    /// qui n'est plus la courante ne marque jamais le jeton « enregistré » (#441).
+    @ObservationIgnored private var sessionGeneration = 0
+    /// Fin de la dernière inscription mise en file : les PUT de cet appareil ne se chevauchent jamais, donc l'ordre des
+    /// réponses est l'ordre des validations côté école et le dernier secret reçu est le dernier secret valide.
+    @ObservationIgnored private var registrationTail: Task<Void, Never>?
 
     init(revocations: any SchoolPushRevocationStoring = KeychainSchoolPushRevocationStore(),
-         revocationBudget: Duration = .seconds(3)) {
+         revocationBudget: Duration = .seconds(3),
+         systemStatus: @escaping @MainActor () async -> UNAuthorizationStatus = {
+             await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
+         },
+         registersForRemote: @escaping @MainActor () -> Void = { UIApplication.shared.registerForRemoteNotifications() }) {
         self.revocations = revocations
         self.revocationBudget = revocationBudget
+        self.systemStatus = systemStatus
+        self.registersForRemote = registersForRemote
     }
 
     func configure(client: SchoolNotificationClient?) { self.client = client }
 
     /// Relit l’état système sans rien demander.
     func refreshAuthorization() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        authorization = Self.authorization(settings.authorizationStatus)
-        if authorization == .allowed, hasSession { UIApplication.shared.registerForRemoteNotifications() }
+        authorization = Self.authorization(await systemStatus())
+        if authorization == .allowed, hasSession { registersForRemote() }
     }
 
     /// Geste explicite de la personne : seule voie vers la demande système.
@@ -143,7 +157,7 @@ struct SchoolPushRevocationStorageError: Error {}
 
     /// Connexion confirmée : l’appareil s’enregistre si l’autorisation existe déjà, sans la demander.
     func sessionStarted() {
-        hasSession = true
+        hasSession = true; sessionGeneration += 1
         Task { await refreshAuthorization(); await upload() }
     }
 
@@ -154,7 +168,7 @@ struct SchoolPushRevocationStorageError: Error {}
     func sessionEnding() async {
         SchoolNotificationSettingsCache.reset()
         SchoolReplayCache.shared.reset()
-        hasSession = false
+        hasSession = false; sessionGeneration += 1
         pendingSeriesID = nil
         pendingMessagingTarget = nil
         let recorded = try? revocations.load()
@@ -195,23 +209,55 @@ struct SchoolPushRevocationStorageError: Error {}
 
     /// Enregistre l’appareil et garde le secret de révocation avec son jeton ; un nouvel enregistrement le remplace.
     /// Une école plus ancienne n’en rend pas : seule la révocation authentifiée reste possible, comme avant #120.
+    /// Les enregistrements passent un à un (file) : l'école fait tourner le secret à chaque PUT, et deux PUT en vol
+    /// pourraient rendre leurs réponses dans l'ordre inverse de leur validation.
+    /// Vrai seulement si l'école a répondu ET que le secret rendu est durablement conservé : sans sauvegarde, l'appareil
+    /// ne se tient pas pour enregistré (un secret perdu rend la révocation anonyme impossible).
     @discardableResult
     func registerDevice(token: String) async -> Bool {
+        await serialized { await self.putAndKeep(token: token) }
+    }
+
+    /// Inscrit le jeton courant s'il ne l'est pas déjà pour cette session. Deux déclenchements rapprochés (connexion et
+    /// retour du jeton APNs) se fondent en un seul PUT : le second, passé son tour, trouve le jeton déjà enregistré.
+    func upload() async {
+        await serialized { await self.uploadIfNeeded() }
+    }
+
+    private func uploadIfNeeded() async {
+        guard hasSession, authorization == .allowed, let token = deviceToken, token != registeredToken else { return }
+        let generation = sessionGeneration
+        guard await putAndKeep(token: token) else { return }
+        // Session terminée (ou autre session ouverte) pendant l'enregistrement : le secret reste sur l'appareil, la
+        // révocation reprendra hors session, mais ce jeton n'est pas « enregistré » pour la session suivante.
+        guard hasSession, generation == sessionGeneration else { return }
+        registeredToken = token
+    }
+
+    private func putAndKeep(token: String) async -> Bool {
         guard let client else { return false }
         do {
             let secret = try await client.register(token: token, environment: .current)
-            if let secret { try? revocations.save(SchoolPushRevocationRecord(token: token, secret: secret)) }
+            if let secret {
+                do { try revocations.save(SchoolPushRevocationRecord(token: token, secret: secret)) }
+                catch { return false }
+            } else if let recorded = try? revocations.load(), recorded.token == token {
+                // L'école ne rend plus de secret : celui d'avant ne correspond plus à rien.
+                try? revocations.clear()
+            }
             return true
         } catch { return false }
     }
 
-    private func upload() async {
-        guard hasSession, authorization == .allowed, let token = deviceToken, token != registeredToken else { return }
-        guard await registerDevice(token: token) else { return }
-        // Session terminée pendant l'enregistrement : le secret reste sur l'appareil, la révocation reprendra hors
-        // session, au lancement suivant ou au retour au premier plan.
-        guard hasSession else { return }
-        registeredToken = token
+    /// File FIFO sur l'acteur principal : le travail suivant attend la fin du précédent, qu'il réussisse ou non.
+    private func serialized<T: Sendable>(_ work: @escaping @MainActor () async -> T) async -> T {
+        let previous = registrationTail
+        let task = Task { @MainActor in
+            await previous?.value
+            return await work()
+        }
+        registrationTail = Task { _ = await task.value }
+        return await task.value
     }
 
     /// Révocation d'un appareil : authentifiée d'abord, puis le secret de l'appareil quand l'école ne reconnaît plus
@@ -221,8 +267,10 @@ struct SchoolPushRevocationStorageError: Error {}
         guard !isRevoking, let client else { return }
         isRevoking = true
         defer { isRevoking = false }
+        // Le record visé est celui d'AVANT l'attente : ce qui sera effacé, c'est lui et rien d'autre (#441).
         let recorded = try? revocations.load()
-        let secret = recorded?.token == token ? recorded?.secret : nil
+        let target = recorded?.token == token ? recorded : nil
+        let secret = target?.secret
         let authenticated = Task { try await client.revoke(token: token) }
         let deadline = Task { try? await Task.sleep(for: revocationBudget); authenticated.cancel() }
         var failure: Error?
@@ -230,7 +278,7 @@ struct SchoolPushRevocationStorageError: Error {}
         deadline.cancel()
         if failure == nil {
             // Confirmée : le secret n’a plus d’usage.
-            clearRecord(for: token)
+            clearRecord(matching: target)
             return
         }
         // Une session sans jeton d’accès n’a plus que le secret pour se révoquer ; toute autre panne attendra.
@@ -240,14 +288,13 @@ struct SchoolPushRevocationStorageError: Error {}
         var anonymousFailure: Error?
         do { try await anonymous.value } catch { anonymousFailure = error }
         anonymousDeadline.cancel()
-        if anonymousFailure == nil { clearRecord(for: token) }
+        if anonymousFailure == nil { clearRecord(matching: target) }
     }
 
-    /// Efface le secret de ce jeton seulement : un enregistrement plus récent n’est jamais effacé par une révocation
-    /// qui ne le concerne pas.
-    private func clearRecord(for token: String) {
-        let recorded = try? revocations.load()
-        guard recorded == nil || recorded?.token == token else { return }
+    /// Efface exactement le record que la révocation visait (jeton ET secret). Un record renouvelé pendant l'attente,
+    /// même pour le même jeton, désigne un nouvel enregistrement que cette révocation ne couvre pas : il reste.
+    private func clearRecord(matching target: SchoolPushRevocationRecord?) {
+        guard let target, let current = try? revocations.load(), current == target else { return }
         try? revocations.clear()
     }
 

@@ -20,13 +20,13 @@ struct SchoolSelfProfileIntent: Codable, Equatable, Sendable {
         SchoolSelfProfile(personId: base.personId, displayName: edit.displayName,
             firstName: edit.firstName, lastName: edit.lastName, contactPhone: edit.contactPhone,
             contactEmail: edit.contactEmail, birthDate: edit.birthDate, postalAddress: edit.postalAddress,
-            photoVersion: base.photoVersion, version: base.version)
+            photoVersion: base.photoVersion, photoGeneration: base.photoGeneration, version: base.version)
     }
 
     func baseStillMatches(_ profile: SchoolSelfProfile) -> Bool {
         switch kind {
         case .fields: SchoolSelfProfileEdit(base) == SchoolSelfProfileEdit(profile)
-        case .photo: base.photoVersion == profile.photoVersion
+        case .photo: base.hasSamePhotoState(as: profile)
         }
     }
 }
