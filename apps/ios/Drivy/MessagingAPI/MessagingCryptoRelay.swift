@@ -4,6 +4,14 @@ import Foundation
 /// Les corps sont des JSON Matrix opaques produits par matrix-sdk-crypto ; ce module ne les lit pas.
 enum MessagingCryptoRelayFailure: Error, Equatable, Sendable {
     case notFound, backupVersionConflict, deviceLimitReached
+    /// 409 BACKUP_ALREADY_EXISTS : une sauvegarde existe déjà ; seule sa clé publique dit si elle est la nôtre (#435).
+    case backupAlreadyExists
+    /// 409 BACKUP_CHANGED_DURING_READ : la sauvegarde a changé en cours de lecture ; relire depuis le début (#436).
+    case backupChangedDuringRead
+    /// 400 BACKUP_CURSOR_INVALID : curseur refusé ; recommencer sans `from` (#436).
+    case backupCursorInvalid
+    /// 422 BACKUP_PAGINATION_REQUIRED : lecture non paginée d'une grosse sauvegarde, jamais une lecture partielle (#436).
+    case backupPaginationRequired
     /// 409 sans code connu : ce n'est pas une sauvegarde existante.
     case conflict
 }
@@ -108,6 +116,8 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
             }
             if response.status == 409 {
                 let code = String(decoding: response.data.prefix(4_096), as: UTF8.self)
+                if code.contains("BACKUP_CHANGED_DURING_READ") { throw MessagingCryptoRelayFailure.backupChangedDuringRead }
+                if code.contains("BACKUP_ALREADY_EXISTS") { throw MessagingCryptoRelayFailure.backupAlreadyExists }
                 if code.contains("BACKUP_VERSION_CONFLICT") {
                     throw MessagingCryptoRelayFailure.backupVersionConflict
                 }
@@ -116,6 +126,8 @@ actor MessagingCryptoHTTPRelay: MessagingCryptoRelay {
                 throw MessagingCryptoRelayFailure.conflict
             }
             if response.status == 404 { throw MessagingCryptoRelayFailure.notFound }
+            if response.status == 400, String(decoding: response.data.prefix(4_096), as: UTF8.self).contains("BACKUP_CURSOR_INVALID") { throw MessagingCryptoRelayFailure.backupCursorInvalid }
+            if response.status == 422, String(decoding: response.data.prefix(4_096), as: UTF8.self).contains("BACKUP_PAGINATION_REQUIRED") { throw MessagingCryptoRelayFailure.backupPaginationRequired }
             if response.status == 401 || response.status == 403 { throw MessagingFailure.accessChanged }
             guard (200...299).contains(response.status) else { throw MessagingFailure.unavailable }
             guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else {

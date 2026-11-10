@@ -16,6 +16,8 @@ actor MessagingOutboxCoordinator {
     private let outbox: any MessagingProtectedOutbox
     private let currentScope: @MainActor @Sendable () -> MessagingScope?
     private var active: Set<UUID> = []
+    /// #428 : au plus une requête en vol par conversation, quel que soit le chemin de reprise.
+    private var activeConversations: Set<UUID> = []
     /// Échecs observés dans cette instance de scope, indexés par intention puis conversation.
     private var membersConflicts: [UUID: UUID] = [:]
 
@@ -91,9 +93,10 @@ actor MessagingOutboxCoordinator {
         guard await self.currentScope() == scope else { return .failed(.contextChanged) }
         guard Self.validEnvelope(entry.ciphertext) else { return .failed(.invalidResponse) }
         if let failure = await cryptography.availabilityFailure(scope: scope, conversationID: entry.conversationID) { return .failed(failure) }
-        guard !active.contains(entry.clientMessageID) else { return .waiting }
+        guard !active.contains(entry.clientMessageID), !activeConversations.contains(entry.conversationID) else { return .waiting }
         active.insert(entry.clientMessageID)
-        defer { active.remove(entry.clientMessageID) }
+        activeConversations.insert(entry.conversationID)
+        defer { active.remove(entry.clientMessageID); activeConversations.remove(entry.conversationID) }
         do {
             // Même identifiant, octets et époque, y compris pour une archive ancienne sans époque.
             // Seul le serveur peut distinguer réponse perdue déjà acceptée et intention nouvelle périmée.
@@ -127,12 +130,20 @@ actor MessagingOutboxCoordinator {
         do { entries = try await outbox.entries(scope: scope) }
         catch { return [.failed(.protectionUnavailable)] }
         var results: [Delivery] = []
-        for entry in entries.prefix(20) {
+        // Ordre par conversation : une entrée non confirmée (en vol ailleurs, réponse perdue) retient les suivantes
+        // de la même conversation ; un refus définitif ne les retient pas ; les autres conversations restent indépendantes.
+        var held: Set<UUID> = []
+        for entry in entries.prefix(20) where !held.contains(entry.conversationID) {
             guard await self.currentScope() == scope else { results.append(.failed(.contextChanged)); break }
             let result = await retry(entry, currentScope: currentScope)
             results.append(result)
-            if case .failed(let failure) = result,
-               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached { break }
+            switch result {
+            case .accepted: break
+            case .waiting: held.insert(entry.conversationID)
+            case .failed(let failure):
+                if failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached { return results }
+                if failure == .unavailable || failure == .invalidResponse { held.insert(entry.conversationID) }
+            }
         }
         return results
     }
