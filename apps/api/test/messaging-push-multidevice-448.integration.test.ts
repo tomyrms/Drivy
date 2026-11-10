@@ -111,4 +111,52 @@ describe('#448 messagerie : état par destination', () => {
     expect(row!.status).toBe('SKIPPED');
     expect(await deliveries(row!.id)).toMatchObject({ [tokenA]: { status: 'SENT' }, [tokenB]: { status: 'REVOKED' } });
   });
+  /** Transport suspendu sur le premier envoi : une autre connexion modifie la base avant la destination suivante. */
+  async function suspendedBatch(first: 'SENT' | 'INVALID_TOKEN', during: (sent: string, other: string) => Promise<void>) {
+    const calls: string[] = [];
+    let release!: () => void, enter!: (device: string) => void;
+    const released = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<string>((resolve) => { enter = resolve; });
+    const sender: PushSender = { async send(device) { calls.push(device); if (calls.length === 1) { enter(device); await released; return first; } return 'SENT'; }, close() {} };
+    const batch = processPushBatch(worker, sender);
+    const sent = await entered;
+    await during(sent, sent === tokenA ? tokenB : tokenA);
+    release(); await batch;
+    return { calls, sent, other: sent === tokenA ? tokenB : tokenA };
+  }
+  it('appareil révoqué pendant l’envoi précédent : jamais envoyé, clos DEVICE_UNAVAILABLE', async () => {
+    await sendPrivate();
+    const run = await suspendedBatch('SENT', async (_sent, other) => { await pool.query('UPDATE drivy.push_device SET revoked_at=now() WHERE token=$1', [other]); });
+    expect(run.calls).toEqual([run.sent]);
+    const [row] = await notification();
+    expect(row).toMatchObject({ status: 'SENT' });
+    expect(await deliveries(row!.id)).toMatchObject({ [run.sent]: { status: 'SENT' }, [run.other]: { status: 'REVOKED', failure_code: 'DEVICE_UNAVAILABLE' } });
+  });
+  it('appareil réattribué pendant l’envoi précédent : jamais envoyé', async () => {
+    await sendPrivate();
+    const run = await suspendedBatch('SENT', async (_sent, other) => { await pool.query('UPDATE drivy.push_device SET person_id=$2 WHERE token=$1', [other, id.bob]); });
+    expect(run.calls).toEqual([run.sent]);
+    const [row] = await notification();
+    expect(await deliveries(row!.id)).toMatchObject({ [run.other]: { status: 'REVOKED' } });
+  });
+  it('préférence retirée pendant l’envoi précédent : la destination suivante n’est pas envoyée, l’alerte est ignorée', async () => {
+    await sendPrivate();
+    const run = await suspendedBatch('SENT', async () => {
+      await pool.query('INSERT INTO drivy.notification_preference(person_id,messaging_private) VALUES($1,false) ON CONFLICT(person_id) DO UPDATE SET messaging_private=false', [id.alice]);
+    });
+    expect(run.calls).toEqual([run.sent]);
+    const [row] = await notification();
+    expect(row!.status).toBe('SKIPPED');
+    expect(await deliveries(row!.id)).toMatchObject({ [run.sent]: { status: 'SENT' }, [run.other]: { status: 'REVOKED' } });
+  });
+  it('INVALID_TOKEN tardif sur un enregistrement renouvelé pendant l’envoi : l’appareil n’est pas révoqué', async () => {
+    await sendPrivate();
+    const run = await suspendedBatch('INVALID_TOKEN', async (sent) => {
+      await pool.query("UPDATE drivy.push_device SET last_seen_at=now()+interval '1 second',revocation_digest=decode(repeat('ab',32),'hex') WHERE token=$1", [sent]);
+    });
+    expect(run.calls[0]).toBe(run.sent);
+    expect((await pool.query<{ revoked_at: Date | null }>('SELECT revoked_at FROM drivy.push_device WHERE token=$1', [run.sent])).rows[0]!.revoked_at).toBeNull();
+    const [row] = await notification();
+    expect((await deliveries(row!.id))[run.sent]).toMatchObject({ status: 'REJECTED', failure_code: 'INVALID_TOKEN' });
+  });
 });

@@ -19,24 +19,29 @@ Périmètre : API des notifications, migration additive `20261110_push_delivery_
 **Comportement (cours et messagerie, même moteur).**
 - Les destinations sont créées au premier passage pour les appareils actifs ; un appareil enregistré ensuite ne reçoit pas une alerte ancienne.
 - Seules les destinations `PENDING` sont reprises : A acceptée n'est jamais renvoyée, y compris après redémarrage du service (l'état vit en base).
-- Avant chaque tentative : droits, préférences et événement revalidés (`push_revalidate`, instantané messagerie) ; appareil relu (révoqué ou repris par une autre personne → `REVOKED`, sans envoi).
-- Un jeton invalide devient `REJECTED`, l'appareil est révoqué, les autres destinations continuent, aucune boucle.
+- Avant chaque envoi après le premier : droits, préférences, échéance et événement revalidés (`push_revalidate` pour les cours, instantané messagerie) ; appareil relu juste avant son envoi, jamais depuis un instantané pris avant la boucle (révoqué ou repris par une autre personne → `REVOKED`, sans envoi). Si l'autorisation est perdue, la notification est close et ses destinations restantes avec elle. C'est un contrôle par tentative, pas un contrôle préalable de toute la liste ; un intervalle incompressible subsiste entre la relecture et l'envoi réseau.
+- Un jeton invalide devient `REJECTED`, l'appareil est révoqué, les autres destinations continuent, aucune boucle. La révocation est gardée par version : elle n'a lieu que si jeton, personne, environnement et `last_seen_at` (modifié à chaque réenregistrement, y compris même personne avec nouveau secret) sont ceux lus avant l'envoi ; une réponse tardive ne révoque pas un enregistrement renouvelé. Les destinations sont traitées par `device_id` croissant : deux notifications concurrentes verrouillent les appareils communs dans le même ordre (pas d'interblocage).
 - La notification reste `PENDING` avec attente exponentielle tant qu'une destination est `PENDING`. Close globale : `SENT` si au moins une destination est `SENT`, sinon `FAILED` (`APNS_UNAVAILABLE` si reprises épuisées, `NO_VALID_DEVICE` sinon).
 - Une transaction par notification (ou groupe de messagerie). Si le transport lève après qu'un résultat est écrit, ce résultat est conservé et seule la suite est reprise ; sans résultat écrit, l'unité est annulée comme avant.
 - Aucun jeton ni contenu dans les logs : l'état n'enregistre que des codes (`APNS_RETRY`, `INVALID_TOKEN`, `RETRY_EXHAUSTED`, `DEVICE_UNAVAILABLE`).
 
 ## Qualification
 
-Base `drivy_test` PostgreSQL isolée (conteneur local). Nouveaux tests :
-- `push-reliability-20261110.integration.test.ts` (16) : #429 série×2 annulation, ×2 replanification, deux écoles, rejeu, transition ; #448 cours : A/B avec redémarrage, aucune clôture prématurée, jeton invalide, épuisement, échec global, appareil révoqué/repris, préférence retirée, échéance, exception du transport, appareil tardif.
-- `messaging-push-multidevice-448.integration.test.ts` (4) : chemin messagerie, mêmes scénarios clés.
-- Résultat observé : 20/20 réussis après correction de tests (erreurs de fixture et d'ordre des destinations, pas du produit).
+Base `drivy_test` PostgreSQL 17 réelle (conteneur local `drivy-audit-planning-pg`), runtime **Node v24.22.2** (archive extraite localement, placée en tête du `PATH`, `process.version` vérifié).
 
-Suites voisines (push, notifications, messagerie, révocation d'appareil, `course-upgrade`) : réussies. `messaging-push-coalescing` : l'assistant de vieillissement vieillit aussi `push_delivery.completed_at`, assertions inchangées. `npx tsc --noEmit` et `npm run build` : sortie 0.
+Commandes et résultats observés :
+- `npx tsc --noEmit` et `npx tsc -p tsconfig.build.json --noEmit` : sortie 0.
+- `npx vitest run` sur les 14 fichiers : `push-reliability-20261110`, `course-notifications`, `course-push-failure`, `course-push-revalidation`, `course-push-transport`, `lesson-exam-push`, `messaging-mention-push`, `messaging-message-push`, `messaging-notifications`, `messaging-push-a55`, `messaging-push-coalescing`, `messaging-push-multidevice-448`, `push-device-revocation`, `course-worker-process` : **14 fichiers réussis, 170 tests réussis, 1 ignoré** (aucun échec).
+- Après ajout des tests de concurrence de la messagerie : `messaging-push-multidevice-448` + `messaging-push-coalescing` : 16/16 réussis, `tsc --noEmit` sortie 0 (cette dernière exécution est ciblée, non une nouvelle suite globale).
+- `course-worker-process.integration.test.ts` (processus réel, PostgreSQL isolée créée par son harnais) : réussi sous Node 24. Son test **SIGTERM** reste ignoré sous Windows (`it.skipIf(!posix)`, Windows ne livre pas SIGTERM) : **NON EXÉCUTÉ**, à qualifier sur POSIX.
+
+Tests de concurrence (transport suspendu sur le premier envoi, autre connexion qui modifie la base, puis relâchement) :
+- cours (`push-reliability-20261110`) : appareil révoqué, appareil réattribué, préférence retirée, adhésion révoquée, échéance dépassée (le temps passe : la ligne est verrouillée par le service), INVALID_TOKEN tardif sur enregistrement renouvelé (2 variantes), deux instances du service sur les mêmes appareils avec barrière (pas d'interblocage, deux `FAILED` avec `attempts` 1) ;
+- messagerie (`messaging-push-multidevice-448`) : appareil révoqué, réattribué, préférence retirée, INVALID_TOKEN tardif sur enregistrement renouvelé.
 
 ## Limites
 
-- **NON EXÉCUTÉ** : `course-worker-process.integration.test.ts` exige Node 24 ; la machine fournit Node 26. Le « redémarrage » des tests est simulé par fermeture et réouverture du pool, non par un processus réel.
-- Résiduel at-least-once : un crash entre l'envoi APNs accepté et l'écriture du résultat peut renvoyer à cet appareil une fois.
-- La non-modification de l'ordre des destinations n'est pas contractuelle (ordre `created_at, device_id`).
+- **At-least-once exact.** Les résultats par appareil sont écrits dans la transaction de l'unité mais ne sont durables qu'au `COMMIT` de cette unité (une notification, ou un groupe de messagerie). Un arrêt brutal du processus (ou une perte de connexion) entre l'envoi accepté d'un appareil et ce `COMMIT` — y compris pendant l'attente des appareils suivants — annule l'unité et peut renvoyer une seconde fois à un appareil déjà accepté. Le test « exception du transport » prouve la conservation du résultat par le `catch` suivi du `COMMIT`, pas la survie à un crash de processus au milieu du lot. Aucun harnais de crash ni garantie exactly-once ne sont fournis ; l'exigence de l'issue est le redémarrage normal.
+- Le « redémarrage » des tests de ce lot est la fermeture et la réouverture du pool ; seul `course-worker-process` utilise un vrai processus.
+- Entre la relecture d'autorisation et l'envoi réseau, une modification concurrente reste possible (contrôle par tentative, non atomique).
 - Aucun essai APNs réel, aucun déploiement, pas de campagne globale ; STATUS.md non touché.
