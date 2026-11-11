@@ -247,11 +247,14 @@ final class MessagingReportScreensUITests: XCTestCase {
                 let startY = downward ? top + 12 : bottom - 12
                 let endY = startY + (downward ? distance : -distance)
                 let origin = app.coordinate(withNormalizedOffset: .zero)
+                // Lent et tenu : un glisser rapide laisse une inertie qui dépasse le bloc, surtout en très grand texte.
                 origin.withOffset(CGVector(dx: bounds.midX, dy: startY)).press(forDuration: 0.05,
-                    thenDragTo: origin.withOffset(CGVector(dx: bounds.midX, dy: endY)))
+                    thenDragTo: origin.withOffset(CGVector(dx: bounds.midX, dy: endY)), withVelocity: .slow, thenHoldForDuration: 0.3)
             }
             capture("report-mixed-\(largeText ? "large" : "normal")-\(part)")
-            XCTAssertTrue(visible, "Le bloc \(part) doit être entièrement visible après défilement borné")
+            let finalBounds = content.frame.intersection(app.windows.firstMatch.frame)
+            XCTAssertTrue(visible, "Le bloc \(part) doit être entièrement visible après défilement borné : bloc \(text.frame), "
+                + "zone \(finalBounds), barre \(app.navigationBars["Signalement"].frame.maxY), confirmer \(confirm.frame.minY), hittable \(text.isHittable)")
         }
         XCTAssertTrue(confirm.isHittable)
         XCTAssertTrue(cancel.isHittable)
