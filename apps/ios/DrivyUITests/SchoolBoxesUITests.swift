@@ -69,11 +69,13 @@ import XCTest
 
     private func verifyRequests(count: Int) {
         let app = launch("learners-boxes-\(count)")
+        // Le bouton suit les huit premières lignes : la liste est paresseuse, il n'existe qu'une fois atteint.
         let toggle = app.buttons["pending-requests-expansion"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(scrollTo(toggle, in: app), app.debugDescription)
         XCTAssertEqual(toggle.value as? String, "Liste réduite")
         XCTAssertFalse(row(app, "Élève demande", 9).exists, "La neuvième demande ne se voit qu'après le dépliage")
         toggle.tap()
+        XCTAssertTrue(scrollTo(toggle, in: app), app.debugDescription)
         XCTAssertEqual(toggle.value as? String, "Liste complète")
         let last = row(app, "Élève demande", count)
         XCTAssertTrue(scrollTo(last, in: app), "Dernière demande inaccessible : \(app.debugDescription)")
@@ -84,7 +86,7 @@ import XCTest
         XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].label.contains("Camille"), app.debugDescription)
         backToList(app)
-        XCTAssertTrue(app.buttons["pending-requests-expansion"].waitForExistence(timeout: 20), app.debugDescription)
+        XCTAssertTrue(scrollTo(app.buttons["pending-requests-expansion"], in: app), app.debugDescription)
         XCTAssertEqual(app.buttons["pending-requests-expansion"].value as? String, "Liste complète", "Le retour a perdu le dépliage")
     }
 
@@ -94,6 +96,7 @@ import XCTest
         XCTAssertTrue(scrollTo(toggle, in: app), app.debugDescription)
         XCTAssertEqual(toggle.value as? String, "Liste réduite")
         toggle.tap()
+        XCTAssertTrue(scrollTo(toggle, in: app), app.debugDescription)
         XCTAssertEqual(toggle.value as? String, "Liste complète")
         // Deux examens de la même formation : l'avant-dernière ligne, puis la dernière (jamais le premier de la formation).
         for (number, identifier) in [(count - 1, earlierExamIdentifier), (count, laterExamIdentifier)] {
@@ -131,8 +134,9 @@ import XCTest
     func testRefreshChangesTheBoxesAndAFailedBoxKeepsItsReadingUntilRetry() {
         let app = launch("learners-boxes-refresh")
         let requestsToggle = app.buttons["pending-requests-expansion"]
-        XCTAssertTrue(requestsToggle.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(scrollTo(requestsToggle, in: app), app.debugDescription)
         requestsToggle.tap()
+        scrollToTop(app)
         XCTAssertTrue(row(app, "Élève demande", 1).exists, app.debugDescription)
 
         pullToRefresh(app)
@@ -162,7 +166,7 @@ import XCTest
     func testAConfirmedRefusalRereadsTheBoxOnReturnWithoutPulling() {
         let app = launch("learners-boxes-refresh")
         let toggle = app.buttons["pending-requests-expansion"]
-        XCTAssertTrue(toggle.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertTrue(scrollTo(toggle, in: app), app.debugDescription)
         toggle.tap()
         let last = row(app, "Élève demande", 9)
         XCTAssertTrue(scrollTo(last, in: app), app.debugDescription)
