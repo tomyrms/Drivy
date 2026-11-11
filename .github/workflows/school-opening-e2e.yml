@@ -75,7 +75,7 @@ jobs:
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
           "$JAVA_HOME_21_X64/bin/javac" -version
-      - run: node infra/dev/node_modules/playwright-core/cli.js install --with-deps chromium
+      - run: bash scripts/qualification/install-playwright-browser.sh chromium
       - run: npm run build --prefix apps/web
       - name: Parcours complet sur données synthétiques
         env:

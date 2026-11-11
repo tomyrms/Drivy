@@ -102,7 +102,7 @@ jobs:
           node --test --test-reporter=tap scripts/qualification/test-workflows.mjs | tee artifacts/qualification/workflows.tap
           python3 scripts/qualification/evidence.py tap artifacts/qualification/workflows.tap
           npm ci --prefix infra/dev --ignore-scripts
-          node infra/dev/node_modules/playwright-core/cli.js install --with-deps msedge
+          bash scripts/qualification/install-playwright-browser.sh msedge
           npx tsx scripts/dev/setup.ts
           node --test --import tsx --test-reporter=tap scripts/dev/provision-school.test.mjs | tee artifacts/qualification/provision.tap
           python3 scripts/qualification/evidence.py tap artifacts/qualification/provision.tap

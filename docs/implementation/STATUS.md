@@ -2178,3 +2178,27 @@ les bornes et l'absence de changement métier/serveur. Cette exception est inté
 nouveaux tests et les parcours iPhone/iPad doivent encore être compilés et exécutés sur Apple.
 La prochaine qualification porte sur le candidat complet ; aucune fusion master ou bascule
 homelab n'est encore annoncée. Leur autorisation est acquise, avec sauvegarde préalable vérifiée.
+
+## 11 novembre 2026 — CI de master rouge corrigée, restes serveur de #37 et #50
+
+**Exécuté.** Les workflows « Refonte · vérifications » (job « Web et BFF ») et « Refonte · ouverture école
+navigateur » échouaient depuis le 5 novembre à `playwright-core install --with-deps chromium`, sur
+`Temporary failure resolving 'azure.archive.ubuntu.com'`. Cause établie en comparant un journal en échec
+(`43046719913`) et un journal réussi (`43029756647`) : même étape, même image, le miroir apt Azure se résout sur
+certains runners seulement ; l'échec touche aussi des dispatchs, ce n'est donc pas une différence push/PR.
+Correctif : `scripts/qualification/install-playwright-browser.sh` retire les miroirs sans DNS, replie sur les
+miroirs officiels, réduit les délais apt et réessaie trois fois ; les trois workflows qui installaient un
+navigateur l'appellent. Sur la branche `tomyrms/restes-serveur-20261111`, au `62f64cc5` : vérifications
+`43066470393` vert (web 908 réussis + 1 échec attendu sur 909 ; serveur sur PostgreSQL réelle 1149/1149, dont
+`course-worker-process` 7/7 avec SIGTERM sous Linux), navigateur `43066475650` vert.
+
+**Livré sans activation.** #50 : `infra/deploy/configure-identity-smtp.py` (simulation par défaut, n'écrit que
+`smtpServer`, secrets lus dans des fichiers 0600 hors dépôt), 16 tests locaux, procédure dans
+`recuperation-activation-50.md`. #37 : un test API sur l'horloge d'appareil fausse (le serveur seul décide de
+l'échéance d'annulation), et la relecture critère par critère dans `cours-collectifs-cloture-37-20261111.md`.
+
+**À qualifier.** Le repli DNS du script n'a pas été exercé en CI (le DNS répondait) : seule une simulation locale
+avec miroirs factices le couvre. Le script SMTP n'a jamais parlé à un Keycloak réel ; aucun courrier n'a été
+envoyé. Restent hors dépôt : choix du fournisseur SMTP (#50), réception APNs, VoiceOver et parcours Face ID sur
+appareil (#37, #50), recomptage de la matrice #83. Rien n'est déployé, aucune issue n'est fermée par ce lot.
+
