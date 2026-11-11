@@ -119,7 +119,7 @@ describe('assistant', () => {
   });
   test('une seule commande avec le contenu exact relu', () => {
     const draft: WizardDraft = { category: ' A ', intent: 'NEW', programmeLabel: 'ignoré', source: { templateId: 'pedagogy-a', templateVersion: '2026-10-13.2' },
-      competencies: competencyDrafts([{ key: 'preparation', label: 'Préparer', description: 'Préparer la moto.' }]), rules: { procedureText: 'D', cancellationPolicyText: 'A', sources: '' },
+      competencies: competencyDrafts([{ key: 'preparation', label: 'Préparer', description: 'Préparer la moto.' }]), rules: { ...rulesDraft(null), procedureText: 'D', cancellationPolicyText: 'A' },
       tariff: { ...newTariffDraft('INDIVIDUAL_LESSON', '2026-10-14', 'Conditions.'), label: 'Leçon moto', duration: '50', price: '95' } };
     expect(createFormationBody(draft)).toEqual({ categoryCode: 'A', intent: 'NEW', programmeLabel: null, competencies: [{ key: 'preparation', label: 'Préparer', description: 'Préparer la moto.' }],
       procedure: { procedureText: 'D', cancellationPolicyText: 'A', sourceUrls: [] }, source: { templateId: 'pedagogy-a', templateVersion: '2026-10-13.2' },

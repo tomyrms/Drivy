@@ -6,10 +6,30 @@ import { assignmentSchema, catalogPolicySchema, learnerSchema, memberSchema, off
 import { applicableProducts, assignmentCovers, canEditPlannedLesson, initialLessonForm, individualCancellationDeadline, lessonCommercial, lessonInterval, lessonLocalInstants,
   lessonWriteBody, planningLessonSchema, planningProductSchema, planningTrainingLabel, slotAvailabilitySchema, type LessonForm, type PlanningLesson } from '../../lesson-planning-model';
 import type { LessonIntention, PlannedLessonDraft } from '../../console/agenda-intentions';
+import { rebaseConfirmedDraft } from '../../console/draft-model';
 import { readError, useCommandLane, useConsole, useLoad, useUnsavedChanges, type Outcome } from '../../console/context';
 import { distinctLabel, homonymReferences } from '../../person-reference';
 import { RequestFailure } from '../../protocol';
 import type { LessonRefusal, LessonRestored } from './lesson-intentions-model';
+
+const lessonFieldLabels: Readonly<Record<keyof LessonForm, string>> = {
+  learnerId: 'Élève', trainingId: 'Formation', instructorId: 'Moniteur', localStart: 'Début', duration: 'Durée', buffer: 'Battement', meetingPoint: 'Lieu',
+  productId: 'Tarif', commercialChange: 'Conditions', reason: 'Motif', agreement: 'Accord', localChoice: 'Heure choisie',
+};
+const lessonFieldOrder = Object.keys(lessonFieldLabels) as (keyof LessonForm)[];
+/**
+ * Rapproche la saisie de la leçon actuelle de l'école. `base` : le formulaire de la version sur laquelle la saisie reposait. Un champ touché
+ * d'un seul côté est gardé, un champ changé des deux côtés garde la saisie et est signalé. Base inconnue (`null`) : aucun champ ne peut être
+ * dit « non retouché », donc chaque écart avec l'école est signalé et la saisie reste intacte.
+ */
+export function reconcileLessonForm(base: LessonForm | null, current: PlanningLesson, learnerId: string | undefined, form: LessonForm): { value: LessonForm; conflicts: (keyof LessonForm)[] } {
+  const school = initialLessonForm(current, learnerId);
+  if (!base) return { value: { ...form, agreement: false }, conflicts: lessonFieldOrder.filter(key => key !== 'agreement' && form[key] !== school[key] && !(key === 'reason' || key === 'productId' || key === 'commercialChange')) };
+  const { value, conflicts } = rebaseConfirmedDraft(base, school, form);
+  return { value: { ...value, agreement: false }, conflicts: conflicts as (keyof LessonForm)[] };
+}
+const conflictMessage = (conflicts: readonly (keyof LessonForm)[]) => `Version actuelle relue. Votre proposition est conservée${conflicts.length
+  ? ` ; l’école a aussi changé : ${conflicts.map(key => lessonFieldLabels[key].toLowerCase()).join(', ')}` : ''} ; relisez les conditions et confirmez de nouveau l’accord.`;
 
 export async function readPlanningCatalogue(schoolId: string) {
   const [learners, members, offerings, policies, products, terms] = await Promise.all([
@@ -59,14 +79,25 @@ export interface LessonEditorInput {
  * `requestId` : la demande de déplacement de l'élève que ce déplacement accepte ; l'école la ferme avec la leçon.
  */
 export function useLessonEditor(input: LessonEditorInput) {
-  const { original, learnerId, catalogue, requestId, restored, onQueued, onRefused } = input;
+  const { original: loadedOriginal, learnerId, catalogue, requestId, restored, onQueued, onRefused } = input;
   const { schoolId, school, membership } = useConsole();
   const lane = useCommandLane();
-  const initial = useRef(initialLessonForm(original, learnerId));
-  const [form, setForm] = useState(restored?.draft.form ?? initial.current);
+  // `base` est la leçon sur laquelle la saisie repose : elle seule part dans If-Match. Elle n'avance que par une relecture réconciliée (#442).
+  const [base, setBase] = useState(loadedOriginal);
+  const original = base;
+  const initial = useRef(initialLessonForm(loadedOriginal, learnerId));
+  // Reprise après refus : la leçon lue maintenant peut être plus récente que celle sur laquelle la saisie reposait. La base de la saisie
+  // voyage avec elle ; la réconciliation se fait avant le premier affichage, jamais en comparant la saisie à la version déjà relue (#442).
+  const [resumed] = useState(() => {
+    const draft = restored?.draft;
+    if (!draft || !loadedOriginal || draft.baseVersion === loadedOriginal.version) return null;
+    return reconcileLessonForm(draft.baseForm ?? null, loadedOriginal, learnerId, draft.form);
+  });
+  const [rebased, setRebased] = useState(resumed !== null);
+  const [form, setForm] = useState(resumed?.value ?? restored?.draft.form ?? initial.current);
   const [step, setStep] = useState<'people' | 'appointment' | 'review'>(original || restored ? 'appointment' : 'people');
   const [review, setReview] = useState<Record<string, unknown> | null>(null);
-  const [checking, setChecking] = useState(false), [problem, setProblem] = useState('');
+  const [checking, setChecking] = useState(false), [problem, setProblem] = useState(() => resumed ? conflictMessage(resumed.conflicts) : '');
   const requestInFlight = useRef(false), submitInFlight = useRef(false), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const tag = original ? `lesson:${original.id}` : 'lesson:new';
@@ -151,6 +182,7 @@ export function useLessonEditor(input: LessonEditorInput) {
       learnerDisplayName: catalogue.learners.find(item => item.id === form.learnerId)?.displayName ?? original?.learnerDisplayName ?? 'Élève',
       instructorDisplayName: catalogue.members.find(item => item.id === form.instructorId)?.displayName ?? original?.instructorDisplayName ?? 'Moniteur',
       meetingPoint: form.meetingPoint.trim(), timeZone: school.timeZone, plannedStart: interval.plannedStart, plannedEnd: interval.plannedEnd, form,
+      baseForm: original ? initial.current : null, baseVersion: original?.version ?? null,
     };
     const intention: LessonIntention = original
       ? { tag, operationId: command.operationId, kind: 'lesson-move', lessonId: original.id, draft }
@@ -172,13 +204,18 @@ export function useLessonEditor(input: LessonEditorInput) {
       if (!mounted.current) return;
       if (current.id !== original.id || current.schoolId !== schoolId || current.trainingId !== original.trainingId) throw new RequestFailure('INVALID_RESPONSE');
       lane.clearOutcome();
+      // Les valeurs de l'école (base V1 -> V2) sont réconciliées champ par champ avec la saisie : un champ touché d'un seul côté est
+      // gardé, un champ changé des deux côtés garde la saisie et est signalé. Base et version avancent ensemble, la confirmation reste explicite.
+      const { value, conflicts } = reconcileLessonForm(initial.current, current, learnerId, form);
+      initial.current = initialLessonForm(current, learnerId);
+      setBase(current); setRebased(true);
       setReview(null); setStep('appointment');
-      setForm(previous => ({ ...previous, buffer: String(current.bufferMinutesSnapshot), duration: previous.commercialChange ? previous.duration : String((Date.parse(current.plannedEnd) - Date.parse(current.plannedStart)) / 60_000), agreement: false }));
-      setProblem('Version actuelle relue. Votre proposition est conservée ; relisez les conditions et confirmez de nouveau l’accord.');
+      setForm(value);
+      setProblem(conflictMessage(conflicts));
     } catch (error) { if (mounted.current) setProblem(readError(error)); }
     finally { requestInFlight.current = false; if (mounted.current) setChecking(false); }
   };
-  return { original, school, form, change, step, setStep, review, checking, problem, outcome, blocked, blockedReason: blocked
+  return { original, rebased, school, form, change, step, setStep, review, checking, problem, outcome, blocked, blockedReason: blocked
       ? 'Une demande de planification attend sa confirmation (voir en haut de la page).' : null,
     locked, dirty, release, trainingRead, assignmentRead,
     learners, trainings, instructors, offering, policy, interval, cancellationDeadline, localInstants, learnerOptions, trainingOptions, instructorOptions,

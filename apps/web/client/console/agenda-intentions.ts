@@ -27,6 +27,12 @@ export interface PlannedLessonDraft {
   readonly plannedEnd: string;
   /** La saisie du formulaire, rendue telle quelle après un refus. Jamais écrite dans le stockage du navigateur. */
   readonly form: LessonForm;
+  /**
+   * Ce sur quoi la saisie reposait : le formulaire de la leçon telle que lue, et sa version. Sans cette base, une reprise après refus ne sait plus
+   * quels champs la personne a réellement retouchés (#442). `null` : une création, ou une base inconnue.
+   */
+  readonly baseForm?: LessonForm | null;
+  readonly baseVersion?: number | null;
 }
 
 interface IntentionBase {

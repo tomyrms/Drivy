@@ -50,6 +50,8 @@ export interface ProgrammeEditorOptions<D> {
   changed: (draft: D) => boolean;
   /** Seule la rubrique concernée est envoyée. */
   body: (draft: D) => Record<string, unknown>;
+  /** Une version plus récente de l'école devient la base de la saisie gardée : le brouillon est rapproché de celle-ci. */
+  rebase?: (draft: D, programme: Programme) => D;
   success: string;
 }
 /** `waitingFor` : la fiche affichée au moment du conflit ; une nouvelle lecture la remplace, l'édition repart alors de la version relue. */
@@ -70,7 +72,7 @@ export function useProgrammeEditor<D>(options: ProgrammeEditorOptions<D>) {
   useUnsavedChanges(dirty);
   // Après relecture, l'édition repart de la version actuelle et le dit.
   useEffect(() => {
-    if (editing?.waitingFor && programme !== editing.waitingFor) setEditing({ ...editing, baseId: programme.head.id, waitingFor: null, rebased: true });
+    if (editing?.waitingFor && programme !== editing.waitingFor) setEditing({ ...editing, draft: options.rebase ? options.rebase(editing.draft, programme) : editing.draft, baseId: programme.head.id, waitingFor: null, rebased: true });
   }, [programme, editing]);
   const tag = formationTag(programme.offeringKey);
   const valid = editing ? options.valid(editing.draft) : false;

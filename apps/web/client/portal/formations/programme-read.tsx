@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../compo
 import { Badge } from '../../components/ui/badge';
 import type { FormationSheet, Programme } from '../../formation-api';
 import { useConsole } from '../../console/context';
+import { cancellationRulesLabel, type RulesSource } from '../../console/formation-model';
 import { dateTime, duration, plural, priceLabel } from './formation-format';
 
 /** Compétences enseignées, dans l'ordre enregistré : une liste à lire, pas un formulaire. */
@@ -15,10 +16,10 @@ export function CompetencyList({ items }: { items: readonly { id?: string; key: 
 }
 
 /** Déroulement et annulation en lecteur confortable ; les sources sont un détail secondaire. */
-export function RulesReader({ procedure }: { procedure: { procedureText: string; cancellationPolicyText: string; sourceUrls: readonly string[] } }) {
+export function RulesReader({ procedure }: { procedure: RulesSource }) {
   return <div className="cat-rules">
     <section><h3>Déroulement d’une leçon</h3><p className="cat-reader">{procedure.procedureText}</p></section>
-    <section><h3>Conditions d’annulation</h3><p className="cat-reader">{procedure.cancellationPolicyText}</p></section>
+    <section><h3>Conditions d’annulation</h3><p className="cat-reader">{procedure.cancellationPolicyText}</p>{procedure.cancellationRules && <p className="cat-muted">{cancellationRulesLabel(procedure.cancellationRules)}</p>}</section>
     {procedure.sourceUrls.length > 0 && <Collapsible className="cat-collapsible">
       <CollapsibleTrigger render={<Button variant="ghost" className="cat-collapsible-trigger" />}>Sources ({procedure.sourceUrls.length})</CollapsibleTrigger>
       <CollapsibleContent><ul className="cat-sources">{procedure.sourceUrls.map(url => <li key={url}><a href={url} target="_blank" rel="noreferrer noopener">{url}<ExternalLink aria-hidden="true" /></a></li>)}</ul></CollapsibleContent>

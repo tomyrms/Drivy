@@ -5,9 +5,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../compo
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu';
 import { Field, FieldContent, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
+import { PortalSelect } from '../components/portal-select';
 import { Switch } from '../../components/ui/switch';
 import { Textarea } from '../../components/ui/textarea';
-import { competencyProblems, emptyCompetency, moveItem, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft } from '../../console/formation-model';
+import { competencyProblems, emptyCompetency, keepRules, moveItem, removeRules, rulesDecisionRequired, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft } from '../../console/formation-model';
 
 /** Nom, état des nouvelles inscriptions et durée habituelle : les seuls réglages généraux d'un parcours. */
 export function GeneralFields({ draft, onChange, disabled, problems, showErrors, nameRequired }: {
@@ -137,6 +138,17 @@ export function RulesFields({ draft, onChange, disabled, showErrors, example }: 
       <Textarea id={`${id}-cancellation`} rows={5} maxLength={4000} value={draft.cancellationPolicyText} disabled={disabled} aria-invalid={showErrors && !!problems.cancellationPolicyText}
         onChange={event => onChange({ ...draft, cancellationPolicyText: event.target.value })} />
       {showErrors && problems.cancellationPolicyText && <FieldError>{problems.cancellationPolicyText}</FieldError>}{proposal('cancellationPolicyText')}
+    </Field>
+    <Field data-invalid={!!problems.cancellationRules && (showErrors || rulesDecisionRequired(draft))}>
+      <FieldLabel htmlFor={`${id}-delay`}>Délai d’annulation (heures avant la leçon, facultatif)</FieldLabel>
+      <Input id={`${id}-delay`} inputMode="numeric" value={draft.delayHours} disabled={disabled} aria-invalid={!!problems.cancellationRules && (showErrors || rulesDecisionRequired(draft))}
+        onChange={event => onChange({ ...draft, delayHours: event.target.value, decided: true, kept: false })} />
+      {draft.delayHours.trim() !== '' && <PortalSelect id={`${id}-late`} label="Après le délai" value={draft.lateAction} disabled={disabled}
+        onValueChange={value => onChange({ ...draft, lateAction: value === 'NO_FEE' ? 'NO_FEE' : 'CONTACT', decided: true, kept: false })}
+        options={[{ value: 'CONTACT', label: 'Contacter l’école' }, { value: 'NO_FEE', label: 'Sans frais' }]} />}
+      {problems.cancellationRules && (showErrors || rulesDecisionRequired(draft)) && <FieldError>{problems.cancellationRules}</FieldError>}
+      {rulesDecisionRequired(draft) && <div className="cat-actions"><Button type="button" variant="outline" disabled={disabled} onClick={() => onChange(keepRules(draft))}>Conserver ce délai</Button>
+        <Button type="button" variant="ghost" disabled={disabled} onClick={() => onChange(removeRules(draft))}>Retirer le délai</Button></div>}
     </Field>
     <Collapsible defaultOpen={draft.sources.trim() !== ''} className="cat-collapsible">
       <CollapsibleTrigger render={<Button type="button" variant="ghost" className="cat-collapsible-trigger" />}>Sources{draft.sources.trim() ? ` (${draft.sources.trim().split(/\s*\n\s*/).length})` : ''}</CollapsibleTrigger>

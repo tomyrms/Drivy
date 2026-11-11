@@ -7,7 +7,7 @@ import type { LaneOutcome } from '../../command-lane';
 import type { FormationSheet, Programme, TextProposalsLite } from '../../formation-api';
 import {
   competenciesChanged, competencyDrafts, competencyPayload, competencyProblems, emptyCompetency, generalChanges, generalDraft, generalProblems,
-  minutes, programmeName, rulesChanged, rulesDraft, rulesPayload, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft,
+  minutes, programmeName, rebaseRules, rulesChanged, rulesDraft, rulesPayload, rulesProblems, type CompetencyDraft, type GeneralDraft, type RulesDraft,
 } from '../../console/formation-model';
 import { ActionSlot, ChangeList, ReviewDialog, StateBadge } from './catalogue-ui';
 import { LaneFeedback, RefusalBanner } from './formation-feedback';
@@ -179,7 +179,7 @@ function RulesSection({ sheet, programme, commands, proposals, onEditing, action
   const editor: ProgrammeEditor<RulesDraft> = useProgrammeEditor<RulesDraft>({ programme, section: 'deroulement', commands,
     success: 'Le déroulement et l’annulation sont enregistrés pour les nouvelles inscriptions.',
     initial: () => rulesDraft(current), valid: draft => rulesProblems(draft).valid, changed: draft => rulesChanged(draft, current) || !current?.approved,
-    body: draft => ({ procedure: rulesPayload(draft) }) });
+    rebase: (draft, next) => rebaseRules(draft, next.procedure), body: draft => ({ procedure: rulesPayload(draft) }) });
   const heading = useRestoreFocus(editor.editing, onEditing);
   if (editor.editing && editor.draft) {
     const changes = rulesChanges(current, editor.draft);

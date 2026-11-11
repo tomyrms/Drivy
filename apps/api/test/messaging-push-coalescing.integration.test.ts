@@ -72,6 +72,7 @@ const run = async () => { const out: Sent[] = []; await processPushBatch(worker,
 /** Simule l'écoulement de la fenêtre de calme sans attendre : l'envoi précédent vieillit, le report devient dû. */
 async function elapseQuietWindow() {
   await pool.query("UPDATE drivy.push_notification SET sent_at=sent_at-make_interval(secs=>$1+1) WHERE status='SENT'", [MESSAGING_PUSH_QUIET_WINDOW_SECONDS]);
+  await pool.query("UPDATE drivy.push_delivery SET completed_at=completed_at-make_interval(secs=>$1+1) WHERE status='SENT'", [MESSAGING_PUSH_QUIET_WINDOW_SECONDS]);
   await pool.query("UPDATE drivy.push_notification SET available_at=now()-interval '1 second' WHERE status='PENDING'");
 }
 

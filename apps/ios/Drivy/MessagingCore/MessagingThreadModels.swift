@@ -246,6 +246,28 @@ struct UnavailableMessagingReportSealing: MessagingReportSealing {
     }
 }
 
+/// Élément d'un signalement, avec sa provenance **déclarée** par le producteur (#97).
+///
+/// Un lot peut mélanger texte/sondage (octets applicatifs legacy, conservés tels quels) et un contenu
+/// Matrix média déjà validé par son type. Le scellement ne devine rien : il n'interprète jamais des
+/// octets de `body`, et un média n'est jamais déduit d'un texte qui ressemblerait à du JSON.
+enum MessagingReportPayload: Sendable, Equatable {
+    /// Texte v1 ou enveloppe applicative v2 : ces octets restent le contenu du message scellé.
+    case legacy(Data)
+    /// Contenu Matrix v3 média : namespace `ch.drivy.messaging`, légende et métadonnées, aucun octet de fichier.
+    case media(MessagingMediaContentV3)
+}
+
+/// Capacité additive de scellement typé (#97) : une seule session pour tout le signalement, ordre et
+/// destinataires identiques au scellement legacy.
+///
+/// Un scelleur qui ne fournit pas cette capacité garde `MessagingReportSealing` inchangé ; un lot qui
+/// contient un média est alors refusé fermé par l'appelant, jamais dégradé en texte.
+protocol MessagingTypedReportSealing: Sendable {
+    func sealReport(_ payloads: [MessagingReportPayload], scope: MessagingScope,
+                    conversationID: UUID) async throws -> [MessagingCiphertext]
+}
+
 /// Statut de traitement d'un signalement (#77) : ouvert, traité ou classé. Les valeurs sont celles de l'API.
 enum MessagingReportStatus: String, Codable, Sendable, CaseIterable, Equatable {
     case open = "OPEN", handled = "HANDLED", dismissed = "DISMISSED"

@@ -41,9 +41,34 @@ export function competenciesChanged(items: readonly CompetencyDraft[], current: 
 
 /* ---------------------------------------------------------------- Déroulement et annulation */
 
-export interface RulesDraft { readonly procedureText: string; readonly cancellationPolicyText: string; readonly sources: string }
-export const rulesDraft = (value: { procedureText: string; cancellationPolicyText: string; sourceUrls: readonly string[] } | null): RulesDraft =>
-  ({ procedureText: value?.procedureText ?? '', cancellationPolicyText: value?.cancellationPolicyText ?? '', sources: value?.sourceUrls.join('\n') ?? '' });
+export type CancellationRules = { readonly cancellationHours: number | null; readonly lateAction: 'CONTACT' | 'NO_FEE' };
+export type RulesSource = { procedureText: string; cancellationPolicyText: string; sourceUrls: readonly string[]; cancellationRules?: CancellationRules | null | undefined };
+/**
+ * `baseRules` et `baseText` : la règle structurée et le texte d'annulation de la version sur laquelle la saisie repose. Tant que
+ * `decided` est faux, la règle n'est pas envoyée (l'école reprend celle de la version précédente) ; si le texte d'annulation change alors
+ * qu'une règle existe, la personne doit la confirmer, la modifier ou la retirer avant l'envoi (#424).
+ */
+export interface RulesDraft {
+  readonly procedureText: string; readonly cancellationPolicyText: string; readonly sources: string;
+  readonly delayHours: string; readonly lateAction: CancellationRules['lateAction']; readonly decided: boolean;
+  /** « Conserver » : la règle de la version de base est renvoyée telle quelle (même sans délai). Toute retouche du délai ou de la suite l'annule. */
+  readonly kept: boolean;
+  readonly baseRules: CancellationRules | null; readonly baseText: string;
+}
+export const rulesDraft = (value: RulesSource | null): RulesDraft => ({
+  procedureText: value?.procedureText ?? '', cancellationPolicyText: value?.cancellationPolicyText ?? '', sources: value?.sourceUrls.join('\n') ?? '',
+  delayHours: value?.cancellationRules?.cancellationHours == null ? '' : String(value.cancellationRules.cancellationHours),
+  lateAction: value?.cancellationRules?.lateAction ?? 'CONTACT', decided: false, kept: false, baseRules: value?.cancellationRules ?? null, baseText: value?.cancellationPolicyText.trim() ?? '',
+});
+export const cancellationRulesLabel = (rules: CancellationRules | null | undefined): string => !rules ? 'Aucun délai structuré'
+  : `${rules.cancellationHours === null ? 'Sans délai' : `Annulation jusqu’à ${rules.cancellationHours} h avant`} · ensuite : ${rules.lateAction === 'NO_FEE' ? 'sans frais' : 'contacter l’école'}`;
+/** Le texte d'annulation a changé alors qu'une règle structurée existait : la décision est à prendre. */
+export const rulesDecisionRequired = (draft: RulesDraft) => draft.baseRules !== null && !draft.decided && draft.cancellationPolicyText.trim() !== draft.baseText;
+const hoursValue = (text: string): number | null | 'invalid' => {
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  return /^\d{1,4}$/.test(trimmed) && Number(trimmed) <= 8760 ? Number(trimmed) : 'invalid';
+};
 export const sourceList = (text: string) => text.split(/\s*\n\s*/).map(item => item.trim()).filter(Boolean);
 export function rulesProblems(draft: RulesDraft) {
   const sources = sourceList(draft.sources);
@@ -51,13 +76,41 @@ export function rulesProblems(draft: RulesDraft) {
     procedureText: filled(draft.procedureText, 4000) ? null : 'Décrivez le déroulement d’une leçon (4 000 caractères au plus).',
     cancellationPolicyText: filled(draft.cancellationPolicyText, 4000) ? null : 'Indiquez les conditions d’annulation (4 000 caractères au plus).',
     sources: sources.length > 30 ? '30 liens au plus.' : sources.some(item => !isHttpURL(item)) ? 'Indiquez une adresse web complète par ligne (https://…).' : null,
+    cancellationRules: hoursValue(draft.delayHours) === 'invalid' ? 'Indiquez un nombre d’heures entier, de 0 à 8 760.' : rulesDecisionRequired(draft) ? 'Le texte d’annulation change : conservez le délai, modifiez-le ou retirez-le.' : null,
   };
   return { ...problems, valid: Object.values(problems).every(value => value === null) };
 }
-export const rulesPayload = (draft: RulesDraft) => ({ procedureText: draft.procedureText.trim(), cancellationPolicyText: draft.cancellationPolicyText.trim(), sourceUrls: sourceList(draft.sources) });
-export function rulesChanged(draft: RulesDraft, current: { procedureText: string; cancellationPolicyText: string; sourceUrls: readonly string[] } | null): boolean {
+/** Conserver exactement la règle de la base (y compris une règle sans délai) : c'est une décision, distincte du retrait. */
+export const keepRules = (draft: RulesDraft): RulesDraft => ({ ...draft, decided: true, kept: true, delayHours: draft.baseRules?.cancellationHours == null ? '' : String(draft.baseRules.cancellationHours), lateAction: draft.baseRules?.lateAction ?? draft.lateAction });
+/** Retrait explicite de la règle structurée. */
+export const removeRules = (draft: RulesDraft): RulesDraft => ({ ...draft, decided: true, kept: false, delayHours: '' });
+/**
+ * Une version plus récente de l'école devient la base : la conservation exacte suit la règle actuelle de l'école, les retouches et le retrait
+ * restent ceux de la personne, et la décision requise est recalculée contre le texte actuel.
+ */
+export function rebaseRules(draft: RulesDraft, current: RulesSource | null): RulesDraft {
+  const next = rulesDraft(current);
+  const base = { ...draft, baseRules: next.baseRules, baseText: next.baseText };
+  return draft.kept ? { ...keepRules(base) } : base;
+}
+/** La règle structurée voulue : `undefined` = non envoyée (reprise de la version précédente), `null` = retrait explicite. */
+export function rulesDecision(draft: RulesDraft): CancellationRules | null | undefined {
+  if (!draft.decided) return undefined;
+  if (draft.kept && draft.baseRules) return draft.baseRules;
+  const hours = hoursValue(draft.delayHours);
+  if (hours === 'invalid' || hours === null) return null;
+  return { cancellationHours: hours, lateAction: draft.lateAction };
+}
+export const rulesPayload = (draft: RulesDraft) => {
+  const cancellationRules = rulesDecision(draft);
+  return { procedureText: draft.procedureText.trim(), cancellationPolicyText: draft.cancellationPolicyText.trim(), sourceUrls: sourceList(draft.sources),
+    ...(cancellationRules === undefined ? {} : { cancellationRules }) };
+};
+export function rulesChanged(draft: RulesDraft, current: RulesSource | null): boolean {
   const next = rulesPayload(draft);
+  const wanted = rulesDecision(draft);
   return !current || next.procedureText !== current.procedureText || next.cancellationPolicyText !== current.cancellationPolicyText
+    || (wanted !== undefined && JSON.stringify(wanted) !== JSON.stringify(current.cancellationRules ?? null))
     || next.sourceUrls.length !== current.sourceUrls.length || next.sourceUrls.some((value, index) => value !== current.sourceUrls[index]);
 }
 

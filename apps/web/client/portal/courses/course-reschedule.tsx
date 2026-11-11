@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { createCommand } from '../../command-core';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
@@ -24,8 +24,26 @@ export function CourseReschedule({ series, catalogue, onBack, onChanged, onRerea
   const { schoolId, school } = useConsole();
   const timeZone = school.timeZone;
   const runner = useCommandRunner();
-  const opened = useMemo(() => formFromSeries(series, timeZone), []);
+  // `base` est la version sur laquelle les dates saisies reposent : elle seule part dans If-Match. Une relecture plus récente ne
+  // l'avance que si les dates de l'école n'ont pas bougé ou si rien n'est saisi ; sinon la personne choisit (#443, même règle que #422).
+  const [base, setBase] = useState(series);
+  const opened = useMemo(() => formFromSeries(base, timeZone), [base]);
   const [sessions, setSessions] = useState<SessionForm[]>(opened.sessions);
+  const newer = series.version > base.version ? series : null;
+  const newerSessions = useMemo(() => newer ? formFromSeries(newer, timeZone).sessions : null, [newer]);
+  const schoolMoved = newerSessions !== null && changedSessions(opened.sessions, newerSessions).size > 0;
+  const mineChanged = changedSessions(opened.sessions, sessions).size > 0;
+  const concurrent = newer !== null && schoolMoved && mineChanged ? newer : null;
+  useEffect(() => {
+    if (!newer || !newerSessions || concurrent) return;
+    if (!mineChanged) setSessions(newerSessions);
+    setBase(newer);
+  }, [newer, concurrent, mineChanged]);
+  const resolveConcurrent = (keep: 'mine' | 'theirs') => {
+    if (!concurrent || !newerSessions) return;
+    if (keep === 'theirs') setSessions(newerSessions);
+    setBase(concurrent); setRefusal(null);
+  };
   const [stage, setStage] = useState<Stage>({ kind: 'list' });
   const [touched, setTouched] = useState(false), [discard, setDiscard] = useState(false);
   const [refusal, setRefusal] = useState<{ code: string; message: string } | null>(null);
@@ -33,7 +51,7 @@ export function CourseReschedule({ series, catalogue, onBack, onChanged, onRerea
   useHeadingFocus(heading, stage.kind, { preventScroll: true });
   const changed = changedSessions(opened.sessions, sessions);
   const dirty = changed.size > 0;
-  const locked = runner.busy || Boolean(runner.pending);
+  const locked = runner.busy || Boolean(runner.pending) || concurrent !== null;
   useUnsavedChanges(dirty && !runner.pending);
   const problems = touched ? validate({ ...opened, sessions }, timeZone).sessions : {};
   const instructors = useMemo(() => {
@@ -45,21 +63,24 @@ export function CourseReschedule({ series, catalogue, onBack, onChanged, onRerea
   const back = () => { if (locked) return; if (dirty) setDiscard(true); else onBack(); };
   const review = () => {
     setTouched(true);
-    if (!dirty || !rescheduleBody(series, sessions, timeZone)) return;
+    if (!dirty || !rescheduleBody(base, sessions, timeZone)) return;
     setStage({ kind: 'review' });
   };
   async function save() {
-    const body = rescheduleBody(series, sessions, timeZone);
+    const body = rescheduleBody(base, sessions, timeZone);
     if (!body || locked) return;
     setRefusal(null);
-    const result = await runner.run(createCommand({ schoolId, kind: 'rescheduleCourseSeries', path: `course-series/${series.id}/reschedule`, ifMatch: series.version,
-      resourceId: series.id, resourceVersion: series.version, body }), 'Les dates sont modifiées.');
+    const result = await runner.run(createCommand({ schoolId, kind: 'rescheduleCourseSeries', path: `course-series/${base.id}/reschedule`, ifMatch: base.version,
+      resourceId: base.id, resourceVersion: base.version, body }), 'Les dates sont modifiées.');
     if (result.status === 'rejected') { if (!result.needsLogin) runner.clearOutcome(); setRefusal({ code: result.code, message: courseErrorMessage(result.code) ?? result.message }); setStage({ kind: 'list' }); return; }
     if (result.status === 'pending') { onBack(); return; }
     runner.clearOutcome(); onChanged(confirmedSeries(result.body), 'Les dates sont modifiées.');
   }
   const stale = refusal?.code === 'VERSION_CONFLICT';
   const feedback = <>
+    {concurrent && <Alert variant="destructive"><AlertTitle>Modifié ailleurs</AlertTitle><AlertDescription>Les dates ont changé à l’école. Choisissez les dates à garder.</AlertDescription>
+      <div className="course-actions"><Button type="button" variant="outline" onClick={() => resolveConcurrent('mine')}>Garder mes dates</Button>
+        <Button type="button" variant="outline" onClick={() => resolveConcurrent('theirs')}>Prendre les dates de l’école</Button></div></Alert>}
     <CommandFeedback outcome={runner.outcome?.needsLogin ? runner.outcome : null} blocked={runner.blockedReason} />
     {refusal && <Alert variant="destructive"><AlertTitle>{stale ? 'Modifié entre-temps' : 'Dates non enregistrées'}</AlertTitle><AlertDescription>{/conservé/.test(refusal.message) ? refusal.message : `${refusal.message} Vos dates sont conservées.`}</AlertDescription>
       {stale && <div className="course-actions"><Button type="button" variant="outline" disabled={locked} onClick={() => { setRefusal(null); onReread(); }}>Relire, garder mes dates</Button></div>}</Alert>}</>;

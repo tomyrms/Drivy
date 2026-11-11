@@ -556,9 +556,12 @@ async function main() {
       ON m.school_id=l.school_id AND m.person_id=l.person_id WHERE m.school_id=$1 AND m.invitation_email=$2`,[school.id,'instructor@example.invalid'])).rows[0].n===0,
       'Rejoindre comme moniteur ne crée aucun dossier élève ni demande de noms scolaires');
     await verifyPersonalWelcome({apiOrigin,schoolId:school.id,kind:'STAFF',getAccessToken:()=>accessTokenFor(staffContext),assert,setStage:value=>{stage=value;}});
-    await staffPage.reload();await staffPage.getByRole('heading',{name:'Vos écoles',exact:true}).waitFor();
-    await staffPage.getByText('Auto-école Recette · synthétique',{exact:true}).waitFor();
-    await staffPage.screenshot({path:resolve(artifactDirectory,'06-equipe-invitation-acceptee-synthetic.png'),fullPage:true});await staffContext.close();
+    stage='accueil STAFF : reload après accueil personnel';await staffPage.reload();
+    stage='accueil STAFF : heading Vos écoles après reload';await staffPage.getByRole('heading',{name:'Vos écoles',exact:true,level:1}).waitFor();
+    stage='accueil STAFF : nom école après reload';await staffPage.getByText('Auto-école Recette · synthétique',{exact:true}).waitFor();
+    stage='accueil STAFF : capture';await staffPage.screenshot({path:resolve(artifactDirectory,'06-equipe-invitation-acceptee-synthetic.png'),fullPage:true});
+    stage='accueil STAFF : fermeture du contexte';await staffContext.close();
+    stage='première leçon : entrée du helper';
     await verifySchoolFirstLesson({browser,page,consumerContext,schoolId:school.id,origin,apiOrigin,keycloakOrigin,administration,
       ownMail,mailLink,deliverInvitation:()=>deliverOneInvitation(mailer!,invitationMail),
       getAccessToken:accessTokenFor,assert,setStage:value=>{stage=value;},artifactDirectory});
