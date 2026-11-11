@@ -28,6 +28,15 @@ import Testing
         for _ in 0..<300 where !condition() { try? await Task.sleep(for: .milliseconds(10)) }
     }
 
+    /// Attend, par sondage borné et non par durée fixe, que le serveur ait reçu un envoi : à ce point la tâche d'envoi a déjà écrit
+    /// le geste envoyé dans le coffre.
+    private func arrived(_ server: CourseSheetServer) async {
+        for _ in 0..<500 {
+            if await !server.keys.isEmpty { return }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     /// Laisse à un envoi qui ne devrait pas avoir lieu le temps de se produire.
     private func settle() async { try? await Task.sleep(for: .milliseconds(200)) }
 
@@ -58,6 +67,10 @@ import Testing
         await stopped.hold(CourseSheetServer.first)
         present(first)
         let operation = try #require(try store.commands(scope: scope(), seriesID: seriesID).first).id
+        // Barrière : la première instance a figé et conservé l'envoi (`sent`), puis est retenue par le serveur. Sans elle, sa tâche
+        // d'envoi avance pendant la lecture de la seconde et remplace la commande que celle-ci croit encore à jour.
+        await arrived(stopped)
+        #expect(await stopped.keys == [operation.uuidString])
 
         // L'app redémarre : une nouvelle feuille relit le coffre.
         let fresh = CourseSheetServer()
@@ -86,6 +99,8 @@ import Testing
         let first = await workspace(stopped, store: store)
         await stopped.hold(CourseSheetServer.first)
         present(first)
+        // Même barrière : la tâche d'envoi de la première instance a fini d'écrire le coffre avant la relecture.
+        await arrived(stopped)
         let reopened = await workspace(CourseSheetServer(), store: store)
         #expect(reopened.hasUnconfirmed)
         reopened.abandon(CourseSheetServer.first)
