@@ -50,6 +50,16 @@ export function useReference(selection: string | undefined, extra: readonly unkn
 
 interface TariffEditing { target: TariffTarget; draft: TariffDraft; snapshot: string }
 
+/**
+ * Cible d'une saisie refusée que l'on reprend. La fiche s'est peut-être déjà actualisée (le refus la relit) : la base suit alors la
+ * version actuelle, que la relecture montre, sinon un second envoi repartirait avec l'ancienne version et serait refusé sans fin.
+ * Une création, ou une base déjà à jour, reste inchangée.
+ */
+export function resumedRefusal(refused: TariffTarget, baseline: Tariff | undefined): { readonly target: TariffTarget; readonly moved: boolean } {
+  if (refused.kind !== 'edit' || !baseline || baseline.head.id === refused.baseId) return { target: refused, moved: false };
+  return { target: { ...refused, baseId: baseline.head.id }, moved: true };
+}
+
 export interface TariffEditorOptions {
   tariffs: readonly Tariff[];
   categoryCode: string | null;
@@ -98,10 +108,7 @@ export function useTariffEditor(options: TariffEditorOptions) {
   const reopen = (next: { target: TariffTarget; draft: TariffDraft; outcome: NonNullable<Outcome> }) => {
     const { target: refused } = next;
     const baseline = refused.kind === 'edit' ? tariffs.find(item => item.productKey === refused.productKey) : undefined;
-    // La fiche s'est peut-être déjà actualisée avant la reprise (le refus la relit) : la base suit alors la version actuelle, que la
-    // relecture montre, sinon un second envoi repartirait avec l'ancienne version et serait refusé de nouveau, à l'infini.
-    const moved = refused.kind === 'edit' && !!baseline && baseline.head.id !== refused.baseId;
-    const resumed: TariffTarget = refused.kind === 'edit' && baseline && moved ? { ...refused, baseId: baseline.head.id } : refused;
+    const { target: resumed, moved } = resumedRefusal(refused, baseline);
     setEditing({ target: resumed, draft: next.draft, snapshot: JSON.stringify(baseline ? tariffDraft(baseline) : next.draft) });
     setAttempted(false);
     setReviewing(refused.kind === 'edit' && refused.quick);

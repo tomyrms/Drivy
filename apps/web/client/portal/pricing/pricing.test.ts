@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { newTariffDraft, tariffDraft } from '../../console/formation-model';
 import type { Tariff } from '../../formation-api';
-import { consultedTariff } from './pricing-controllers';
+import { consultedTariff, resumedRefusal } from './pricing-controllers';
 import { tariffDifferences, tariffSummary } from './tariff-diff';
 import { tariffGroups } from './tariff-groups';
 
@@ -65,5 +65,26 @@ describe('groupes de tarifs', () => {
       tariff({}, { productKey: 'z', status: 'NOT_YET' }), tariff({}, { productKey: 'w', status: 'TERMS_EXPIRED' })]);
     expect(groups.current.map(item => item.productKey)).toEqual(['lesson-45', 'z', 'w']);
     expect(groups.archived.map(item => item.productKey)).toEqual(['x', 'y']);
+  });
+});
+
+describe('reprise d’une saisie refusée (#422)', () => {
+  const refusedEdit = { kind: 'edit', productKey: 'lesson-45', baseId: id(1), quick: false } as const;
+  test('base refusée différente de la version actuelle : la base suit la version actuelle, avec avertissement', () => {
+    const current = tariff({ id: id(9), version: 3 });
+    const { target, moved } = resumedRefusal(refusedEdit, current);
+    expect(target).toEqual({ ...refusedEdit, baseId: id(9) });
+    expect(moved).toBe(true);
+    expect(refusedEdit.baseId).toBe(id(1));
+  });
+  test('base refusée égale à la version actuelle : base inchangée, pas d’avertissement', () => {
+    const { target, moved } = resumedRefusal(refusedEdit, tariff());
+    expect(target).toBe(refusedEdit);
+    expect(moved).toBe(false);
+  });
+  test('fiche absente ou cible de création : cible inchangée', () => {
+    expect(resumedRefusal(refusedEdit, undefined)).toEqual({ target: refusedEdit, moved: false });
+    const create = { kind: 'create' } as const;
+    expect(resumedRefusal(create, tariff({ id: id(9) }))).toEqual({ target: create, moved: false });
   });
 });
