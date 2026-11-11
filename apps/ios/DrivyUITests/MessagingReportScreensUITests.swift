@@ -228,7 +228,8 @@ final class MessagingReportScreensUITests: XCTestCase {
             let text = app.staticTexts["messaging.report.disclosure." + part]
             XCTAssertTrue(text.exists)
             XCTAssertTrue(text.label.contains(first))
-            XCTAssertTrue(text.label.contains(second))
+            // `contains("")` est faux : un second repère vide (blocs « file » et « privacy ») n'en exige aucun.
+            XCTAssertTrue(second.isEmpty || text.label.contains(second), text.label)
             // A partially hittable paragraph is not proof that its complete disclosure was visible.
             var visible = false
             for gesture in 0...10 {
