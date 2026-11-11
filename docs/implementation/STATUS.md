@@ -1,5 +1,27 @@
 # État de la réalisation
 
+## 11 novembre 2026 — Restes de réactivité #106 / #131 / #105
+
+Branche `tomyrms/restes-reactivite-20261111` sur `ff79607a` ; rien déployé, aucune issue fermée. Détail dans
+`docs/implementation/reactivite-restes-20261111.md`.
+
+Exécuté, sur `23487c5b` :
+
+- Tests métier, portée `all` : 632 tests, 0 échec,
+  [43066913872](https://github.com/tomyrms/Drivy/actions/runs/43066913872). Les cinq régressions natives de #131 passent ;
+  le scénario de relais réel de `MatrixMessagingRelayIntegrationTests` passe (une exécution).
+- UI iPhone `SchoolPlanningCancellationUITests` (3) et deux tests de `MessagingLatencyUITests` : verts,
+  [43068112256](https://github.com/tomyrms/Drivy/actions/runs/43068112256).
+- Web : seuils d'attente 5 s / 10 s et onglet dupliqué, tests unitaires ajoutés (6), non rejoués en navigateur.
+
+Échoué ou non qualifié :
+
+- `MessagingLatencyUITests.testFifteenSecondResponseKeepsReactionAndComposerUsable` : rouge dans 43068112256, vert seul dans
+  [43075946109](https://github.com/tomyrms/Drivy/actions/runs/43075946109). Instable, cause non établie.
+- Cause du délai READINESS du relais non expliquée ; annulation avant envoi générale, expiration, migration avec files
+  remplies, multi-appareils, matrice #131 à régénérer.
+- Aucune mesure sur appareil physique (GPS, batterie, VoiceOver).
+
 ## 11 novembre 2026 — Intégration des trois branches d'audit
 
 Branche `tomyrms/issues-manquantes-orchestre-go` : fusion ordinaire, sans conflit,
