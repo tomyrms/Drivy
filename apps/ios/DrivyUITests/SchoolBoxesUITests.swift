@@ -84,7 +84,8 @@ import XCTest
         // La feuille de la leçon s'ouvre (liste paresseuse) : la carte de la demande se rejoint en défilant.
         XCTAssertTrue(app.descendants(matching: .any)["lesson-state"].waitForExistence(timeout: 40), app.debugDescription)
         XCTAssertTrue(scrollTo(app.descendants(matching: .any)["lesson-change-card"], in: app), app.debugDescription)
-        app.swipeDown()
+        // La liste de la feuille est défilée : on ferme par son bouton, un glissement ne ferait que remonter la liste.
+        app.buttons["Fermer"].firstMatch.tap()
         XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].label.contains("Camille"), app.debugDescription)
         backToList(app)
