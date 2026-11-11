@@ -21,6 +21,15 @@ prise sur appareil physique.
 | [43068112256](https://github.com/tomyrms/Drivy/actions/runs/43068112256) | UI iPhone : `MessagingLatencyUITests`, `SchoolPlanningCancellationUITests` | rouge : 6 tests, 1 échec |
 | [43075946109](https://github.com/tomyrms/Drivy/actions/runs/43075946109) | UI iPhone : `MessagingLatencyUITests/testFifteenSecondResponseKeepsReactionAndComposerUsable` seul | vert : 1 test, passé en 60 s |
 
+Deuxième passe, SHA `33640951` (dernier commit de code ; les commits suivants ne touchent que de la documentation) :
+
+| Run | Sélection | Résultat |
+|---|---|---|
+| [43081282148](https://github.com/tomyrms/Drivy/actions/runs/43081282148) | `unit_only`, portée `all`, SHA `deb4995b` | rouge : la compilation de `SchoolCourseFollow131Tests.swift` échoue (ligne 79, « failed to produce diagnostic for expression », expression ternaire à valeurs hétérogènes) ; aucun test exécuté |
+| [43082421565](https://github.com/tomyrms/Drivy/actions/runs/43082421565) | `unit_only`, portée `all`, SHA `33640951` | vert : 632 tests XCTest, 0 échec ; 1 306 tests Swift Testing en 124 suites, tous passés ; les cinq tests de `SchoolCourseFollow131Tests` passent ; `MatrixMessagingRelayIntegrationTests` passe (5,7 s) |
+
+Budget CI : 5 runs sur 6 utilisés (la première passe en a pris 3, la seconde 2).
+
 Détail du run 43066913872 : les cinq tests historiquement rouges passent
 (`anInvitationAndAProfileRecordDoNotShareAVersion`, `aRefusedPermitReviewKeepsTheLessonAndFallsBackToTheWrittenReason`,
 `laterGPSDepartureAlsoWaitsForSavedObjectives`, `lateConfirmationRefreshesTheNoGPSWorkspaceAfterItsSheetClosed`,

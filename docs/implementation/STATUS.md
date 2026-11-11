@@ -19,7 +19,7 @@ Deuxième passe (mêmes jour et branche) :
 - Web, local (Windows/Node, vitest) : `command-migration-106` (5), `draft-rebase-sequence-106` (4), `entry-client-131` (15),
   `member-commands-131` (7) ajoutés ; `npm run typecheck` propre. Suite complète : 943 tests passent, 2 échecs connus de
   `pending-recovery-106` (`playwright-core` absent).
-- iOS : `SchoolCourseFollow131Tests` (5) écrit sans compilateur local ; qualifié seulement par le run indiqué ci-dessous.
+- iOS : `SchoolCourseFollow131Tests` (5) écrit sans compilateur local ; qualifié par le run [43082421565](https://github.com/tomyrms/Drivy/actions/runs/43082421565) (SHA `33640951`, portée `all`) : vert, 632 tests XCTest et 1 306 tests Swift Testing, 0 échec. Un premier run (43081282148) avait échoué à la compilation de ce fichier, corrigé.
 - `matrice-couverture-131.md` mise à jour : huit écritures sans test dédié désormais couvertes par des tests de contrat
   (sans rendu). L1 (expiration générale) reste une décision du porteur ; L2 et L3 documentés dans
   `reactivite-restes-20261111.md`.
