@@ -485,3 +485,19 @@ recueillir le résultat existant à sa livraison, sans relance ni polling.
 Le worktree integration-issues-20261105 est propre à 6c1f8957 au contrôle en
 lecture ; aucun fichier API dans son delta, mais plusieurs fichiers natifs
 messagerie partagés. Aucune modification ni reprise de ses workers ici.
+
+## Intégration des trois branches d'audit — 11 novembre
+
+Fusions ordinaires, sans conflit, sur `6c510c6d` : web `d41948a9`, confidentialité
+iOS `66aa53f7`, identité iOS `971e42da`. `origin/master` inchangé (`2a801eaf`).
+
+| Lot | Issues | Résultat exécuté | Reste |
+|---|---|---|---|
+| D · recette web | #422, #437 | Navigateur formations 43008288499 vert sur `6bfbcdd4` ; typage et 20 tests `pricing` locaux sur l'intégré | `d41948a9` (test unitaire, extraction de `resumedRefusal`) non rejoué en navigateur avant intégration |
+| E · intentions natives | #427, #431, #438 | Agenda 155/155, run 43007000102 (`acb4fc16`) | Rien de physique |
+| F natif · messagerie et clés | #428, #435, #436 | `messaging-recovery` 157/157, run 43023492304 (`971e42da`) | Appareil réel, VoiceOver |
+| G natif · notifications | #441, #445 | `reactivity` 140/140, run 43026012819 (`971e42da`) | APNs réel, appareil |
+| H · boîtes natives | #447, #449 | `SchoolBoxesRefreshTests` verts (43020463769, 43024752953) ; `SchoolBoxesUITests` 6/7 | Test UI d'actualisation #449 rouge, cause non tranchée (tirage simulé ou transport scripté du test) |
+
+Non exécuté : tests d'API (PostgreSQL absent), tout résultat physique. Aucune issue
+fermée. Les runs sur le SHA intégré sont consignés dans la pull request.

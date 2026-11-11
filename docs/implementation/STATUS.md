@@ -1,5 +1,44 @@
 # État de la réalisation
 
+## 11 novembre 2026 — Intégration des trois branches d'audit
+
+Branche `tomyrms/issues-manquantes-orchestre-go` : fusion ordinaire, sans conflit,
+de `audit-web-20261107` (`d41948a9`), `audit-confidentialite-20261107` (`66aa53f7`)
+et `audit-identite-20261107` (`971e42da`) sur `6c510c6d`. `origin/master` reste
+`2a801eaf`. Aucune issue fermée, rien de déployé.
+
+Exécuté, avec SHA :
+
+- Web #422/#437 (tarif repris après refus) : navigateur formations
+  [43008288499](https://github.com/tomyrms/Drivy/actions/runs/43008288499) vert sur
+  `6bfbcdd4`. Le dernier commit de la branche, `d41948a9` (test unitaire et
+  extraction de `resumedRefusal`), n'a pas été rejoué en navigateur avant
+  l'intégration ; en local, typage `apps/web` et tests `pricing` (20) réussis.
+- Lot E #427/#431/#438 : agenda 155/155,
+  [43007000102](https://github.com/tomyrms/Drivy/actions/runs/43007000102) sur `acb4fc16`.
+- Lots F/G natifs #428/#435/#436/#441/#445 : `messaging-recovery` 157/157,
+  [43023492304](https://github.com/tomyrms/Drivy/actions/runs/43023492304), et
+  `reactivity` 140/140,
+  [43026012819](https://github.com/tomyrms/Drivy/actions/runs/43026012819), sur `971e42da`.
+- Lot H #447/#449 : tests métier `SchoolBoxesRefreshTests` verts
+  ([43020463769](https://github.com/tomyrms/Drivy/actions/runs/43020463769),
+  [43024752953](https://github.com/tomyrms/Drivy/actions/runs/43024752953)) ; tests UI
+  `SchoolBoxesUITests` 6/7.
+
+Échoué ou non qualifié :
+
+- `testRefreshChangesTheBoxesAndAFailedBoxKeepsItsReadingUntilRetry` (#449) reste
+  rouge ; la cause n'est pas tranchée (tirage pour actualiser simulé, ou transport
+  scripté du test).
+- Aucun résultat physique : appareil, APNs réel, VoiceOver, GPS, batterie.
+- Les tests d'API exigent PostgreSQL, absent ici : non lancés localement.
+- Localement, la suite complète `apps/web` donne 906 réussis et 2 échecs
+  (`pending-recovery-106`), dus à `playwright-core` absent de ce poste, pas à un
+  changement de code ; Node local 26.8.1 au lieu de 24.
+
+Les résultats de la branche intégrée sont consignés dans la pull request.
+Voir le [suivi des lots](checkup-issues-20261107.md).
+
 ## 10 novembre 2026 — Reprise des lots interrompus
 
 Le porteur autorise GPT-6-Astra et permet également de continuer avec Sonnet
