@@ -43,6 +43,7 @@ import { registerSharing } from './sharing.js';
 import { registerAdministration } from './administration.js';
 import { registerObservationThemes } from './observation-themes.js';
 import { registerObservationRanking } from './observation-ranking.js';
+import { registerObservationPreferences } from './observation-preferences.js';
 import { registerCourses } from './courses.js';
 import { registerCourseEnrollments } from './course-enrollments.js';
 import { registerCourseFacts } from './course-facts.js';
@@ -247,6 +248,7 @@ export function buildApp(options: { metricsClock?: () => Date; gpsOnlyQualificat
   registerAdministration(app,options);
   registerObservationThemes(app,options);
   registerObservationRanking(app,options);
+  registerObservationPreferences(app,options);
   registerCourses(app,options);
   registerCourseEnrollments(app,options);
   registerCourseFacts(app,options);
