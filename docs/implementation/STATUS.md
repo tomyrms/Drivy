@@ -1,5 +1,25 @@
 # État de la réalisation
 
+## 11 novembre 2026 — Restes iOS et messagerie (#449, #97, #78)
+
+Branche `tomyrms/restes-ios-messagerie-20261111`, depuis `origin/master` `ff79607a`. Rien de déployé, aucune issue fermée.
+
+Exécuté sur le runner Apple (`refonte-ios.yml`, SHA `d87f6bf5`) :
+
+- Run 43105920984 : `SchoolBoxesUITests` (7 tests) et `MessagingLatencyUITests/testFifteenSecondResponseKeepsReactionAndComposerUsable`, iPhone, verts (8/8).
+- Run 43105900777 : `MessagingReportScreensUITests` (deux scénarios média mixtes), iPhone et iPad, verts.
+- `python -m unittest scripts.ios.test_messaging_log_guard` : garde statique, aucune sortie console ni journal système dans le code natif de la messagerie (preuve statique seulement).
+
+Causes trouvées :
+
+- #449 : le tirage pour actualiser partait du champ de recherche (défaut du test) ; puis `scrollTo` ne défile que vers le bas (Réessayer dépassé) et la feuille de leçon n'était pas fermée par un glisser (défauts du test).
+- #97 : `contains("")` est faux en Swift (test) ; le témoin de la fixture était recréé à chaque rendu du parent, donc jamais alimenté (défaut de la fixture DEBUG, pas du produit) ; en très grand texte, le glisser rapide dépassait le paragraphe (test).
+- Latence : fenêtre de confirmation de 12 s comptée depuis la fin de la saisie, trop courte sur runner chargé ; la hiérarchie finale montrait la bulle confirmée (test).
+
+Échecs intermédiaires, tous diagnostiqués puis corrigés : 43066986206, 43067201639, 43076595321, 43081428904. Runs annulés : 43081344057 (mauvais SHA, lancé par erreur), 43087261671 et 43087280652 (pause du porteur).
+
+Reste à qualifier : aucun résultat physique (appareil, APNs réel, VoiceOver, GPS, batterie) ; MSG-09 deux appareils réels ; MSG-13, MSG-15/16 et résidence suisse du stockage médias (#68) ; MSG-18 sur appareil ; panne du chat pendant une leçon sur le terrain. Détail dans `docs/qa/messaging-78-20261023.md`. Tests API sans PostgreSQL non relancés ici.
+
 ## 11 novembre 2026 — Intégration des trois branches d'audit
 
 Branche `tomyrms/issues-manquantes-orchestre-go` : fusion ordinaire, sans conflit,
