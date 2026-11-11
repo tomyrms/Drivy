@@ -26,10 +26,13 @@ import XCTest
         composer.tap(); composer.typeText("Saisie conservée")
         XCTAssertTrue((composer.value as? String)?.contains("Saisie conservée") == true)
 
-        // Confirmée : plus aucun état provisoire lu avec la réaction.
+        // Confirmée : plus aucun état provisoire lu avec la réaction. La fenêtre part du geste, pas de la saisie : sur un runner chargé
+        // (run 43068112256, six tests de suite), la bulle est confirmée dans la hiérarchie finale mais après les 12 s qui suivaient
+        // la saisie ; seul, le test passe (run 43075946109).
+        let confirmationBudget = max(12, started.addingTimeInterval(15 + 30).timeIntervalSinceNow)
         XCTAssertTrue(wait(target(in: app), "label CONTAINS 'Cœur 1, vous avez réagi' AND NOT (label CONTAINS 'synchronisation')"
                            + " AND NOT (label CONTAINS 'non confirmée') AND NOT (label CONTAINS 'en attente de connexion')",
-                           timeout: 12), app.debugDescription)
+                           timeout: confirmationBudget), app.debugDescription)
         XCTAssertFalse(uncertain.exists)
         XCTAssertTrue((composer.value as? String)?.contains("Saisie conservée") == true)
         record(visualSeconds: visualSeconds, confirmationSeconds: Date().timeIntervalSince(started), injectedDelay: 15)
