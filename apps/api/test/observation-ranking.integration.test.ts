@@ -12,7 +12,7 @@ const mode=(value:'MANUAL'|'SMART')=>({operationId:randomUUID(),mode:value});
 const refreshes=async()=>(await pool.query("SELECT count(*)::int AS n FROM drivy.operation WHERE command_type='REFRESH_OBSERVATION_RANKING'")).rows[0].n as number;
 /** Vieillit le dernier classement : la prochaine lecture est la première d'un nouveau jour. Chaque appel recule d'un jour de plus. */
 let age=0;
-const yesterday=(member:string)=>pool.query("UPDATE drivy.observation_ranking SET ranked_on=(now() AT TIME ZONE 'Europe/Zurich')::date-$2::int WHERE membership_id=$1",[member,++age]);
+const yesterday=(person:string)=>pool.query("UPDATE drivy.person_observation_preference SET ranked_on=(now() AT TIME ZONE 'Europe/Zurich')::date-$2::int WHERE person_id=$1",[person,++age]);
 /** Une leçon passée du moniteur, avec `uses` signalements d'un thème faits dans la palette. */
 async function pastLesson(daysAgo:number,slot:number,theme:string,competency:string,uses:number,member=id.instructorMember){
  const lesson=randomUUID();
@@ -38,7 +38,7 @@ describe('classement intelligent : préférence du moniteur',()=>{
   expect((await call('GET',path,undefined,null,'demo-alice')).statusCode).toBe(403);
   expect((await call('GET',path,undefined,null,'demo-foreign')).statusCode).toBe(403);
   expect((await call('PUT',path,mode('SMART'),1,'demo-alice')).statusCode).toBe(403);
-  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.observation_ranking')).rows[0].n).toBe(0);
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.person_observation_preference')).rows[0].n).toBe(0);
  });
  it('un moniteur sans droit de gestion l’active : sans historique, le classement est l’ordre de l’école',async()=>{
   const body=mode('SMART'),saved=await call('PUT',path,body,1);expect(saved.statusCode,saved.body).toBe(200);
@@ -49,10 +49,14 @@ describe('classement intelligent : préférence du moniteur',()=>{
   expect((await call('PUT',path,mode('MANUAL'),1)).json().code).toBe('VERSION_CONFLICT');
   expect((await call('PUT',path,mode('MANUAL'),null)).statusCode).toBe(428);
   for(const invalid of [{operationId:randomUUID(),mode:'AUTO'},{operationId:randomUUID()},{...mode('SMART'),order:manual}])expect((await call('PUT',path,invalid,2)).statusCode).toBe(400);
-  expect((await call('GET',`/operations/${body.operationId}`)).json().data).toMatchObject({commandType:'SAVE_OBSERVATION_RANKING',resourceType:'ObservationRanking',resourceId:id.instructorMember,resourceVersion:2});
+  expect((await call('GET',`/operations/${body.operationId}`)).json().data).toMatchObject({commandType:'SAVE_OBSERVATION_RANKING',resourceType:'ObservationPreferences',resourceId:id.instructor,resourceVersion:2});
   expect((await pool.query('SELECT action FROM drivy.audit_event WHERE operation_id=$1',[body.operationId])).rows).toEqual([{action:'ObservationRankingSaved'}]);
   // La preuve appartient à son auteur.
   expect((await call('GET',`/operations/${body.operationId}`,undefined,null,'demo-other-instructor')).statusCode).toBeGreaterThanOrEqual(403);
+ });
+ it('l’ancienne table par école n’est plus jamais écrite : le classement vit sur le compte',async()=>{
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.observation_ranking')).rows[0].n).toBe(0);
+  expect((await pool.query('SELECT version,mode FROM drivy.person_observation_preference WHERE person_id=$1',[id.instructor])).rows).toEqual([{version:2,mode:'SMART'}]);
  });
  it('le retour au mode manuel ne publie plus d’ordre et n’a jamais touché à l’ordre de l’école',async()=>{
   const before=(await call('GET',themes)).json().data;
@@ -76,7 +80,7 @@ describe('classement intelligent : habitudes',()=>{
   await pastLesson(1,5,'anticipation',look,1);await pastLesson(2,5,'motorway',look,40);
   const removed=await pastLesson(1,7,'give-way',look,2);await pastLesson(2,7,'give-way',look,2);
   await pool.query('UPDATE drivy.geo_observation SET removed_at=now(),text=NULL WHERE lesson_id=$1',[removed]);
-  const before=(await call('GET',path)).json().data;await yesterday(id.instructorMember);
+  const before=(await call('GET',path)).json().data;await yesterday(id.instructor);
   const after=(await call('GET',path)).json().data;
   expect(after.order).toEqual(before.order);expect(after.version).toBe(before.version);
  });
@@ -84,7 +88,7 @@ describe('classement intelligent : habitudes',()=>{
   // « Céder le passage » devient une habitude nette sur trois jours.
   for(let day=1;day<=3;day++)for(const slot of [9,11,13])await pastLesson(day,slot,'give-way',look,3);
   const stored=(await call('GET',path)).json().data,count=await refreshes();
-  await yesterday(id.instructorMember);
+  await yesterday(id.instructor);
   const [first,second]=await Promise.all([call('GET',path),call('GET',path)]);
   expect(first.statusCode,first.body).toBe(200);expect(second.statusCode,second.body).toBe(200);
   expect(first.json().data).toEqual(second.json().data);expect(await refreshes()).toBe(count+1);
@@ -120,11 +124,11 @@ describe('classement intelligent : habitudes',()=>{
   expect((await call('GET',path)).json().data.order).toEqual(before.order);
   // Masqué pendant un reclassement, il en sort ; réaffiché ensuite, il part en fin jusqu'au lendemain…
   const again=await call('PUT',themes,{operationId:randomUUID(),themes:hidden},shown.json().data.version,'demo-admin');expect(again.statusCode,again.body).toBe(200);
-  await yesterday(id.instructorMember);expect((await call('GET',path)).json().data.order).not.toContain('indicators');
+  await yesterday(id.instructor);expect((await call('GET',path)).json().data.order).not.toContain('indicators');
   const back=await call('PUT',themes,{operationId:randomUUID(),themes:original},again.json().data.version,'demo-admin');expect(back.statusCode,back.body).toBe(200);
   expect((await call('GET',path)).json().data.order.at(-1)).toBe('indicators');
   // … où son historique le replace d'un coup, sans la limite de montée.
-  await yesterday(id.instructorMember);expect((await call('GET',path)).json().data.order.indexOf('indicators')).toBeLessThan(2);
+  await yesterday(id.instructor);expect((await call('GET',path)).json().data.order.indexOf('indicators')).toBeLessThan(2);
  });
 });
 
@@ -135,9 +139,10 @@ describe('classement intelligent : isolation',()=>{
   const on=await call('PUT',path,mode('SMART'),1,'demo-other-instructor');expect(on.statusCode,on.body).toBe(200);
   expect(on.json().data.order).toEqual(manual);
   expect((await call('GET',path,undefined,null,'demo-admin')).json().data).toMatchObject({id:id.adminMember,version:1,mode:'MANUAL'});
-  // Le même compte, administrateur d'une autre école, y garde un classement distinct.
-  const elsewhere=await call('GET',schoolB);expect(elsewhere.statusCode,elsewhere.body).toBe(200);
-  expect(elsewhere.json().data).toMatchObject({id:id.instructorMemberB,schoolId:id.schoolB,version:1,mode:'MANUAL',order:[]});
+  // Le même compte, administrateur d'une autre école, y retrouve le même classement : il est celui du compte.
+  const mine=(await call('GET',path)).json().data,elsewhere=await call('GET',schoolB);expect(elsewhere.statusCode,elsewhere.body).toBe(200);
+  expect(elsewhere.json().data).toMatchObject({id:id.instructorMemberB,schoolId:id.schoolB,version:mine.version,mode:'SMART'});
+  expect(elsewhere.json().data.order).toHaveLength(manual.length);
   expect((await call('GET',schoolB,undefined,null,'demo-admin')).statusCode).toBe(403);
   expect((await call('GET',path)).json().data.mode).toBe('SMART');
  });
@@ -146,10 +151,10 @@ describe('classement intelligent : isolation',()=>{
   try{
    await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');
    await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject','demo-other-instructor',true),set_config('app.school_id',$2,true),set_config('app.person_id',$3,true),set_config('app.membership_id',$4,true)",[issuer,id.schoolA,id.otherInstructor,id.otherInstructorMember]);
-   expect((await db.query('SELECT membership_id FROM drivy.observation_ranking')).rows).toEqual([{membership_id:id.otherInstructorMember}]);
-   expect((await db.query("UPDATE drivy.observation_ranking SET mode='MANUAL' WHERE membership_id=$1",[id.instructorMember])).rowCount).toBe(0);
+   expect((await db.query('SELECT person_id FROM drivy.person_observation_preference')).rows).toEqual([{person_id:id.otherInstructor}]);
+   expect((await db.query("UPDATE drivy.person_observation_preference SET mode='MANUAL' WHERE person_id=$1",[id.instructor])).rowCount).toBe(0);
    // Les usages lus sont ceux du compte courant : aucun pour ce collègue.
-   expect((await db.query("SELECT * FROM drivy.observation_theme_usage($1,'Europe/Zurich')",[id.schoolA])).rows).toEqual([]);
+   expect((await db.query("SELECT * FROM drivy.observation_account_usage('Europe/Zurich')")).rows).toEqual([]);
    await db.query('ROLLBACK');
   }finally{db.release();}
  });
