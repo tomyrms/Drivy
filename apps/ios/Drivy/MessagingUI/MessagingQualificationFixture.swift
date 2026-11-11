@@ -54,14 +54,23 @@ struct MessagingQualificationFixture: View {
                 let inbox = MessagingInboxView(workspace: workspace, keys: keys, currentScope: { [scope = workspace.scope] in scope })
                 if let reportWitness {
                     return AnyView(inbox.safeAreaInset(edge: .bottom) {
-                            Text(reportWitness.summary).font(.caption2)
-                                .dynamicTypeSize(.medium)
-                                .accessibilityIdentifier("messaging.report.fixture")
+                        MessagingReportWitnessLabel(witness: reportWitness)
                     })
                 }
                 return AnyView(inbox)
             }))
             .environment(\.locale, Locale(identifier: "fr_CH"))
+    }
+}
+
+/// Témoin du signalement : une vue à part lit le compteur dans son propre corps, pour que SwiftUI en suive chaque changement
+/// (lu dans la fermeture d'un modificateur, il est resté figé à l'état initial pendant les parcours de médias signalés).
+private struct MessagingReportWitnessLabel: View {
+    let witness: MessagingReportQualificationWitness
+    var body: some View {
+        Text(witness.summary).font(.caption2)
+            .dynamicTypeSize(.medium)
+            .accessibilityIdentifier("messaging.report.fixture")
     }
 }
 

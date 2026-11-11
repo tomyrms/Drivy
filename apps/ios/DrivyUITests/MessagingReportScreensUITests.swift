@@ -173,7 +173,7 @@ final class MessagingReportScreensUITests: XCTestCase {
         let witness = app.staticTexts["messaging.report.fixture"]
         XCTAssertTrue(witness.waitForExistence(timeout: 10))
         let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", expected), object: witness)
-        XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 10), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 10), .completed, "Témoin attendu \(expected), relevé \(witness.label)")
     }
 
     private func dismissReportConfirmation(in app: XCUIApplication) {
