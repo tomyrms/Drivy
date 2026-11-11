@@ -11,8 +11,8 @@ import XCTest
 /// - un refus de demande confirmé dans la fiche de la leçon relit la boîte au retour, sans tirage.
 @MainActor final class SchoolBoxesUITests: XCTestCase {
     /// Deux examens à renseigner de la même formation du dossier fictif ; 155 est la dernière ligne de la boîte.
-    private let earlierExamIdentifier = "exam-10000000-0000-4000-8000-000000000153"
-    private let laterExamIdentifier = "exam-10000000-0000-4000-8000-000000000155"
+    private let earlierExamIdentifier = "exam-actions-10000000-0000-4000-8000-000000000153"
+    private let laterExamIdentifier = "exam-actions-10000000-0000-4000-8000-000000000155"
 
     private func launch(_ screen: String) -> XCUIApplication {
         let app = XCUIApplication()
@@ -81,7 +81,9 @@ import XCTest
         XCTAssertTrue(scrollTo(last, in: app), "Dernière demande inaccessible : \(app.debugDescription)")
         last.tap()
         // La cible : la fiche de la leçon qui porte la demande, sur le dossier de son élève.
-        XCTAssertTrue(app.descendants(matching: .any)["lesson-change-card"].waitForExistence(timeout: 40), app.debugDescription)
+        // La feuille de la leçon s'ouvre (liste paresseuse) : la carte de la demande se rejoint en défilant.
+        XCTAssertTrue(app.descendants(matching: .any)["lesson-state"].waitForExistence(timeout: 40), app.debugDescription)
+        XCTAssertTrue(scrollTo(app.descendants(matching: .any)["lesson-change-card"], in: app), app.debugDescription)
         app.swipeDown()
         XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].waitForExistence(timeout: 20), app.debugDescription)
         XCTAssertTrue(app.descendants(matching: .any)["learner-profile-first-name"].label.contains("Camille"), app.debugDescription)
