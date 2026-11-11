@@ -173,18 +173,26 @@ struct MessagingInboxPreview: Equatable, Sendable {
         if let conversationID { visibleMessageConversationID = conversationID }
         resuming = true
         defer { resuming = false; resumeGeneration += 1 }
+        // #428 : un seul chemin de reprise. Le journal durable est rapproché de la file mémoire, puis chaque
+        // conversation est drainée par son propre exécuteur (jamais par un envoi direct du coordinateur).
+        // Pendant la restauration, aucun exécuteur ne démarre : un envoi mis en file à ce moment ne doit pas passer
+        // devant une entrée plus ancienne du journal. Les exécuteurs sont lancés ensuite, jamais attendus ici : un envoi
+        // retenu (réponse en attente) ne bloque ni la lecture de cette conversation ni celle des autres.
+        restoringDurableSends = true
+        let restoreFailure = await restoreDurableSends()
+        restoringDurableSends = false
+        // Un échec de restauration du journal est traité AVANT toute reprise : sans l'ordre durable, un envoi plus récent
+        // pourrait partir devant une entrée plus ancienne du journal. Rien ne repart ; la prochaine reprise réessaie.
+        if let failure = restoreFailure { recordFailure(failure); return }
         resumeSends()
-        let results = await outbox.flushPending(currentScope: scope)
-        for result in results {
-            if case .failed(let failure) = result,
-               failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached {
-                recordFailure(failure)
-                return
-            }
-        }
         guard currentScope() == scope else { recordFailure(.contextChanged); return }
         await loadConversations()
         if let conversationID, visibleMessageConversationID == conversationID { await loadMessages(conversationID) }
+        // Le contexte a pu changer pendant les lectures (un envoi en vol l'a constaté) : une lecture tardive en échec ne
+        // doit pas masquer ce verdict par une simple indisponibilité.
+        guard currentScope() == scope else { recordFailure(.contextChanged); return }
+        // Signalé après les lectures, qui remettent l'erreur à zéro quand elles réussissent.
+        reportSendBlock()
     }
 
     func loadMessages(_ conversationID: UUID, more: Bool = false, marksVisible: Bool = true) async {
@@ -564,6 +572,43 @@ struct MessagingInboxPreview: Equatable, Sendable {
             guard await Task(operation: { await self.markRead(conversationID: id, sequence: wanted) }).value else { return }
         }
         requestedRead[id] = nil
+    }
+
+    /// #445 : alerte de premier plan d'un fil visible. Elle n'est absorbée qu'après une lecture autorisée de SA séquence :
+    /// ce message précis doit figurer dans le fil visible (lisible, ni masqué ni illisible), chargé si besoin, puis être
+    /// confirmé lu par le serveur. Un message plus récent ne prouve rien sur lui. `stillPresented` rend faux dès que la
+    /// présentation du fil qui a demandé la lecture n'est plus la courante : vérifié après le chargement et avant l'accusé.
+    /// Tout échec renvoie faux : l'appelant présente alors l'alerte, rien n'est perdu ni inventé.
+    func absorbForegroundAlert(_ conversationID: UUID, sequence: Int,
+                               stillPresented: @Sendable () -> Bool = { true }) async -> Bool {
+        guard currentScope() == scope, sequence >= 1, readable(sequence, in: conversationID),
+              stillPresented() else { return false }
+        if !isListed(sequence, in: conversationID) {
+            await loadMessages(conversationID, marksVisible: false)
+            guard currentScope() == scope, stillPresented() else { return false }
+        }
+        // Le message doit être listé ET son contenu réellement disponible (déchiffré, authentifié, affichable) : l'absence de
+        // code d'échec ne prouve rien (protection indisponible, message vidé, contexte changé en cours de route).
+        guard await hasDisplayableContent(sequence, in: conversationID) else { return false }
+        guard currentScope() == scope, stillPresented() else { return false }
+        if (readStates[conversationID]?.lastReadSequence ?? 0) >= sequence { return true }
+        return await markRead(conversationID: conversationID, sequence: sequence)
+    }
+
+    /// Le message de cette séquence exacte figure dans le fil visible, lisible, sans échec de déchiffrement connu.
+    private func isListed(_ sequence: Int, in conversationID: UUID) -> Bool {
+        visibleMessages(conversationID).contains {
+            $0.meta.sequence == sequence && readable(sequence, in: conversationID) && decryptionCodes[$0.id] == nil
+        }
+    }
+
+    /// #445 : le contenu du message est effectivement chargé (déchiffré par le chemin normal) et reste lisible après la lecture.
+    private func hasDisplayableContent(_ sequence: Int, in conversationID: UUID) async -> Bool {
+        guard let message = visibleMessages(conversationID).first(where: {
+            $0.meta.sequence == sequence && readable(sequence, in: conversationID) && decryptionCodes[$0.id] == nil
+        }) else { return false }
+        guard await content(for: message) != nil else { return false }
+        return decryptionCodes[message.id] == nil && contents[message.id] != nil
     }
 
     /// Somme des non-lus messagerie connus de ce contexte.
@@ -1424,6 +1469,17 @@ struct MessagingInboxPreview: Equatable, Sendable {
     /// File FIFO par conversation : un seul envoi en vol, l'ordre serveur suit l'ordre de mise en file.
     private var sendQueues: [UUID: [MessagingPending]] = [:]
     private var sendInFlight: Set<UUID> = []
+    /// Panne de protection ou limite d'appareils rencontrée par un envoi pendant une reprise (#428) : signalée une fois.
+    private var sendBlock: MessagingFailure?
+    /// Restauration du journal en cours : les exécuteurs attendent qu'elle ait fixé l'ordre durable (#428).
+    private var restoringDurableSends = false
+
+    /// Signale une fois la panne de protection ou la limite d'appareils rencontrée pendant une reprise.
+    private func reportSendBlock() {
+        guard let failure = sendBlock, currentScope() == scope else { return }
+        sendBlock = nil
+        recordFailure(failure)
+    }
     private var sendClocks: [UUID: UUID] = [:]
 
     func sendStatus(_ clientMessageID: UUID) -> SendStatus? { sendStates[clientMessageID] }
@@ -1438,6 +1494,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
     func scheduleSend(_ entry: MessagingPending) {
         let id = entry.clientMessageID
         if case .accepted? = sendStates[id] { return }
+        // Déjà en vol (restauré par une reprise pendant la mise en file) : jamais remis en file.
+        if let current = sendStates[id], current == .sending || current == .slow || current == .unconfirmed { return }
         var queue = sendQueues[entry.conversationID] ?? []
         if !queue.contains(where: { $0.clientMessageID == id }) { queue.append(entry) }
         sendQueues[entry.conversationID] = queue
@@ -1452,17 +1510,57 @@ struct MessagingInboxPreview: Equatable, Sendable {
         scheduleSend(entry)
     }
 
-    private func resumeSends() {
-        guard !networkOffline else { return }
+    /// #428 : reprise unique, appelée par le retour actif, le retour réseau et l'actualisation.
+    /// « Hors connexion » et « incertain » (hors requête en vol) repassent en file avec le MÊME clientMessageID,
+    /// dédupliqué par le serveur : un M1 confirmé au retour libère M2, un M1 encore incertain le retient.
+    @discardableResult private func resumeSends() -> [Task<Void, Never>] {
+        guard !networkOffline else { return [] }
+        var runners: [Task<Void, Never>] = []
         for (conversationID, queue) in sendQueues {
-            for entry in queue where sendStates[entry.clientMessageID] == .offline { sendStates[entry.clientMessageID] = .queued }
-            drainSends(conversationID)
+            for entry in queue {
+                let id = entry.clientMessageID
+                if sendStates[id] == .offline || (sendStates[id] == .uncertain && sendClocks[id] == nil) { sendStates[id] = .queued }
+            }
+            if let runner = drainSends(conversationID) { runners.append(runner) }
         }
+        return runners
     }
 
-    private func drainSends(_ conversationID: UUID) {
-        guard !networkOffline, sendInFlight.insert(conversationID).inserted else { return }
-        Task { await self.runSends(conversationID) }
+    /// Entrées du journal durable inconnues de la mémoire (relance de l'app) : remises en file dans l'ordre du journal.
+    /// Une entrée connue (en file, en vol, refusée ou acceptée) n'est jamais touchée.
+    private func restoreDurableSends() async -> MessagingFailure? {
+        let entries: [MessagingPending]
+        do { entries = try await outbox.pending(currentScope: scope) }
+        catch let failure as MessagingFailure { return failure }
+        catch { return .protectionUnavailable }
+        guard currentScope() == scope else { return .contextChanged }
+        // L'ordre du journal est l'ordre durable : par conversation, les entrées du journal (déjà en file ou inconnues)
+        // passent d'abord dans l'ordre du journal, puis celles que le journal ne contient pas. Une entrée connue hors
+        // file (refusée, acceptée) n'est jamais remise en file : un refus définitif n'est pas rejoué.
+        var journal: [UUID: [MessagingPending]] = [:]
+        for entry in entries { journal[entry.conversationID, default: []].append(entry) }
+        for (conversationID, durable) in journal {
+            let queue = sendQueues[conversationID] ?? []
+            var ordered: [MessagingPending] = []
+            for entry in durable {
+                let id = entry.clientMessageID
+                if let known = queue.first(where: { $0.clientMessageID == id }) {
+                    ordered.append(known)
+                } else if sendStates[id] == nil {
+                    ordered.append(entry)
+                    sendStates[id] = networkOffline ? .offline : .queued
+                }
+            }
+            let inJournal = Set(ordered.map(\.clientMessageID))
+            ordered += queue.filter { !inJournal.contains($0.clientMessageID) }
+            sendQueues[conversationID] = ordered
+        }
+        return nil
+    }
+
+    @discardableResult private func drainSends(_ conversationID: UUID) -> Task<Void, Never>? {
+        guard !networkOffline, !restoringDurableSends, sendInFlight.insert(conversationID).inserted else { return nil }
+        return Task { await self.runSends(conversationID) }
     }
 
     private func runSends(_ conversationID: UUID) async {
@@ -1501,6 +1599,7 @@ struct MessagingInboxPreview: Equatable, Sendable {
                     // Refus explicite : contenu conservé dans la file protégée, les suivants peuvent partir.
                     sendStates[id] = .failed(failure)
                     sendQueues[conversationID]?.removeAll { $0.clientMessageID == id }
+                    if failure == .protectionUnavailable || failure == .deviceLimitReached { sendBlock = failure }
                 }
             }
             if case .accepted? = sendStates[id] { continue }
@@ -1508,6 +1607,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
             break
         }
         if accepted { Task { await self.loadMessages(conversationID, marksVisible: false) } }
+        // Pendant une actualisation, c'est elle qui signale (après ses lectures) ; sinon l'exécuteur le fait lui-même.
+        if !resuming { reportSendBlock() }
     }
 
     private func scheduleSendLatency(_ id: UUID, clock: UUID) {

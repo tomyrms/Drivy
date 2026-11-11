@@ -337,8 +337,10 @@ struct SchoolPushRevocationStorageError: Error {}
     /// App ouverte : la notification reste visible, le bandeau des places proposées se relit de son côté.
     nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification)
         async -> UNNotificationPresentationOptions {
-        // #103 : conversation active, bas du fil affiché → le fil se met à jour, pas de bannière en double.
-        if MessagingActiveConversation.suppresses(notification.request.content.userInfo) { return [] }
+        // #103/#445 : conversation active, bas du fil affiché et rien ne le recouvre → lecture autorisée de la séquence
+        // visée, puis pas de bannière en double. Si la lecture échoue, la séquence manque ou une feuille recouvre le fil,
+        // l'alerte est présentée comme avant.
+        if await MessagingActiveConversation.absorbs(notification.request.content.userInfo) { return [] }
         return [.banner, .list, .sound]
     }
 

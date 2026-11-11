@@ -635,7 +635,13 @@ struct MessagingConversationView: View {
 
     private var lifecycle: MessagingThreadLifecycle {
         MessagingThreadLifecycle(workspace: workspace, thread: thread, connectivity: connectivity,
-                                 conversationID: conversationID, scenePhase: scenePhase)
+                                 conversationID: conversationID, scenePhase: scenePhase, covered: coveringScreen)
+    }
+
+    /// Une feuille, une confirmation ou l'écran des membres recouvre le fil : l'alerte de premier plan reste visible (#445).
+    private var coveringScreen: Bool {
+        showSearch || showMembers || reportSent || thread.menuTarget != nil || thread.showPollComposer
+            || thread.votersFor != nil || thread.mediaComposer?.preview != nil || confirmationPresented.wrappedValue
     }
 
     // MARK: Fil
@@ -767,6 +773,7 @@ private struct MessagingThreadLifecycle: ViewModifier {
     let connectivity: MessagingConnectivity
     let conversationID: UUID
     let scenePhase: ScenePhase
+    let covered: Bool
 
     private var composer: MessagingComposerModel { thread.composer }
     /// Dernier message reçu (hors envois locaux), pour décider du suivi du bas.
@@ -780,9 +787,13 @@ private struct MessagingThreadLifecycle: ViewModifier {
                     await workspace.conversationViewed(conversationID, upTo: seq)
                 }
             }
-            .task(id: thread.atBottom) {
+            .task(id: [thread.atBottom, covered, scenePhase == .active]) {
+                // #445 : le fil est « visible » seulement actif, au bas du fil et sans rien par-dessus.
+                let workspace = workspace, conversationID = conversationID
                 MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID,
-                                                atBottom: thread.atBottom)
+                    atBottom: thread.atBottom && scenePhase == .active, covered: covered) { sequence, stillPresented in
+                    await workspace.absorbForegroundAlert(conversationID, sequence: sequence, stillPresented: stillPresented)
+                }
             }
             .onAppear { connectivity.start() }
             .onDisappear { thread.cancelMenu(); thread.mediaComposer?.suspend(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }

@@ -96,6 +96,9 @@ final class MessagingCoreTests: XCTestCase {
         context.value = nil
         await service.releaseResponse()
         await refresh.value
+        // #428 : l'actualisation n'attend plus l'exécuteur d'envoi (un envoi retenu ne bloque pas la lecture) ; le
+        // changement de contexte est constaté par l'exécuteur, qui rend la main juste après. On attend ce verdict.
+        for _ in 0..<500 where workspace.error != .contextChanged { try? await Task.sleep(for: .milliseconds(5)) }
         XCTAssertEqual(workspace.error, .contextChanged)
         let pending = try await store.entries(scope: scope)
         XCTAssertEqual(pending.count, 1)

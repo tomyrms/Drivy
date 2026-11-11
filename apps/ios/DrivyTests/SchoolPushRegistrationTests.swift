@@ -164,19 +164,28 @@ struct SchoolPushRegistrationTests {
         store.refusesToStore = true
         let center = makeCenter(server, store: store)
         await openSession(center)
+        await server.hold("/v1/me/push-devices")
 
         center.didRegister(deviceToken: dataA)
-        #expect(await eventually { await server.puts == 1 })
+        // Barrière : le premier PUT est retenu en vol. Les envois sont sérialisés, donc aucun autre ne peut le précéder
+        // (la tâche de `sessionStarted` et celle de `didRegister` passent l'une après l'autre, jamais ensemble).
+        #expect(await eventually { await server.waiting("/v1/me/push-devices") == 1 })
+        #expect(await server.puts == 1)
+        #expect(center.registeredToken == nil && store.record == nil)
+
+        // Le Trousseau refuse : réponse reçue mais secret perdu, donc jamais « enregistré ». Les envois en file et l'essai
+        // explicite refont chacun leur PUT ; `upload()` passe après toute la file, tout est donc terminé à son retour.
+        await server.unhold("/v1/me/push-devices")
         await center.upload()
-        // Le secret n'a pas pu être gardé : pas de « enregistré », et chaque nouvel essai refait le PUT.
         #expect(center.registeredToken == nil && store.record == nil)
         #expect(await server.puts >= 2)
+        #expect(await server.maxConcurrentPuts == 1)
 
         store.refusesToStore = false
         await center.upload()
         #expect(center.registeredToken == tokenA)
         let keptSecret = await server.currentSecret
-        #expect(store.record?.secret == keptSecret)
+        #expect(keptSecret != nil && store.record == SchoolPushRevocationRecord(token: tokenA, secret: keptSecret ?? ""))
         let puts = await server.puts
         await center.upload()                                   // enregistré : plus rien à envoyer
         #expect(await server.puts == puts)
@@ -250,6 +259,13 @@ private actor RotatingPushServer: SchoolHTTPTransport {
 
     func hold(_ path: String) { held.insert(path) }
     func waiting(_ path: String) -> Int { waiters.filter { $0.path == path }.count }
+    /// Lève la retenue et libère toutes les requêtes en attente ; les suivantes passent sans attendre.
+    func unhold(_ path: String) {
+        held.remove(path)
+        let released = waiters.filter { $0.path == path }
+        waiters.removeAll { $0.path == path }
+        for waiter in released { waiter.continuation.resume() }
+    }
     /// Laisse passer une seule requête retenue ; la retenue reste active pour les suivantes.
     func releaseOne(_ path: String) {
         guard let index = waiters.firstIndex(where: { $0.path == path }) else { return }
