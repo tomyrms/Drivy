@@ -14,12 +14,22 @@ Exécuté, sur `23487c5b` :
   [43068112256](https://github.com/tomyrms/Drivy/actions/runs/43068112256).
 - Web : seuils d'attente 5 s / 10 s et onglet dupliqué, tests unitaires ajoutés (6), non rejoués en navigateur.
 
+Deuxième passe (mêmes jour et branche) :
+
+- Web, local (Windows/Node, vitest) : `command-migration-106` (5), `draft-rebase-sequence-106` (4), `entry-client-131` (15),
+  `member-commands-131` (7) ajoutés ; `npm run typecheck` propre. Suite complète : 943 tests passent, 2 échecs connus de
+  `pending-recovery-106` (`playwright-core` absent).
+- iOS : `SchoolCourseFollow131Tests` (5) écrit sans compilateur local ; qualifié seulement par le run indiqué ci-dessous.
+- `matrice-couverture-131.md` mise à jour : huit écritures sans test dédié désormais couvertes par des tests de contrat
+  (sans rendu). L1 (expiration générale) reste une décision du porteur ; L2 et L3 documentés dans
+  `reactivite-restes-20261111.md`.
+
 Échoué ou non qualifié :
 
 - `MessagingLatencyUITests.testFifteenSecondResponseKeepsReactionAndComposerUsable` : rouge dans 43068112256, vert seul dans
   [43075946109](https://github.com/tomyrms/Drivy/actions/runs/43075946109). Instable, cause non établie.
 - Cause du délai READINESS du relais non expliquée ; annulation avant envoi générale, expiration, migration avec files
-  remplies, multi-appareils, matrice #131 à régénérer.
+  remplies côté iOS, multi-appareils, parcours rendus des formulaires web.
 - Aucune mesure sur appareil physique (GPS, batterie, VoiceOver).
 
 ## 11 novembre 2026 — Intégration des trois branches d'audit
