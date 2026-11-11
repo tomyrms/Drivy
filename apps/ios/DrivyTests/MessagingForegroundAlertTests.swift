@@ -22,10 +22,12 @@ final class MessagingForegroundAlertTests: XCTestCase {
     }
 
     private func workspace(sequences: [Int], directory: AlertDirectory, loadFailure: MessagingFailure? = nil,
-                           onMessages: @escaping @Sendable () -> Void = {}) -> MessagingWorkspace {
+                           onMessages: @escaping @Sendable () -> Void = {},
+                           cipher: any MessagingCryptography = AlertCipher(),
+                           messages: [MessagingWireMessage]? = nil) -> MessagingWorkspace {
         let box = AlertScopeBox(scope)
-        let service = AlertService(messages: sequences.map(message), failure: loadFailure, onMessages: onMessages)
-        return MessagingWorkspace(scope: scope, service: service, directory: directory,
+        let service = AlertService(messages: messages ?? sequences.map(message), failure: loadFailure, onMessages: onMessages)
+        return MessagingWorkspace(scope: scope, service: service, cryptography: cipher, directory: directory,
                                   notifications: AlertNotifications(),
                                   mutationLatency: MessagingMutationLatency(slow: .seconds(60), unconfirmed: .seconds(120)),
                                   currentScope: { box.value })
@@ -91,6 +93,35 @@ final class MessagingForegroundAlertTests: XCTestCase {
         let reads = await directory.reads
         XCTAssertTrue(reads.isEmpty, "Aucun accusé pour une séquence absente du fil")
         XCTAssertNil(workspace.readStates[conversation]?.lastReadSequence)
+    }
+
+    /// #445 : aucun code de déchiffrement n'est posé (la panne n'est pas un échec de déchiffrement du message),
+    /// mais le contenu reste indisponible : le message est listé, l'alerte est gardée et aucun accusé n'est envoyé.
+    func testUnavailableContentWithoutADecryptionCodeKeepsTheAlertAndSendsNoRead() async {
+        let directory = AlertDirectory()
+        let workspace = workspace(sequences: [5], directory: directory, cipher: AlertCipher(failure: .protectionUnavailable))
+        let absorbed = await workspace.absorbForegroundAlert(conversation, sequence: 5)
+        XCTAssertFalse(absorbed)
+        let target = workspace.visibleMessages(conversation).first { $0.meta.sequence == 5 }
+        XCTAssertNotNil(target, "Le message est bien listé dans le fil")
+        XCTAssertNil(target.flatMap { workspace.decryptionCodes[$0.id] }, "Aucun code de déchiffrement n'explique l'indisponibilité")
+        XCTAssertNil(workspace.contents[target?.id ?? UUID()])
+        let reads = await directory.reads
+        XCTAssertTrue(reads.isEmpty, "Contenu indisponible : aucun accusé de lecture")
+        XCTAssertNil(workspace.readStates[conversation]?.lastReadSequence)
+    }
+
+    /// Message listé sans contenu chiffré (pas encore disponible) : même résultat, alerte gardée.
+    func testListedMessageWithoutCiphertextKeepsTheAlertAndSendsNoRead() async {
+        let directory = AlertDirectory()
+        var empty = message(sequence: 5)
+        empty = MessagingWireMessage(id: empty.id, conversationID: conversation, schoolID: school, senderID: other,
+                                     acceptedAt: empty.acceptedAt, ciphertext: nil, meta: empty.meta)
+        let workspace = workspace(sequences: [], directory: directory, messages: [empty])
+        let absorbed = await workspace.absorbForegroundAlert(conversation, sequence: 5)
+        XCTAssertFalse(absorbed)
+        let reads = await directory.reads
+        XCTAssertTrue(reads.isEmpty)
     }
 
     /// La présentation prend fin pendant le chargement : l'accusé n'est pas envoyé.
@@ -197,6 +228,19 @@ final class MessagingForegroundAlertTests: XCTestCase {
         MessagingActiveConversation.clear(conversation)
         let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
         XCTAssertFalse(absorbed)
+    }
+}
+
+/// Déchiffrement synthétique : renvoie la charge, ou échoue avec une panne qui n'est pas un échec de déchiffrement.
+private struct AlertCipher: MessagingCryptography {
+    var failure: MessagingFailure?
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { failure == nil }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: plaintext, expectedMembersEpoch: 1)
+    }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data {
+        if let failure { throw failure }
+        return ciphertext.payload
     }
 }
 

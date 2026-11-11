@@ -578,17 +578,20 @@ struct MessagingInboxPreview: Equatable, Sendable {
                                stillPresented: @Sendable () -> Bool = { true }) async -> Bool {
         guard currentScope() == scope, sequence >= 1, readable(sequence, in: conversationID),
               stillPresented() else { return false }
-        if !isDisplayable(sequence, in: conversationID) {
+        if !isListed(sequence, in: conversationID) {
             await loadMessages(conversationID, marksVisible: false)
             guard currentScope() == scope, stillPresented() else { return false }
         }
-        guard isDisplayable(sequence, in: conversationID) else { return false }
+        // Le message doit être listé ET son contenu réellement disponible (déchiffré, authentifié, affichable) : l'absence de
+        // code d'échec ne prouve rien (protection indisponible, message vidé, contexte changé en cours de route).
+        guard await hasDisplayableContent(sequence, in: conversationID) else { return false }
+        guard currentScope() == scope, stillPresented() else { return false }
         if (readStates[conversationID]?.lastReadSequence ?? 0) >= sequence { return true }
         return await markRead(conversationID: conversationID, sequence: sequence)
     }
 
-    /// Le message de cette séquence exacte est dans le fil visible, lisible, et son déchiffrement n'a pas échoué.
-    private func isDisplayable(_ sequence: Int, in conversationID: UUID) -> Bool {
+    /// Le message de cette séquence exacte figure dans le fil visible, lisible, sans échec de déchiffrement connu.
+    private func isListed(_ sequence: Int, in conversationID: UUID) -> Bool {
         visibleMessages(conversationID).contains {
             $0.meta.sequence == sequence && readable(sequence, in: conversationID) && decryptionCodes[$0.id] == nil
         }
@@ -596,6 +599,15 @@ struct MessagingInboxPreview: Equatable, Sendable {
 
     /// Somme des non-lus messagerie connus de ce contexte.
     var unreadTotal: Int { conversations.reduce(0) { $0 + max(0, $1.unreadCount ?? 0) } }
+    /// #445 : le contenu du message est effectivement chargé (déchiffré par le chemin normal) et reste lisible après la lecture.
+    private func hasDisplayableContent(_ sequence: Int, in conversationID: UUID) async -> Bool {
+        guard let message = visibleMessages(conversationID).first(where: {
+            $0.meta.sequence == sequence && readable(sequence, in: conversationID) && decryptionCodes[$0.id] == nil
+        }) else { return false }
+        guard await content(for: message) != nil else { return false }
+        return decryptionCodes[message.id] == nil && contents[message.id] != nil
+    }
+
 
     /// Non-lus après une lecture confirmée : zéro si la borne couvre la conversation, sinon les seuls
     /// messages reçus (pas les miens) chargés au-delà de la borne, sans dépasser le compteur serveur.
