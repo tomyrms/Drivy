@@ -74,7 +74,31 @@ struct SchoolBrowserView: View {
     private var managesExams: Bool {
         workspace.school?.status == "ACTIVE" && workspace.membership?.roles.contains { $0 == "ADMIN" || $0 == "INSTRUCTOR" } == true
     }
-    private var examKey: String { "\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(managesExams)" }
+    /// Compte, école, époque d'accès, rôles et droits : une lecture d'un autre contexte n'est jamais gardée ni appliquée.
+    private var examKey: String {
+        "\(workspace.person?.personId.uuidString ?? ""):\(workspace.membership?.membershipId.uuidString ?? ""):\(workspace.membership?.schoolId.uuidString ?? ""):\(workspace.membership?.accessEpoch ?? 0):\(workspace.membership?.roles.joined(separator: ",") ?? ""):\(workspace.membership?.grants.joined(separator: ",") ?? ""):\(managesExams)"
+    }
+
+    private func reloadDirectory() async {
+        guard workspace.school?.status == "ACTIVE" else { return }
+        await workspace.searchLearners(workspace.searchText)
+    }
+
+    private func reloadRequests() async {
+        await requestInbox.load(client: managesExams ? agendaClient?.lessonChangeClient : nil, schoolID: workspace.membership?.schoolId, context: examKey)
+    }
+
+    private func reloadExams() async {
+        await pendingExams.load(client: managesExams ? agendaClient?.examClient : nil, schoolID: workspace.membership?.schoolId, context: examKey)
+    }
+
+    /// Annuaire, demandes et examens du même contexte, en parallèle : une section en panne n'arrête pas les autres.
+    private func reloadAll() async {
+        async let directory: Void = reloadDirectory()
+        async let requests: Void = reloadRequests()
+        async let exams: Void = reloadExams()
+        _ = await (directory, requests, exams)
+    }
 
     private var trimmedSearch: String { workspace.searchText.trimmingCharacters(in: .whitespacesAndNewlines) }
 
@@ -155,8 +179,18 @@ struct SchoolBrowserView: View {
                     .listRowSeparator(.hidden)
                     .drivyPlainRows()
             }
-            SchoolPendingRequestRows(items: requestInbox.items) { workspace.selectLearner($0) }
-            SchoolPendingExamRows(items: pendingExams.items) { workspace.selectLearner($0) }
+            if let message = requestInbox.errorMessage {
+                SchoolErrorNotice(message: message, retry: { Task { await reloadRequests() } }, retryIdentifier: "pending-requests-retry")
+                    .listRowSeparator(.hidden)
+                    .drivyPlainRows()
+            }
+            SchoolPendingRequestRows(items: requestInbox.items) { workspace.open($0) }
+            if let message = pendingExams.errorMessage {
+                SchoolErrorNotice(message: message, retry: { Task { await reloadExams() } }, retryIdentifier: "pending-exams-retry")
+                    .listRowSeparator(.hidden)
+                    .drivyPlainRows()
+            }
+            SchoolPendingExamRows(items: pendingExams.items) { workspace.open($0) }
             let references = homonymReferences
             ForEach(workspace.learners) { learner in
                 NavigationLink(value: learner.id) {
@@ -188,14 +222,16 @@ struct SchoolBrowserView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(DrivyTheme.surface)
-        .refreshable {
-            guard workspace.school?.status == "ACTIVE" else { return }
-            await workspace.searchLearners(workspace.searchText)
-        }
+        .refreshable { await reloadAll() }
         // Retour sur l’onglet : un élève qui vient de rejoindre l’école apparaît, sans effacer la liste.
         .task { await workspace.refreshLearners() }
-        .task(id: examKey) { await requestInbox.load(client: managesExams ? agendaClient?.lessonChangeClient : nil, schoolID: workspace.membership?.schoolId) }
-        .task(id: examKey) { await pendingExams.load(client: managesExams ? agendaClient?.examClient : nil, schoolID: workspace.membership?.schoolId) }
+        .task(id: examKey) { await reloadRequests() }
+        .task(id: examKey) { await reloadExams() }
+        // Un traitement confirmé dans le parcours (demande de leçon, résultat d'examen) : relecture une fois, sans minuterie.
+        .onChange(of: SchoolBoxesSignal.shared.revision) { _, _ in
+            Task { await reloadRequests() }
+            Task { await reloadExams() }
+        }
     }
 
     @ViewBuilder private var emptyLearners: some View {

@@ -5,7 +5,7 @@ import SwiftUI
 /// No production credentials, persistent school store or network transport is created.
 struct SchoolVisualReview: View {
     /// Shell screens routed here directly by DrivyApp, with the real tab bar.
-    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "agenda-mixed", "agenda-mixed-month", "agenda-courses-error", "agenda-courses-stale", "learners", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi", "dossier-incomplete"]
+    static let shellScreens: Set<String> = ["home-tabs", "home-to-finish", "agenda", "agenda-month", "agenda-mixed", "agenda-mixed-month", "agenda-courses-error", "agenda-courses-stale", "learners", "learners-boxes-9", "learners-boxes-20", "learners-boxes-refresh", "learner", "dossier", "profile-tab", "learner-home", "learner-progress", "learner-profile", "learner-profile-multi", "live", "live-waiting", "dossier-multi", "dossier-incomplete"]
 
     let screen: String
     @State private var context: SchoolVisualContext?
@@ -97,7 +97,7 @@ struct SchoolVisualReview: View {
                     // L’affichage retenu est posé avant l’onglet : « agenda » reste la semaine d’une capture à l’autre.
                     let _ = SchoolAgendaDisplayMode.remember(screen == "agenda-month" || screen == "agenda-mixed-month" ? .month : .week)
                     SchoolVisualShell(context: context, tab: .agenda)
-                case "learners":
+                case "learners", "learners-boxes-9", "learners-boxes-20", "learners-boxes-refresh":
                     SchoolVisualShell(context: context, tab: .learners)
                 case "learner", "dossier", "dossier-multi", "dossier-incomplete":
                     SchoolVisualShell(context: context, tab: .learners, learnerID: SchoolVisualData.learnerID)
@@ -215,6 +215,9 @@ struct SchoolVisualShell: View {
         let transport: any SchoolHTTPTransport
         if let agendaScenario, SchoolAgendaVisualData.screens.contains(agendaScenario) {
             transport = try SchoolAgendaVisualData.transport(overriding: fixtures, scenario: agendaScenario)
+        } else if let boxes = agendaScenario, boxes.hasPrefix("learners-boxes-") {
+            // Lectures des examens lentes pour tous les écrans des boîtes ; lectures qui changent pour « refresh » seulement.
+            transport = SchoolBoxesScriptTransport(base: SchoolVisualTransport(responses: fixtures), scriptsReads: boxes == "learners-boxes-refresh")
         } else {
             transport = SchoolVisualTransport(responses: fixtures)
         }

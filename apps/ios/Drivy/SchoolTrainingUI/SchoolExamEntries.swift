@@ -60,22 +60,22 @@ extension View {
     }
 }
 
-/// Lecture des examens à renseigner pour la liste des élèves du personnel.
-@MainActor @Observable final class SchoolPendingExamsModel {
-    private(set) var items: [SchoolExamListItem] = []
+typealias SchoolPendingExamsModel = SchoolBoxReading<SchoolExamListItem>
 
-    func load(client: SchoolExamClient?, schoolID: UUID?) async {
-        guard let client, let schoolID else { items = []; return }
-        // Une panne garde la dernière lecture : ne rien afficher de plus n'est pas dire qu'il n'y a rien à renseigner.
-        guard let loaded = try? await client.list(schoolID: schoolID, filter: .pendingResult) else { return }
-        items = loaded
+extension SchoolBoxReading where Item == SchoolExamListItem {
+    /// Lecture des examens à renseigner pour la liste des élèves du personnel.
+    func load(client: SchoolExamClient?, schoolID: UUID?, context: String) async {
+        let fetch: (() async throws -> [SchoolExamListItem])?
+        if let client, let schoolID { fetch = { try await client.list(schoolID: schoolID, filter: .pendingResult) } } else { fetch = nil }
+        await load(context: context, failure: "Les examens n’ont pas pu être relus.", fetch: fetch)
     }
 }
 
 /// Les examens à renseigner, en tête de la liste d'élèves : chaque ligne ouvre le dossier de l'élève.
 struct SchoolPendingExamRows: View {
     let items: [SchoolExamListItem]
-    let open: (UUID) -> Void
+    let open: (SchoolBoxTarget) -> Void
+    @State private var expanded = false
 
     var body: some View {
         if !items.isEmpty {
@@ -85,8 +85,8 @@ struct SchoolPendingExamRows: View {
                 .accessibilityAddTraits(.isHeader)
                 .listRowSeparator(.hidden)
                 .drivyPlainRows()
-            ForEach(items.prefix(8)) { item in
-                Button { open(item.learnerId) } label: {
+            ForEach(SchoolBoxExpansion.visible(items, expanded: expanded)) { item in
+                Button { open(SchoolBoxTarget(learnerID: item.learnerId, trainingID: item.exam.trainingId, examID: item.exam.id)) } label: {
                     DrivyEntityRow(title: item.learnerDisplayName.isEmpty ? "Élève" : item.learnerDisplayName,
                         meta: SchoolExamText.summary(item.exam), leading: .symbol("exclamationmark.circle"), showsChevron: true)
                 }
@@ -96,12 +96,9 @@ struct SchoolPendingExamRows: View {
                 .listRowSeparator(.hidden)
                 .drivyPlainRows()
             }
-            if items.count > 8 {
-                Text("\(items.count - 8) autres examens à renseigner")
-                    .font(.footnote)
-                    .foregroundStyle(DrivyTheme.muted)
-                    .listRowSeparator(.hidden)
-                    .drivyPlainRows()
+            if SchoolBoxExpansion.canExpand(items.count) {
+                SchoolBoxExpansionButton(expanded: $expanded, hidden: SchoolBoxExpansion.hiddenCount(items.count, expanded: expanded),
+                    noun: "examens", identifier: "pending-exams-expansion")
             }
         }
     }

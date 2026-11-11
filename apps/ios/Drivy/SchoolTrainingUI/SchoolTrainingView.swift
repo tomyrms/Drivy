@@ -172,6 +172,15 @@ struct SchoolTrainingScreen: View {
             if phase == .active, isCurrent { Task { await SchoolLessonFeed(models: models).reload(ifOlderThan: 30) } }
         }
         .sheet(item: $opened, onDismiss: { Task { await refresh() } }) { lesson in lessonSheet(lesson) }
+        .onChange(of: workspace.boxTarget, initial: true) { _, _ in openTargetedLesson() }
+        .onChange(of: isCurrent) { _, _ in openTargetedLesson() }
+    }
+
+    /// La demande choisie dans une boîte de l'onglet Élèves : la fiche de sa leçon s'ouvre, une seule fois, sur le bon élève.
+    private func openTargetedLesson() {
+        guard isCurrent, let target = workspace.boxTarget, target.learnerID == learner.id, let lessonID = target.lessonID else { return }
+        workspace.resolveBoxTarget(target)
+        opened = OpenedLesson(id: lessonID)
     }
 
     @ViewBuilder private func lessonSheet(_ lesson: OpenedLesson) -> some View {
@@ -911,6 +920,22 @@ private struct SchoolTrainingContent: View {
     private func instructorName(of lesson: SchoolLesson) -> String? {
         lesson.instructorMembershipId == workspace.membership?.membershipId ? nil : lesson.providedInstructorName
     }
+    /// L'examen visé depuis une boîte, s'il appartient à cet élève et à cette formation.
+    private func examTarget(in model: SchoolTrainingWorkspace) -> SchoolBoxTarget? {
+        guard let target = workspace.boxTarget, target.learnerID == learner.id, target.trainingID == model.trainingID,
+              target.examID != nil else { return nil }
+        return target
+    }
+
+    private func resolveExamTarget(in model: SchoolTrainingWorkspace, _ outcome: SchoolExamFocusOutcome) {
+        guard let target = examTarget(in: model) else { return }
+        switch outcome {
+        case .found: workspace.resolveBoxTarget(target)
+        case .missing: workspace.resolveBoxTarget(target, message: "Cet examen n’est plus dans la liste de la formation.")
+        case .unavailable: workspace.resolveBoxTarget(target, message: "Les examens de cette formation ne sont pas accessibles.")
+        }
+    }
+
     /// Une compétence relève du référentiel de sa catégorie : la progression se lit un permis à la fois, sans rien
     /// additionner d’un permis à l’autre. `namesPermit` : le filtre voisin dit « Tous les permis », le permis montré
     /// est donc nommé ici.
@@ -927,7 +952,8 @@ private struct SchoolTrainingContent: View {
                     // Changer de permis : la progression de l’autre remplace celle-ci, replis refermés.
                     .id(model.trainingID)
                     // Examens de la formation (#54) : prévus, reportés, résultats saisis par le personnel.
-                    SchoolTrainingExamsSection(training: model, schoolTimeZone: zone, grouped: groupsBlocks)
+                    SchoolTrainingExamsSection(training: model, schoolTimeZone: zone, grouped: groupsBlocks,
+                        focusExamID: examTarget(in: model)?.examID, resolveFocus: { resolveExamTarget(in: model, $0) })
                         .id("exams-\(model.trainingID.uuidString)")
                 }
             }

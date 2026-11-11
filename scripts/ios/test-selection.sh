@@ -76,7 +76,7 @@ elif [[ "$unit_only" == 1 ]]; then
   elif [[ "$unit_test_scope" == reactivity ]]; then
     for suite in SchoolNotificationSettingsTests AccountIntentStorageTests SchoolCommandSchedulingTests \
       SchoolNotificationTests SchoolCommandOutboxTests SchoolPlanningDefaultsTests SchoolInvitationWorkspaceTests \
-      SchoolPushCenterTests SchoolPushRegistrationTests; do
+      SchoolPushCenterTests SchoolPushRegistrationTests SchoolBoxesRefreshTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reports ]]; then

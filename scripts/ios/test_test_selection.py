@@ -27,7 +27,7 @@ REPORT_SUITES = ['SchoolReportFlowTests', 'SchoolLessonFinishTests', 'SchoolLess
 REPORT_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REPORT_SUITES]
 REACTIVITY_SUITES = ['SchoolNotificationSettingsTests', 'AccountIntentStorageTests', 'SchoolCommandSchedulingTests',
                      'SchoolNotificationTests', 'SchoolCommandOutboxTests', 'SchoolPlanningDefaultsTests', 'SchoolInvitationWorkspaceTests',
-                     'SchoolPushCenterTests', 'SchoolPushRegistrationTests']
+                     'SchoolPushCenterTests', 'SchoolPushRegistrationTests', 'SchoolBoxesRefreshTests']
 REACTIVITY_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REACTIVITY_SUITES]
 MESSAGING_SUITES = ['MessagingOptimisticMutationTests', 'MessagingProtectedStoreTests', 'MessagingCoreTests', 'MessagingHTTPTransportTests',
                     'MessagingExyteThreadTests', 'MessagingThreadTests', 'MessagingMediaContentTests', 'MatrixMessagingCryptographyTests',
