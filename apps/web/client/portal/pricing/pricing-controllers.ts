@@ -98,11 +98,15 @@ export function useTariffEditor(options: TariffEditorOptions) {
   const reopen = (next: { target: TariffTarget; draft: TariffDraft; outcome: NonNullable<Outcome> }) => {
     const { target: refused } = next;
     const baseline = refused.kind === 'edit' ? tariffs.find(item => item.productKey === refused.productKey) : undefined;
-    setEditing({ target: refused, draft: next.draft, snapshot: JSON.stringify(baseline ? tariffDraft(baseline) : next.draft) });
+    // La fiche s'est peut-être déjà actualisée avant la reprise (le refus la relit) : la base suit alors la version actuelle, que la
+    // relecture montre, sinon un second envoi repartirait avec l'ancienne version et serait refusé de nouveau, à l'infini.
+    const moved = refused.kind === 'edit' && !!baseline && baseline.head.id !== refused.baseId;
+    const resumed: TariffTarget = refused.kind === 'edit' && baseline && moved ? { ...refused, baseId: baseline.head.id } : refused;
+    setEditing({ target: resumed, draft: next.draft, snapshot: JSON.stringify(baseline ? tariffDraft(baseline) : next.draft) });
     setAttempted(false);
     setReviewing(refused.kind === 'edit' && refused.quick);
     setRestored(next.outcome);
-    setRebased(changedCodes.has(next.outcome.code ?? ''));
+    setRebased(moved || changedCodes.has(next.outcome.code ?? ''));
     setWaitingFor(baseline);
     commands.clearOutcome();
   };
