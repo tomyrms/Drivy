@@ -1,6 +1,6 @@
 import type { Programme } from '../../formation-api';
 import { generalChanges, type CompetencyDraft, type GeneralDraft, type RulesDraft } from '../../console/formation-model';
-import { rulesPayload } from '../../console/formation-model';
+import { cancellationRulesLabel, rulesDecision, rulesPayload, type RulesSource } from '../../console/formation-model';
 import { duration } from './formation-format';
 
 /** Différences présentées avant confirmation : calculées contre la version enregistrée, jamais contre un état local. */
@@ -29,12 +29,14 @@ export function competencyChanges(before: readonly Competency[], after: readonly
 }
 export const competencyChangeCount = (changes: CompetencyChanges) => changes.added.length + changes.removed.length + changes.edited.length + (changes.reordered ? 1 : 0);
 
-export interface TextChange { field: 'procedureText' | 'cancellationPolicyText' | 'sources'; label: string; before: string; after: string }
-export function rulesChanges(current: { procedureText: string; cancellationPolicyText: string; sourceUrls: readonly string[] } | null, draft: RulesDraft): TextChange[] {
+export interface TextChange { field: 'procedureText' | 'cancellationPolicyText' | 'cancellationRules' | 'sources'; label: string; before: string; after: string }
+export function rulesChanges(current: RulesSource | null, draft: RulesDraft): TextChange[] {
   const next = rulesPayload(draft);
+  const rules = rulesDecision(draft);
   const rows: TextChange[] = [
     { field: 'procedureText', label: 'Déroulement d’une leçon', before: current?.procedureText ?? '', after: next.procedureText },
     { field: 'cancellationPolicyText', label: 'Conditions d’annulation', before: current?.cancellationPolicyText ?? '', after: next.cancellationPolicyText },
+    { field: 'cancellationRules', label: 'Délai d’annulation', before: cancellationRulesLabel(current?.cancellationRules), after: cancellationRulesLabel(rules === undefined ? current?.cancellationRules : rules) },
     { field: 'sources', label: 'Sources', before: (current?.sourceUrls ?? []).join('\n'), after: next.sourceUrls.join('\n') },
   ];
   return rows.filter(row => row.before !== row.after);

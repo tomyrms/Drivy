@@ -113,7 +113,8 @@ export function registerAdministration(app:FastifyInstance,options:{pool:Pool;ve
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });
 
- // Une formation ne se clôt pas tant qu'une leçon attend un résultat, même après son créneau prévu.
+ // Une formation ne se clôt pas tant qu'une leçon attend un résultat, même après son créneau prévu. Les examens à venir, eux, ne bloquent pas
+ // (aucune commande n'annule un examen : le blocage serait sans issue) ; leur nombre est renvoyé et leur correction reste ouverte.
  app.post(`${base}/trainings/:trainingId/transition`,async(r,reply)=>{
   empty.parse(r.query);const body=transitionBody.parse(r.body),{schoolId,trainingId}=params(r);checkIdempotency(r.headers['idempotency-key'],body.operationId);
   const expected=requireVersion(r.headers['if-match']),identity=await options.verifyToken(r.headers.authorization);
@@ -135,8 +136,12 @@ export function registerAdministration(app:FastifyInstance,options:{pool:Pool;ve
    await db.query(`UPDATE drivy.training t SET status=$3::text,version=t.version+1,
     closed_on=CASE WHEN $3::text IN('COMPLETED','CANCELLED') THEN greatest(coalesce(t.started_on,x.today),x.today) END
     FROM (SELECT (now() AT TIME ZONE $4::text)::date AS today) x WHERE t.school_id=$1 AND t.id=$2`,[schoolId,trainingId,body.targetStatus,school.timeZone]);
+   // Examens à venir (ou accompagnement encore à venir) : la transition ne les efface ni ne les retire, elle les signale. Ils restent
+   // modifiables, déplaçables et dépourvus d'accompagnement via les commandes d'examen, sans réactiver la formation (#444).
+   const scheduledExams=Number((await db.query<{n:string}>(`SELECT count(*) AS n FROM drivy.exam WHERE school_id=$1 AND training_id=$2 AND status='SCHEDULED'
+    AND (starts_at>now() OR escort_ends_at>now())`,[schoolId,trainingId])).rows[0]!.n);
    const scope=adminScope(actor);
-   return {data:{...await getTraining(db,schoolId,scope.actor,scope.member,trainingId!),plannedLessonCount:planned},resourceType:'Training',resourceId:trainingId!,action:'TrainingStatusChanged',reason:body.reason,changedFields:['status','closedOn']};
+   return {data:{...await getTraining(db,schoolId,scope.actor,scope.member,trainingId!),plannedLessonCount:planned,scheduledExamCount:scheduledExams},resourceType:'Training',resourceId:trainingId!,action:'TrainingStatusChanged',reason:body.reason,changedFields:['status','closedOn']};
   });
   reply.header('ETag',`"${data.version}"`);return envelope(data,r);
  });

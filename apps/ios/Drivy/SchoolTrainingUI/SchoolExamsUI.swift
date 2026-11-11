@@ -111,6 +111,7 @@ import SwiftUI
             try? outbox.remove(command)
             queued.removeAll { $0.id == command.id }
             state = next; pending = nil
+            SchoolBoxesSignal.shared.settled()
             return true
         } catch is CancellationError {
             return false
@@ -135,6 +136,9 @@ import SwiftUI
         pending = nil; errorMessage = nil
         await load()
     }
+
+    /// Prévoir un examen n'est proposé que pour une formation connue ACTIVE ; un statut inconnu ou autre le ferme (#444).
+    static func allowsCreation(trainingStatus: String?) -> Bool { trainingStatus == "ACTIVE" }
 
     static func message(_ error: Error) -> String {
         guard let failure = error as? SchoolPlanningFailure else { return "L’opération n’a pas pu aboutir. Réessaie." }
@@ -170,37 +174,96 @@ private func examKindTitle(_ kind: SchoolExam.Kind?) -> String {
     }
 }
 
+/// Ce que la lecture des examens dit de l'examen visé depuis une boîte de l'onglet Élèves.
+enum SchoolExamFocusOutcome: Equatable { case found, missing, unavailable }
+
 /// Les examens d'une formation, sous sa progression : prévus, reportés, absents, réussis ou échoués, chacun avec sa tentative.
 struct SchoolTrainingExamsSection: View {
     let training: SchoolTrainingWorkspace
     let schoolTimeZone: String
     /// Vrai sur la page de l'élève, où chaque bloc est une carte ; faux dans le dossier du moniteur, lu à plat.
     var grouped = false
+    /// L'examen visé par une boîte de l'onglet Élèves : la section défile jusqu'à sa ligne une fois les examens lus, puis le dit.
+    var focusExamID: UUID?
+    var resolveFocus: (SchoolExamFocusOutcome) -> Void = { _ in }
     @State private var model: SchoolExamModel?
     @State private var sheet: SchoolExamSheet?
+    /// Vrai quand la lecture en main date de l'ouverture de la cible actuelle.
+    @State private var freshForFocus = false
+    @State private var refused = false
+
+    /// Tout ce qui peut faire avancer la résolution de la cible ; aucune minuterie.
+    private struct FocusSignal: Equatable {
+        var focus: UUID?
+        var fresh: Bool
+        var refused: Bool
+        var loading: Bool
+        var ids: [UUID]?
+        var failed: Bool
+    }
+    private var focusSignal: FocusSignal {
+        FocusSignal(focus: focusExamID, fresh: freshForFocus, refused: refused, loading: model?.isLoading ?? false,
+            ids: model?.state?.exams.map(\.id), failed: model?.errorMessage != nil)
+    }
+
+    /// Prévoir un examen exige une formation connue active : tant que son statut n'est pas lu, ou dès qu'il ne l'est plus, la
+    /// création n'est pas proposée (#444). Les examens déjà prévus restent gérables, l'école tranchant au serveur.
+    private var creationOpen: Bool { SchoolExamModel.allowsCreation(trainingStatus: training.training?.status) }
 
     var body: some View {
         // Un conteneur, pas un `Group` : tant que le modèle n'existe pas, la section est vide, et SwiftUI ne lance ni `.task` ni `.onAppear`
         // sur une vue vide. Le chargement ne démarrerait alors jamais (constaté sur les captures de la progression).
-        VStack(spacing: 0) {
-            if let model {
-                if let state = model.state {
-                    if state.canManage || !state.exams.isEmpty || model.pending != nil { content(model, state) }
-                } else if let message = model.errorMessage {
-                    SchoolErrorNotice(message: message, retry: { Task { await model.load() } }, retryIdentifier: "exams-retry")
+        ScrollViewReader { proxy in
+            VStack(spacing: 0) {
+                if let model {
+                    if let state = model.state {
+                        if state.canManage || !state.exams.isEmpty || model.pending != nil { content(model, state) }
+                    } else if let message = model.errorMessage {
+                        SchoolErrorNotice(message: message, retry: { Task { await model.load() } }, retryIdentifier: "exams-retry")
+                    }
                 }
             }
+            .task(id: training.trainingID) { await prepare() }
+            .sheet(item: $sheet) { sheet in sheetView(sheet) }
+            .onChange(of: focusExamID) { _, new in reloadForFocus(new) }
+            .onChange(of: focusSignal, initial: true) { _, _ in settleFocus(proxy) }
         }
-        .task(id: training.trainingID) { await prepare() }
-        .sheet(item: $sheet) { sheet in sheetView(sheet) }
+    }
+
+    /// Une nouvelle cible sur une section déjà lue : les examens sont relus avant de dire si l'examen y est.
+    private func reloadForFocus(_ focus: UUID?) {
+        freshForFocus = false
+        guard focus != nil, let model else { return }
+        Task { await model.load(); freshForFocus = true }
+    }
+
+    /// Résout la cible sur une lecture terminée : l'examen est là (la page y défile), n'y est plus, ou la formation refuse la lecture.
+    /// Une panne avec Réessayer garde la cible : la reprise réussie la résout.
+    private func settleFocus(_ proxy: ScrollViewProxy) {
+        guard let focus = focusExamID else { return }
+        if refused { resolveFocus(.unavailable); return }
+        guard freshForFocus, let model, !model.isLoading else { return }
+        if let state = model.state {
+            if state.exams.contains(where: { $0.id == focus }) {
+                proxy.scrollTo(focus, anchor: .top)
+                resolveFocus(.found)
+            } else {
+                resolveFocus(.missing)
+            }
+        } else if model.errorMessage == nil {
+            // Lecture refusée ou inconnue de l'école : la section se tait, la cible le dit.
+            resolveFocus(.unavailable)
+        }
     }
 
     private func prepare() async {
-        guard training.hasPedagogicalRole, !training.invalidated, !training.accessRevoked else { return }
+        guard training.hasPedagogicalRole, !training.invalidated, !training.accessRevoked else { refused = true; return }
+        refused = false
         if model == nil || model?.trainingID != training.trainingID {
             model = SchoolExamModel(client: training.client.examClient, scope: training.scope, trainingID: training.trainingID)
         }
         await model?.load()
+        freshForFocus = true
     }
 
     @ViewBuilder private func content(_ model: SchoolExamModel, _ state: SchoolExamState) -> some View {
@@ -215,7 +278,7 @@ struct SchoolTrainingExamsSection: View {
                 }
                 Spacer(minLength: 0)
                 let kinds = SchoolExam.Kind.allCases.filter { state.canSchedule($0) }
-                if state.canManage, !kinds.isEmpty, !model.blocks(.createExam) {
+                if state.canManage, creationOpen, !kinds.isEmpty, !model.blocks(.createExam) {
                     Menu("Prévoir") {
                         ForEach(kinds, id: \.self) { kind in
                             Button(examKindTitle(kind)) { sheet = .create(kind) }
@@ -234,7 +297,7 @@ struct SchoolTrainingExamsSection: View {
 
     @ViewBuilder private func details(_ model: SchoolExamModel, _ state: SchoolExamState) -> some View {
         if let pending = model.pending { pendingBanner(model, pending) }
-        else if state.canManage, let step = state.nextStep {
+        else if state.canManage, creationOpen, let step = state.nextStep {
             Text(step.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                 .padding(DrivySpacing.s).frame(maxWidth: .infinity, alignment: .leading)
                 .background(DrivyTheme.surfaceCard, in: RoundedRectangle(cornerRadius: DrivyRadius.content, style: .continuous))
@@ -285,6 +348,7 @@ struct SchoolTrainingExamsSection: View {
             }
         }
         .accessibilityElement(children: .contain)
+        .id(exam.id)
         .accessibilityIdentifier("exam-\(exam.id.uuidString)")
     }
 
@@ -342,7 +406,7 @@ struct SchoolTrainingExamsSection: View {
 
     private func scheduleSheet(_ model: SchoolExamModel, _ mode: SchoolExamScheduleSheet.Mode) -> some View {
         SchoolExamScheduleSheet(model: model, mode: mode, zone: schoolTimeZone, candidates: model.state?.escortCandidates ?? [],
-            ownMembershipID: training.membership.membershipId)
+            ownMembershipID: training.membership.membershipId, creationOpen: creationOpen)
     }
 
     @ViewBuilder private func sheetView(_ sheet: SchoolExamSheet) -> some View {
@@ -369,6 +433,8 @@ struct SchoolExamScheduleSheet: View {
     let mode: Mode
     let zone: String
     let candidates: [SchoolExamState.Candidate]
+    /// Faux dès que la formation n'est plus connue active : une feuille de création déjà ouverte ne confirme plus.
+    let creationOpen: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.dynamicTypeSize) private var typeSize
     @State private var startsAt: Date
@@ -380,8 +446,9 @@ struct SchoolExamScheduleSheet: View {
     /// Le moniteur qui accompagne : celui de l'examen modifié, sinon l'appelant s'il est proposable, sinon le premier proposé.
     @State private var escortInstructor: UUID?
 
-    init(model: SchoolExamModel, mode: Mode, zone: String, candidates: [SchoolExamState.Candidate], ownMembershipID: UUID?) {
+    init(model: SchoolExamModel, mode: Mode, zone: String, candidates: [SchoolExamState.Candidate], ownMembershipID: UUID?, creationOpen: Bool = true) {
         _model = Bindable(wrappedValue: model); self.mode = mode; self.zone = zone; self.candidates = candidates
+        self.creationOpen = creationOpen
         var date = Date().addingTimeInterval(7 * 86_400), place = "", escort: SchoolExam.Escort?
         switch mode {
         case .create: break
@@ -408,6 +475,10 @@ struct SchoolExamScheduleSheet: View {
         case .create: false
         case .edit, .postpone: true
         }
+    }
+    private var creationClosed: Bool {
+        if case .create = mode { return !creationOpen }
+        return false
     }
     private var escortValid: Bool {
         !escorts || (escortInstructor != nil && escortEnd > escortStart && escortEnd.timeIntervalSince(escortStart) <= 12 * 3_600)
@@ -455,7 +526,8 @@ struct SchoolExamScheduleSheet: View {
             .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 DrivyStickyActionBar {
-                    if let message = model.errorMessage { DrivyActionNote(text: message, isError: true) }
+                    if creationClosed { DrivyActionNote(text: "La formation n’est plus active : l’examen ne peut plus être prévu.", isError: true) }
+                    else if let message = model.errorMessage { DrivyActionNote(text: message, isError: true) }
                     else if !escortValid { DrivyActionNote(text: "Choisis le moniteur et une durée d’accompagnement de 12 heures au plus, qui finit après son début.", isError: true) }
                     else if tooLong { DrivyActionNote(text: "Raccourcis le texte saisi.", isError: true) }
                     Button { Task { if await submit() { dismiss() } } } label: {
@@ -465,7 +537,7 @@ struct SchoolExamScheduleSheet: View {
                         }
                     }
                     .buttonStyle(DrivyPrimaryButtonStyle())
-                    .disabled(!escortValid || tooLong || model.isSending)
+                    .disabled(!escortValid || tooLong || model.isSending || creationClosed)
                     .accessibilityIdentifier("exam-schedule-send")
                 }
             }

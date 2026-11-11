@@ -202,6 +202,8 @@ export function courseErrorMessage(code: string): string | null {
   const messages: Record<string, string> = {
     COURSE_ACCESS_REQUIRED: 'Vos accès ne permettent pas de gérer les cours.',
     COURSE_INSTRUCTOR_CONFLICT: 'Un moniteur est déjà pris pendant une séance.',
+    COURSE_INSTRUCTOR_CLOSED: 'Un moniteur est absent (fermeture) pendant une séance.',
+    COURSE_POSITIONS_MISMATCH: 'Les séances ne correspondent plus à celles du cours. Rien n’a été modifié ; relisez le cours.',
     COURSE_OCCURRENCES_OVERLAP: 'Deux séances se chevauchent.',
     COURSE_OCCURRENCES_REQUIRED: 'Ajoutez au moins une séance.',
     COURSE_IN_PAST: 'La première séance est déjà passée.',
@@ -311,9 +313,16 @@ export type CoursePayment = z.infer<typeof coursePaymentSchema>;
 
 /** Une présence ne se saisit qu'une fois la séance commencée, pour une inscription active. */
 export const occurrenceStarted = (occurrence: Pick<CourseSeries['occurrences'][number], 'startsAt'>, now = Date.now()): boolean => Date.parse(occurrence.startsAt) <= now;
-export function canMarkAttendance(sheet: Pick<CourseSheet, 'rights'>, row: Pick<CourseSheetRow, 'status'>, occurrence: Pick<CourseSeries['occurrences'][number], 'startsAt'>, now = Date.now()): boolean {
-  return sheet.rights.canTakeAttendance && row.status === 'ACTIVE' && occurrenceStarted(occurrence, now);
+export function canMarkAttendance(sheet: Pick<CourseSheet, 'rights'>, row: Pick<CourseSheetRow, 'status'> & Partial<Pick<CourseSheetRow, 'cancelledAt' | 'attendance'>>, occurrence: Pick<CourseSeries['occurrences'][number], 'startsAt'> & { id?: string }, now = Date.now()): boolean {
+  if (!sheet.rights.canTakeAttendance || !occurrenceStarted(occurrence, now)) return false;
+  if (row.status === 'ACTIVE') return true;
+  // Une inscription annulée ne reçoit aucune nouvelle marque ; une marque déjà posée se corrige si la séance a commencé avant l'annulation.
+  const marked = occurrence.id !== undefined && row.attendance?.some(cell => cell.occurrenceId === occurrence.id && cell.status !== null) === true;
+  return marked && row.cancelledAt != null && Date.parse(row.cancelledAt) > Date.parse(occurrence.startsAt);
 }
+/** Ligne à montrer dans l'appel d'une séance : les inscrits actifs, et les inscriptions annulées qui y gardent une marque. */
+export const attendanceRows = <R extends Pick<CourseSheetRow, 'status' | 'attendance'>>(rows: readonly R[], occurrenceId: string): R[] =>
+  rows.filter(row => row.status === 'ACTIVE' || row.attendance.some(cell => cell.occurrenceId === occurrenceId && cell.status !== null));
 /** Cellule absente de la réponse : vide, jamais déduite. */
 export function attendanceCell(row: Pick<CourseSheetRow, 'attendance'>, occurrenceId: string): AttendanceCell {
   return row.attendance.find(cell => cell.occurrenceId === occurrenceId) ?? { occurrenceId, status: null, version: null, recordedAt: null };

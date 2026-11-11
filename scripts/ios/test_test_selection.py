@@ -18,18 +18,28 @@ GPS_SUITES = [
     'SchoolMapCourseTests', 'SchoolMapRouteGapTests', 'SchoolLiveHeadingTests', 'SchoolReplayFormattingTests',
 ]
 GPS_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in GPS_SUITES]
-AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolCourseClientTests', 'SchoolVisualTransportTests']
+AGENDA_SUITES = ['SchoolAgendaMonthTests', 'SchoolAgendaCoursesTests', 'SchoolCourseClientTests', 'SchoolVisualTransportTests',
+                 'SchoolCourseAccessRevocationTests', 'SchoolCourseSheetQueueTests', 'SchoolCourseIntentPersistenceTests',
+                 'SchoolIntentExactnessTests', 'SchoolExamTests']
 AGENDA_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in AGENDA_SUITES]
-REPORT_SUITES = ['SchoolReportFlowTests', 'SchoolLessonFinishTests', 'SchoolLessonHubTests', 'SchoolTrainingRefreshTests']
+REPORT_SUITES = ['SchoolReportFlowTests', 'SchoolLessonFinishTests', 'SchoolLessonHubTests', 'SchoolTrainingRefreshTests',
+                 'SchoolLessonLifecycleTests', 'SchoolNativeRegression131Tests']
 REPORT_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REPORT_SUITES]
 REACTIVITY_SUITES = ['SchoolNotificationSettingsTests', 'AccountIntentStorageTests', 'SchoolCommandSchedulingTests',
-                     'SchoolNotificationTests', 'SchoolCommandOutboxTests', 'SchoolPlanningDefaultsTests', 'SchoolInvitationWorkspaceTests']
+                     'SchoolNotificationTests', 'SchoolCommandOutboxTests', 'SchoolPlanningDefaultsTests', 'SchoolInvitationWorkspaceTests',
+                     'SchoolPushCenterTests', 'SchoolPushRegistrationTests', 'SchoolBoxesRefreshTests']
 REACTIVITY_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REACTIVITY_SUITES]
 MESSAGING_SUITES = ['MessagingOptimisticMutationTests', 'MessagingProtectedStoreTests', 'MessagingCoreTests', 'MessagingHTTPTransportTests',
-                    'MessagingExyteThreadTests', 'MatrixMessagingReportSealingTests', 'MessagingReportInboxTests',
+                    'MessagingExyteThreadTests', 'MessagingThreadTests', 'MessagingMediaContentTests', 'MatrixMessagingCryptographyTests',
+                    'MatrixMessagingReportSealingTests', 'MessagingReportInboxTests',
                     'MessagingReportTransportTests', 'MatrixMessagingRelayIntegrationTests', 'MatrixMessagingSealedReportRelayTests',
                     'RelayReadinessDiagnosticTests']
 MESSAGING_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in MESSAGING_SUITES]
+# Messagerie récupérable (#428, #435, #436, #445) : suites neuves puis régressions, sans le relais réel.
+MESSAGING_RECOVERY_SUITES = ['MessagingSendRecoveryTests', 'MatrixMessagingBackupRecoveryTests', 'MessagingForegroundAlertTests',
+                             'MessagingActiveConversationTests', 'MatrixMessagingCryptographyTests', 'MessagingOptimisticMutationTests',
+                             'MessagingCoreTests', 'MessagingDiagnosticsTests', 'MessagingKeyBackupTests', 'MessagingOwnDevicesTests']
+MESSAGING_RECOVERY_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in MESSAGING_RECOVERY_SUITES]
 
 
 def environment(**overrides):
@@ -70,6 +80,22 @@ class TestSelection(unittest.TestCase):
     def test_messaging_selects_mutation_and_protected_storage_regressions(self):
         self.assert_options(MESSAGING_OPTIONS, DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='messaging')
 
+    def test_messaging_recovery_selects_the_new_suites_and_their_regressions(self):
+        self.assert_options(MESSAGING_RECOVERY_OPTIONS, DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='messaging-recovery')
+        # Les trois suites neuves y sont, et `messaging` (avec son échec connu) n'en est pas modifié.
+        for suite in MESSAGING_RECOVERY_SUITES[:3]:
+            self.assertIn('-only-testing:DrivyTests/' + suite, MESSAGING_RECOVERY_OPTIONS)
+            self.assertNotIn('-only-testing:DrivyTests/' + suite, MESSAGING_OPTIONS)
+        self.assertNotIn('-only-testing:DrivyTests/RelayReadinessDiagnosticTests', MESSAGING_RECOVERY_OPTIONS)
+
+    def test_messaging_recovery_does_not_require_the_real_relay(self):
+        result = subprocess.run([BASH, '-c', 'set -euo pipefail; source scripts/ios/test-selection.sh; '
+                                 'printf "%s" "$relay_required"'], cwd=ROOT,
+                                env=environment(DRIVY_IOS_UNIT_ONLY='1', DRIVY_IOS_UNIT_TEST_SCOPE='messaging-recovery'),
+                                text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, '0')
+
     def test_agenda_does_not_require_the_unrelated_crypto_relay(self):
         result = subprocess.run([BASH, '-c', 'set -euo pipefail; source scripts/ios/test-selection.sh; '
                                  'printf "%s" "$relay_required"'], cwd=ROOT,
@@ -105,7 +131,7 @@ class TestSelection(unittest.TestCase):
 
     def test_selected_suite_names_exist_in_real_swift_sources(self):
         sources = '\n'.join(path.read_text(encoding='utf-8') for path in (ROOT / 'apps/ios/DrivyTests').glob('*.swift'))
-        for suite in GPS_SUITES + AGENDA_SUITES + REPORT_SUITES + REACTIVITY_SUITES + MESSAGING_SUITES:
+        for suite in GPS_SUITES + AGENDA_SUITES + REPORT_SUITES + REACTIVITY_SUITES + MESSAGING_SUITES + MESSAGING_RECOVERY_SUITES:
             self.assertIsNotNone(re.search(r'\b(?:struct|class)\s+' + suite + r'\b', sources), f'Suite Swift absente : {suite}')
 
     def test_ui_suite_and_method_are_preserved(self):
@@ -173,7 +199,7 @@ export -f xcodebuild xcrun python3 sleep
         return subprocess.run([BASH, '-c', harness], cwd=root, env=env, text=True, capture_output=True, timeout=15)
 
     def test_unit_build_and_test_share_exact_selection_and_never_run_ui_or_ipad(self):
-        for scope, expected in [('gps', GPS_OPTIONS), ('agenda', AGENDA_OPTIONS), ('reports', REPORT_OPTIONS), ('reactivity', REACTIVITY_OPTIONS), ('messaging', MESSAGING_OPTIONS), ('all', ['-only-testing:DrivyTests'])]:
+        for scope, expected in [('gps', GPS_OPTIONS), ('agenda', AGENDA_OPTIONS), ('reports', REPORT_OPTIONS), ('reactivity', REACTIVITY_OPTIONS), ('messaging', MESSAGING_OPTIONS), ('messaging-recovery', MESSAGING_RECOVERY_OPTIONS), ('all', ['-only-testing:DrivyTests'])]:
             with self.subTest(scope=scope):
                 outputs = []
                 for build in [True, False]:
@@ -269,7 +295,7 @@ export -f xcodebuild xcrun python3 sleep
         workflow = (ROOT / '.github/workflows/refonte-ios.yml').read_text(encoding='utf-8')
         self.assertLess(workflow.index('- name: Valider le mode et la sélection des tests'), workflow.index('- name: Installer XcodeGen'))
         self.assertIn("unit_test_scope:\n", workflow)
-        self.assertIn("options: [gps, agenda, reports, reactivity, messaging, consent, drafts, profile, all]", workflow)
+        self.assertIn("options: [gps, agenda, reports, reactivity, messaging, messaging-recovery, consent, drafts, profile, all]", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
         self.assertIn("inputs.visual_only != true && inputs.unit_only != true && inputs.ui_test_suite == ''", workflow)
         self.assertIn('if: inputs.visual_only == true', workflow)

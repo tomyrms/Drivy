@@ -89,7 +89,12 @@ final class MessagingKeyBackupModel {
     }
 
     /// Confirmation ou sortie explicite : seule voie qui oublie la clé pendant le parcours normal.
-    func acknowledgeKey() { issuedKey = nil }
+    func acknowledgeKey() {
+        issuedKey = nil
+        // #435 : l'intention chiffrée qui permettait de réafficher la clé n'a plus d'objet une fois la clé confirmée.
+        let keys = keys, scope = scope
+        Task { await keys.acknowledgeRecoveryKey(scope: scope) }
+    }
 
     /// Changement de compte ou d'école : purge sans rien montrer.
     func purgeIfContextChanged() {

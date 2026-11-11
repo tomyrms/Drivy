@@ -377,6 +377,10 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
     // JSON encodes request Data as base64, larger than the original request.
     private let maximumArchiveBytes = 14_000_000
     private var file: URL { directory.appendingPathComponent("pending-v1.bin") }
+    /// Tests seulement : appelés juste avant et juste après l'unique remplacement atomique du fichier, pour simuler une
+    /// interruption à chaque frontière d'écriture. Absents en production.
+    var faultBeforeFileWrite: (() throws -> Void)?
+    var faultAfterFileWrite: (() throws -> Void)?
 
     init(directory: URL? = nil, keyData: Data? = nil, vault: (any IdentityVault)? = nil) {
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -423,6 +427,44 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
         guard commands[index] == command else { throw SchoolConfigurationFailure.storage }
         commands.remove(at: index)
         try write(commands)
+    }
+
+    /// Remplace `old` par `new` (ou ajoute `new` quand `old` est `nil`) en une seule lecture, une seule mutation et une
+    /// seule écriture atomique du coffre chiffré (#438). Tous les contrôles se font en mémoire avant l'écriture : à chaque
+    /// frontière d'échec, le fichier garde l'ancien instantané ou le nouveau, jamais un coffre sans l'une ni l'autre des
+    /// deux commandes. Les autres commandes sont réécrites telles quelles. `admission` dit si une commande conservée de
+    /// la même portée de travail (hors `old`) refuserait `new` ; rien n'est alors modifié.
+    func replace(_ old: PendingSchoolCommand?, with new: PendingSchoolCommand,
+                 refusing admission: (PendingSchoolCommand) -> Bool = { _ in false }) throws {
+        try validate(new)
+        var commands = try read()
+        var changed = false
+        if let old {
+            if let index = commands.firstIndex(where: { $0.id == old.id }) {
+                guard commands[index] == old else { throw SchoolConfigurationFailure.storage }
+                commands.remove(at: index)
+                changed = true
+            } else if !commands.contains(where: { $0 == new }) {
+                // Ni l'ancienne ni la nouvelle : substitution périmée (déjà retirée ailleurs), rien n'est ajouté.
+                // Seule l'idempotence d'après une faute après écriture (la nouvelle est déjà là, exacte) reste permise.
+                throw SchoolConfigurationFailure.storage
+            }
+        }
+        // La commande exacte déjà conservée (rejeu après une faute post-écriture) ne se bloque pas elle-même ; toute AUTRE
+        // commande, y compris une de même identifiant mais de contenu différent, garde son refus.
+        guard !commands.contains(where: { $0 != new && $0.scope.belongsToWorkspace(new.scope) && admission($0) }) else {
+            throw SchoolConfigurationFailure.pendingCommand
+        }
+        if let kept = commands.first(where: { $0.id == new.id }) {
+            // Déjà conservée à l'identique : seule la sortie de `old` reste à écrire.
+            guard kept == new else { throw SchoolConfigurationFailure.pendingCommand }
+        } else {
+            guard !commands.contains(where: { $0.blocksQueueEntry(of: new) }) else { throw SchoolConfigurationFailure.pendingCommand }
+            guard commands.count < 50 else { throw SchoolConfigurationFailure.storage }
+            commands.append(new)
+            changed = true
+        }
+        if changed { try write(commands) } else { try synchronize() }
     }
 
     private func read() throws -> [PendingSchoolCommand] {
@@ -474,7 +516,9 @@ final class EncryptedSchoolCommandOutbox: SchoolCommandOutbox {
             var values = URLResourceValues()
             values.isExcludedFromBackup = true
             try protectedDirectory.setResourceValues(values)
+            try faultBeforeFileWrite?()
             try encrypted.write(to: file, options: [.atomic, .completeFileProtection])
+            try faultAfterFileWrite?()
             try synchronize()
         } catch { throw SchoolConfigurationFailure.storage }
     }

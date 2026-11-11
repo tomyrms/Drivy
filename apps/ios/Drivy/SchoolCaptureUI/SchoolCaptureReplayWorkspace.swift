@@ -168,7 +168,9 @@ struct SchoolReplayRetryBudget {
                 // A matching outage must not prevent the measured replay from opening.
             }
             guard current(request) else { return }
-            if let cached, try await isUnchanged(cached, request: request) {
+            // Les mesures gardées valent tant que la version et la synchronisation du trajet n’ont pas bougé ; les observations,
+            // elles, ont leur propre vie (correction, retrait, partage) et se relisent toujours auprès de l’école (#425).
+            if let cached, try await isUnchanged(cached, request: request), try await refreshObservations(request) {
                 // Même version, même synchronisation : les pages déjà reconstruites restent, seul le recalage se relit.
                 isLoading = false
                 if let initialFailure, initialFailure != .unavailable && initialFailure != .changed {
@@ -208,6 +210,38 @@ struct SchoolReplayRetryBudget {
         guard latest.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
         guard latest.version == cached.capture.version, latest.syncState == cached.capture.syncState else { return false }
         capture = latest
+        return true
+    }
+
+    /// Relit les observations autorisées sans toucher aux mesures gardées. Les observations n’ont pas de route propre : elles
+    /// voyagent avec les pages du replay, dont seules les annotations sont retenues ici. Rend `false` si ces pages ne
+    /// correspondent plus aux mesures gardées, auquel cas le trajet est relu en entier.
+    private func refreshObservations(_ request: UUID) async throws -> Bool {
+        var cursor: String?, seenCursors = Set<String>(), known: [UUID: SchoolPrivateGeoObservation] = [:]
+        var pages = 0, points = 0
+        repeat {
+            try Task.checkCancellation()
+            let page = try await client.privateReplayPage(schoolID: scope.schoolID, captureID: captureID,
+                cursor: cursor, scope: scope)
+            guard current(request) else { throw CancellationError() }
+            guard page.publicationState == .privateCapture else { throw SchoolCaptureFailure.notFound }
+            pages += 1
+            guard pages <= 1000, page.quality == quality else { return false }
+            points += page.segments.reduce(0) { $0 + $1.points.count }
+            for observation in page.observations {
+                guard observation.lessonId == capture?.lessonId else { return false }
+                known[observation.id] = observation
+            }
+            cursor = page.nextCursor
+            if let cursor, !seenCursors.insert(cursor).inserted { return false }
+        } while cursor != nil
+        guard points == pointCount else { return false }
+        let refreshed = Self.sortedObservations(known)
+        if refreshed != observations {
+            observations = refreshed
+            contentRevision += 1
+        }
+        remember()
         return true
     }
 

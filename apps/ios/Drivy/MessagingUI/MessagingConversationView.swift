@@ -635,7 +635,13 @@ struct MessagingConversationView: View {
 
     private var lifecycle: MessagingThreadLifecycle {
         MessagingThreadLifecycle(workspace: workspace, thread: thread, connectivity: connectivity,
-                                 conversationID: conversationID, scenePhase: scenePhase)
+                                 conversationID: conversationID, scenePhase: scenePhase, covered: coveringScreen)
+    }
+
+    /// Une feuille, une confirmation ou l'écran des membres recouvre le fil : l'alerte de premier plan reste visible (#445).
+    private var coveringScreen: Bool {
+        showSearch || showMembers || reportSent || thread.menuTarget != nil || thread.showPollComposer
+            || thread.votersFor != nil || thread.mediaComposer?.preview != nil || confirmationPresented.wrappedValue
     }
 
     // MARK: Fil
@@ -767,6 +773,7 @@ private struct MessagingThreadLifecycle: ViewModifier {
     let connectivity: MessagingConnectivity
     let conversationID: UUID
     let scenePhase: ScenePhase
+    let covered: Bool
 
     private var composer: MessagingComposerModel { thread.composer }
     /// Dernier message reçu (hors envois locaux), pour décider du suivi du bas.
@@ -780,9 +787,13 @@ private struct MessagingThreadLifecycle: ViewModifier {
                     await workspace.conversationViewed(conversationID, upTo: seq)
                 }
             }
-            .task(id: thread.atBottom) {
+            .task(id: [thread.atBottom, covered, scenePhase == .active]) {
+                // #445 : le fil est « visible » seulement actif, au bas du fil et sans rien par-dessus.
+                let workspace = workspace, conversationID = conversationID
                 MessagingActiveConversation.set(schoolID: workspace.scope.schoolID, conversationID: conversationID,
-                                                atBottom: thread.atBottom)
+                    atBottom: thread.atBottom && scenePhase == .active, covered: covered) { sequence, stillPresented in
+                    await workspace.absorbForegroundAlert(conversationID, sequence: sequence, stillPresented: stillPresented)
+                }
             }
             .onAppear { connectivity.start() }
             .onDisappear { thread.cancelMenu(); thread.mediaComposer?.suspend(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
@@ -1489,6 +1500,8 @@ private struct MessagingThreadFooter: View {
     let onReported: () -> Void
     /// Transmettre un signalement est un acte explicite : la personne voit d'abord qui le lira et ce qu'il contient (#77).
     @State private var confirmingReport = false
+    @State private var confirmingMediaReport = false
+    @State private var mediaReportRequested = false
 
     private var workspace: MessagingWorkspace { thread.workspace }
 
@@ -1532,7 +1545,14 @@ private struct MessagingThreadFooter: View {
             }
             .frame(minHeight: DrivyLayout.tapTarget)
             Spacer()
-            Button("Transmettre (\(thread.reportSelection.count))") { confirmingReport = true }
+            Button("Transmettre (\(thread.reportSelection.count))") {
+                let includesMedia = workspace.visibleMessages(thread.conversationID).contains {
+                    thread.reportSelection.contains($0.id)
+                        && ($0.meta.media != nil || workspace.contents[$0.id]?.media != nil)
+                }
+                if includesMedia { confirmingMediaReport = true }
+                else { confirmingReport = true }
+            }
             .bold()
             .frame(minHeight: DrivyLayout.tapTarget)
             .disabled(thread.reportSelection.isEmpty)
@@ -1541,14 +1561,7 @@ private struct MessagingThreadFooter: View {
         .padding(.horizontal, DrivySpacing.m)
         .confirmationDialog("Transmettre aux administrateurs de l'école ?", isPresented: $confirmingReport,
                             titleVisibility: .visible) {
-            Button("Transmettre") {
-                let selected = workspace.visibleMessages(thread.conversationID).filter { thread.reportSelection.contains($0.id) }
-                Task {
-                    if await workspace.report(selected, conversationID: thread.conversationID) {
-                        thread.reporting = false; thread.reportSelection = []; onReported()
-                    }
-                }
-            }
+            Button("Transmettre") { transmitReport() }
             .accessibilityIdentifier("messaging.report.confirm")
             Button("Annuler", role: .cancel) {}
         } message: {
@@ -1556,6 +1569,81 @@ private struct MessagingThreadFooter: View {
             let noun = count == 1 ? "ce message" : "ces \(count) messages"
             Text("Les administrateurs de l'école pourront lire \(noun), avec leur auteur et leur date. Le reste de la conversation ne leur est pas montré.")
         }
+        .sheet(isPresented: $confirmingMediaReport, onDismiss: {
+            // Present the existing acknowledgement only after the confirmation sheet has closed.
+            guard mediaReportRequested else { return }
+            mediaReportRequested = false
+            transmitReport()
+        }) {
+            MessagingMediaReportConfirmation(count: thread.reportSelection.count) {
+                confirmingMediaReport = false
+            } transmit: {
+                mediaReportRequested = true
+                confirmingMediaReport = false
+            }
+        }
+    }
+
+    private func transmitReport() {
+        let selected = workspace.visibleMessages(thread.conversationID).filter { thread.reportSelection.contains($0.id) }
+        Task {
+            if await workspace.report(selected, conversationID: thread.conversationID) {
+                thread.reporting = false; thread.reportSelection = []; onReported()
+            }
+        }
+    }
+}
+
+/// The media disclosure can grow with Dynamic Type; its actions stay outside the scrolling content.
+private struct MessagingMediaReportConfirmation: View {
+    let count: Int
+    let cancel: () -> Void
+    let transmit: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: DrivySpacing.l) {
+                    Text("Les administrateurs de l’école pourront lire :")
+                        .accessibilityIdentifier("messaging.report.disclosure.recipients")
+                    Text("\(count == 1 ? "Ce message" : "Ces \(count) messages"), avec leur auteur et leur date.")
+                        .accessibilityIdentifier("messaging.report.disclosure.selection")
+                    Text("Pour chaque pièce jointe : nature, nom et légende éventuelle.")
+                        .accessibilityIdentifier("messaging.report.disclosure.metadata")
+                    Text("Pièce jointe non transmise aux administrateurs.")
+                        .fontWeight(.semibold)
+                        .accessibilityIdentifier("messaging.report.disclosure.file")
+                    Text("Le reste de la conversation ne leur est pas montré.")
+                        .accessibilityIdentifier("messaging.report.disclosure.privacy")
+                }
+                .font(.body)
+                .foregroundStyle(DrivyTheme.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(DrivySpacing.m)
+            }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(spacing: DrivySpacing.s) {
+                    Button(action: transmit) {
+                        Text("Transmettre").fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
+                    }
+                    .buttonStyle(DrivyPrimaryButtonStyle())
+                    .accessibilityIdentifier("messaging.report.confirm")
+                    Button(action: cancel) {
+                        Text("Annuler").fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, minHeight: DrivyLayout.tapTarget)
+                    }
+                    .accessibilityIdentifier("messaging.report.confirm.cancel")
+                }
+                .padding(DrivySpacing.m)
+                .background(DrivyTheme.surface)
+            }
+            .background(DrivyTheme.canvas)
+            .tint(DrivyTheme.accent)
+            .navigationTitle("Signalement")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.large])
     }
 }
 

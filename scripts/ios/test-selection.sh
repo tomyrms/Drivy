@@ -34,7 +34,7 @@ ui_test_options=()
 # iPad : campagne complète, ou suite UI ciblée qui le demande. Jamais pour le métier seul ni les captures.
 run_ipad=0
 if [[ "$full_campaign" == 1 || ( -n "$ui_test_suite" && "$ui_ipad" == 1 ) ]]; then run_ipad=1; fi
-[[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == consent || "$unit_test_scope" == drafts || "$unit_test_scope" == profile || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging, consent, drafts, profile ou all).' >&2; exit 1; }
+[[ "$unit_test_scope" == gps || "$unit_test_scope" == agenda || "$unit_test_scope" == reports || "$unit_test_scope" == reactivity || "$unit_test_scope" == messaging || "$unit_test_scope" == messaging-recovery || "$unit_test_scope" == consent || "$unit_test_scope" == drafts || "$unit_test_scope" == profile || "$unit_test_scope" == all ]] || { echo 'Périmètre métier invalide (gps, agenda, reports, reactivity, messaging, messaging-recovery, consent, drafts, profile ou all).' >&2; exit 1; }
 [[ "$visual_only" != 1 || ( "$unit_only" == 0 && -z "$ui_test_suite" ) ]] || { echo 'Choisir les captures visuelles ou les tests, pas les deux.' >&2; exit 1; }
 
 if [[ -n "$ui_test_suite" ]]; then
@@ -66,23 +66,38 @@ elif [[ "$unit_only" == 1 ]]; then
     done
   elif [[ "$unit_test_scope" == messaging ]]; then
     # Signalements (#77) : scellement pour les administrateurs, boîte, transport, puis le même parcours contre le vrai relais.
+    # #97 : contenu média typé, provenance et scellement de lot typé (texte, sondage, image, PDF).
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
-      MessagingExyteThreadTests MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
+      MessagingExyteThreadTests MessagingThreadTests MessagingMediaContentTests MatrixMessagingCryptographyTests \
+      MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
       MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests RelayReadinessDiagnosticTests; do
+      test_options+=("-only-testing:DrivyTests/$suite")
+    done
+  elif [[ "$unit_test_scope" == messaging-recovery ]]; then
+    # Messagerie récupérable (#428 reprise des envois, #435/#436 sauvegarde de clés, #445 alerte de premier plan) :
+    # les trois suites neuves, puis leurs régressions. Sans relais réel (les doubles suffisent) ; `messaging` et son
+    # test de préparation du relais restent inchangés.
+    for suite in MessagingSendRecoveryTests MatrixMessagingBackupRecoveryTests MessagingForegroundAlertTests \
+      MessagingActiveConversationTests MatrixMessagingCryptographyTests MessagingOptimisticMutationTests MessagingCoreTests \
+      MessagingDiagnosticsTests MessagingKeyBackupTests MessagingOwnDevicesTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reactivity ]]; then
     for suite in SchoolNotificationSettingsTests AccountIntentStorageTests SchoolCommandSchedulingTests \
-      SchoolNotificationTests SchoolCommandOutboxTests SchoolPlanningDefaultsTests SchoolInvitationWorkspaceTests; do
+      SchoolNotificationTests SchoolCommandOutboxTests SchoolPlanningDefaultsTests SchoolInvitationWorkspaceTests \
+      SchoolPushCenterTests SchoolPushRegistrationTests SchoolBoxesRefreshTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == reports ]]; then
-    for suite in SchoolReportFlowTests SchoolLessonFinishTests SchoolLessonHubTests SchoolTrainingRefreshTests; do
+    # Barrière de leçon libérée après un refus corrigeable (#427) : SchoolLessonLifecycleTests et SchoolNativeRegression131Tests.
+    for suite in SchoolReportFlowTests SchoolLessonFinishTests SchoolLessonHubTests SchoolTrainingRefreshTests \
+      SchoolLessonLifecycleTests SchoolNativeRegression131Tests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == agenda ]]; then
     # Agenda #144-#146: calendar projection, course reads and their synthetic UI transport.
-    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests; do
+    # Confidentialité des fiches de cours (#426) : refus d'accès, gestes durables et file de la feuille. Le replay (#425) reste dans gps.
+    for suite in SchoolAgendaMonthTests SchoolAgendaCoursesTests SchoolCourseClientTests SchoolVisualTransportTests       SchoolCourseAccessRevocationTests SchoolCourseSheetQueueTests SchoolCourseIntentPersistenceTests SchoolIntentExactnessTests SchoolExamTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   else

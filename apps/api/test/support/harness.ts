@@ -13,7 +13,7 @@ import {migrationFilePattern} from '../../scripts/migrations.js';
 
 /** Recette PostgreSQL réelle : schéma recréé, toutes les migrations sous un propriétaire non privilégié, requêtes sous drivy_app. */
 export const issuer='https://harness-identity.example.invalid';
-export async function freshDatabase({deferCourseMigrations=false}:{deferCourseMigrations?:boolean}={}){
+export async function freshDatabase({deferCourseMigrations=false,skipMigrations}:{deferCourseMigrations?:boolean;skipMigrations?:RegExp}={}){
  const url=process.env.TEST_DATABASE_URL;if(!url||new URL(url).pathname!=='/drivy_test')throw new Error('Base de recette drivy_test requise.');
  const owner='drivy_harness_migrator',operator=new Pool({connectionString:url});
  try{
@@ -25,7 +25,7 @@ export async function freshDatabase({deferCourseMigrations=false}:{deferCourseMi
  try{
   // Le registre reste cohérent avec le schéma : une suite suivante utilisant scripts/migrations.ts ne réapplique rien.
   await migration.query('CREATE TABLE public.drivy_migrations(name text PRIMARY KEY,sha256 text NOT NULL,applied_at timestamptz NOT NULL DEFAULT now())');
-  for(const name of (await readdir(new URL('../../migrations/',import.meta.url))).filter(n=>migrationFilePattern.test(n)&&!(deferCourseMigrations&&/^04[2-6]_|^20261025_messaging_mention_push|^20261031_messaging_message_push|^20261031_pilotage_metrics|^20261101b_exams|^20261103_lesson_exam_push|^20261103c_push_device_revocation/.test(n))).sort()){
+  for(const name of (await readdir(new URL('../../migrations/',import.meta.url))).filter(n=>migrationFilePattern.test(n)&&!skipMigrations?.test(n)&&!(deferCourseMigrations&&/^04[2-6]_|^20261025_messaging_mention_push|^20261031_messaging_message_push|^20261031_pilotage_metrics|^20261101b_exams|^20261103_lesson_exam_push|^20261103c_push_device_revocation|^20261107_planning_coherence|^20261110_push_delivery_event_identity/.test(n))).sort()){
    const db=await migration.connect(),sql=await readFile(new URL(`../../migrations/${name}`,import.meta.url),'utf8');
    try{await db.query('BEGIN');await db.query(sql);await db.query('INSERT INTO public.drivy_migrations(name,sha256) VALUES($1,$2)',[name,createHash('sha256').update(sql).digest('hex')]);await db.query('COMMIT');}catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
    if(name.startsWith('001_'))await seedFixtures(pool,issuer);

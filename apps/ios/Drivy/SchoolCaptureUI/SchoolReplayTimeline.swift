@@ -355,6 +355,13 @@ struct SchoolReplayTimeline {
     }
 
     /// Stable IDs survive a geometry refresh even when the observation's displayed coordinate changes.
+    /// Observation ouverte en texte intégral, relue dans cette projection : son texte à jour, ou rien si elle a disparu
+    /// (retirée, devenue privée). Une feuille ouverte avant la revalidation ne garde jamais l'ancienne copie.
+    func refreshed(_ item: Item?) -> Item? {
+        guard let item else { return nil }
+        return items.first { $0.id == item.id }
+    }
+
     func retainedSelection(_ selectedID: UUID?) -> UUID? {
         guard let selectedID, items.contains(where: { $0.id == selectedID }) else { return nil }
         return selectedID

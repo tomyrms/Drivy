@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createCommand } from '../../command-core';
+import { useCommandSnapshot } from '../../command-store';
 import { courseErrorMessage, emptyForm, emptySession, formFromSeries, hasProblems, LIMITS, preview, seriesBody, validate,
   type CourseCatalogue, type CourseSeries, type CourseType, type SeriesForm, type SessionForm } from '../../console/course-model';
 import { useCommandRunner, useConsole, useUnsavedChanges } from '../../console/context';
 import { confirmedSeries } from './course-catalogue';
 import { formSignature } from './course-presentation';
+import { rebaseCourseDraft } from './course-rebase';
 
 /** One composition at a time: the series, a single session, or the review before publication. */
 export type DraftStage = { kind: 'course' } | { kind: 'session'; key: string } | { kind: 'review' };
@@ -14,27 +16,62 @@ export interface Refusal { code: string; message: string }
  * Draft of a series. State and commands only: every write goes through the shared command engine (version and operation id
  * kept), nothing is shown as saved before the school's receipt, and a refusal keeps the whole draft.
  */
-export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCatalogue, done: (series: CourseSeries | null, message: string) => void) {
+export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCatalogue, done: (series: CourseSeries | null, message: string) => void, created?: (id: string) => void) {
   const { schoolId, school, membership } = useConsole();
   const timeZone = school.timeZone;
+  // `current` est la version sur laquelle le brouillon repose : elle seule part dans If-Match. Une relecture plus récente ne
+  // l'avance que si la saisie est propre, ou fusionnée sans conflit ; sinon elle attend le choix de la personne (#422).
   const [current, setCurrent] = useState(series);
-  // A re-read after a version conflict supplies the version to send next; the typed draft is never replaced.
-  useEffect(() => { if (series && (!current || series.version > current.version)) setCurrent(series); }, [series]);
   const initial = useMemo(() => series ? formFromSeries(series, timeZone)
     : emptyForm(catalogue, catalogue.instructors.some(item => item.membershipId === membership.membershipId) ? membership.membershipId : ''), []);
   const [form, setForm] = useState<SeriesForm>(initial);
+  // Le conflit se déduit de la saisie actuelle, jamais d'un instantané : une retouche faite après l'alerte reste dans le choix (#422).
+  const newer = series && current && series.version > current.version ? series : null;
+  const signature = formSignature(form);
+  const concurrent = useMemo(() => {
+    if (!newer || !current) return null;
+    const conflict = rebaseCourseDraft(formFromSeries(current, timeZone), formFromSeries(newer, timeZone), form);
+    return conflict.fields.length > 0 ? { series: newer, conflict } : null;
+  }, [newer, current, signature]);
+  useEffect(() => {
+    if (!series) return;
+    if (!current) { setCurrent(series); return; }
+    if (!newer || concurrent) return;
+    const base = formFromSeries(current, timeZone), latest = formFromSeries(newer, timeZone);
+    setForm(formSignature(form) === formSignature(base) ? latest : rebaseCourseDraft(base, latest, form).merged);
+    setCurrent(newer);
+  }, [series, signature]);
+  /** Choix explicite : garder la saisie ou prendre la valeur de l'école sur les champs changés des deux côtés. Les autres champs sont déjà fusionnés. */
+  const resolveConcurrent = (keep: 'mine' | 'theirs') => {
+    if (!concurrent || !current) return;
+    const conflict = rebaseCourseDraft(formFromSeries(current, timeZone), formFromSeries(concurrent.series, timeZone), form);
+    setForm(keep === 'mine' ? conflict.merged : conflict.theirs);
+    setCurrent(concurrent.series); setRefusal(null);
+  };
   const [stage, setStage] = useState<DraftStage>({ kind: 'course' });
   const [touched, setTouched] = useState(false);
   const [refusal, setRefusal] = useState<Refusal | null>(null);
   const [addedTypes, setAddedTypes] = useState<CourseType[]>([]);
   const runner = useCommandRunner();
   const guard = useRef(false);
+  // Une création dont la réponse s'est perdue est confirmée plus tard par le reçu (#437) : le formulaire se rattache alors à la série
+  // créée, il ne reste jamais un formulaire de création déverrouillé qui en émettrait une seconde.
+  const creation = useRef<string | null>(null);
+  const snapshot = useCommandSnapshot();
+  const attached = creation.current ? snapshot.confirmations.find(item => item.operationId === creation.current && item.resourceId)?.resourceId ?? null : null;
+  const createdRef = useRef(created); createdRef.current = created;
+  const announced = useRef<string | null>(null);
+  useEffect(() => {
+    if (!attached || announced.current === attached) return;
+    announced.current = attached;
+    createdRef.current?.(attached);
+  }, [attached]);
   const saved = useMemo(() => current ? formSignature(formFromSeries(current, timeZone)) : formSignature(emptyForm(catalogue, initial.responsible)), [current, timeZone]);
   const dirty = formSignature(form) !== saved;
   const pendingKind = runner.pending?.meta.kind;
   const sent = pendingKind === 'createCourseSeries' || pendingKind === 'updateCourseSeries' || pendingKind === 'publishCourseSeries';
   const releaseGuard = useUnsavedChanges(dirty && !sent);
-  const locked = runner.busy || Boolean(runner.pending);
+  const locked = runner.busy || Boolean(runner.pending) || concurrent !== null || attached !== null;
   const problems = validate(form, timeZone);
   const shown = touched ? problems : { fields: {}, sessions: {} };
   const overview = preview(form, timeZone);
@@ -65,11 +102,13 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   async function save(): Promise<CourseSeries | null | undefined> {
     setTouched(true);
     const body = seriesBody(form, timeZone);
-    if (!body || locked) return undefined;
+    if (!body || locked || concurrent) return undefined;
     setRefusal(null);
-    const result = await runner.run(createCommand(current
+    const command = createCommand(current
       ? { schoolId, kind: 'updateCourseSeries', path: `course-series/${current.id}`, ifMatch: current.version, resourceId: current.id, resourceVersion: current.version, body }
-      : { schoolId, kind: 'createCourseSeries', path: 'course-series', resourceVersion: 0, body }), 'Le brouillon est enregistré.');
+      : { schoolId, kind: 'createCourseSeries', path: 'course-series', resourceVersion: 0, body });
+    if (!current) creation.current = command.operationId;
+    const result = await runner.run(command, 'Le brouillon est enregistré.');
     if (result.status === 'rejected') { if (!result.needsLogin) runner.clearOutcome(); refuse(result.code, result.message); return undefined; }
     if (result.status !== 'confirmed') return undefined;
     const confirmed = confirmedSeries(result.body);
@@ -89,7 +128,7 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   /** Publication is explicit and follows a save when the draft changed: the school publishes the stored version, never the screen. */
   const publish = () => once(async () => {
     setTouched(true);
-    if (hasProblems(problems) || locked) return;
+    if (hasProblems(problems) || locked || concurrent) return;
     let target = current;
     if (!target || dirty) {
       const result = await save();
@@ -106,7 +145,7 @@ export function useCourseDraft(series: CourseSeries | null, catalogue: CourseCat
   }, undefined);
 
   const review = () => { setTouched(true); if (hasProblems(problems)) { setStage({ kind: 'course' }); return false; } setStage({ kind: 'review' }); return true; };
-  return { form, set, setSession, addSession, removeSession, stage, setStage, touched, shown, problems, overview, dirty, locked, runner, refusal, setRefusal, current,
+  return { form, set, setSession, addSession, removeSession, stage, setStage, touched, shown, problems, overview, dirty, locked, runner, refusal, setRefusal, current, concurrent, resolveConcurrent,
     types, addType: (type: CourseType) => setAddedTypes(previous => [...previous, type]), instructorOptions, responsibleOptions, saveDraft, publish, review, releaseGuard, timeZone };
 }
 export type CourseDraft = ReturnType<typeof useCourseDraft>;

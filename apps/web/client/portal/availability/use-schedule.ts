@@ -3,7 +3,7 @@ import { civilDateIn } from '../../agenda-model';
 import { kindsOf } from '../../command-families';
 import { useCommandRevision } from '../../command-store';
 import { activeInstructors } from '../../invitation-model';
-import { availabilitySchema, closureSchema, memberSchema, readAll } from '../../school-api';
+import { availabilitySchema, closureSchema, type Availability, memberSchema, readAll } from '../../school-api';
 import { distinctLabel, homonymReferences } from '../../person-reference';
 import { useConsole, useLoad, type Outcome } from '../../console/context';
 import { useListState } from '../../console/list-state';
@@ -14,7 +14,7 @@ import { ruleGroups, upcomingAbsences, type AbsenceDraft, type RuleDraft } from 
  * `restored` gives back what was typed, with the school's refusal, when a request that had been kept was refused.
  */
 export type ScheduleView = null
-  | { kind: 'rule'; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome> } }
+  | { kind: 'rule'; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome>; base?: Availability } }
   | { kind: 'absence'; restored?: { draft: AbsenceDraft; outcome: NonNullable<Outcome> } };
 
 /**

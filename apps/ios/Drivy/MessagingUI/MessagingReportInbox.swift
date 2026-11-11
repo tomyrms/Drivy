@@ -1,6 +1,26 @@
 import Foundation
 import Observation
 
+/// Ce qu'un administrateur peut savoir d'une pièce jointe signalée, sans jamais en recevoir les octets.
+///
+/// Le modèle de présentation ne porte **ni clé de fichier, ni IV, ni hash, ni URL** : la clé reste dans
+/// l'enveloppe chiffrée qui n'est lisible que par les appareils destinataires. La vue du lot UI compose
+/// le libellé à partir de ces seuls champs.
+struct MessagingReportAttachment: Equatable, Sendable {
+    enum Nature: String, Equatable, Sendable {
+        case photo
+        case pdf
+    }
+
+    let nature: Nature
+    /// Nom déjà assaini par le contenu Matrix (jamais un chemin).
+    let name: String
+    /// Légende du message, `nil` quand il n'y en a pas.
+    let caption: String?
+    /// État de cette livraison : les octets de la pièce ne sont pas transmis aux administrateurs.
+    let bytesTransmitted: Bool
+}
+
 /// Un message signalé, lisible seulement après un déchiffrement local sur l'appareil de l'administrateur.
 struct MessagingReportLine: Identifiable, Equatable, Sendable {
     let id: UUID
@@ -8,6 +28,8 @@ struct MessagingReportLine: Identifiable, Equatable, Sendable {
     let date: Date?
     /// Contenu du message ; nil quand cet appareil ne peut pas le lire.
     let text: String?
+    /// Pièce jointe annoncée sans ses octets ; `nil` pour un texte ou un sondage.
+    let media: MessagingReportAttachment?
     /// Phrase fixe qui dit pourquoi le message n'est pas lisible : jamais un contenu inventé.
     let unreadable: String?
 }
@@ -81,6 +103,9 @@ struct MessagingReportLine: Identifiable, Equatable, Sendable {
     }
 
     /// Déchiffre les messages choisis, un par un, sur cet appareil. Un message illisible est dit tel quel.
+    ///
+    /// La provenance est celle de l'événement authentifié : un contenu Matrix structuré n'est jamais
+    /// deviné depuis un `body` legacy, donc un ancien texte qui ressemble à du JSON reste du texte.
     func open(_ report: MessagingReportRecord) async {
         guard lines[report.id] == nil, !opening.contains(report.id) else { return }
         opening.insert(report.id)
@@ -92,23 +117,56 @@ struct MessagingReportLine: Identifiable, Equatable, Sendable {
             let wire = MessagingWireMessage(id: item.messageID, conversationID: scope.schoolID, schoolID: scope.schoolID,
                                             senderID: report.reporterID, acceptedAt: report.createdAt, ciphertext: item.ciphertext)
             do {
-                let bytes = try await cryptography.decrypt(wire, scope: scope)
-                guard let content = MessagingPlainContent.decode(bytes) else { throw MessagingFailure.invalidResponse }
+                let content = try await Self.content(of: wire, cryptography: cryptography, scope: scope)
+                guard currentScope() == scope else { return }
                 result.append(MessagingReportLine(id: item.messageID, senderName: item.senderName, date: item.acceptedAt,
-                                                  text: content.summary, unreadable: nil))
+                                                  text: content.summary, media: Self.attachment(of: content),
+                                                  unreadable: nil))
             } catch let failure as MessagingDecryptionFailure {
                 let code = MessagingDiagnostics.isSafe(failure.code) ? failure.code : "D-X"
                 result.append(MessagingReportLine(id: item.messageID, senderName: item.senderName, date: item.acceptedAt,
-                                                  text: nil, unreadable: MessagingDecryptionFailure.explanation(for: code)))
+                                                  text: nil, media: nil,
+                                                  unreadable: MessagingDecryptionFailure.explanation(for: code)))
             } catch is CancellationError {
                 return
             } catch {
                 result.append(MessagingReportLine(id: item.messageID, senderName: item.senderName, date: item.acceptedAt,
-                                                  text: nil, unreadable: MessagingDecryptionFailure.explanation(for: "D-X")))
+                                                  text: nil, media: nil,
+                                                  unreadable: MessagingDecryptionFailure.explanation(for: "D-X")))
             }
         }
         guard currentScope() == scope else { return }
         lines[report.id] = result
+    }
+
+    /// Contenu d'un message signalé, selon la provenance rendue par la crypto.
+    ///
+    /// Un double sans provenance garde le décodeur legacy : il ne fabrique alors jamais de média.
+    private static func content(of wire: MessagingWireMessage, cryptography: any MessagingCryptography,
+                                scope: MessagingScope) async throws -> MessagingPlainContent {
+        guard let provenance = cryptography as? any MessagingContentProvenanceDecryption else {
+            let bytes = try await cryptography.decrypt(wire, scope: scope)
+            guard let content = MessagingPlainContent.decode(bytes) else { throw MessagingFailure.invalidResponse }
+            return content
+        }
+        let decrypted = try await provenance.decryptContent(wire, scope: scope)
+        let content: MessagingPlainContent?
+        switch decrypted.provenance {
+        case .matrixContent: content = MessagingPlainContent.decodeMatrixContent(decrypted.bytes)
+        case .legacyBody: content = MessagingPlainContent.decode(decrypted.bytes)
+        }
+        guard let content else { throw MessagingFailure.invalidResponse }
+        return content
+    }
+
+    /// Métadonnées présentables d'une pièce jointe : nature, nom, légende. Jamais de clé, d'IV ni d'URL.
+    private static func attachment(of content: MessagingPlainContent) -> MessagingReportAttachment? {
+        guard let media = content.media else { return nil }
+        let caption = content.text.flatMap { text -> String? in
+            text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
+        }
+        return MessagingReportAttachment(nature: media.mime == .pdf ? .pdf : .photo,
+                                         name: media.name, caption: caption, bytesTransmitted: false)
     }
 
     /// Changement de statut : le statut attendu est celui que cette personne voit ; un statut périmé relit la liste.

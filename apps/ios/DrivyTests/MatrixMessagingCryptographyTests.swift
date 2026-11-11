@@ -839,6 +839,31 @@ private actor InMemoryRelay {
     }
     private var backups: [String: Backup] = [:]
     private var backupUnavailable = false
+    // Lecture paginée (#436) : journal des curseurs reçus et pannes déterministes, jamais du contenu.
+    private var pageRequests: [String?] = []
+    private var interruptAtPage: Int?
+    private var mutateAfterPage: Int?
+    private var backupPosts = 0
+    private var loseNextBackupPostResponse = false
+    func backupPageRequests() -> [String?] { pageRequests }
+    func backupPostCount() -> Int { backupPosts }
+    func interruptBackupRead(atPage page: Int) { interruptAtPage = page }
+    func changeBackupAfterPage(_ page: Int) { mutateAfterPage = page }
+    func loseNextBackupPost() { loseNextBackupPostResponse = true }
+    func backupPublicKey(_ person: UUID, school: UUID) -> String? {
+        backups["\(school)|\(MatrixMessagingCryptography.userID(person))"]?.authData["public_key"] as? String
+    }
+    /// Sessions de synthèse non déchiffrables : elles prouvent le décompte sans toucher à un vrai secret.
+    func seedBackupSessions(_ person: UUID, school: UUID, count: Int) {
+        let owner = "\(school)|\(MatrixMessagingCryptography.userID(person))"
+        guard var backup = backups[owner] else { return }
+        for index in 0..<count {
+            backup.rooms["!synthetic\(index / 1000):drivy", default: [:]]["session\(String(format: "%05d", index))"] =
+                ["session_data": ["ephemeral": "x", "mac": "x", "ciphertext": "x"]]
+        }
+        backup.etag += 1
+        backups[owner] = backup
+    }
     // Cross-signing : documents publics réels du SDK, jamais de confiance attribuée par fixture.
     private var signingKeys: [String: [String: [String: Any]]] = [:]
     enum SignatureFault: Sendable { case refused, malformed }
@@ -947,12 +972,14 @@ private actor InMemoryRelay {
             output = ["recipients": (reportRecipients[school] ?? []).map { ["personId": $0.uuidString.lowercased()] }]
         case "room_keys/version":
             if method == "POST" {
-                guard backups[backupOwner] == nil else { throw MessagingCryptoRelayFailure.backupVersionConflict }
+                guard backups[backupOwner] == nil else { throw MessagingCryptoRelayFailure.backupAlreadyExists }
+                backupPosts += 1
                 guard let algorithm = input["algorithm"] as? String,
                       let auth = input["auth_data"] as? [String: Any], auth["public_key"] is String else {
                     throw MessagingFailure.invalidResponse
                 }
                 backups[backupOwner] = Backup(version: "1", algorithm: algorithm, authData: auth)
+                if loseNextBackupPostResponse { loseNextBackupPostResponse = false; throw MessagingFailure.unavailable }
                 output = ["version": "1"]
             } else if method == "GET" {
                 guard let backup = backups[backupOwner] else { throw MessagingCryptoRelayFailure.notFound }
@@ -963,7 +990,34 @@ private actor InMemoryRelay {
             guard var backup = backups[backupOwner], query.first(where: { $0.name == "version" })?.value == backup.version else {
                 throw MessagingCryptoRelayFailure.backupVersionConflict
             }
-            if method == "GET" {
+            if method == "GET", let limitText = query.first(where: { $0.name == "limit" })?.value {
+                guard let limit = Int(limitText), (1...500).contains(limit) else { throw MessagingFailure.invalidResponse }
+                pageRequests.append(query.first(where: { $0.name == "from" })?.value)
+                if interruptAtPage == pageRequests.count { interruptAtPage = nil; throw MessagingFailure.unavailable }
+                var offset = 0
+                if let cursor = query.first(where: { $0.name == "from" })?.value {
+                    let parts = cursor.split(separator: "|")
+                    guard parts.count == 3, parts[0] == "cursor", let at = Int(parts[2]), at >= 0 else {
+                        throw MessagingCryptoRelayFailure.backupCursorInvalid
+                    }
+                    guard parts[1] == String(backup.etag) else { throw MessagingCryptoRelayFailure.backupChangedDuringRead }
+                    offset = at
+                }
+                let ordered = backup.rooms.keys.sorted().flatMap { room in backup.rooms[room]!.keys.sorted().map { (room, $0) } }
+                let slice = Array(ordered.dropFirst(offset).prefix(limit))
+                var rooms: [String: [String: Any]] = [:]
+                for (room, id) in slice { rooms[room, default: [:]][id] = backup.rooms[room]![id]! }
+                let complete = offset + slice.count >= ordered.count
+                let servedEtag = backup.etag
+                output = ["rooms": rooms.mapValues { ["sessions": $0] }, "etag": String(servedEtag), "count": ordered.count,
+                          "complete": complete,
+                          "next_from": complete ? NSNull() as Any : "cursor|\(servedEtag)|\(offset + slice.count)"]
+                if mutateAfterPage == pageRequests.count {
+                    mutateAfterPage = nil
+                    backup.etag += 1
+                    backups[backupOwner] = backup
+                }
+            } else if method == "GET" {
                 output = ["rooms": backup.rooms.mapValues { ["sessions": $0] }]
             } else if method == "PUT" {
                 if backupUnavailable { throw MessagingFailure.unavailable }
@@ -1384,5 +1438,264 @@ final class MatrixMessagingReportSealingTests: XCTestCase {
         XCTAssertEqual(decoded.media?.size, 4_096)
         XCTAssertEqual(decoded.media?.file, media.file, "La clé de fichier reste explicite pour l'administrateur")
         XCTAssertNil(MessagingPlainContent.decode(clear)?.media, "Le décodeur legacy ne fabrique aucun média")
+    }
+
+    /// Lot typé (#97) : texte legacy et média dans **une seule** session, ordre conservé, et l'administrateur
+    /// lit la provenance de chacun — le texte tel quel, le média avec sa légende et ses métadonnées.
+    func testTypedBatchSealsLegacyAndMediaInOneSession() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+
+        let legacy = try MessagingPlainContent(text: "Texte signalé").encoded()
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x31, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x52, count: 32)))
+        let value = try MessagingMediaContentV3(text: "Preuve signalée", media: media)
+        let sealed = try await reporter.sealReport([.legacy(legacy), .media(value)], scope: scope(alice),
+                                                   conversationID: conversation)
+        XCTAssertEqual(sealed.count, 2)
+        XCTAssertEqual(sealed[0].keyID, sealed[1].keyID, "Une seule session pour tout le signalement")
+        XCTAssertEqual(sealed[0].scheme, "megolm.v1")
+
+        let legacyContent = try await administrator.decryptContent(wire(sealed[0]), scope: scope(admin))
+        XCTAssertEqual(legacyContent.provenance, .legacyBody)
+        XCTAssertEqual(legacyContent.bytes, legacy, "Les octets legacy du signalement ne changent pas")
+        XCTAssertNil(MessagingPlainContent.decode(legacyContent.bytes)?.media)
+
+        let mediaContent = try await administrator.decryptContent(wire(sealed[1]), scope: scope(admin))
+        XCTAssertEqual(mediaContent.provenance, .matrixContent)
+        let decoded = try XCTUnwrap(MessagingPlainContent.decodeMatrixContent(mediaContent.bytes))
+        XCTAssertEqual(decoded.text, "Preuve signalée")
+        XCTAssertEqual(decoded.media?.name, "bilan.pdf")
+        XCTAssertEqual(decoded.media?.mime, .pdf)
+        XCTAssertEqual(decoded.media?.size, 4_096)
+        XCTAssertEqual(decoded.media?.file, media.file, "La clé de fichier reste dans l'enveloppe destinataire")
+        // Le body du média porte un repli lisible, jamais du JSON technique ; ni le nom ni la légende
+        // n'apparaissent en clair dans le chiffré transporté.
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: mediaContent.bytes) as? [String: Any])
+        XCTAssertEqual(object["body"] as? String, "Preuve signalée")
+        XCTAssertFalse(String(decoding: sealed[1].payload, as: UTF8.self).contains("bilan.pdf"))
+        XCTAssertFalse(String(decoding: sealed[1].payload, as: UTF8.self).contains("Preuve signalée"))
+    }
+
+    /// Un ancien `body` qui reproduit exactement un contenu v3 reste du texte dans un signalement typé :
+    /// le scellement n'interprète jamais les octets legacy.
+    func testTypedBatchKeepsALegacyBodyLookingLikeV3AsText() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+
+        let lookalike = Data(#"{"msgtype":"m.text","body":"Photo","ch.drivy.messaging":{"v":3,"text":null,"media":{"id":"5c1f","size":10,"mime":"image/jpeg","name":"a.jpg","width":1,"height":1,"file":{}}}}"#.utf8)
+        let sealed = try await reporter.sealReport([.legacy(lookalike)], scope: scope(alice), conversationID: conversation)
+        let decrypted = try await administrator.decryptContent(wire(sealed[0]), scope: scope(admin))
+        XCTAssertEqual(decrypted.provenance, .legacyBody, "Un contenu déclaré legacy le reste")
+        XCTAssertEqual(decrypted.bytes, lookalike, "Le texte utilisateur est transmis tel quel")
+        XCTAssertNil(MessagingPlainContent.decode(decrypted.bytes)?.media, "Aucune pièce jointe n'est déduite")
+    }
+
+    /// Un contenu média au-delà du plafond est refusé **avant** toute session de signalement.
+    func testTypedBatchRefusesAMediaBeyondTheBoundBeforeSealing() async throws {
+        let relay = InMemoryRelay()
+        await relay.setReportRecipients(school, [admin])
+        let reporter = try device(alice, relay: relay)
+        let administrator = try device(admin, relay: relay)
+        let ready = await administrator.isAvailable(scope: scope(admin), conversationID: conversation)
+        XCTAssertTrue(ready)
+
+        let heavy = String(repeating: "a\u{0301}\u{0301}\u{0301}\u{0301}\u{0301}", count: 1_000)
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x32, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x53, count: 32)))
+        let value = try MessagingMediaContentV3(text: heavy, media: media)
+        do {
+            _ = try await reporter.sealReport([.media(value)], scope: scope(alice), conversationID: conversation)
+            XCTFail("Un contenu média au-delà du plafond ne doit pas être scellé")
+        } catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+    }
+}
+
+/// Sauvegarde de clés récupérable (#435) et lecture paginée (#436). NON COMPILÉ / NON EXÉCUTÉ localement :
+/// à lancer sur runner Apple avec la bibliothèque native. Sessions et clés synthétiques, aucune donnée réelle.
+final class MatrixMessagingBackupRecoveryTests: XCTestCase {
+    private let school = UUID(uuidString: "22222222-2222-4222-8222-222222222222")!
+    private let conversation = UUID(uuidString: "33333333-3333-4333-8333-333333333333")!
+    private let alice = UUID(uuidString: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")!
+    private let bob = UUID(uuidString: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")!
+
+    private func scope(_ person: UUID) -> MessagingScope {
+        MessagingScope(accountID: person, schoolID: school, accessEpoch: 1, apiBaseURL: "https://a.test")
+    }
+
+    private func vault(_ person: UUID, root: URL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)) throws -> MessagingCryptoVault {
+        try MessagingCryptoVault(scope: scope(person), root: root, keychain: FlakyKeychain())
+    }
+
+    private func device(_ person: UUID, relay: any MessagingCryptoRelay, vault: MessagingCryptoVault) throws -> MatrixMessagingCryptography {
+        try MatrixMessagingCryptography(scope: scope(person), relay: relay, vault: vault)
+    }
+
+    // MARK: #435
+
+    /// Un échec de stockage de l'intention chiffrée interdit le POST : aucune sauvegarde sans clé durable.
+    func testStorageFailureForbidsAnyPost() async throws {
+        let relay = InMemoryRelay()
+        let sealed = try vault(bob)
+        try FileManager.default.createDirectory(at: sealed.folder.appendingPathComponent("backup-activation.sealed"),
+                                                withIntermediateDirectories: true)
+        let crypto = try device(bob, relay: relay.view(bob), vault: sealed)
+        do { _ = try await crypto.enableBackup(scope: scope(bob)); XCTFail("Sans intention durable, rien ne part") }
+        catch { XCTAssertEqual(error as? MessagingFailure, .protectionUnavailable) }
+        let posts = await relay.backupPostCount()
+        XCTAssertEqual(posts, 0)
+    }
+
+    /// Réponse perdue puis relance : GET de rapprochement avec la même clé publique, même clé révélée, une seule sauvegarde.
+    func testLostPostResponseIsReconciledAndRevealsTheInitialKey() async throws {
+        let relay = InMemoryRelay()
+        let sealed = try vault(bob)
+        let first = try device(bob, relay: relay.view(bob), vault: sealed)
+        await relay.loseNextBackupPost()
+        do { _ = try await first.enableBackup(scope: scope(bob)); XCTFail("La réponse perdue est une panne") }
+        catch { XCTAssertEqual(error as? MessagingFailure, .unavailable) }
+        let intent = try XCTUnwrap(sealed.backupActivation(), "La clé est durable avant le POST")
+        // Relance de l'application : nouvelle instance, même coffre.
+        let relaunched = try device(bob, relay: relay.view(bob), vault: sealed)
+        let revealed = try await relaunched.enableBackup(scope: scope(bob))
+        XCTAssertEqual(revealed, intent.recoveryKey)
+        let posts = await relay.backupPostCount()
+        XCTAssertEqual(posts, 1, "Aucun second POST : la sauvegarde distante est rapprochée")
+        let remoteKey = await relay.backupPublicKey(bob, school: school)
+        XCTAssertEqual(remoteKey, intent.publicKey)
+        // Sans confirmation de l'utilisateur, la même clé reste révélable.
+        let again = try await relaunched.enableBackup(scope: scope(bob))
+        XCTAssertEqual(again, intent.recoveryKey)
+        await relaunched.acknowledgeRecoveryKey(scope: scope(bob))
+        XCTAssertNil(try sealed.backupActivation(), "La confirmation efface l'intention chiffrée")
+    }
+
+    /// Une version distante différente demande une décision explicite : ni rotation ni suppression automatique.
+    func testDifferentRemoteVersionIsAnExplicitConflictAndNeverReplaced() async throws {
+        let relay = InMemoryRelay()
+        let original = try device(bob, relay: relay.view(bob), vault: try vault(bob))
+        _ = try await original.enableBackup(scope: scope(bob))
+        let before = await relay.backupPublicKey(bob, school: school)
+        let otherVault = try vault(bob)
+        let other = try device(bob, relay: relay.view(bob), vault: otherVault)
+        do { _ = try await other.enableBackup(scope: scope(bob)); XCTFail("Une autre sauvegarde existe déjà") }
+        catch { XCTAssertEqual(error as? MessagingFailure, .stateConflict) }
+        let after = await relay.backupPublicKey(bob, school: school)
+        let posts = await relay.backupPostCount()
+        XCTAssertEqual(before, after, "La sauvegarde distante n'est ni remplacée ni supprimée")
+        XCTAssertEqual(posts, 1)
+        XCTAssertNil(try otherVault.backupActivation(), "Une clé jamais acceptée ne se réaffiche pas")
+    }
+
+    /// Sauvegarde puis restauration d'une session synthétique après une activation interrompue.
+    func testSyntheticSessionSurvivesInterruptedActivationAndRestores() async throws {
+        let relay = InMemoryRelay()
+        await relay.setMembers(conversation, [alice, bob])
+        let a = try device(alice, relay: relay.view(alice), vault: try vault(alice))
+        let sealed = try vault(bob)
+        let b = try device(bob, relay: relay.view(bob), vault: sealed)
+        await relay.loseNextBackupPost()
+        do { _ = try await b.enableBackup(scope: scope(bob)); XCTFail() } catch {}
+        let recovery = try await b.enableBackup(scope: scope(bob))
+        let encrypted = try await a.encrypt(Data("Session de synthèse".utf8), mentions: [], scope: scope(alice), conversationID: conversation)
+        let message = MessagingWireMessage(id: UUID(), conversationID: conversation, schoolID: school, senderID: alice,
+                                           acceptedAt: Date(), ciphertext: encrypted)
+        let clear = try await b.decrypt(message, scope: scope(bob))
+        let fresh = try device(bob, relay: relay.view(bob), vault: try vault(bob))
+        let restored = try await fresh.restoreBackup(recoveryKey: recovery, scope: scope(bob))
+        XCTAssertEqual(restored.imported, 1); XCTAssertEqual(restored.failed, 0)
+        let again = try await fresh.decrypt(message, scope: scope(bob))
+        XCTAssertEqual(again, clear)
+    }
+
+    // MARK: #436
+
+    private func seededRestorer(sessions: Int, relay: InMemoryRelay) async throws -> (crypto: MatrixMessagingCryptography, recovery: String) {
+        let owner = try device(bob, relay: relay.view(bob), vault: try vault(bob))
+        let recovery = try await owner.enableBackup(scope: scope(bob))
+        await relay.seedBackupSessions(bob, school: school, count: sessions)
+        return (try device(bob, relay: relay.view(bob), vault: try vault(bob)), recovery)
+    }
+
+    /// 5001 sessions : onze pages, aucune troncature, fin annoncée uniquement par `complete`.
+    func testMoreThanFiveThousandSessionsAreReadWithoutTruncation() async throws {
+        let relay = InMemoryRelay()
+        let (restorer, recovery) = try await seededRestorer(sessions: 5_001, relay: relay)
+        let result = try await restorer.restoreBackup(recoveryKey: recovery, scope: scope(bob))
+        XCTAssertEqual(result.imported, 0)
+        XCTAssertEqual(result.failed, 5_001, "Chaque session de synthèse est comptée une fois, aucune omise")
+        let requests = await relay.backupPageRequests()
+        XCTAssertEqual(requests.count, 11)
+        XCTAssertNil(requests[0])
+        XCTAssertEqual(Set(requests.dropFirst().compactMap { $0 }).count, 10, "Un curseur différent par page")
+    }
+
+    /// Interruption puis reprise : la page suivante repart du dernier curseur, sans doubler ni perdre de session.
+    func testInterruptedReadResumesFromTheLastCursor() async throws {
+        let relay = InMemoryRelay()
+        let (restorer, recovery) = try await seededRestorer(sessions: 1_200, relay: relay)
+        await relay.interruptBackupRead(atPage: 2)
+        do { _ = try await restorer.restoreBackup(recoveryKey: recovery, scope: scope(bob)); XCTFail("L'interruption n'est jamais une fin") }
+        catch { XCTAssertEqual(error as? MessagingFailure, .unavailable) }
+        let result = try await restorer.restoreBackup(recoveryKey: recovery, scope: scope(bob))
+        XCTAssertEqual(result.failed, 1_200)
+        let requests = await relay.backupPageRequests()
+        XCTAssertEqual(requests.count, 4)
+        XCTAssertNil(requests[0])
+        XCTAssertEqual(requests[1], requests[2], "Reprise depuis le dernier curseur reçu")
+    }
+
+    /// 409 BACKUP_CHANGED_DURING_READ : l'état partiel est jeté et la lecture recommence depuis le début.
+    func testChangeDuringReadRestartsFromTheBeginning() async throws {
+        let relay = InMemoryRelay()
+        let (restorer, recovery) = try await seededRestorer(sessions: 1_200, relay: relay)
+        await relay.changeBackupAfterPage(1)
+        let result = try await restorer.restoreBackup(recoveryKey: recovery, scope: scope(bob))
+        XCTAssertEqual(result.failed, 1_200, "Le décompte ne garde rien de la lecture abandonnée")
+        let requests = await relay.backupPageRequests()
+        XCTAssertNil(requests[0]); XCTAssertNotNil(requests[1]); XCTAssertNil(requests[2], "Relecture depuis le début")
+    }
+
+    /// Une réponse sans `complete`, ou « incomplète » sans suite, n'est jamais une fin : réponse invalide.
+    func testMissingOrContradictoryCompletionIsNeverAnEnd() async throws {
+        let relay = InMemoryRelay()
+        let (_, recovery) = try await seededRestorer(sessions: 10, relay: relay)
+        let tampers: [@Sendable (inout [String: Any]) -> Void] = [
+            { $0.removeValue(forKey: "complete") },
+            { $0["complete"] = false; $0["next_from"] = NSNull() },
+        ]
+        for tamper in tampers {
+            let wrapped = PageTamperRelay(base: relay.view(bob), tamper: tamper)
+            let restorer = try device(bob, relay: wrapped, vault: try vault(bob))
+            do { _ = try await restorer.restoreBackup(recoveryKey: recovery, scope: scope(bob)); XCTFail("Pas de fin sans complete") }
+            catch { XCTAssertEqual(error as? MessagingFailure, .invalidResponse) }
+        }
+    }
+}
+
+/// Altère la réponse paginée d'un relais réel pour éprouver les refus (tests uniquement).
+private struct PageTamperRelay: MessagingCryptoRelay {
+    let base: InMemoryRelay.View
+    let tamper: @Sendable (inout [String: Any]) -> Void
+    func call(scope: MessagingScope, deviceID: String, method: String, path: [String], query: [URLQueryItem], body: Data?) async throws -> Data {
+        let raw = try await base.call(scope: scope, deviceID: deviceID, method: method, path: path, query: query, body: body)
+        guard path == ["room_keys", "keys"], method == "GET", var object = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else { return raw }
+        tamper(&object)
+        return try JSONSerialization.data(withJSONObject: object)
+    }
+    func members(scope: MessagingScope, deviceID: String, conversationID: UUID) async throws -> MessagingConversationMembers {
+        try await base.members(scope: scope, deviceID: deviceID, conversationID: conversationID)
     }
 }

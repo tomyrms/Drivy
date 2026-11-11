@@ -172,6 +172,7 @@ import Testing
         #expect(SchoolCourseFormat.duration(minutes: 45) == "45 min")
         #expect(SchoolCourseFormat.seats(0) == "Complet")
         #expect(SchoolCourseClient.failure(409, "COURSE_INSTRUCTOR_CONFLICT") == .rejected("Un moniteur a déjà un rendez-vous pendant une séance. Le brouillon est conservé."))
+        #expect(SchoolCourseClient.failure(409, "COURSE_INSTRUCTOR_CLOSED") == .rejected("Un moniteur est absent (fermeture) pendant une séance. Le brouillon est conservé : change le moniteur ou l’horaire."))
         #expect(SchoolCourseClient.failure(412, "VERSION_CONFLICT") == .conflict)
     }
 

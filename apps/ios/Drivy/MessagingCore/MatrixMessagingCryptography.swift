@@ -11,6 +11,8 @@ protocol MessagingKeyManagement: Sendable {
     func restoreBackup(recoveryKey: String, scope: MessagingScope) async throws -> (imported: Int, failed: Int)
     /// Vrai si des clés n'ont pas encore pu être envoyées à la sauvegarde (nouvel essai au prochain open/sync).
     func backupPending(scope: MessagingScope) async -> Bool
+    /// L'utilisateur a confirmé avoir noté la clé : l'intention d'activation chiffrée (#435) peut être effacée.
+    func acknowledgeRecoveryKey(scope: MessagingScope) async
     func ownDevices(scope: MessagingScope) async throws -> [MessagingOwnDevice]
     func deviceVerificationSnapshot(scope: MessagingScope) async throws -> MessagingDeviceVerificationSnapshot
     /// À appeler seulement après comparaison visuelle de l'empreinte affichée sur les deux appareils.
@@ -18,6 +20,7 @@ protocol MessagingKeyManagement: Sendable {
 }
 
 extension MessagingKeyManagement {
+    func acknowledgeRecoveryKey(scope: MessagingScope) async {}
     func deviceVerificationSnapshot(scope: MessagingScope) async throws -> MessagingDeviceVerificationSnapshot {
         throw MessagingFailure.protectionUnavailable
     }
@@ -41,7 +44,7 @@ struct MessagingOwnDevice: Sendable, Hashable, Identifiable {
 /// Chiffrement de bout en bout #67 : Olm/Megolm de matrix-sdk-crypto (vodozemac), transport API Drivy.
 /// Aucun chemin ne renvoie ou n'envoie de clair : toute erreur devient `protectionUnavailable`.
 actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement, MessagingReportSealing,
-    MessagingMatrixContentEncryption, MessagingContentProvenanceDecryption {
+    MessagingMatrixContentEncryption, MessagingContentProvenanceDecryption, MessagingTypedReportSealing {
     static let scheme = "megolm.v1"
     static let serverName = "drivy"
     /// Rotation périodique en plus de la rotation à chaque départ.
@@ -242,16 +245,22 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
         return first
     }
 
-    /// Une session de groupe neuve par signalement, partagée par to-device Olm aux appareils des administrateurs,
-    /// puis un chiffrement par message choisi. Sans administrateur joignable, rien n'est chiffré ni envoyé.
+    /// API legacy conservée telle quelle : chaque `Data` est traitée comme contenu applicatif (texte v1 ou
+    /// enveloppe v2), jamais réinterprétée. Elle délègue au scellement typé en déclarant la provenance.
     func sealForSchoolAdmins(_ plaintexts: [Data], scope: MessagingScope, conversationID: UUID) async throws -> [MessagingCiphertext] {
+        try await sealReport(plaintexts.map(MessagingReportPayload.legacy), scope: scope, conversationID: conversationID)
+    }
+
+    /// Une session de groupe neuve par signalement, partagée par to-device Olm aux appareils des administrateurs,
+    /// puis un chiffrement par message choisi, dans l'ordre du lot. Sans administrateur joignable, rien n'est
+    /// chiffré ni envoyé. Chaque contenu est construit selon la provenance **déclarée** avant toute ouverture
+    /// de session : un média est un contenu Matrix v3 typé, un texte reste le `body` legacy.
+    func sealReport(_ payloads: [MessagingReportPayload], scope: MessagingScope,
+                    conversationID: UUID) async throws -> [MessagingCiphertext] {
         try guardScope(scope)
         diagnostics.clear()
-        guard (1...50).contains(plaintexts.count) else { throw MessagingFailure.invalidResponse }
-        let texts = try plaintexts.map { data -> String in
-            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else { throw MessagingFailure.invalidResponse }
-            return text
-        }
+        guard (1...50).contains(payloads.count) else { throw MessagingFailure.invalidResponse }
+        let contents = try payloads.map(Self.reportContent)
         return try await shielded {
             let machine = try await open()
             let room = Self.reportRoomID(scope.schoolID)
@@ -274,13 +283,31 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                 try await dispatch(request, machine)
             }
             var sealed: [MessagingCiphertext] = []
-            for text in texts {
-                let content = try Self.messageContent(text: text, mentions: [])
+            for content in contents {
                 let encrypted = try machine.encrypt(roomId: room, eventType: "m.room.message", content: content)
                 sealed.append(try Self.envelope(fromEncryptedContent: encrypted))
             }
             try await backupOrMarkPending(machine)
             return sealed
+        }
+    }
+
+    /// Contenu Matrix réellement chiffré pour un élément de signalement, selon la provenance déclarée.
+    ///
+    /// - `legacy` : les octets applicatifs vont dans `body`, comme avant #97 ;
+    /// - `media` : contenu Matrix v3 complet (namespace, légende, métadonnées), borné à 6 000 octets,
+    ///   sans aucune demande ni octet de fichier.
+    private static func reportContent(_ payload: MessagingReportPayload) throws -> String {
+        switch payload {
+        case .legacy(let data):
+            guard let text = String(data: data, encoding: .utf8), !text.isEmpty else {
+                throw MessagingFailure.invalidResponse
+            }
+            return try messageContent(text: text, mentions: [])
+        case .media(let value):
+            let data = try MessagingMediaContent.messageContent(value, mentions: [])
+            guard data.count <= MessagingPlainContent.maximumV3ByteCount else { throw MessagingFailure.invalidResponse }
+            return String(decoding: data, as: UTF8.self)
         }
     }
 
@@ -300,24 +327,75 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
 
     // MARK: MessagingKeyManagement
 
+    /// #435 : la clé de récupération et son intention sont durables (chiffrées) AVANT le POST. Une réponse perdue,
+    /// une relance ou un second essai rapprochent la sauvegarde distante par sa clé publique et révèlent la clé initiale.
+    /// Une sauvegarde distante différente n'est jamais remplacée ni supprimée : décision explicite de l'utilisateur.
     func enableBackup(scope: MessagingScope) async throws -> String {
         try guardScope(scope)
         diagnostics.clear()
         return try await shielded {
             let machine = try await open()
-            let key = BackupRecoveryKey()
+            // Échec d'écriture : MessagingFailure.protectionUnavailable, aucun POST n'a été tenté.
+            let intent = try vault.prepareBackupActivation {
+                let fresh = BackupRecoveryKey()
+                return MessagingCryptoVault.BackupActivation(recoveryKey: fresh.toBase58(), publicKey: fresh.megolmV1PublicKey().publicKey)
+            }
+            guard let key = try? BackupRecoveryKey.fromBase58(key: intent.recoveryKey),
+                  key.megolmV1PublicKey().publicKey == intent.publicKey else { throw MessagingFailure.protectionUnavailable }
             let publicKey = key.megolmV1PublicKey()
-            let authData: [String: Any] = ["public_key": publicKey.publicKey]
-            let body = try JSONSerialization.data(withJSONObject: ["algorithm": publicKey.backupAlgorithm, "auth_data": authData])
-            let created = try await relay.call(scope: scope, deviceID: deviceID, method: "POST",
-                                               path: ["room_keys", "version"], query: [], body: body)
-            guard let version = (try JSONSerialization.jsonObject(with: created) as? [String: Any])?["version"] as? String,
-                  !version.isEmpty else { throw MessagingFailure.invalidResponse }
+            let version: String
+            if let remote = try await remoteBackup(scope: scope) {
+                version = try adopt(remote, intent: intent)
+            } else {
+                let authData: [String: Any] = ["public_key": publicKey.publicKey]
+                let body = try JSONSerialization.data(withJSONObject: ["algorithm": publicKey.backupAlgorithm, "auth_data": authData])
+                do {
+                    let created = try await relay.call(scope: scope, deviceID: deviceID, method: "POST",
+                                                       path: ["room_keys", "version"], query: [], body: body)
+                    guard let made = (try JSONSerialization.jsonObject(with: created) as? [String: Any])?["version"] as? String,
+                          !made.isEmpty else { throw MessagingFailure.invalidResponse }
+                    version = made
+                } catch let failure as MessagingCryptoRelayFailure where failure == .backupAlreadyExists || failure == .backupVersionConflict {
+                    // Créée entre-temps (réponse perdue d'un essai précédent, ou autre appareil) : seule la clé publique tranche.
+                    guard let remote = try await remoteBackup(scope: scope) else { throw MessagingFailure.protectionUnavailable }
+                    version = try adopt(remote, intent: intent)
+                }
+            }
             try machine.enableBackupV1(key: publicKey, version: version)
             try machine.saveRecoveryKey(key: key, version: version)
             try await backupOrMarkPending(machine)
             return key.toBase58()
         }
+    }
+
+    func acknowledgeRecoveryKey(scope: MessagingScope) async {
+        guard scope == self.scope else { return }
+        try? vault.clearBackupActivation()
+    }
+
+    private struct RemoteBackup { let version: String; let publicKey: String }
+
+    private func remoteBackup(scope: MessagingScope) async throws -> RemoteBackup? {
+        let info: Data
+        do {
+            info = try await relay.call(scope: scope, deviceID: deviceID, method: "GET",
+                                        path: ["room_keys", "version"], query: [], body: nil)
+        } catch MessagingCryptoRelayFailure.notFound { return nil }
+        guard let object = try? JSONSerialization.jsonObject(with: info) as? [String: Any],
+              let version = object["version"] as? String, !version.isEmpty,
+              let auth = object["auth_data"] as? [String: Any],
+              let publicKey = auth["public_key"] as? String else { throw MessagingFailure.invalidResponse }
+        return RemoteBackup(version: version, publicKey: publicKey)
+    }
+
+    /// La sauvegarde distante est la nôtre si et seulement si sa clé publique est celle de l'intention.
+    private func adopt(_ remote: RemoteBackup, intent: MessagingCryptoVault.BackupActivation) throws -> String {
+        guard remote.publicKey == intent.publicKey else {
+            // Cette clé n'a jamais été acceptée par le serveur : l'intention est périmée, la sauvegarde distante intacte.
+            try? vault.clearBackupActivation()
+            throw MessagingFailure.stateConflict
+        }
+        return remote.version
     }
 
     func restoreBackup(recoveryKey: String, scope: MessagingScope) async throws -> (imported: Int, failed: Int) {
@@ -339,16 +417,90 @@ actor MatrixMessagingCryptography: MessagingCryptography, MessagingKeyManagement
                   let auth = object["auth_data"] as? [String: Any],
                   let publicKey = auth["public_key"] as? String else { throw MessagingFailure.invalidResponse }
             guard publicKey == key.megolmV1PublicKey().publicKey else { throw MessagingFailure.recoveryKeyRefused }
-            let raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["room_keys", "keys"],
-                                           query: [URLQueryItem(name: "version", value: version)], body: nil)
-            let backup = try Self.decryptBackup(raw, key: key)
-            let keys = String(decoding: try JSONSerialization.data(withJSONObject: backup.sessions), as: UTF8.self)
-            let result = try machine.importRoomKeysFromBackup(keys: keys, backupVersion: version, progressListener: SilentProgress())
+            // #436 : lecture paginée ; seul `complete: true` annonce la fin, jamais une page courte ni une erreur.
+            let total = try await importBackupPages(machine: machine, key: key, version: version, scope: scope)
             try machine.saveRecoveryKey(key: key, version: version)
             try machine.enableBackupV1(key: key.megolmV1PublicKey(), version: version)
-            let rejected = max(0, Int(result.total) - Int(result.imported))
-            return (imported: Int(result.imported), failed: backup.failed + rejected)
+            return total
         }
+    }
+
+    /// Point de reprise d'une lecture interrompue (mémoire seulement : aucune clé, aucun contenu).
+    private struct BackupReadProgress {
+        let version: String
+        let etag: String
+        let from: String
+        var imported: Int
+        var failed: Int
+    }
+    private var backupReadProgress: BackupReadProgress?
+    static let backupPageLimit = 500
+    /// Garde-fou : 5001 sessions tiennent en 11 pages ; un serveur qui ne finit jamais est une réponse invalide.
+    private static let backupMaximumPages = 2_000
+
+    private func importBackupPages(machine: OlmMachine, key: BackupRecoveryKey, version: String,
+                                   scope: MessagingScope) async throws -> (imported: Int, failed: Int) {
+        var restarts = 0
+        while true {
+            do { return try await readBackupPages(machine: machine, key: key, version: version, scope: scope) }
+            catch MessagingCryptoRelayFailure.backupChangedDuringRead, MessagingCryptoRelayFailure.backupCursorInvalid {
+                // La sauvegarde a changé ou le curseur est refusé : état partiel jeté, relecture depuis le début.
+                backupReadProgress = nil
+                restarts += 1
+                if restarts > 3 { throw MessagingFailure.stateConflict }
+            }
+        }
+    }
+
+    private func readBackupPages(machine: OlmMachine, key: BackupRecoveryKey, version: String,
+                                 scope: MessagingScope) async throws -> (imported: Int, failed: Int) {
+        var from: String?
+        var etag: String?
+        var imported = 0, failed = 0
+        if let resume = backupReadProgress, resume.version == version {
+            from = resume.from; etag = resume.etag; imported = resume.imported; failed = resume.failed
+        }
+        var seen: Set<String> = from.map { [$0] } ?? []
+        for _ in 0..<Self.backupMaximumPages {
+            var query = [URLQueryItem(name: "version", value: version),
+                         URLQueryItem(name: "limit", value: String(Self.backupPageLimit))]
+            if let from { query.append(URLQueryItem(name: "from", value: from)) }
+            let raw: Data
+            do {
+                raw = try await relay.call(scope: scope, deviceID: deviceID, method: "GET", path: ["room_keys", "keys"],
+                                           query: query, body: nil)
+            } catch MessagingCryptoRelayFailure.backupPaginationRequired {
+                // Jamais une lecture partielle : la forme paginée est toujours demandée, ceci est une réponse inattendue.
+                throw MessagingFailure.invalidResponse
+            }
+            guard let object = try? JSONSerialization.jsonObject(with: raw) as? [String: Any],
+                  let complete = object["complete"] as? Bool else { throw MessagingFailure.invalidResponse }
+            let pageETag = (object["etag"] as? String) ?? (object["etag"] as? NSNumber).map { "\($0)" }
+            guard let pageETag, !pageETag.isEmpty else { throw MessagingFailure.invalidResponse }
+            // Un etag qui change au milieu d'une lecture est une sauvegarde modifiée : relire depuis le début.
+            if let etag, etag != pageETag { throw MessagingCryptoRelayFailure.backupChangedDuringRead }
+            etag = pageETag
+            let page = try Self.decryptBackup(raw, key: key)
+            if !page.sessions.isEmpty {
+                let keys = String(decoding: try JSONSerialization.data(withJSONObject: page.sessions), as: UTF8.self)
+                let result = try machine.importRoomKeysFromBackup(keys: keys, backupVersion: version, progressListener: SilentProgress())
+                imported += Int(result.imported)
+                failed += max(0, Int(result.total) - Int(result.imported))
+            }
+            failed += page.failed
+            if complete {
+                guard object["next_from"] == nil || object["next_from"] is NSNull else { throw MessagingFailure.invalidResponse }
+                backupReadProgress = nil
+                return (imported: imported, failed: failed)
+            }
+            guard let next = object["next_from"] as? String, !next.isEmpty, seen.insert(next).inserted else {
+                throw MessagingFailure.invalidResponse
+            }
+            from = next
+            // Reprise possible après une coupure réseau : la page suivante repart du dernier curseur reçu.
+            backupReadProgress = BackupReadProgress(version: version, etag: pageETag, from: next, imported: imported, failed: failed)
+        }
+        throw MessagingFailure.invalidResponse
     }
 
     func backupPending(scope: MessagingScope) async -> Bool {
@@ -909,6 +1061,12 @@ struct MessagingCryptoVault: Sendable {
         let intent: PendingDeviceSigning
         var completed: Bool
     }
+    /// #435 : intention d'activation de la sauvegarde, chiffrée dans le coffre avant tout effet serveur.
+    /// Contient la clé de récupération (secret) : jamais journalisée, effacée à la confirmation de l'utilisateur.
+    struct BackupActivation: Codable, Equatable, Sendable {
+        let recoveryKey: String
+        let publicKey: String
+    }
     struct State: Codable, Equatable, Sendable {
         var syncToken: String?
         var members: [UUID: [UUID]] = [:]
@@ -1029,6 +1187,47 @@ struct MessagingCryptoVault: Sendable {
             record.completed = true
             try writeDeviceSigning(record)
         }
+    }
+
+    private var activationFile: URL { folder.appendingPathComponent("backup-activation.sealed") }
+    private static let activationLock = NSLock()
+
+    func backupActivation() throws -> BackupActivation? {
+        try Self.activationLock.withLock { try readBackupActivation() }
+    }
+
+    /// Relit l'intention existante, sinon l'écrit AVANT de la rendre : un échec de stockage interdit tout POST.
+    func prepareBackupActivation(_ create: () throws -> BackupActivation) throws -> BackupActivation {
+        try Self.activationLock.withLock {
+            if let existing = try readBackupActivation() { return existing }
+            let record = try create()
+            do {
+                let sealed = try AES.GCM.seal(JSONEncoder().encode(record), using: stateKey(),
+                                             authenticating: Data("backup-activation|\(fingerprint)".utf8))
+                guard let bytes = sealed.combined else { throw MessagingFailure.protectionUnavailable }
+                try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+                try bytes.write(to: activationFile, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                try Self.protect(activationFile)
+            } catch { diagnostics.recordIfEmpty("S-BKACT-SAVE"); throw MessagingFailure.protectionUnavailable }
+            return record
+        }
+    }
+
+    func clearBackupActivation() throws {
+        try Self.activationLock.withLock {
+            guard FileManager.default.fileExists(atPath: activationFile.path) else { return }
+            do { try FileManager.default.removeItem(at: activationFile) }
+            catch { diagnostics.recordIfEmpty("S-BKACT-RM"); throw MessagingFailure.protectionUnavailable }
+        }
+    }
+
+    private func readBackupActivation() throws -> BackupActivation? {
+        guard FileManager.default.fileExists(atPath: activationFile.path) else { return nil }
+        do {
+            let box = try AES.GCM.SealedBox(combined: Data(contentsOf: activationFile))
+            let clear = try AES.GCM.open(box, using: stateKey(), authenticating: Data("backup-activation|\(fingerprint)".utf8))
+            return try JSONDecoder().decode(BackupActivation.self, from: clear)
+        } catch { diagnostics.recordIfEmpty("S-BKACT-READ"); throw MessagingFailure.protectionUnavailable }
     }
 
     private func readDeviceSigning() throws -> DeviceSigningRecord? {

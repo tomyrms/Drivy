@@ -285,6 +285,127 @@ final class MessagingThreadTests: XCTestCase {
         XCTAssertEqual(workspace.actionError, .protectionUnavailable)
     }
 
+    /// #97 : un média signalé voyage comme contenu Matrix v3 typé, scellé par la capacité dédiée ;
+    /// aucun octet de fichier n'est demandé ni transmis, et l'intention est retirée après acquittement.
+    func testReportSendsAMediaMessageThroughTheTypedSealing() async throws {
+        let scope = scope
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let response = envelope("{}")
+        let network = ThreadRecordingHTTP { request in
+            SchoolHTTPResponse(data: response, status: 200, url: request.url!, contentType: "application/json")
+        }
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+                                                   transport: network, currentScope: { scope })
+        let sealing = ReportPayloadRecordingSealing()
+        let messageID = UUID()
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x21, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x33, count: 32)))
+        let value = try MessagingMediaContentV3(text: "Preuve signalée", media: media)
+        let sealedContent = try MessagingMediaContent.messageContent(value, mentions: nil)
+        let crypto = ThreadProvenanceCipher(contents: [messageID: .matrixContent(sealedContent)])
+        var message = MessagingWireMessage(id: messageID, conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("seed".utf8)))
+        message.meta.sequence = 4
+        message.meta.media = try MessagingMessageMediaReference(mediaID: media.id, byteSize: media.size, deleted: false)
+        let workspace = MessagingWorkspace(scope: scope, cryptography: crypto, actions: actions,
+            reportSealing: sealing, reports: store, currentScope: { scope })
+        let sent = await workspace.report([message], conversationID: conversation)
+        XCTAssertTrue(sent)
+        XCTAssertNil(workspace.actionError)
+        let batches = await sealing.batches
+        XCTAssertEqual(batches.count, 1, "Un seul lot scellé pour un seul signalement")
+        XCTAssertEqual(batches.first?.count, 1)
+        guard case .media(let reported)? = batches.first?.first else {
+            XCTFail("Un média doit être scellé comme contenu Matrix typé"); return
+        }
+        XCTAssertEqual(reported.text, "Preuve signalée")
+        XCTAssertEqual(reported.media.name, "bilan.pdf")
+        XCTAssertEqual(reported.media.mime, .pdf)
+        XCTAssertEqual(reported.media.id, media.id)
+        let pending = try await store.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertNil(pending, "L'intention durable est retirée après acquittement")
+    }
+
+    /// Sans la capacité typée, un média est refusé fermé : aucun contenu n'est scellé à sa place et
+    /// aucune intention n'est écrite.
+    func testReportFailsClosedForAMediaWithoutTheTypedSealingCapability() async throws {
+        let scope = scope
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let sealing = ReportChangingSyntheticSealing()
+        let messageID = UUID()
+        let media = try MessagingMediaAttachment(id: UUID(), size: 2_048, mime: .jpeg, name: "photo.jpg",
+            width: 800, height: 600,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x22, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x44, count: 32)))
+        let value = try MessagingMediaContentV3(text: nil, media: media)
+        let sealedContent = try MessagingMediaContent.messageContent(value, mentions: nil)
+        let crypto = ThreadProvenanceCipher(contents: [messageID: .matrixContent(sealedContent)])
+        var message = MessagingWireMessage(id: messageID, conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("seed".utf8)))
+        message.meta.sequence = 2
+        message.meta.media = try MessagingMessageMediaReference(mediaID: media.id, byteSize: media.size, deleted: false)
+        let workspace = MessagingWorkspace(scope: scope, cryptography: crypto,
+            reportSealing: sealing, reports: store, currentScope: { scope })
+        let sent = await workspace.report([message], conversationID: conversation)
+        XCTAssertFalse(sent)
+        XCTAssertEqual(workspace.actionError, .protectionUnavailable)
+        let sealedCount = await sealing.count
+        XCTAssertEqual(sealedCount, 0, "Aucun contenu legacy n'est scellé à la place du média")
+        let pending = try await store.pendingReport(conversationID: conversation, scope: scope)
+        XCTAssertNil(pending, "Aucune intention n'est écrite pour un média non scellable")
+    }
+
+    /// Un lot mixte texte + média garde l'ordre des messages choisis et une seule intention durable.
+    func testReportSealsTextAndMediaInOneOrderedBatch() async throws {
+        let scope = scope
+        let store = try MessagingProtectedStore(scope: scope)
+        addTeardownBlock { try await store.purge(scope: scope) }
+        let response = envelope("{}")
+        let network = ThreadRecordingHTTP { request in
+            SchoolHTTPResponse(data: response, status: 200, url: request.url!, contentType: "application/json")
+        }
+        let actions = MessagingHTTPTransport.using(baseURL: baseURL, tokenSource: ThreadFixtureToken(),
+                                                   transport: network, currentScope: { scope })
+        let sealing = ReportPayloadRecordingSealing()
+        let textMessage = UUID(uuidString: "00000000-0000-4000-8000-00000000000a")!
+        let mediaMessage = UUID(uuidString: "00000000-0000-4000-8000-00000000000b")!
+        let textContent = try MessagingPlainContent(text: "Texte signalé").encoded()
+        let media = try MessagingMediaAttachment(id: UUID(), size: 4_096, mime: .pdf, name: "bilan.pdf",
+            width: nil, height: nil,
+            file: MessagingMediaEncryptionInfo(key: Data(repeating: 0x23, count: 32), iv: Data(repeating: 0, count: 16),
+                                               sha256: Data(repeating: 0x45, count: 32)))
+        let value = try MessagingMediaContentV3(text: "Preuve signalée", media: media)
+        let sealedContent = try MessagingMediaContent.messageContent(value, mentions: nil)
+        let crypto = ThreadProvenanceCipher(contents: [textMessage: .legacyBody(textContent),
+                                                       mediaMessage: .matrixContent(sealedContent)])
+        var text = MessagingWireMessage(id: textMessage, conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("un".utf8)))
+        text.meta.sequence = 1
+        var mediaWire = MessagingWireMessage(id: mediaMessage, conversationID: conversation, schoolID: school, senderID: UUID(),
+            acceptedAt: Date(), ciphertext: MessagingCiphertext(scheme: "TEST_ONLY", keyID: "k", payload: Data("deux".utf8)))
+        mediaWire.meta.sequence = 2
+        mediaWire.meta.media = try MessagingMessageMediaReference(mediaID: media.id, byteSize: media.size, deleted: false)
+        let workspace = MessagingWorkspace(scope: scope, cryptography: crypto, actions: actions,
+            reportSealing: sealing, reports: store, currentScope: { scope })
+        let sent = await workspace.report([mediaWire, text], conversationID: conversation)
+        XCTAssertTrue(sent)
+        let batches = await sealing.batches
+        XCTAssertEqual(batches.first?.count, 2)
+        guard case .legacy(let legacy)? = batches.first?.first else {
+            XCTFail("Le texte doit rester un contenu legacy, dans l'ordre des identifiants"); return
+        }
+        XCTAssertEqual(legacy, textContent, "Les octets applicatifs du texte ne changent pas")
+        guard case .media(let reported)? = batches.first?.last else {
+            XCTFail("Le média doit rester un contenu Matrix typé"); return
+        }
+        XCTAssertEqual(reported.media.name, "bilan.pdf")
+        XCTAssertEqual(reported.text, "Preuve signalée")
+    }
+
     func testReportAbandonIsDurableAndNextAttemptUsesNewIntent() async throws {
         let scope = scope
         let store = try MessagingProtectedStore(scope: scope)
@@ -723,8 +844,7 @@ private actor ReportLostAcknowledgementHTTP: SchoolHTTPTransport {
 }
 
 /// Deliberately different opaque bytes on each call expose accidental re-encryption on retry.
-private actor ReportChangingSyntheticSealing: MessagingReportSealing {
-    private(set) var count = 0
+private actor ReportChangingSyntheticSealing: MessagingReportSealing {    private(set) var count = 0
     let gate: ReportSuspensionGate?
     init(gate: ReportSuspensionGate? = nil) { self.gate = gate }
     func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
@@ -732,6 +852,41 @@ private actor ReportChangingSyntheticSealing: MessagingReportSealing {
         let ordinal = count
         if ordinal == 1 { await gate?.pause() }
         return MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data("SYNTHETIC_SEAL_\(ordinal)".utf8))
+    }
+}
+
+/// Crypto synthétique **avec provenance** (#97) : le contenu est déclaré par message. Aucun `body`
+/// n'est interprété pour en déduire une pièce jointe.
+private struct ThreadProvenanceCipher: MessagingCryptography, MessagingContentProvenanceDecryption {
+    let contents: [UUID: MessagingDecryptedContent]
+
+    func isAvailable(scope: MessagingScope, conversationID: UUID) async -> Bool { true }
+    func encrypt(_ plaintext: Data, mentions: [UUID], scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decrypt(_ ciphertext: MessagingCiphertext, scope: MessagingScope, conversationID: UUID) async throws -> Data {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decrypt(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> Data {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func decryptContent(_ message: MessagingWireMessage, scope: MessagingScope) async throws -> MessagingDecryptedContent {
+        guard let content = contents[message.id] else { throw MessagingFailure.protectionUnavailable }
+        return content
+    }
+}
+
+/// Scelleur typé synthétique : enregistre le lot reçu et rend une enveloppe par élément, dans l'ordre.
+private actor ReportPayloadRecordingSealing: MessagingReportSealing, MessagingTypedReportSealing {
+    private(set) var batches: [[MessagingReportPayload]] = []
+
+    func sealForSchoolAdmins(_ plaintext: Data, scope: MessagingScope, conversationID: UUID) async throws -> MessagingCiphertext {
+        throw MessagingFailure.protectionUnavailable
+    }
+    func sealReport(_ payloads: [MessagingReportPayload], scope: MessagingScope,
+                    conversationID: UUID) async throws -> [MessagingCiphertext] {
+        batches.append(payloads)
+        return payloads.map { _ in MessagingCiphertext(scheme: "TEST_ONLY", keyID: "admins", payload: Data([1, 2, 3])) }
     }
 }
 

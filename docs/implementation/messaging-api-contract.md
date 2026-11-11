@@ -54,7 +54,19 @@ Préfixe `/v1/schools/{schoolId}/messaging/crypto`, mêmes en-têtes que la mess
 - `POST keys/device_signing/upload` (clé maîtresse jamais remplacée : 409 `CROSS_SIGNING_CONFLICT`) et `POST keys/signatures/upload` → `{ failures }` (signatures acceptées sur ses propres clés seulement).
 - `GET devices` → `{ devices: [{ deviceId, createdAt, isCurrent }] }` ; `DELETE devices/{deviceId}` → `{ deviceId, revoked: true }`, idempotent : clés publiques, clés à usage unique et file supprimées, changement annoncé.
 - `POST room_keys/version` `{ algorithm, auth_data }` → `{ version }` : création de la première sauvegarde seulement, sous verrou du compte dans l'école. Une sauvegarde déjà présente, y compris lors d'un réessai après réponse perdue, donne `409 BACKUP_ALREADY_EXISTS` sans changer sa version, sa clé publique ou ses sessions. Aucune rotation implicite. `GET room_keys/version` → `{ version, algorithm, auth_data, etag, count }` ou 404.
-- `PUT room_keys/keys?version=` `{ rooms: { roomId: { sessions: { sessionId: data } } } }` → `{ etag, count }`. CAS : version non courante → 409 `BACKUP_VERSION_CONFLICT`. Une session existante n'est remplacée que par une meilleure (vérifiée, index plus bas, moins transférée). `GET room_keys/keys?version=` → `{ rooms }`, 5000 sessions au plus.
+- `PUT room_keys/keys?version=` `{ rooms: { roomId: { sessions: { sessionId: data } } } }` → `{ etag, count }`. CAS : version non courante → 409 `BACKUP_VERSION_CONFLICT`. Une session existante n'est remplacée que par une meilleure (vérifiée, index plus bas, moins transférée). `GET room_keys/keys?version=` → `{ rooms }` pour une sauvegarde de 5000 sessions au plus ; au-delà, `422 BACKUP_PAGINATION_REQUIRED` (jamais une lecture partielle). Lecture paginée (#436) : voir « Lecture paginée de la sauvegarde ».
+- `POST keys/upload` : une clé à usage unique distribuée reste enregistrée comme consommée (empreinte seule) ; un renvoi identique est accepté sans la rendre à nouveau disponible, un autre contenu sous le même identifiant donne `409 ONE_TIME_KEY_CONFLICT` (#440). Les compteurs et le plafond ne comptent que les clés disponibles.
+
+## Lecture paginée de la sauvegarde (#436)
+
+Requête : `GET room_keys/keys?version=<v>&limit=<1..500>[&from=<next_from>]`. Sans `limit` ni `from`, forme historique `{ rooms }` (5000 sessions au plus).
+Réponse paginée : `{ rooms, next_from, complete, etag, count }`.
+
+- Le client boucle : première requête sans `from`, puis `from = next_from` tant que `complete` vaut `false`. **Seul `complete: true` (avec `next_from: null`) annonce la fin** ; une page intermédiaire, une erreur ou une interruption ne l'annonce jamais.
+- Page : au plus `limit` sessions (500 maximum, 200 par défaut) et 2 Mio de contenu ; elle peut être plus courte que `limit` sans être la dernière. Ordre stable par (roomId, sessionId) ; aucune session répétée ni omise entre pages.
+- `next_from` est opaque, lié au compte, à l'école, à la version et à l'`etag` ; il ne contient aucun contenu. Reprise après interruption : rejouer la requête avec le dernier `next_from` reçu (autre service, autre appareil du même compte).
+- `etag` est constant pendant une lecture cohérente ; `count` est le total de la sauvegarde.
+- Erreurs : `400 BACKUP_CURSOR_INVALID` (curseur altéré, d'un autre compte ou d'une autre version : recommencer sans `from`), `400` pour `limit` hors 1..500, `404` version inconnue ou autre compte, `409 BACKUP_CHANGED_DURING_READ` (la sauvegarde a changé depuis la première page : jeter l'état partiel et relire depuis le début), `422 BACKUP_PAGINATION_REQUIRED` (lecture historique d'une sauvegarde > 5000).
 
 ## Qualification du 24 octobre 2026
 

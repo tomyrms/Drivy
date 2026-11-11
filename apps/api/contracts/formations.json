@@ -81,6 +81,42 @@
                 "maxLength": 2048,
                 "format": "uri"
               }
+            },
+            "cancellationRules": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "cancellationHours": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 8760
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lateAction": {
+                      "type": "string",
+                      "enum": [
+                        "CONTACT",
+                        "NO_FEE"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "cancellationHours",
+                    "lateAction"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -264,6 +300,42 @@
                 "maxLength": 2048,
                 "format": "uri"
               }
+            },
+            "cancellationRules": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "cancellationHours": {
+                      "anyOf": [
+                        {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 8760
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "lateAction": {
+                      "type": "string",
+                      "enum": [
+                        "CONTACT",
+                        "NO_FEE"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "cancellationHours",
+                    "lateAction"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [

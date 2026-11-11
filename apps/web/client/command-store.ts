@@ -64,7 +64,8 @@ export interface MetadataStorageState {
   readonly last: 'read' | 'write' | 'clear';
 }
 /** `startedAt` is when the command left the page: confirmations are kept in that order, not in the order answers arrive. */
-type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number; startedAt: number };
+/** `resourceId` : la ressource que l'école dit avoir écrite (réponse ou reçu), pour rattacher une création confirmée après coup (#437). */
+type Confirmation = { kind: SchoolCommand['kind']; operationId: string; schoolId: string; at: number; startedAt: number; resourceId?: string };
 /**
  * `byKind` counts the confirmations of each kind of command and `rereads` the requests given up or refused on a resend: a section that
  * reads one family of resources (see command-families) asks for a new read only when one of its kinds was confirmed, not for every
@@ -104,11 +105,11 @@ class CommandStore {
   getSnapshot = () => this.snapshot;
 
   /** `reread` makes every section read the school again, as a confirmation does. */
-  private update(operationId: string, entry: PendingEntry | null, confirmed?: CommandMetadata, reread = false) {
+  private update(operationId: string, entry: PendingEntry | null, confirmed?: CommandMetadata, reread = false, resourceId?: string) {
     const entries = new Map(this.snapshot.entries);
     if (entry) entries.set(operationId, entry); else entries.delete(operationId);
     const confirmation: Confirmation | null = confirmed
-      ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now(), startedAt: confirmed.createdAt } : null;
+      ? { kind: confirmed.kind, operationId: confirmed.operationId, schoolId: confirmed.schoolId, at: Date.now(), startedAt: confirmed.createdAt, ...(resourceId ? { resourceId } : {}) } : null;
     // Les réponses arrivent dans n’importe quel ordre : la liste des confirmations garde l’ordre des commandes (#106), pour
     // qu’une section qui la rejoue finisse sur l’intention la plus récente et non sur le dernier paquet reçu.
     const confirmations = confirmation
@@ -222,7 +223,7 @@ class CommandStore {
       const valid = data !== null && (data.schoolId === undefined || data.schoolId.toLowerCase() === command.schoolId.toLowerCase())
         && (data.version === undefined || data.version > command.resourceVersion)
         && (spec.target !== 'resource' || data.id === undefined || data.id.toLowerCase() === command.resourceId?.toLowerCase());
-      if (valid) { this.update(command.operationId, null, toMetadata(command)); return { status: 'confirmed', body: response.body, via: 'response' }; }
+      if (valid) { this.update(command.operationId, null, toMetadata(command), false, data.id); return { status: 'confirmed', body: response.body, via: 'response' }; }
       return this.keep(command, 'uncertain', 'INVALID_RESPONSE', false, attempts + 1, true);
     }
     const success = response.status >= 200 && response.status < 300;
@@ -259,7 +260,7 @@ class CommandStore {
       const receipt = await readSchool(schoolId, `operations/${entry.meta.operationId}`, receiptSchema);
       if (generation !== this.generation || accessScope !== this.accessScopes.get(schoolId)) return { status: 'pending', message: '' };
       if (!receiptMatches(entry.meta, receipt)) throw new RequestFailure('INVALID_RESPONSE');
-      this.update(entry.meta.operationId, null, entry.meta);
+      this.update(entry.meta.operationId, null, entry.meta, false, receipt.resourceId);
       return { status: 'confirmed', body: null, via: 'receipt' };
     } catch (error) {
       if (generation !== this.generation || accessScope !== this.accessScopes.get(schoolId)) return { status: 'pending', message: '' };

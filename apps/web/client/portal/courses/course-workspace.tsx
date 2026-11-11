@@ -34,17 +34,23 @@ export function CourseWorkspace({ courseId, occurrenceId, catalogue, onClose, on
     setNotice(message); onChanged();
     if (series) onShow(series.id, occurrenceId); else loaded.reload();
   };
+  // Création confirmée après coup par le reçu : on rejoint la série créée, qui se relit sous son identifiant (#437).
+  const created = (id: string) => { setNotice('Le brouillon est enregistré.'); onChanged(); onShow(id, occurrenceId); };
   const series = loaded.data?.series ?? null;
+  // Une lecture en échec qui garde sa donnée (panne, 503) laisse le formulaire en place avec une erreur réessayable ; seule la perte de
+  // donnée (accès retiré, introuvable) remplace l'écran (#443).
+  const readFailed = loaded.status === 'error' && series !== null ? <ReadFeedback key="course-read" loaded={loaded} label="Lecture du cours" stale /> : null;
+  const catalogueFailed = catalogue.status === 'error' && catalogue.data !== undefined ? <ReadFeedback key="catalogue-read" loaded={catalogue} label="Lecture des types et des moniteurs" stale /> : null;
   const unavailable = <section className="course-page"><Button variant="ghost" className="course-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
     <ReadFeedback loaded={loaded} label="Lecture du cours" /></section>;
-  if (loaded.status !== 'ready' || (courseId && !series)) return unavailable;
-  if (catalogue.status !== 'ready' && (!series || series.status === 'DRAFT')) return <section className="course-page"><Button variant="ghost" className="course-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
+  if ((loaded.status !== 'ready' && !(loaded.status === 'error' && series)) || (courseId && !series)) return unavailable;
+  if (catalogue.data === undefined && (!series || series.status === 'DRAFT')) return <section className="course-page"><Button variant="ghost" className="course-back" onClick={onClose}><ArrowLeft data-icon="inline-start" />Retour à l’agenda</Button>
     <ReadFeedback loaded={catalogue} label="Lecture des types et des moniteurs" /></section>;
   const reread = () => { loaded.reload(); catalogue.reload(); };
   if (!series || series.status === 'DRAFT') {
     // The key follows the series, not the version: saving the draft never discards what is on screen.
-    return <CourseEditor key={series?.id ?? 'new'} series={series} catalogue={catalogue.data!} canManage={series ? series.canManage : catalogue.data!.canManage} notice={notice}
-      onClose={onClose} onDone={done} onReread={reread} />;
+    return <>{readFailed}{catalogueFailed}<CourseEditor key={series?.id ?? 'new'} series={series} catalogue={catalogue.data!} canManage={series ? series.canManage : catalogue.data!.canManage} notice={notice}
+      onClose={onClose} onDone={done} onCreated={created} onReread={reread} /></>;
   }
-  return <CourseSheet series={series} catalogue={catalogue.data} occurrenceId={occurrenceId} notice={notice} onClose={onClose} onChanged={done} onReread={reread} />;
+  return <>{readFailed}{catalogueFailed}<CourseSheet series={series} catalogue={catalogue.data} occurrenceId={occurrenceId} notice={notice} onClose={onClose} onChanged={done} onReread={reread} /></>;
 }

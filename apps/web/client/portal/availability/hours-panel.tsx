@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, ChevronDown, Clock3, Plus } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
@@ -10,6 +10,7 @@ import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from
 import { Input } from '../../components/ui/input';
 import { ToggleGroup, ToggleGroupItem } from '../../components/ui/toggle-group';
 import { useUnsavedChanges, type Outcome } from '../../console/context';
+import { rebaseConfirmedDraft } from '../../console/draft-model';
 import type { Availability } from '../../school-api';
 import { CommandFeedback } from '../agenda/presentation';
 import { useHeadingFocus } from '../agenda/use-heading-focus';
@@ -104,11 +105,36 @@ export function RuleRemoval({ state, commands }: { state: ScheduleState; command
 
 type Stage = 'edit' | 'review';
 
-export function RuleEditor({ state, commands, ruleId, restored }: { state: ScheduleState; commands: ScheduleCommands; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome> } | undefined }) {
-  const target = ruleId ? state.rules.find(rule => rule.id === ruleId) ?? null : null;
-  // The baseline is the hours read when the editor opened; a later re-read changes the version sent, never the typed draft.
-  const baseline = useRef(draftFromRule(target, state.today));
-  const [draft, setDraft] = useState<RuleDraft>(restored?.draft ?? baseline.current);
+export function RuleEditor({ state, commands, ruleId, restored }: { state: ScheduleState; commands: ScheduleCommands; ruleId: string | null; restored?: { draft: RuleDraft; outcome: NonNullable<Outcome>; base?: Availability } | undefined }) {
+  const latest = ruleId ? state.rules.find(rule => rule.id === ruleId) ?? null : null;
+  // `target` est la version sur laquelle le brouillon repose, et la seule dont la version part dans If-Match. Une relecture plus
+  // récente ne l'avance que si la saisie est propre ou fusionnée sans conflit ; sinon elle attend un choix explicite (#422).
+  const [target, setTarget] = useState<Availability | null>(restored?.base ?? latest);
+  const opened = useRef(state.today);
+  const baselineDraft = useMemo(() => draftFromRule(target, opened.current), [target]);
+  const baseline = { current: baselineDraft };
+  const [draft, setDraft] = useState<RuleDraft>(restored?.draft ?? baselineDraft);
+  // Le conflit se déduit de la saisie actuelle, jamais d'un instantané : une retouche faite après l'alerte reste dans le choix (#422).
+  const newer = latest && target && latest.version > target.version ? latest : null;
+  const concurrent = useMemo(() => {
+    if (!newer || !target) return null;
+    const { conflicts } = rebaseConfirmedDraft(draftFromRule(target, opened.current), draftFromRule(newer, opened.current), draft);
+    return conflicts.length > 0 ? { latest: newer, fields: [...new Set(conflicts.map(path => path.split('.')[0]!))] } : null;
+  }, [newer, target, draft]);
+  // À l'ouverture comme après une relecture : saisie propre ou sans conflit, la nouvelle version est adoptée sans friction.
+  useEffect(() => {
+    if (!newer || !target || concurrent) return;
+    const from = draftFromRule(target, opened.current), to = draftFromRule(newer, opened.current);
+    setDraft(sameRuleDraft(draft, from) ? to : rebaseConfirmedDraft(from, to, draft).value);
+    setTarget(newer);
+  }, [newer, draft]);
+  const resolveConcurrent = (keep: 'mine' | 'theirs') => {
+    if (!concurrent || !target) return;
+    const from = draftFromRule(target, opened.current), to = draftFromRule(concurrent.latest, opened.current);
+    const { value } = rebaseConfirmedDraft(from, to, draft);
+    setDraft(keep === 'mine' ? value : { ...value, ...Object.fromEntries(concurrent.fields.map(field => [field, to[field as keyof RuleDraft]])) });
+    setTarget(concurrent.latest);
+  };
   // What the school refused comes back with the typed draft; the first change the person makes clears it.
   const [returned, setReturned] = useState<NonNullable<Outcome> | null>(restored?.outcome ?? null);
   const tag = ruleTag(ruleId);
@@ -122,16 +148,16 @@ export function RuleEditor({ state, commands, ruleId, restored }: { state: Sched
   // Hours still to be confirmed count for the local overlap hint; the school stays the judge.
   const others = commands.rules.filter(rule => rule.id !== ruleId);
   const problems = ruleProblems(draft, others);
-  const gone = ruleId !== null && target === null;
+  const gone = ruleId !== null && latest === null;
   const blocked = commands.blockedReason('rules');
   const locked = false;
   const change = (patch: Partial<RuleDraft>) => { setReturned(null); commands.clearOutcome(tag); setDraft(previous => ({ ...previous, ...patch })); };
   const close = () => { if (dirty) setDiscard(true); else state.setView(null); };
   const refusal = returned ?? commands.outcomeFor(tag);
   const refusedInterval = isFieldRefusal(refusal) ? refusal?.message : undefined;
-  const review = () => { setTouched(true); if (!hasRuleProblems(problems) && !gone && (!ruleId || dirty)) setStage('review'); };
+  const review = () => { setTouched(true); if (!hasRuleProblems(problems) && !gone && !concurrent && (!ruleId || dirty)) setStage('review'); };
   // Kept by the store: the editor closes and the row says « À confirmer ». Refused on the spot: the draft stays here with the reason.
-  const submit = () => { if (commands.saveRule(draft, target) === 'refused') setStage('edit'); };
+  const submit = () => { if (concurrent || commands.saveRule(draft, target) === 'refused') setStage('edit'); };
   const toggle = (values: readonly string[]) => change({ weekdays: values.map(Number).sort((a, b) => a - b) });
   const agenda = () => state.context.navigate('agenda', { instructor: state.instructor });
   const reread = () => { setReturned(null); commands.clearOutcome(tag); state.refresh(); };
@@ -160,9 +186,10 @@ export function RuleEditor({ state, commands, ruleId, restored }: { state: Sched
         {showing.overlap && <Alert id="rule-overlap" variant="destructive"><AlertTitle>Cet horaire chevauche un autre créneau</AlertTitle><AlertDescription>{dayRange(showing.overlap.weekdays)} · {showing.overlap.localStart}–{showing.overlap.localEnd} · {periodLabel(showing.overlap)}</AlertDescription></Alert>}
       </FieldGroup>
       <CommandFeedback outcome={null} blocked={blocked} />
+      <ConcurrentRule fields={concurrent?.fields ?? null} onResolve={resolveConcurrent} />
       <ScheduleRefusal outcome={refusal} instructorName={state.instructorName} busy={locked} onAgenda={agenda} onReread={reread} />
       <div className="schedule-footer"><Button type="button" variant="ghost" disabled={locked} onClick={close}>Annuler</Button>
-        <Button type="submit" disabled={locked || gone || !state.writable || (ruleId !== null && !dirty)}>Relire<ArrowRight data-icon="inline-end" /></Button></div>
+        <Button type="submit" disabled={locked || gone || concurrent !== null || !state.writable || (ruleId !== null && !dirty)}>Relire<ArrowRight data-icon="inline-end" /></Button></div>
     </form> : <div className="schedule-form">
       <h2 className="schedule-review-title">Relire avant d’enregistrer</h2>
       <RuleReview draft={draft} before={ruleId ? baseline.current : null} instructorName={state.instructorName} />
@@ -173,6 +200,17 @@ export function RuleEditor({ state, commands, ruleId, restored }: { state: Sched
     </div>}
     <DiscardDialog open={discard} onCancel={() => setDiscard(false)} onDiscard={() => { setDiscard(false); state.setView(null); }} />
   </section>;
+}
+
+const ruleFieldLabels: Record<string, string> = { weekdays: 'Jours', start: 'Début', end: 'Fin', from: 'Valable dès le', until: 'Jusqu’au' };
+
+/** Un autre administrateur a changé les mêmes champs : la saisie reste, la version de départ n'avance que sur choix explicite. */
+function ConcurrentRule({ fields, onResolve }: { fields: readonly string[] | null; onResolve: (keep: 'mine' | 'theirs') => void }) {
+  if (!fields) return null;
+  return <Alert variant="destructive"><AlertTitle>Modifié ailleurs</AlertTitle>
+    <AlertDescription>Déjà changé par un autre administrateur : {fields.map(field => ruleFieldLabels[field] ?? field).join(', ')}. Choisissez la valeur à garder.</AlertDescription>
+    <div className="schedule-footer"><Button type="button" variant="outline" onClick={() => onResolve('mine')}>Garder ma saisie</Button>
+      <Button type="button" variant="outline" onClick={() => onResolve('theirs')}>Prendre la version de l’école</Button></div></Alert>;
 }
 
 /** What will be written. In an edit, every changed line shows the value it replaces. */
