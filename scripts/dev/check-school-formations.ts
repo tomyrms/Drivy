@@ -205,7 +205,12 @@ async function run(options:FormationsOptions):Promise<void> {
   const priceReview=page.getByRole('dialog',{name:'Enregistrer ces changements ?',exact:true});
   await page.getByRole('button',{name:'Relire les changements',exact:true}).click();
   await priceReview.getByRole('button',{name:'Enregistrer le tarif',exact:true}).click();
+  // Catalogue optimiste (#124) : le formulaire se libère à l'envoi, le refus revient en bandeau et la saisie se reprend sur demande.
+  await page.getByText('Modification refusée',{exact:true}).waitFor();
   await page.getByText(/Ce tarif a été modifié entre-temps/).first().waitFor();
+  const refusedPrices=(await administration.query('SELECT unit_price_cents FROM drivy.service_product_version WHERE school_id=$1 AND product_key=$2 ORDER BY version',[schoolId,lessonTariff.productKey])).rows;
+  assert(JSON.stringify(refusedPrices.map(row=>Number(row.unit_price_cents)))==='[9500,9800]','Le refus n’écrit rien : seule la version concurrente existe côté serveur');
+  await page.getByRole('button',{name:'Reprendre la saisie',exact:true}).click();
   await page.getByText('Ce tarif a changé pendant votre modification',{exact:true}).waitFor();
   assert(await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='99','Le conflit relit la fiche et conserve la saisie, sans écraser la version concurrente');
   await page.getByRole('button',{name:'Relire les changements',exact:true}).click();
