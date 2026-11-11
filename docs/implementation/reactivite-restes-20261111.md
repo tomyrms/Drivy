@@ -44,11 +44,27 @@ messagerie, interdit à ce lot ; l'assertion n'a pas été modifiée.
 | Reprise après perte de réponse, double appui, réponses inversées | fait | fait | `command-latency-106`, `command-recovery-106` ; `SchoolPendingRequestResolutionTests` |
 | Seuils 5 s / 10 s indicatifs, jamais un refus | livré ici | fait | `pending-wait.test.ts` ; `SchoolWaitMonitorTests` |
 | Onglet dupliqué (corps jamais persisté côté web) | livré ici | sans objet | `command-tabs-106.test.ts` |
-| Annulation avant envoi (L2) | non | planification seulement | `SchoolPlanningAdmission106Tests`, `SchoolPlanningCancellationUITests` |
-| Réconciliation champ par champ (L3) | partielle | partielle | non démontrée de façon générale |
-| Expiration générale d'une commande en file (L1) | non | non | décision produit, non prise |
-| Migration et retour arrière avec files remplies | non démontré | non démontré | aucun test dédié |
+| Annulation avant envoi (L2) | sans objet : aucune attente avant envoi (voir 3.1) | planification seulement, primitive commune `SchoolCommandSendAdmission` | `command-latency-106` (critères 2 et 3) ; `SchoolPlanningAdmission106Tests`, `SchoolPlanningCancellationUITests` |
+| Réconciliation champ par champ (L3) | fait : fusion à trois voies `rebaseConfirmedDraft` | tests existants du profil et des brouillons | `draft-rebase-sequence-106.test.ts` (4) ; `SchoolProfileWorkspaceTests` |
+| Expiration générale d'une commande en file (L1) | non | non | décision produit, non prise (voir 3.2) |
+| Migration et retour arrière avec files remplies | fait (file pleine, entrées invalides, clé d'une version plus récente) | non démontré : aucun test unitaire isolable trouvé | `command-migration-106.test.ts` (5) |
 | Plusieurs appareils réels | non démontré | non démontré | appareil physique requis |
+
+### 3.1 L2 — annulation avant envoi
+
+Le contrat (R2, L2) interdit d'ajouter un bouton Annuler universel tant que la capacité n'existe pas. Sur le web, il n'y a
+aucune fenêtre avant envoi à annuler : l'admission refuse localement (`LOCAL_COMMAND_CONFLICT`, `LOCAL_COMMAND_LIMIT`), rien
+n'est mis en file et la saisie est gardée (preuve : `command-latency-106`, critères 2 et 3 ; `member-commands-131`). Sur iOS,
+la primitive commune `SchoolCommandSendAdmission` existe et est adoptée là où une attente avant envoi est exposée
+(planification : création et déplacement de leçon). L'étendre à d'autres commandes suppose des changements d'interface Swift
+qui ne peuvent pas être compilés ici et un choix de produit sur quelles écritures deviennent annulables ; ce n'est donc pas
+fait, et le critère est considéré satisfait pour ce qui existe.
+
+### 3.2 L1 — expiration générale : décision à prendre (non prise)
+
+- Décision : fixer ou non une durée de conservation d'une commande en file ou d'un brouillon chiffré abandonné, et ce qui arrive à l'échéance.
+- Options : (a) aucune expiration, la commande reste protégée et vérifiable sans renvoi automatique jusqu'à une action humaine ; (b) durée par famille de commandes (par exemple plus courte pour un paiement que pour une note) ; (c) revue humaine explicite à la reprise, sans suppression silencieuse.
+- Le contrat dit de ne pas inventer un TTL universel ; rien n'est donc implémenté tant que le porteur n'a pas choisi.
 
 Local : `pending-recovery-106` échoue en local (2 échecs) faute de `playwright-core` ; absence de dépendance déjà
 documentée, pas une régression, non corrigée ici.
@@ -60,8 +76,11 @@ documentée, pas une régression, non corrigée ici.
   Ce n'est pas un défaut de code du lot : le fichier relève de la messagerie. Résultat sur ce SHA : passé une fois
   (run 43066913872). Une seule exécution ne prouve pas la stabilité ; l'issue de cause reste ouverte.
 - Les cinq régressions natives de `native-regressions-131-20261104.md` sont vertes sur ce SHA (run 43066913872).
-- La matrice `matrice-couverture-131.md` date du 3 novembre (SHA `17b6b667`) : elle n'a pas été régénérée. Huit
-  actions d'écriture y restent sans test dédié (`W01`, `W03` à `W06`, `W47`, `W48`, `I39`).
+- La matrice `matrice-couverture-131.md` est mise à jour : les huit écritures sans test dédié ont maintenant un test de
+  contrat (`entry-client-131.test.ts` 15 : W01, W03 à W06 ; `member-commands-131.test.ts` 7 : W47, W48 ;
+  `SchoolCourseFollow131Tests.swift` 5 : I39, à qualifier par la CI Apple). Ce sont des tests d'échange et de
+  classification d'échec, sans rendu : le comportement des formulaires et des panneaux reste à couvrir par la campagne
+  navigateur. `W46`, `W66`, `W67`, `I12` restent sans preuve.
 - Mesures web synthétiques : `web-reactivity-measures-131-20261105.md` (Windows/Chromium, petit échantillon). Aucune
   mesure sur appareil, VoiceOver, batterie ou GPS physique.
 
@@ -73,6 +92,6 @@ Sous-issues #104 et #107 à #130 : fermées. #106 et #131 : ouvertes. Les critè
 ## 6. Restant
 
 - Physique : mesures sur appareil, VoiceOver, plusieurs appareils.
-- Décision : expiration générale (L1) ; périmètre d'annulation avant envoi (L2).
+- Décision : expiration générale (L1, voir 3.2). Le périmètre d'annulation avant envoi (L2) n'appelle pas de décision tant qu'aucun bouton universel n'est voulu.
 - Technique : cause du délai READINESS ; instabilité de `testFifteenSecondResponseKeepsReactionAndComposerUsable` (rouge dans la sélection de 6 tests, vert seul : deux exécutions, cause non établie) ;
-  matrice #131 à régénérer ; couverture des huit écritures sans test.
+  parcours rendus des formulaires et panneaux web (campagne navigateur, la CI Chromium étant hors service) ; `pending-recovery-106` local (`playwright-core`).
