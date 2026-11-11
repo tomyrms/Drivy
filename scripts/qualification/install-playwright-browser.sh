@@ -14,7 +14,8 @@ set -euo pipefail
 
 browser="${1:?navigateur Playwright attendu (chromium, msedge…)}"
 cli="infra/dev/node_modules/playwright-core/cli.js"
-mirrors="/etc/apt/apt-mirrors.txt"
+mirrors="${APT_MIRRORS_FILE:-/etc/apt/apt-mirrors.txt}"
+apt_conf="${APT_CONF_FILE:-/etc/apt/apt.conf.d/99drivy-ci}"
 
 resolves() {
   local host="$1" try
@@ -48,14 +49,14 @@ if [ -f "$mirrors" ]; then
 fi
 
 # Délais courts et nouvelles tentatives : un hôte muet coûte quelques secondes, pas vingt par fichier.
-sudo tee /etc/apt/apt.conf.d/99drivy-ci >/dev/null <<'APT'
+sudo tee "$apt_conf" >/dev/null <<'APT'
 Acquire::Retries "3";
 Acquire::http::Timeout "15";
 Acquire::https::Timeout "15";
 APT
 
 for attempt in 1 2 3; do
-  if node "$cli" install --with-deps "$browser"; then
+  if ${NODE_BIN:-node} "$cli" install --with-deps "$browser"; then
     exit 0
   fi
   echo "Installation du navigateur : tentative $attempt en échec."
