@@ -1,9 +1,26 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { RequestFailure, endSession, errorMessage, okSchema, request } from '../client/protocol.js';
-import { accessCodeSchema, accountCreationFailure, acceptanceFailure, codeFromInput, entryFailureMessage, sessionLost }
-  from '../client/portal/entry/entry-model.js';
+
+// Modules du navigateur, importés par chemin dynamique : le contrôle de types serveur n'en suit pas les imports sans extension.
+const protocolPath = '../client/protocol.ts', entryModelPath = '../client/portal/entry/entry-model.ts';
+const protocol = await import(/* @vite-ignore */ protocolPath) as {
+  RequestFailure: new (code: string, status?: number) => Error & { code: string; status: number };
+  endSession(): Promise<unknown>;
+  errorMessage(cause: unknown): string;
+  okSchema: z.ZodType;
+  request(path: string, schema: z.ZodType, options?: { csrf: string; body: Record<string, unknown> }): Promise<unknown>;
+};
+const entry = await import(/* @vite-ignore */ entryModelPath) as {
+  accessCodeSchema: z.ZodType;
+  accountCreationFailure(kind: string | null, cause: unknown): unknown;
+  acceptanceFailure(cause: unknown): { dropPreview: boolean; uncertain: boolean };
+  codeFromInput(value: string): string;
+  entryFailureMessage(cause: unknown): string;
+  sessionLost(cause: unknown): boolean;
+};
+const { RequestFailure, endSession, errorMessage, okSchema, request } = protocol;
+const { accessCodeSchema, accountCreationFailure, acceptanceFailure, codeFromInput, entryFailureMessage, sessionLost } = entry;
 
 /**
  * #131, écritures web d'entrée sans test dédié (matrice W01, W03, W04, W05, W06) : ce qui part sur le réseau, avec quelle

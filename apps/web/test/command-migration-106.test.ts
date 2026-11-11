@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 type Entry = { phase: string; command: unknown; meta: { operationId: string } };
 type Store = { get(schoolId: string, operationId?: string): Entry | undefined; clear(): void };
 type Snapshot = { entries: ReadonlyMap<string, Entry>; metadata: { durability: string; last: string } };
+const storeModule = '../client/command-store.ts';
 const storageKey = 'drivy-gestion-demandes-v1';
 const futureKey = 'drivy-gestion-demandes-v2';
 const schoolId = randomUUID();
@@ -24,7 +25,7 @@ const valid = (overrides: Record<string, unknown> = {}) =>
 async function reload(session: ReturnType<typeof memory>) {
   vi.resetModules();
   vi.stubGlobal('window', { location: { origin: 'https://drivy.example' }, sessionStorage: session, localStorage: memory() });
-  const module = await import(/* @vite-ignore */ '../client/command-store.ts') as { commandStore: Store & { getSnapshot(): Snapshot } };
+  const module = await import(/* @vite-ignore */ storeModule) as { commandStore: Store & { getSnapshot(): Snapshot } };
   return module.commandStore;
 }
 afterEach(() => { vi.unstubAllGlobals(); });

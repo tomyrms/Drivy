@@ -13,6 +13,7 @@ type Store = {
   get(schoolId: string, operationId?: string): { phase: string } | undefined;
   clear(): void;
 };
+const storeModule = '../client/command-store.ts';
 const schoolId = randomUUID(), member = randomUUID(), other = randomUUID();
 const memory = () => {
   const items = new Map<string, string>();
@@ -30,7 +31,7 @@ function answer(status: number, body: unknown) {
 async function openStore(): Promise<Store> {
   vi.resetModules();
   vi.stubGlobal('window', { location: { origin: 'https://drivy.example' }, sessionStorage: memory(), localStorage: memory() });
-  return (await import(/* @vite-ignore */ '../client/command-store.ts') as { commandStore: Store }).commandStore;
+  return (await import(/* @vite-ignore */ storeModule) as { commandStore: Store }).commandStore;
 }
 const change = (id = member, version = 4) => createCommand({ schoolId, kind: 'updateMember', path: `members/${id}`, ifMatch: version, resourceId: id, resourceVersion: version,
   body: { roles: ['INSTRUCTOR'], grants: ['TAKE_ATTENDANCE'], reason: 'Changement de fonction' } });
