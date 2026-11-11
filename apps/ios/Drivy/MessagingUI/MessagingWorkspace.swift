@@ -188,6 +188,9 @@ struct MessagingInboxPreview: Equatable, Sendable {
         guard currentScope() == scope else { recordFailure(.contextChanged); return }
         await loadConversations()
         if let conversationID, visibleMessageConversationID == conversationID { await loadMessages(conversationID) }
+        // Le contexte a pu changer pendant les lectures (un envoi en vol l'a constaté) : une lecture tardive en échec ne
+        // doit pas masquer ce verdict par une simple indisponibilité.
+        guard currentScope() == scope else { recordFailure(.contextChanged); return }
         // Signalé après les lectures, qui remettent l'erreur à zéro quand elles réussissent.
         reportSendBlock()
     }
