@@ -159,12 +159,20 @@ async function run(options:FormationsOptions):Promise<void> {
   const requests=page.getByRole('region',{name:'Demandes en cours',exact:true});
   await requests.getByText('Résultat à vérifier',{exact:true}).waitFor();
   assert(lostStatus===201&&z.uuid().safeParse(lostOperation).success,'Le tarif est durable avant la perte de la réponse');
-  assert(await page.getByRole('button',{name:'Relire les changements',exact:true}).isDisabled()&&await page.getByLabel('Prix (CHF)',{exact:true}).inputValue()==='170',
-    'Le formulaire reste visible, avec sa saisie, et bloqué tant que le résultat est inconnu');
+  // Le catalogue est optimiste (#124) : dès que le magasin conserve l'intention, le formulaire se libère et la liste porte la saisie sous
+  // une marque textuelle. Les invariants sont : la saisie reste visible et récupérable, le statut incertain est dit, aucune seconde demande.
+  const pendingRow=page.getByRole('list',{name:'Tarifs en attente de confirmation',exact:true}).getByLabel('Leçon de 90 minutes · À confirmer',{exact:true});
+  await pendingRow.waitFor();
+  assert(/170[.,]00/.test(await pendingRow.innerText())&&await page.getByLabel('Prix (CHF)',{exact:true}).count()===0,
+    'La saisie reste visible dans la liste sous « À confirmer » ; aucun formulaire ne reste ouvert, aucun envoi n’est inventé');
+  assert(await page.getByRole('button',{name:'Ajouter un tarif',exact:true}).isDisabled()&&await requests.getByRole('button',{name:'Vérifier le résultat',exact:true}).isEnabled(),
+    'Une nouvelle création est bloquée tant que le résultat est inconnu ; la vérification est proposée');
   const recovery=page.waitForResponse(response=>new URL(response.url()).pathname===`/app/bff/schools/${schoolId}/operations/${lostOperation}`);
   await requests.getByRole('button',{name:'Vérifier le résultat',exact:true}).click();const recovered=await recovery;
   const receipt=z.object({data:z.object({operationId:z.uuid(),commandType:z.literal('SAVE_TARIFF'),resourceType:z.literal('ServiceProductVersion'),resourceId:z.uuid()})}).parse(await recovered.json()).data;
-  await page.getByText('Leçon de 90 minutes',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Ouvrir le tarif Leçon de 90 minutes',exact:true}).waitFor();
+  assert(await page.getByRole('list',{name:'Tarifs en attente de confirmation',exact:true}).count()===0&&await requests.getByText('Résultat à vérifier',{exact:true}).count()===0,
+    'Après AP72 la liste confirmée remplace la ligne provisoire et la demande en attente disparaît');
   const afterTariff=await counts();
   assert(receipt.operationId===lostOperation&&writes===1&&afterTariff.products===afterCompetencies.products+1&&afterTariff.offerings===afterCompetencies.offerings
     &&afterTariff.notices===before.notices&&afterTariff.profiles===before.profiles&&afterTariff.status==='ACTIVE',
