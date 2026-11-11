@@ -164,7 +164,9 @@ import XCTest
         let kept = row(app, "Élève examen", 1)
         XCTAssertTrue(scrollTo(kept, in: app), "Lecture précédente des examens perdue : \(app.debugDescription)")
 
-        XCTAssertTrue(scrollTo(retry, in: app))
+        // scrollTo ne défile que vers le bas : la ligne conservée a dépassé le bouton, on remonte avant de le rejoindre.
+        scrollToTop(app)
+        XCTAssertTrue(scrollTo(retry, in: app), "Réessayer perdu après la lecture conservée : \(app.debugDescription)")
         retry.tap()
         let expansion = app.buttons["pending-exams-expansion"]
         XCTAssertTrue(scrollTo(expansion, in: app), app.debugDescription)
@@ -188,7 +190,10 @@ import XCTest
         XCTAssertTrue(send.waitForExistence(timeout: 20), app.debugDescription)
         send.tap()
         XCTAssertTrue(app.buttons["lesson-change-refuse"].waitForNonExistence(timeout: 20), "Refus non confirmé : \(app.debugDescription)")
-        app.swipeDown()
+        // La fiche de leçon est une feuille : on la ferme par son bouton (un glisser vers le bas ne la ferme que depuis le haut du contenu).
+        let close = app.buttons["Fermer"]
+        if close.waitForExistence(timeout: 10) { close.tap() }
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10), "La fiche de leçon est restée ouverte : \(app.debugDescription)")
         backToList(app)
         // Aucun tirage : la demande traitée a disparu de la boîte.
         let gone = NSPredicate(format: "label BEGINSWITH %@", "Élève demande 9,")
