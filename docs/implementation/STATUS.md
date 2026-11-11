@@ -1,3 +1,9 @@
+## 12 novembre 2026 — Départ de trajet : demande au sort inconnu gardée (#106, L1)
+
+- Écart confirmé puis corrigé dans `SchoolCapturePreparationWorkspace.swift` : une demande de départ inconnue de l'école, ou jamais émise, n'est plus retirée automatiquement après 120 s (`verifyStart`, `reconcilePendingStarts`). Elle reste en file et est signalée ; la personne relit le départ (même clé d'opération) ou abandonne la demande après confirmation. `settledRequestAge` ne sert plus qu'à ne pas déclarer « inconnue » une demande encore en route.
+- Tests ajoutés dans `SchoolCaptureLifecycleTests` : demande de 200 s toujours présente (émise ou non), abandon explicite retire, relecture reprend la même clé. Statut d'exécution : voir le run Apple consigné dans le rapport de la branche `tomyrms/l1-depart-trajet-20261112`.
+- Non vérifié : rendu de l'écran « Départ à vérifier », parcours physique GPS, réessai jusqu'à l'autorisation de l'école (la confirmation reprend `review.pendingMutation`, lu mais non rejoué par un test).
+
 # État de la réalisation
 
 ## 11 novembre 2026 — Intégration des trois branches d'audit
