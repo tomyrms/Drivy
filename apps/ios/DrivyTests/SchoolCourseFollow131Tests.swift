@@ -75,10 +75,17 @@ private actor FollowRecordingTransport: SchoolHTTPTransport {
         requests.append(request)
         if failing { throw URLError(.notConnectedToInternet) }
         let url = request.url!
-        let data: Any = (request.httpMethod ?? "GET") == "GET"
-            ? ["typeIds": followed.map(\.uuidString)]
-            : ["typeId": replyTypeID.uuidString, "following": replyFollowing]
-        let body: [String: Any] = ["data": data, "requestId": "course-follow", "serverTime": "2030-03-10T08:00:00Z"]
+        var data: [String: Any] = [:]
+        if (request.httpMethod ?? "GET") == "GET" {
+            data["typeIds"] = followed.map { $0.uuidString } as [String]
+        } else {
+            data["typeId"] = replyTypeID.uuidString
+            data["following"] = replyFollowing
+        }
+        var body: [String: Any] = [:]
+        body["data"] = data
+        body["requestId"] = "course-follow"
+        body["serverTime"] = "2030-03-10T08:00:00Z"
         return SchoolHTTPResponse(data: try JSONSerialization.data(withJSONObject: body), status: 200, url: url, contentType: "application/json")
     }
 }
