@@ -599,8 +599,6 @@ struct MessagingInboxPreview: Equatable, Sendable {
         }
     }
 
-    /// Somme des non-lus messagerie connus de ce contexte.
-    var unreadTotal: Int { conversations.reduce(0) { $0 + max(0, $1.unreadCount ?? 0) } }
     /// #445 : le contenu du message est effectivement chargé (déchiffré par le chemin normal) et reste lisible après la lecture.
     private func hasDisplayableContent(_ sequence: Int, in conversationID: UUID) async -> Bool {
         guard let message = visibleMessages(conversationID).first(where: {
@@ -610,6 +608,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
         return decryptionCodes[message.id] == nil && contents[message.id] != nil
     }
 
+    /// Somme des non-lus messagerie connus de ce contexte.
+    var unreadTotal: Int { conversations.reduce(0) { $0 + max(0, $1.unreadCount ?? 0) } }
 
     /// Non-lus après une lecture confirmée : zéro si la borne couvre la conversation, sinon les seuls
     /// messages reçus (pas les miens) chargés au-delà de la borne, sans dépasser le compteur serveur.
