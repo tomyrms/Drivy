@@ -69,11 +69,26 @@ la primitive commune `SchoolCommandSendAdmission` existe et est adoptée là où
 qui ne peuvent pas être compilés ici et un choix de produit sur quelles écritures deviennent annulables ; ce n'est donc pas
 fait, et le critère est considéré satisfait pour ce qui existe.
 
-### 3.2 L1 — expiration générale : décision à prendre (non prise)
+### 3.2 L1 — garder et demander (décision du porteur, 12 novembre 2026)
 
-- Décision : fixer ou non une durée de conservation d'une commande en file ou d'un brouillon chiffré abandonné, et ce qui arrive à l'échéance.
-- Options : (a) aucune expiration, la commande reste protégée et vérifiable sans renvoi automatique jusqu'à une action humaine ; (b) durée par famille de commandes (par exemple plus courte pour un paiement que pour une note) ; (c) revue humaine explicite à la reprise, sans suppression silencieuse.
-- Le contrat dit de ne pas inventer un TTL universel ; rien n'est donc implémenté tant que le porteur n'a pas choisi.
+Décision consignée dans `decisions-2026-11-12.md` : une commande restée en file ou un brouillon abandonné n'est jamais supprimé ni renvoyé en silence ; à la reprise, la personne voit l'entrée et choisit de l'envoyer ou de l'abandonner ; aucune durée d'expiration.
+
+Conformité relevée dans le code :
+
+| Point | Web | iOS |
+|---|---|---|
+| Aucune suppression par délai | conforme : `command-retention-106.test.ts` fait avancer l'horloge de dix ans, l'entrée reste | écart : voir ci-dessous |
+| Aucun renvoi automatique | conforme : `resend` n'est appelé que par le bouton de `pending-requests.tsx`, et ne fait rien pour une entrée orpheline (aucun paquet, testé) | conforme sur les commandes d'école (« rien ne doit la rejouer à l'insu de la personne », `SchoolPendingCommandText.swift:79`) |
+| Écran où la personne choisit | `pending-requests.tsx:87-89` : « Renvoyer la même demande » et « Arrêter le suivi » (avec confirmation) | « Abandonner » dans `SchoolCourseEnrollmentViews.swift:145`, `SchoolCourseEditorView.swift:255`, `SchoolCapturePreparationView.swift:482` et les vues d'invitation et de planification |
+
+Écarts, non corrigés ici :
+
+1. Web, entrée reprise après rechargement : son contenu n'est volontairement jamais stocké (politique de persistance du navigateur), donc elle ne peut être que vérifiée ou abandonnée, pas envoyée. Offrir l'envoi après rechargement suppose de stocker le contenu : décision de confidentialité à prendre, pas un correctif.
+2. Web, `sessionStorage` : fermer l'onglet fait perdre le suivi sans geste de la personne. Ce n'est pas un délai, mais ce n'est pas « garder » non plus ; même cause, même décision que le point 1.
+3. Web, « Arrêter le suivi » n'est offert que lorsque le contenu est perdu, qu'aucune trace n'existe à l'école ou que la vérification ne conclut pas (`pendingActions`, `command-store.ts:42`) ; une demande encore envoyable se renvoie ou se vérifie d'abord. Conforme à « envoyer ou abandonner » une fois la vérification faite.
+4. Web et iOS, leçon dont le créneau est passé : le renvoi est retiré (`command-recovery.ts`, `SchoolPendingCommandText.swift:79`). La personne garde vérifier et abandonner.
+5. iOS, départ de trajet (GPS), suppression automatique par délai : `SchoolCapturePreparationWorkspace.swift:661-663` retire sans geste une demande de départ que l'école déclare inconnue au-delà de 120 s (`settledRequestAge`, ligne 680), et `:688-695` classe de même une demande jamais émise. Ces deux chemins contredisent la décision pour les demandes de départ. Le correctif touche la préparation de capture (montrer l'entrée et demander au lieu de classer) : à découper en un lot propre avec un run, non fait dans cette passe.
+6. iOS, brouillon chiffré de messagerie : aucun délai de purge trouvé dans `MessagingCore` ; le dossier de messagerie est interdit à ce lot et son écran de reprise n'a pas été relu.
 
 Local : `pending-recovery-106` échoue en local (2 échecs) faute de `playwright-core` ; absence de dépendance déjà
 documentée, pas une régression, non corrigée ici.
@@ -101,6 +116,6 @@ Sous-issues #104 et #107 à #130 : fermées. #106 et #131 : ouvertes. Les critè
 ## 6. Restant
 
 - Physique : mesures sur appareil, VoiceOver, plusieurs appareils.
-- Décision : expiration générale (L1, voir 3.2). Le périmètre d'annulation avant envoi (L2) n'appelle pas de décision tant qu'aucun bouton universel n'est voulu.
+- Décision L1 prise le 12 novembre (garder et demander) ; reste l'écart iOS du départ de trajet (3.2, point 5). Le périmètre d'annulation avant envoi (L2) n'appelle pas de décision tant qu'aucun bouton universel n'est voulu.
 - Technique : cause du délai READINESS ; instabilité de `testFifteenSecondResponseKeepsReactionAndComposerUsable` (rouge dans la sélection de 6 tests, vert seul : deux exécutions, cause non établie) ;
   parcours rendus des formulaires et panneaux web (campagne navigateur, la CI Chromium étant hors service) ; `pending-recovery-106` local (`playwright-core`).

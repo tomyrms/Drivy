@@ -24,6 +24,12 @@ Deuxième passe (mêmes jour et branche) :
   (sans rendu). L1 (expiration générale) reste une décision du porteur ; L2 et L3 documentés dans
   `reactivite-restes-20261111.md`.
 
+Troisième passe (12 novembre) : le porteur a tranché L1 (« garder et lui demander », aucune expiration), consigné dans
+`decisions-2026-11-12.md`. Web conforme et prouvé (`command-retention-106.test.ts`, 3 tests : l'horloge avance de dix ans,
+rien ne part, rien ne disparaît sans le geste de la personne). Écart iOS relevé et non corrigé : retrait automatique après 120 s
+d'une demande de départ inconnue de l'école (`SchoolCapturePreparationWorkspace.swift:661`). Cadrage de #68 écrit dans
+`hebergement-68-cadrage-20261112.md`, documentation seulement.
+
 Échoué ou non qualifié :
 
 - `MessagingLatencyUITests.testFifteenSecondResponseKeepsReactionAndComposerUsable` : rouge dans 43068112256, vert seul dans
