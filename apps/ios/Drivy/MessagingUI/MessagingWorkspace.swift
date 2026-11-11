@@ -181,8 +181,10 @@ struct MessagingInboxPreview: Equatable, Sendable {
         restoringDurableSends = true
         let restoreFailure = await restoreDurableSends()
         restoringDurableSends = false
-        resumeSends()
+        // Un échec de restauration du journal est traité AVANT toute reprise : sans l'ordre durable, un envoi plus récent
+        // pourrait partir devant une entrée plus ancienne du journal. Rien ne repart ; la prochaine reprise réessaie.
         if let failure = restoreFailure { recordFailure(failure); return }
+        resumeSends()
         guard currentScope() == scope else { recordFailure(.contextChanged); return }
         await loadConversations()
         if let conversationID, visibleMessageConversationID == conversationID { await loadMessages(conversationID) }

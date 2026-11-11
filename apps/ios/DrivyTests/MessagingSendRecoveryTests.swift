@@ -213,6 +213,36 @@ final class MessagingSendRecoveryTests: XCTestCase {
         XCTAssertEqual(sent, [m1.clientMessageID, m1.clientMessageID])
     }
 
+    /// Restauration du journal en échec : aucun envoi ne reprend (M1 incertain n'est pas rejoué, transport retenu),
+    /// l'échec est signalé ; quand le journal redevient lisible, la reprise repart et M1 n'est envoyé qu'une fois de plus.
+    func testNothingResumesWhileTheJournalRestorationFailed() async {
+        let m1 = pending("un")
+        let store = RecoveryStore()
+        let service = ScriptedSender(account: account, school: school, scripts: [m1.clientMessageID: [.lost, .suspend]])
+        let workspace = workspace(service, store: store)
+        workspace.scheduleSend(m1)
+        await until { workspace.sendStatus(m1.clientMessageID) == .uncertain }
+        await store.failReads(.protectionUnavailable)
+
+        await workspace.refreshVisible()
+        for _ in 0..<50 { await Task.yield() }
+        try? await Task.sleep(for: .milliseconds(50))
+        XCTAssertEqual(workspace.error, .protectionUnavailable, "L'échec de restauration est traité, pas masqué")
+        XCTAssertEqual(workspace.sendStatus(m1.clientMessageID), .uncertain, "M1 n'est pas repassé en file")
+        let blocked = await service.sent
+        XCTAssertEqual(blocked, [m1.clientMessageID], "Aucun envoi ne reprend tant que la restauration a échoué")
+        let held = await service.isSuspended(m1.clientMessageID)
+        XCTAssertFalse(held)
+
+        await store.failReads(nil)
+        await workspace.refreshVisible()
+        await until { await service.isSuspended(m1.clientMessageID) }
+        await service.release(m1.clientMessageID)
+        await until { self.isAccepted(workspace, m1) }
+        let sent = await service.sent
+        XCTAssertEqual(sent, [m1.clientMessageID, m1.clientMessageID])
+    }
+
     /// Une panne de protection rencontrée pendant la reprise est signalée, jamais présentée comme un succès.
     func testProtectionFailureDuringRecoveryIsSignalled() async {
         let m1 = pending("un")
@@ -244,12 +274,16 @@ private actor RecoveryStore: MessagingProtectedOutbox {
     private var stored: [MessagingPending] = []
     private var holdsNextRead = false
     private var readWaiter: CheckedContinuation<Void, Never>?
+    private var readFailure: MessagingFailure?
+    /// Les lectures du journal échouent avec cette erreur jusqu'à `failReads(nil)`.
+    func failReads(_ failure: MessagingFailure?) { readFailure = failure }
     func put(_ entry: MessagingPending, scope: MessagingScope) async throws { stored.append(entry) }
     /// La prochaine lecture du journal reste suspendue jusqu'à `releaseRead` (restauration retenue au milieu).
     func holdNextRead() { holdsNextRead = true }
     func isReadWaiting() -> Bool { readWaiter != nil }
     func releaseRead() { readWaiter?.resume(); readWaiter = nil }
     func entries(scope: MessagingScope) async throws -> [MessagingPending] {
+        if let readFailure { throw readFailure }
         if holdsNextRead {
             holdsNextRead = false
             let snapshot = stored                       // le journal lu au moment de la demande
