@@ -33,7 +33,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
                                   currentScope: { box.value })
     }
 
-    private func info(sequence: Int?, conversationID: UUID? = nil) -> [AnyHashable: Any] {
+    nonisolated private func info(sequence: Int?, conversationID: UUID? = nil) -> [AnyHashable: Any] {
         var value: [AnyHashable: Any] = ["kind": "MESSAGING", "schoolId": school.uuidString.lowercased(),
                                          "conversationId": (conversationID ?? conversation).uuidString.lowercased()]
         if let sequence { value["sequence"] = sequence }
