@@ -33,12 +33,6 @@ final class MessagingForegroundAlertTests: XCTestCase {
                                   currentScope: { box.value })
     }
 
-    nonisolated private func info(sequence: Int?, conversationID: UUID? = nil) -> [AnyHashable: Any] {
-        var value: [AnyHashable: Any] = ["kind": "MESSAGING", "schoolId": school.uuidString.lowercased(),
-                                         "conversationId": (conversationID ?? conversation).uuidString.lowercased()]
-        if let sequence { value["sequence"] = sequence }
-        return value
-    }
 
     // MARK: Lecture autorisée côté workspace
 
@@ -150,13 +144,13 @@ final class MessagingForegroundAlertTests: XCTestCase {
 
     func testAbsorbedOnlyWhenTheReadConfirmsTheTargetedSequence() async {
         MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { sequence, _ in sequence == 5 }
-        let confirmed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let confirmed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertTrue(confirmed)
-        let refused = await MessagingActiveConversation.absorbs(info(sequence: 6))
+        let refused = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 6))
         XCTAssertFalse(refused, "Une séquence que la lecture ne confirme pas reste présentée")
-        let anonymous = await MessagingActiveConversation.absorbs(info(sequence: nil))
+        let anonymous = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: nil))
         XCTAssertFalse(anonymous, "Sans séquence, aucune lecture possible : l'alerte reste")
-        let elsewhere = await MessagingActiveConversation.absorbs(info(sequence: 5, conversationID: other))
+        let elsewhere = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5, conversationID: other))
         XCTAssertFalse(elsewhere)
     }
 
@@ -166,18 +160,18 @@ final class MessagingForegroundAlertTests: XCTestCase {
         MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true, covered: true) { _, _ in
             await asked.bump(); return true
         }
-        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let absorbed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertFalse(absorbed)
         let calls = await asked.value
         XCTAssertEqual(calls, 0, "Aucune lecture n'est lancée sous une feuille")
-        XCTAssertFalse(MessagingActiveConversation.suppresses(info(sequence: 5),
+        XCTAssertFalse(MessagingActiveConversation.suppresses(alertInfo(school: school, conversation: conversation, sequence: 5),
             state: .init(schoolID: school, conversationID: conversation, atBottom: true, covered: true)))
     }
 
     /// Fil non affiché au bas (historique parcouru, app inactive) : ni lecture ni absorption.
     func testThreadNotAtBottomNeverAbsorbs() async {
         MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: false) { _, _ in true }
-        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let absorbed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertFalse(absorbed)
     }
 
@@ -188,7 +182,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
             MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true, covered: true)
             return true
         }
-        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let absorbed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertFalse(absorbed)
     }
 
@@ -203,7 +197,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
             if !stillPresented() { seen.end() }
             return true
         }
-        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let absorbed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertFalse(absorbed)
         XCTAssertFalse(seen.isPresented, "La lecture de l'ancienne présentation a vu qu'elle n'était plus la courante")
     }
@@ -215,10 +209,10 @@ final class MessagingForegroundAlertTests: XCTestCase {
             MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in true }
             return true
         }
-        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let absorbed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertFalse(absorbed)
         // La nouvelle présentation, elle, absorbe normalement.
-        let next = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let next = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertTrue(next)
     }
 
@@ -226,7 +220,7 @@ final class MessagingForegroundAlertTests: XCTestCase {
     func testClearedConversationAbsorbsNothing() async {
         MessagingActiveConversation.set(schoolID: school, conversationID: conversation, atBottom: true) { _, _ in true }
         MessagingActiveConversation.clear(conversation)
-        let absorbed = await MessagingActiveConversation.absorbs(info(sequence: 5))
+        let absorbed = await MessagingActiveConversation.absorbs(alertInfo(school: school, conversation: conversation, sequence: 5))
         XCTAssertFalse(absorbed)
     }
 }
@@ -302,4 +296,12 @@ private actor AlertDirectory: MessagingDirectoryService {
     func generalMembers(scope: MessagingScope) async throws -> [MessagingContact] { [] }
     func privateConversation(scope: MessagingScope, peerID: UUID) async throws -> UUID { throw MessagingFailure.unavailable }
     func generalConversation(scope: MessagingScope) async throws -> UUID { throw MessagingFailure.unavailable }
+}
+
+/// Charge de notification construite hors de la classe de test : valeur disjointe, envoyable vers `absorbs`.
+private func alertInfo(school: UUID, conversation: UUID, sequence: Int?, conversationID: UUID? = nil) -> [AnyHashable: Any] {
+    var value: [AnyHashable: Any] = ["kind": "MESSAGING", "schoolId": school.uuidString.lowercased(),
+                                     "conversationId": (conversationID ?? conversation).uuidString.lowercased()]
+    if let sequence { value["sequence"] = sequence }
+    return value
 }
