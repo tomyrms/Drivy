@@ -11,7 +11,18 @@ import Observation
     let runtime: any MessagingMediaRuntime
     let conversationID: UUID
     private(set) var selection: MessagingPreparedMedia?
-    var caption = ""
+    /// Raccord au brouillon texte du composeur (#475). Règle : le champ principal reste visible et sert de
+    /// légende tant qu'une pièce est choisie ; texte et légende sont UNE seule valeur, donc ni perte au
+    /// choix/retrait/remplacement, ni duplication, ni texte masqué. Sans raccord (tests, compositions
+    /// minimales) la légende est locale.
+    @ObservationIgnored var draftChannel: MessagingCaptionChannel?
+    private var localCaption = ""
+    var caption: String {
+        get { draftChannel?.read() ?? localCaption }
+        set { if let draftChannel { draftChannel.write(newValue) } else { localCaption = newValue } }
+    }
+    /// Erreur propre au choix de la pièce (format, taille, import interrompu), affichée à côté de la pièce.
+    private(set) var selectionError: String?
     private(set) var preparing = false
     private(set) var sending = false
     private(set) var opening = false
@@ -35,30 +46,37 @@ import Observation
 
     var canSend: Bool { active && selection != nil && !preparing && !sending }
     var contextGeneration: UUID { generation }
+    /// Change à chaque pièce choisie ; sert de clé aux vues (miniature) sans exposer de contenu.
+    var selectionRevision: UUID { gestureID }
 
     func select(expectedGeneration: UUID? = nil, _ source: () async throws -> MessagingImportedMedia) async {
         guard active, !sending, !preparing else { return }
         guard expectedGeneration == nil || expectedGeneration == generation else { return }
         let request = generation
-        preparing = true; error = nil; confirmation = nil
+        preparing = true; error = nil; selectionError = nil; confirmation = nil
         defer { if request == generation { preparing = false } }
         do {
             let imported = try await source()
             guard active, request == generation else { return }
             let prepared = try await runtime.prepare(imported.data, suggestedName: imported.suggestedName)
             guard active, request == generation, !Task.isCancelled else { return }
-            selection = prepared; caption = ""; gestureID = UUID()
+            selection = prepared; gestureID = UUID()
         } catch is CancellationError {
             // Cancellation is a normal picker outcome; the preceding selection remains.
         } catch {
-            if active, request == generation { record(error) }
+            if active, request == generation {
+                let text = Self.selectionLabel(error)
+                record(error, message: text)
+                if self.error == text { selectionError = text }
+            }
         }
         if request == generation { preparing = false }
     }
 
     func removeSelection() {
         guard !sending else { return }
-        generation = UUID(); selection = nil; caption = ""; preparing = false; preview = nil; error = nil
+        // Retrait avant envoi : la légende (le brouillon) reste dans le champ, rien n'est effacé ni envoyé.
+        generation = UUID(); selection = nil; preparing = false; preview = nil; error = nil; selectionError = nil
         // This generation also invalidates any pending open; its stale defer must not
         // clear a newer operation, so release the presentation lock here instead.
         opening = false
@@ -89,14 +107,17 @@ import Observation
         sending = true; error = nil; confirmation = nil
         pendingRevision = UUID()
         let request = generation, id = gestureID
-        let trimmed = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        let submitted = caption
+        let trimmed = submitted.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
             let item = try await runtime.enqueue(selection, clientMessageID: id, conversationID: conversationID,
                 caption: trimmed.isEmpty ? nil : trimmed, mentionPersonIDs: [], replyToMessageID: replyTo)
             guard active, request == generation else { return }
             pendingItems.removeAll { $0.id == item.id }; pendingItems.append(item)
             enqueuedReplyTo = replyTo; lastEnqueuedID = item.id
-            self.selection = nil; caption = ""; preview = nil
+            // Seule la légende effectivement envoyée est retirée : une frappe pendant la mise en file reste.
+            self.selection = nil; preview = nil
+            if caption == submitted { caption = "" }
             apply(await runtime.send(clientMessageID: id), id: id, request: request)
         } catch {
             if active, request == generation {
@@ -158,17 +179,25 @@ import Observation
     }
 
     func suspend() {
-        active = false; generation = UUID(); selection = nil; caption = ""; preview = nil
+        // La légende liée au brouillon du composeur n'est pas touchée ici : le brouillon a ses propres règles.
+        active = false; generation = UUID(); selection = nil; localCaption = ""; selectionError = nil; preview = nil
         preparing = false; sending = false; opening = false; pendingItems = []; failures = [:]
         error = nil; confirmation = nil; cleanupPending = false
         lastEnqueuedID = nil; enqueuedReplyTo = nil
         // No promise to cancel a request already in flight or erase durable intentions.
     }
 
-    private func record(_ failure: Error, prefix: String = "") {
+    private func record(_ failure: Error, prefix: String = "", message: String? = nil) {
         if let failure = failure as? MessagingMediaRuntimeFailure,
            failure == .contextChanged || failure == .accessChanged { suspend() }
-        error = prefix + Self.label(failure)
+        error = prefix + (message ?? Self.label(failure))
+    }
+
+    /// Texte d'erreur du choix de pièce : format/taille refusés et lecture interrompue (iCloud, fournisseur
+    /// de fichiers indisponible) restent distincts. L'annulation du sélecteur n'arrive jamais ici.
+    static func selectionLabel(_ error: Error) -> String {
+        if error is MessagingMediaRuntimeFailure || error is MessagingMediaImportFailure { return label(error) }
+        return "Fichier indisponible. Vérifier la connexion, puis le choisir à nouveau."
     }
 
     static func label(_ error: Error) -> String {

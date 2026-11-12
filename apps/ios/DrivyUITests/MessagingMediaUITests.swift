@@ -87,6 +87,23 @@ final class MessagingMediaUITests: XCTestCase {
         capture("media-caption-keyboard")
     }
 
+    /// #475 : le champ reste visible pendant la sélection, sert de légende et revient intact au retrait.
+    func testCaptionIsTheDraftAndSurvivesRemoval() {
+        let app = launch()
+        let main = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
+        XCTAssertTrue(main.waitForExistence(timeout: 10))
+        main.tap()
+        main.typeText("Bonjour")
+        select("photo", in: app)
+        let caption = app.descendants(matching: .any)["messaging.media.caption"].firstMatch
+        XCTAssertTrue(caption.waitForExistence(timeout: 5))
+        XCTAssertEqual(caption.value as? String, "Bonjour")
+        capture("media-caption-from-draft")
+        app.buttons["messaging.media.selection.remove"].tap()
+        XCTAssertTrue(app.buttons["messaging.media.selection.open"].waitForNonExistence(timeout: 5))
+        XCTAssertEqual(main.value as? String, "Bonjour")
+    }
+
     func testReceivedPieceOpensInExistingThread() {
         let app = launch()
         let received = app.buttons["messaging.media.received.open"].firstMatch

@@ -8,36 +8,12 @@ struct MessagingMediaComposerPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DrivySpacing.xs) {
-            if model.preparing {
-                ProgressView("Préparation…").accessibilityIdentifier("messaging.media.preparing")
-                Button("Retirer") { model.removeSelection() }.frame(minHeight: DrivyLayout.tapTarget)
-            }
-            if let media = model.selection {
-                let layout = typeSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading)) : AnyLayout(HStackLayout())
-                layout {
-                    Button { model.showSelection() } label: {
-                        MessagingMediaFileLabel(name: media.name, mime: media.mime, byteSize: media.data.count)
-                    }
-                    .frame(minHeight: DrivyLayout.tapTarget)
-                    .accessibilityIdentifier("messaging.media.selection.open")
-                    Button("Retirer", systemImage: "xmark") { model.removeSelection() }
-                        .frame(minHeight: DrivyLayout.tapTarget).disabled(model.sending)
-                        .accessibilityIdentifier("messaging.media.selection.remove")
-                }
-                TextField("Légende facultative", text: $model.caption, axis: .vertical)
-                    .lineLimit(1...6).font(.body).foregroundStyle(DrivyTheme.text)
-                    .frame(minHeight: DrivyLayout.tapTarget)
-                    .disabled(model.sending)
-                    .accessibilityIdentifier("messaging.media.caption")
-                Button("Envoyer la pièce") {
-                    Task { await model.sendSelected(replyTo: replyTo); if model.confirmation != nil { await didConfirm() } }
-                }
-                .frame(minHeight: DrivyLayout.tapTarget).disabled(!model.canSend)
-                .accessibilityIdentifier("messaging.media.send")
-            }
+            // Sélection (#475) : pièce, retrait, erreur de choix. Légende et envoi vivent dans la ligne du
+            // composeur (MessagingThreadComposer) ; voir MessagingComposerAttachmentChip.
+            MessagingComposerSelectionSection(model: model)
             if model.sending { ProgressView("Envoi…") }
             if model.opening { ProgressView("Ouverture…") }
-            if let error = model.error {
+            if let error = model.error, error != model.selectionError {
                 Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("messaging.media.error")

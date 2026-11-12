@@ -1724,8 +1724,11 @@ private struct MessagingThreadComposer: View {
                 }
                 .accessibilityLabel("Plus d'options")
                 .accessibilityIdentifier("messaging.compose.more")
-                if thread.mediaComposer?.selection == nil && thread.mediaComposer?.preparing != true {
-                TextField("Message", text: $composer.draft, axis: .vertical)
+                // #475 : le champ reste visible pendant le choix d'une pièce et sert de légende (même valeur
+                // que le brouillon : rien de masqué, rien de perdu, rien de dupliqué).
+                let attached = thread.mediaComposer?.selection != nil
+                let mediaBusy = thread.mediaComposer?.preparing == true
+                TextField(attached ? "Légende" : "Message", text: $composer.draft, axis: .vertical)
                     .lineLimit(1...6)
                     .focused($focused)
                     .foregroundStyle(DrivyTheme.text)
@@ -1733,22 +1736,45 @@ private struct MessagingThreadComposer: View {
                     .padding(.vertical, 10)
                     .frame(minHeight: DrivyLayout.tapTarget)
                     .background(DrivyTheme.surfaceMuted, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-                    .accessibilityLabel("Rédiger un message")
-                    .accessibilityIdentifier("messaging.compose.text")
-                Button {
-                    Task { if await composer.sendText() { thread.scrollToNewest() } }
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.body.weight(.bold))
-                        .foregroundStyle(composer.canSend ? DrivyTheme.onAccent : DrivyTheme.disabledText)
+                    .accessibilityLabel(attached ? "Légende de la pièce jointe" : "Rédiger un message")
+                    .accessibilityIdentifier(attached ? "messaging.media.caption" : "messaging.compose.text")
+                if attached, let media = thread.mediaComposer {
+                    let ready = media.canSend && composer.draftReady
+                    Button {
+                        Task {
+                            await media.sendSelected(replyTo: composer.replyTo?.id)
+                            if media.confirmation != nil { await thread.refreshAfterMediaSend() }
+                        }
+                    } label: {
+                        Group {
+                            if media.sending { ProgressView().tint(DrivyTheme.onAccent) }
+                            else { Image(systemName: "arrow.up").font(.body.weight(.bold)) }
+                        }
+                        .foregroundStyle(ready || media.sending ? DrivyTheme.onAccent : DrivyTheme.disabledText)
                         .frame(width: 36, height: 36)
-                        .background(composer.canSend ? DrivyTheme.accentFill : DrivyTheme.disabledSurface, in: Circle())
+                        .background(ready || media.sending ? DrivyTheme.accentFill : DrivyTheme.disabledSurface, in: Circle())
                         .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
                         .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Envoyer")
-                .disabled(!composer.canSend)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(media.sending ? "Envoi en cours" : "Envoyer la pièce jointe")
+                    .accessibilityIdentifier("messaging.media.send")
+                    .disabled(!ready)
+                } else {
+                    Button {
+                        Task { if await composer.sendText() { thread.scrollToNewest() } }
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(composer.canSend && !mediaBusy ? DrivyTheme.onAccent : DrivyTheme.disabledText)
+                            .frame(width: 36, height: 36)
+                            .background(composer.canSend && !mediaBusy ? DrivyTheme.accentFill : DrivyTheme.disabledSurface, in: Circle())
+                            .frame(width: DrivyLayout.tapTarget, height: DrivyLayout.tapTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Envoyer")
+                    .disabled(!composer.canSend || mediaBusy)
                 }
             }
         }
@@ -1758,6 +1784,12 @@ private struct MessagingThreadComposer: View {
         .onChange(of: composer.focusRequest) { _, _ in focused = true }
         .onChange(of: composer.blurRequest) { _, _ in focused = false }
         .onChange(of: focused) { _, value in composer.isFocused = value }
+        // #475 : la légende d'une pièce choisie est le brouillon du champ principal.
+        .onAppear {
+            let draftOwner = composer
+            thread.mediaComposer?.draftChannel = MessagingCaptionChannel(
+                read: { draftOwner.draft }, write: { draftOwner.draft = $0 })
+        }
         .onChange(of: thread.mediaComposer?.selection != nil) { _, selected in if selected { composer.blur() } }
         .onChange(of: thread.mediaComposer?.lastEnqueuedID) { _, id in
             if id != nil, composer.replyTo?.id == thread.mediaComposer?.enqueuedReplyTo { composer.replyTo = nil }
