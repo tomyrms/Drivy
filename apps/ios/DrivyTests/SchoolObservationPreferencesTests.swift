@@ -175,13 +175,13 @@ private actor PreferencesSchool: SchoolHTTPTransport {
 }
 
 /// Une leçon n'a besoin d'aucun réseau pour la palette : le transport de l'enregistreur n'est jamais appelé ici.
-private func makeClient(_ school: PreferencesSchool, scope: SchoolCommandScope = ConfigurationFixture.scope()) -> SchoolObservationPreferencesClient {
+@MainActor private func makeClient(_ school: PreferencesSchool, scope: SchoolCommandScope = ConfigurationFixture.scope()) -> SchoolObservationPreferencesClient {
     SchoolObservationPreferencesClient(baseURL: URL(string: scope.apiBaseURL)!, tokenSource: HubToken(), transport: school)
 }
 
 // MARK: - Contrat et palette
 
-struct SchoolObservationPreferencesContractTests {
+@MainActor struct SchoolObservationPreferencesContractTests {
     @Test func theProjectionDecodesAndIsCheckedAgainstTheAccountAndTheSchool() async throws {
         let school = PreferencesSchool()
         let scope = ConfigurationFixture.scope()
@@ -541,7 +541,8 @@ struct SchoolObservationPreferencesContractTests {
         try await settled(model)
         let writes = await school.writes
         #expect(writes.count == 1 && writes[0].visibilityKeys == nil && writes[0].order == chosen.themes.map(\.key))
-        #expect(model.palette == PreferencesSchool.schoolDisplayed.count.words(of: model))
+        let shown = Set(PreferencesSchool.schoolDisplayed)
+        #expect(model.palette == chosen.themes.map(\.key).filter { shown.contains($0) })
     }
 
     // MARK: Accès retiré
@@ -557,11 +558,6 @@ struct SchoolObservationPreferencesContractTests {
         #expect(model.palette == nil && !model.canReorder)
         #expect(account.stored != nil)
     }
-}
-
-private extension Int {
-    /// Aide de lecture des attentes : la palette d'une école qui impose son affichage a toujours 12 tuiles.
-    func words(of model: SchoolObservationPreferencesStore) -> [String] { model.palette ?? [] }
 }
 
 // MARK: - Copies locales
