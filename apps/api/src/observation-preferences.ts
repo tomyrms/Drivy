@@ -6,7 +6,7 @@ import type {Identity,TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type SchoolRow} from './commands.js';
 import {ApiError,forbidden} from './errors.js';
-import {arrangeObservationThemes,schoolObservationConfiguration,themeArrangement,type ObservationThemeSettings} from './observation-themes.js';
+import {arrangeObservationThemes,observationThemeKey,schoolObservationConfiguration,type ObservationThemeSettings} from './observation-themes.js';
 import {rankThemes,reconcileOrder,type ThemeUsage} from './observation-ranking-engine.js';
 
 /**
@@ -19,31 +19,46 @@ import {rankThemes,reconcileOrder,type ThemeUsage} from './observation-ranking-e
 export type Mode='MANUAL'|'SMART';
 interface PrefRow {version:number;theme_order:string[]|null;hidden_themes:string[]|null;mode:Mode;ranked_order:string[];ranked_on:string|null;learning_generation:number;learning_since:Date|null}
 type Arranged=ObservationThemeSettings['themes'];
+/** Un thème tel que le compte le voit dans l'école ouverte : `visible` est la visibilité EFFECTIVE (celle de l'école si elle l'impose). */
+export type PreferenceTheme=Arranged[number]&{schoolVisible:boolean;visibilityEditable:boolean};
 export interface AdoptionCandidate {schoolId:string;schoolName:string;mode:Mode;themes:{key:string;visible:boolean}[]}
 export interface ObservationPreferences {
  id:string;schoolId:string;version:number;
  /** Politique de l'école ouverte : les moniteurs peuvent-ils personnaliser ordre et affichage ? */
  personalizationAllowed:boolean;
- /** Vrai si l'ordre et l'affichage du compte sont ceux qui s'appliquent (politique permissive et personnalisation enregistrée). */
- customized:boolean;
+ /** Le compte a un ordre manuel à lui (sinon l'ordre de référence de l'école ouverte s'applique). L'ordre est personnel dans tous les cas. */
+ orderCustomized:boolean;
+ /** La visibilité personnelle du compte est celle qui s'applique ici : politique ouverte ET visibilité enregistrée. */
+ visibilityCustomized:boolean;
  mode:Mode;
- /** Catalogue complet dans l'ordre manuel en vigueur (compte si personnalisé, sinon école) : la base de l'écran de réglage. */
- themes:Arranged;
- /** Clés affichées dans « Signaler », dans l'ordre à afficher : ordre manuel, ou classement intelligent s'il est actif. */
+ /** Catalogue complet dans l'ordre manuel personnel (sinon celui de l'école), avec la visibilité effective de l'école ouverte : la base de l'écran de réglage. */
+ themes:PreferenceTheme[];
+ /** Clés affichées dans « Signaler », dans l'ordre à afficher : ordre manuel ou classement intelligent, filtré par la visibilité effective. */
  palette:string[];
  rankedOn:string|null;
  learning:{generation:number;since:string|null};
  /** Présent seulement tant que le compte n'a rien enregistré et que les écoles de la personne portent des classements différents. */
  adoption:{candidates:AdoptionCandidate[]}|null;
 }
-export interface Effective {personalizationAllowed:boolean;customized:boolean;themes:Arranged;manual:string[];palette:string[];row:PrefRow|undefined}
+export interface Effective {personalizationAllowed:boolean;orderCustomized:boolean;visibilityCustomized:boolean;themes:PreferenceTheme[];
+ /** Ordre manuel personnel du catalogue COMPLET : la base du classement du compte, indépendante de la visibilité d'une école. */
+ order:string[];
+ /** Classement du compte sur le catalogue complet (celui qui est enregistré, ramené au catalogue), ou l'ordre manuel hors mode intelligent. */
+ ranked:string[];
+ palette:string[];row:PrefRow|undefined}
 
 const staff=['ADMIN','INSTRUCTOR'];
 /** Fuseau du jour de classement : unique pour tout le compte (il peut avoir plusieurs écoles), donc indépendant du fuseau d'une école. */
 export const rankingZone='Europe/Zurich';
 const idOnly=z.object({operationId:z.uuid()}).strict();
-const save=z.object({operationId:z.uuid(),mode:z.enum(['MANUAL','SMART']).optional(),themes:themeArrangement.optional()}).strict()
- .refine(body=>body.mode!==undefined||body.themes!==undefined,{message:'mode ou themes est requis.'});
+const catalogSize=observationThemeKey.options.length;
+/** Ordre manuel : les dix-huit clés du catalogue, chacune une fois. */
+const orderBody=z.array(observationThemeKey).length(catalogSize).refine(keys=>new Set(keys).size===keys.length);
+/** Visibilité personnelle : les dix-huit clés, au moins une visible. Indépendante de l'ordre (on peut envoyer l'un sans l'autre). */
+const visibilityBody=z.array(z.object({key:observationThemeKey,visible:z.boolean()}).strict()).length(catalogSize)
+ .refine(items=>new Set(items.map(item=>item.key)).size===items.length).refine(items=>items.some(item=>item.visible));
+const save=z.object({operationId:z.uuid(),mode:z.enum(['MANUAL','SMART']).optional(),order:orderBody.optional(),visibility:visibilityBody.optional()}).strict()
+ .refine(body=>body.mode!==undefined||body.order!==undefined||body.visibility!==undefined,{message:'mode, order ou visibility est requis.'});
 export type SaveBody=z.infer<typeof save>;
 
 async function readRow(db:PoolClient,personId:string,lock=false):Promise<PrefRow|undefined>{
@@ -67,16 +82,21 @@ function dailyOperation(personId:string,generation:number,from:string|null,day:s
 }
 
 /**
- * Palette effective du compte dans l'école ouverte. L'école qui impose sa visibilité garde sa liste et son ordre (les réglages
- * personnels restent en réserve, intacts, et reprennent si la politique s'ouvre) ; le classement intelligent s'applique dans tous les cas
- * à la liste affichée.
+ * Palette effective du compte dans l'école ouverte (#465) : l'ordre est TOUJOURS personnel (manuel ou intelligent) ; seule la visibilité dépend
+ * de la politique. Mode imposé : visibilité de l'école. Mode libre : visibilité personnelle si elle est enregistrée, sinon celle de l'école.
+ * Sans ordre personnel, la référence de l'école s'applique. Le classement du compte reste sur le catalogue complet : le filtre par
+ * visibilité n'intervient qu'ici, jamais dans ce qui est enregistré.
  */
 export async function effectivePalette(db:PoolClient,schoolId:string,personId:string):Promise<Effective>{
  const school=await schoolObservationConfiguration(db,schoolId),row=await readRow(db,personId);
- const customized=school.personalizationAllowed&&row?.theme_order!=null;
- const themes=customized?arrangeObservationThemes({theme_order:row!.theme_order!,hidden_themes:row!.hidden_themes??[]}):school.themes;
- const manual=themes.filter(theme=>theme.visible).map(theme=>theme.key as string);
- return {personalizationAllowed:school.personalizationAllowed,customized,themes,manual,palette:row?.mode==='SMART'?reconcileOrder(row.ranked_order,manual):manual,row};
+ const orderCustomized=row?.theme_order!=null,reference=new Map(school.themes.map(theme=>[theme.key as string,theme]));
+ const arranged=orderCustomized?arrangeObservationThemes({theme_order:row!.theme_order!,hidden_themes:[]}):school.themes;
+ const personal=school.personalizationAllowed&&row?.hidden_themes!=null?new Set(row.hidden_themes):null;
+ let ownVisibility=personal!==null&&arranged.some(theme=>!personal.has(theme.key));
+ const themes:PreferenceTheme[]=arranged.map(theme=>({...theme,schoolVisible:reference.get(theme.key)!.visible,visible:ownVisibility?!personal!.has(theme.key):reference.get(theme.key)!.visible,visibilityEditable:school.personalizationAllowed}));
+ const order=themes.map(theme=>theme.key as string),ranked=row?.mode==='SMART'?reconcileOrder(row.ranked_order,order):order;
+ const visible=new Set(themes.filter(theme=>theme.visible).map(theme=>theme.key as string));
+ return {personalizationAllowed:school.personalizationAllowed,orderCustomized,visibilityCustomized:ownVisibility,themes,order,ranked,palette:ranked.filter(key=>visible.has(key)),row};
 }
 /** Rang (à partir de 1) de la tuile d'un thème dans « Signaler » pour ce compte, à cet instant ; `null` si elle n'y est pas affichée. */
 export async function palettePosition(db:PoolClient,schoolId:string,personId:string,themeKey:string):Promise<number|null>{
@@ -95,7 +115,7 @@ async function adoption(db:PoolClient,effective:Effective):Promise<ObservationPr
 }
 export async function currentPreferences(db:PoolClient,schoolId:string,personId:string):Promise<ObservationPreferences>{
  const effective=await effectivePalette(db,schoolId,personId),row=effective.row,smart=row?.mode==='SMART';
- return {id:personId,schoolId,version:row?.version??1,personalizationAllowed:effective.personalizationAllowed,customized:effective.customized,mode:row?.mode??'MANUAL',
+ return {id:personId,schoolId,version:row?.version??1,personalizationAllowed:effective.personalizationAllowed,orderCustomized:effective.orderCustomized,visibilityCustomized:effective.visibilityCustomized,mode:row?.mode??'MANUAL',
   themes:effective.themes,palette:effective.palette,rankedOn:smart?row.ranked_on:null,
   learning:{generation:row?.learning_generation??0,since:row?.learning_since?.toISOString()??null},adoption:await adoption(db,effective)};
 }
@@ -114,21 +134,27 @@ const keep=(row:PrefRow|undefined):Write=>({themeOrder:row?.theme_order??null,hi
  rankedOn:row?.ranked_on??null,generation:row?.learning_generation??0,restartLearning:false});
 const disabled=()=>new ApiError(403,'OBSERVATION_PERSONALIZATION_DISABLED','Cette école impose les signalements affichés.');
 
-/** Enregistre l'ordre/l'affichage personnels et/ou le mode. Partagé avec l'ancienne route /observation-ranking. */
-export async function applyPreferencesSave(db:PoolClient,actor:CommandActor,school:SchoolRow,body:Pick<SaveBody,'mode'|'themes'>,expected:number):Promise<CommandEffect<ObservationPreferences>>{
+/**
+ * Enregistre l'ordre manuel personnel, la visibilité personnelle et/ou le mode. Partagé avec l'ancienne route /observation-ranking.
+ * L'ordre est toujours accepté (même en visibilité imposée) ; la visibilité personnelle est refusée tant que l'école impose la sienne,
+ * et celle déjà enregistrée reste en réserve, intacte.
+ */
+export async function applyPreferencesSave(db:PoolClient,actor:CommandActor,school:SchoolRow,body:Pick<SaveBody,'mode'|'order'|'visibility'>,expected:number):Promise<CommandEffect<ObservationPreferences>>{
  const row=await readRow(db,actor.personId,true);checkVersion(row?.version??1,expected);
  const policy=await schoolObservationConfiguration(db,school.id);
- if(body.themes&&!policy.personalizationAllowed)throw disabled();
+ if(body.visibility&&!policy.personalizationAllowed)throw disabled();
  const next=keep(row);
- if(body.themes){next.themeOrder=body.themes.map(theme=>theme.key);next.hiddenThemes=body.themes.filter(theme=>!theme.visible).map(theme=>theme.key);}
+ if(body.order)next.themeOrder=body.order;
+ if(body.visibility)next.hiddenThemes=body.visibility.filter(item=>!item.visible).map(item=>item.key);
  if(body.mode)next.mode=body.mode;
  if(body.mode==='SMART'&&row?.mode!=='SMART'){
   // À l'activation, le classement repart des scores seuls : l'ordre montré la veille en mode manuel ne retient rien.
-  const arranged=policy.personalizationAllowed&&next.themeOrder?arrangeObservationThemes({theme_order:next.themeOrder,hidden_themes:next.hiddenThemes??[]}):policy.themes;
-  next.rankedOrder=rankThemes({manual:arranged.filter(theme=>theme.visible).map(theme=>theme.key),usage:await usage(db)}).order;next.rankedOn=await localDay(db);
+  // Il porte sur le catalogue complet : la visibilité de l'école ouverte ne retire rien du classement du compte.
+  const order=next.themeOrder?arrangeObservationThemes({theme_order:next.themeOrder,hidden_themes:[]}).map(theme=>theme.key as string):policy.themes.map(theme=>theme.key as string);
+  next.rankedOrder=rankThemes({manual:order,usage:await usage(db)}).order;next.rankedOn=await localDay(db);
  }
  await write(db,actor.personId,next);
- const changedFields=[...(body.themes?['order','visibility']:[]),...(body.mode?['mode']:[])];
+ const changedFields=[...(body.order?['order']:[]),...(body.visibility?['visibility']:[]),...(body.mode?['mode']:[])];
  return {data:await currentPreferences(db,school.id,actor.personId),action:'ObservationPresentationSaved',resourceType:'ObservationPreferences',resourceId:actor.personId,changedFields};
 }
 
@@ -136,7 +162,7 @@ export async function applyPreferencesSave(db:PoolClient,actor:CommandActor,scho
  * Lit les préférences et, au premier passage du jour en mode intelligent, refait et garde le classement. Une erreur de rafraîchissement ne
  * fait jamais échouer la lecture : on rend le dernier classement lu. Seul un code est journalisé.
  */
-export async function loadPreferences(pool:Pool,identity:Identity,schoolId:string,log:FastifyBaseLogger,requestId:string):Promise<{data:ObservationPreferences;membershipId:string}>{
+export async function loadPreferences(pool:Pool,identity:Identity,schoolId:string,log:FastifyBaseLogger,requestId:string,afterRead?:()=>Promise<void>):Promise<{data:ObservationPreferences;membershipId:string}>{
  const read=await withActor(pool,identity,schoolId,async(db,actor,member)=>{
   if(!member?.roles.some(role=>staff.includes(role)))throw forbidden();
   const data=await currentPreferences(db,schoolId,actor.personId),smart=data.mode==='SMART',day=smart?await localDay(db):null;
@@ -144,13 +170,16 @@ export async function loadPreferences(pool:Pool,identity:Identity,schoolId:strin
  });
  if(!read.due)return {data:read.data,membershipId:read.membershipId};
  const due=read.due;
+ // Point d'arrêt réservé aux tests : une remise à zéro de l'apprentissage peut arriver entre la lecture et le recalcul.
+ await afterRead?.();
  try{
   const data=await schoolCommand(pool,identity,schoolId,'REFRESH_OBSERVATION_RANKING',{operationId:dailyOperation(read.personId,due.generation,due.from,due.day)},null,async(db,actor)=>{
    const row=await readRow(db,actor.personId,true),day=await localDay(db),before=await effectivePalette(db,schoolId,actor.personId);let changed=false;
    // Un classement lancé avant « Recommencer l'apprentissage » ne s'applique pas : la génération a changé entre la lecture et le verrou.
    if(row?.mode==='SMART'&&row.learning_generation===due.generation&&row.ranked_on!==day){
-    const {order}=rankThemes({manual:before.manual,previous:row.ranked_order,usage:await usage(db),elapsedDays:elapsedDays(row.ranked_on,day)});
-    changed=order.join()!==before.palette.join();
+    // Catalogue complet : le classement du compte ne perd jamais un thème que l'école ouverte masque.
+    const {order}=rankThemes({manual:before.order,previous:row.ranked_order,usage:await usage(db),elapsedDays:elapsedDays(row.ranked_on,day)});
+    changed=order.join()!==before.ranked.join();
     await db.query('UPDATE drivy.person_observation_preference SET ranked_order=$2,ranked_on=$3::date,version=version+$4,updated_at=now() WHERE person_id=$1',[actor.personId,order,day,changed?1:0]);
    }
    return {data:await currentPreferences(db,schoolId,actor.personId),action:'ObservationRankingRefreshed',resourceType:'ObservationPreferences',resourceId:actor.personId,changedFields:changed?['order']:[]};
@@ -181,15 +210,17 @@ export function registerObservationPreferences(app:FastifyInstance,options:{pool
    {replay:(db,actor)=>currentPreferences(db,schoolId,actor.personId)});
   return respond(r,reply,data);
  });
- // « Rétablir » : le compte retrouve la configuration de l'école. Mode et apprentissage ne bougent pas.
+ // « Rétablir » : l'ordre et la visibilité de référence de l'école ouverte sont COPIÉS sur le compte (il ne suit plus ensuite les changements
+ // de référence). ADMIN dans tous les cas ; moniteur seulement si l'école autorise la personnalisation. Mode et apprentissage ne bougent pas.
  app.post(`${path}/presentation-reset`,{bodyLimit:1_024},async(r,reply)=>{
   z.object({}).strict().parse(r.query);const schoolId=schoolID(r.params),body=idOnly.parse(r.body),expected=requireVersion(r.headers['if-match']);
   checkIdempotency(r.headers['idempotency-key'],body.operationId);const identity=await options.verifyToken(r.headers.authorization);
   const data=await schoolCommand(options.pool,identity,schoolId,'RESET_OBSERVATION_PRESENTATION',body,expected,async(db,actor,school)=>{
    const row=await readRow(db,actor.personId,true);checkVersion(row?.version??1,expected);
-   if(!(await schoolObservationConfiguration(db,school.id)).personalizationAllowed)throw disabled();
-   if(row)await write(db,actor.personId,{...keep(row),themeOrder:null,hiddenThemes:null});
-   return {data:await currentPreferences(db,school.id,actor.personId),action:'ObservationPresentationReset',resourceType:'ObservationPreferences',resourceId:actor.personId,changedFields:row?['order','visibility']:[]};
+   const reference=await schoolObservationConfiguration(db,school.id),admin=(await db.query<{ok:boolean}>('SELECT drivy.can_manage_observation_themes($1) AS ok',[school.id])).rows[0]?.ok===true;
+   if(!admin&&!reference.personalizationAllowed)throw disabled();
+   await write(db,actor.personId,{...keep(row),themeOrder:reference.themes.map(theme=>theme.key as string),hiddenThemes:reference.themes.filter(theme=>!theme.visible).map(theme=>theme.key as string)});
+   return {data:await currentPreferences(db,school.id,actor.personId),action:'ObservationPresentationReset',resourceType:'ObservationPreferences',resourceId:actor.personId,changedFields:['order','visibility']};
   },staff,{replay:(db,actor)=>currentPreferences(db,schoolId,actor.personId)});
   return respond(r,reply,data);
  });
@@ -203,7 +234,7 @@ export function registerObservationPreferences(app:FastifyInstance,options:{pool
    const next=keep(row),effective=await effectivePalette(db,school.id,actor.personId);
    next.generation=(row?.learning_generation??0)+1;next.restartLearning=true;
    // Mode intelligent : le classement repart des seules références (aucun usage depuis la borne). Mode manuel : rien à classer.
-   if(next.mode==='SMART'){next.rankedOrder=rankThemes({manual:effective.manual,usage:[]}).order;next.rankedOn=await localDay(db);}
+   if(next.mode==='SMART'){next.rankedOrder=rankThemes({manual:effective.order,usage:[]}).order;next.rankedOn=await localDay(db);}
    else{next.rankedOrder=[];next.rankedOn=null;}
    await write(db,actor.personId,next);
    return {data:await currentPreferences(db,school.id,actor.personId),action:'ObservationLearningReset',resourceType:'ObservationPreferences',resourceId:actor.personId,changedFields:['learning']};

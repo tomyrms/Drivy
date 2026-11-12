@@ -42,7 +42,7 @@ describe('migration 20261111 sur des données antérieures',()=>{
  });
  it('la personne dont les écoles divergent reçoit les candidats et choisit à sa première personnalisation',async()=>{
   const read=await call('GET','/observation-preferences');expect(read.statusCode,read.body).toBe(200);
-  const data=read.json().data;expect(data).toMatchObject({version:1,mode:'MANUAL',customized:false});
+  const data=read.json().data;expect(data).toMatchObject({version:1,mode:'MANUAL',orderCustomized:false});
   expect(data.adoption.candidates).toHaveLength(2);
   expect(data.adoption.candidates.map((candidate:{schoolId:string;mode:string})=>[candidate.schoolId,candidate.mode]).sort()).toEqual([[id.schoolA,'SMART'],[id.schoolB,'MANUAL']].sort());
   expect(data.adoption.candidates.every((candidate:{schoolName:string;themes:unknown[]})=>candidate.schoolName.length>0&&candidate.themes.length===18)).toBe(true);

@@ -11,7 +11,7 @@ Méthode du classement (score, hystérésis, biais de position) : inchangée.
 | --- | --- |
 | L'ordre et l'affichage des signalements sont à l'école ; un moniteur muni du droit `MANAGE_OBSERVATION_THEMES` peut les écrire. | L'école garde une **référence** et une **politique** ; seul l'**administrateur** de l'école écrit l'une et l'autre. Le droit `MANAGE_OBSERVATION_THEMES` reste enregistré mais n'ouvre plus rien. |
 | Le classement intelligent est propre à chaque adhésion (une école = un classement). | Le classement est propre au **compte** (la personne), commun à toutes ses écoles et à tous ses appareils. |
-| Aucun ordre ni affichage personnels. | Si l'école l'autorise, le compte a son ordre et son affichage ; sinon la liste de l'école s'applique. |
+| Aucun ordre ni affichage personnels. | **L'ordre est toujours personnel** (manuel ou intelligent), quelle que soit l'école. Seule la **visibilité** dépend de la politique : personnelle si l'école l'autorise, sinon celle de l'école. |
 | Pas de remise à zéro de l'apprentissage. | « Recommencer l'apprentissage » pose une borne durable. |
 
 ## 2. Modèle de données (migration `20261111_observation_preferences.sql`)
@@ -32,9 +32,11 @@ Méthode du classement (score, hystérésis, biais de position) : inchangée.
 | Action | Qui |
 | --- | --- |
 | Lire les préférences du compte, lire la configuration de l'école | moniteur ou administrateur de l'école ouverte |
-| Écrire la configuration et la politique de l'école | administrateur de l'école seul (`403 OBSERVATION_THEMES_ACCESS_REQUIRED` sinon) |
-| Changer le mode (manuel/intelligent), recommencer l'apprentissage | moniteur ou administrateur |
-| Enregistrer ordre/affichage personnels, rétablir la présentation | moniteur ou administrateur **si l'école autorise la personnalisation** ; sinon `403 OBSERVATION_PERSONALIZATION_DISABLED` |
+| Écrire la configuration et la politique de l'école (y compris le reset scolaire, § 4) | administrateur de l'école seul (`403 OBSERVATION_THEMES_ACCESS_REQUIRED` sinon) |
+| Changer le mode, recommencer l'apprentissage | moniteur ou administrateur |
+| **Enregistrer son ordre manuel** | moniteur ou administrateur, **dans toute école**, y compris quand elle impose sa visibilité |
+| Enregistrer sa **visibilité** personnelle | moniteur ou administrateur **si l'école autorise la personnalisation** ; sinon `403 OBSERVATION_PERSONALIZATION_DISABLED` (rien n'est écrit) |
+| Rétablir sa présentation (reset de présentation) | **administrateur** dans tous les cas ; **moniteur** seulement dans une école libre (sinon `403 OBSERVATION_PERSONALIZATION_DISABLED`) |
 | Lire ou écrire les préférences d'un tiers | personne (RLS : chacun ne voit que sa ligne, administration comprise) |
 
 Un élève et un compte étranger à l'école n'ont aucun accès (403, ou 404 pour un compte sans adhésion).
@@ -47,25 +49,38 @@ les préférences lues et écrites sont celles du compte. Écritures : `If-Match
 `operationId` donne `409 IDEMPOTENCY_MISMATCH`. Réponse : enveloppe `{data, requestId, serverTime}` et en-tête `ETag: "<version>"`.
 
 ### `GET observation-preferences`
-`data` : `id` (personne), `schoolId`, `version`, `personalizationAllowed`, `customized`, `mode`, `themes` (18 thèmes `{key,title,competencyKeys,visible,defaultVisible,defaultPosition}`
-dans l'ordre manuel en vigueur : base de l'écran de réglage), `palette` (clés affichées dans « Signaler », **dans l'ordre à afficher**), `rankedOn`,
-`learning {generation, since}`, `adoption` (voir § 7). Au premier passage du jour en mode intelligent, la lecture refait et garde le classement
-(une opération `REFRESH_OBSERVATION_RANKING` par compte et par jour, rejouée par un second appareil).
+`data` : `id` (personne), `schoolId`, `version`, `personalizationAllowed`, `orderCustomized` (le compte a un ordre à lui), `visibilityCustomized` (la visibilité personnelle
+s'applique **dans cette école** : politique ouverte et visibilité enregistrée), `mode`, `themes`, `palette`, `rankedOn`, `learning {generation, since}`, `adoption` (§ 7).
+
+- `themes` : les 18 thèmes dans l'**ordre manuel personnel** (à défaut, celui de l'école), chacun `{key, title, competencyKeys, defaultVisible, defaultPosition, visible, schoolVisible, visibilityEditable}`.
+  `visible` est la visibilité **effective** dans l'école ouverte ; `schoolVisible` celle de la référence de l'école ; `visibilityEditable` vaut `personalizationAllowed` (faux : l'écran affiche la
+  visibilité sans la proposer à la modification, alors que le glisser-déposer de l'ordre reste ouvert). C'est la base de l'écran de réglage.
+- `palette` : les clés affichées dans « Signaler », dans l'ordre à afficher (§ 5).
+- Au premier passage du jour en mode intelligent, la lecture refait et garde le classement (une opération `REFRESH_OBSERVATION_RANKING` par compte et par jour, rejouée par un second appareil).
 
 ### `PUT observation-preferences`
-Corps `{operationId, mode?, themes?}`, au moins un des deux. `themes` : les 18 clés du catalogue, sans doublon, au moins une visible, `{key, visible}` dans l'ordre voulu.
-Commande `SAVE_OBSERVATION_PRESENTATION`, audit `ObservationPresentationSaved`. Passer en `SMART` repart des scores seuls (jamais de l'ordre vu la veille).
+Corps `{operationId, mode?, order?, visibility?}`, **au moins un des trois** ; l'ordre et la visibilité sont **séparables** (le client peut envoyer l'un sans l'autre) :
+
+- `mode` : `MANUAL` ou `SMART`. Passer en `SMART` repart des scores seuls (jamais de l'ordre vu la veille).
+- `order` : les 18 clés du catalogue, sans doublon. **Toujours accepté**, même quand l'école impose sa visibilité.
+- `visibility` : 18 objets `{key, visible}`, sans doublon, au moins un visible. **Refusé** (`403 OBSERVATION_PERSONALIZATION_DISABLED`, rien d'écrit, y compris l'ordre envoyé en même temps)
+  si l'école impose sa visibilité. La visibilité déjà enregistrée reste alors **en réserve**, intacte, et redevient effective quand l'école rouvre.
+- L'ancien champ `themes` n'existe plus (`400`).
+
+Commande `SAVE_OBSERVATION_PRESENTATION`, audit `ObservationPresentationSaved` (`changedFields` : sous-ensemble de `order`, `visibility`, `mode`).
 
 ### `POST observation-preferences/presentation-reset`
-Corps `{operationId}`. Le compte retrouve la configuration de l'école (`theme_order` et `hidden_themes` remis à vide) ; mode et apprentissage ne bougent pas.
-Commande `RESET_OBSERVATION_PRESENTATION`, audit `ObservationPresentationReset`. Refusé si l'école impose sa visibilité.
+Corps `{operationId}`. L'ordre **et** la visibilité de référence de l'école ouverte sont **copiés** sur le compte : il ne suit plus ensuite les changements de référence de l'école
+(`orderCustomized` et `visibilityCustomized` selon la politique). Mode et apprentissage ne bougent pas. Droit : administrateur toujours ; moniteur seulement en école libre (§ 3).
+Commande `RESET_OBSERVATION_PRESENTATION`, audit `ObservationPresentationReset`.
 
 ### `POST observation-preferences/learning-reset`
 Corps `{operationId}`. Voir § 6. Commande `RESET_OBSERVATION_LEARNING`, audit `ObservationLearningReset`.
 
 ### `GET/PUT observation-themes` (école) — compatibles
 La réponse gagne `personalizationAllowed`. Le corps du `PUT` accepte `personalizationAllowed` **facultatif** : absent (ancien client), la politique reste telle quelle.
-`canManage` ne vaut plus `true` que pour l'administrateur.
+`canManage` ne vaut plus `true` que pour l'administrateur. **Reset scolaire vers les valeurs d'origine de Drivy** : l'administrateur envoie par ce même `PUT` l'ordre et la visibilité
+d'origine du catalogue (`defaultPosition`, `defaultVisible`, fournis par le `GET`). Il ne touche à aucun compte ; il n'y a pas de route dédiée.
 
 ### `GET/PUT observation-ranking` (ancienne route) — compatibles
 Forme d'origine conservée (`id` et `membershipId` = adhésion, `order` vide en mode manuel). Elle lit et écrit désormais le compte : sa `version` est celle des préférences.
@@ -75,11 +90,14 @@ Aucune ligne par école n'est plus créée. Les apps déjà installées continue
 
 Calculée par le serveur à chaque lecture, **jamais réécrite dans les préférences** :
 
-1. liste de référence : si l'école autorise la personnalisation **et** que le compte a établi son ordre, c'est le sien (`customized: true`) ; sinon celle de l'école ;
-2. si le mode est `SMART`, le classement enregistré est ramené à cette liste (thème disparu retiré, nouveau en fin).
+1. **Ordre personnel** : l'ordre manuel du compte, ou à défaut celui de la référence de l'école ouverte. En mode `SMART`, le classement du compte, ramené à ce catalogue.
+2. **Visibilité effective** : la visibilité personnelle si l'école autorise la personnalisation, que le compte en a une et qu'elle laisse au moins un thème visible ; sinon celle de la référence de l'école ouverte.
+3. `palette` = (1) filtré par (2).
 
-Une école qui impose sa visibilité garde donc sa liste et son ordre ; les réglages personnels restent **en réserve**, intacts, et reprennent si la politique s'ouvre.
-Le classement intelligent s'applique dans tous les cas à la liste affichée. Le rang noté sur un signalement (`palette_position`) est le rang dans cette palette.
+Le **classement intelligent porte sur le catalogue complet** (18 clés) : la visibilité de l'école ouverte ne le filtre que pour la palette. Un thème masqué dans l'école A ne perd donc ni son rang
+ni ses habitudes dans l'école B, y compris après un rafraîchissement quotidien fait depuis A. Le rang noté sur un signalement (`palette_position`) reste le rang **affiché** dans la palette de l'école où le geste est fait.
+
+Passage **libre → imposé → libre** : l'ordre peut bouger pendant la phase imposée ; la visibilité personnelle enregistrée n'est ni modifiée ni perdue et redevient effective à la réouverture.
 
 ## 6. « Recommencer l'apprentissage »
 
@@ -97,22 +115,27 @@ La migration reprend sur le compte le classement **intelligent** d'une personne 
 un compte déjà initialisé. Des classements contradictoires (intelligent dans une école, manuel dans l'autre, ou deux ordres appris différents) ne sont **pas départagés** :
 le compte démarre en mode manuel et `GET` publie `adoption: {candidates: [{schoolId, schoolName, mode, themes}]}` (au moins deux entrées) tant que la personne n'a rien enregistré.
 Le client peut proposer ces configurations pour préremplir ; la première écriture est un choix explicite. L'ordre et l'affichage manuels de l'école ne sont **pas** recopiés sur le compte
-(il suit l'école tant qu'il n'a rien établi).
+(il suit l'école tant qu'il n'a rien établi ; le reset de présentation les copie ensuite).
 
-## 8. Décisions conservatrices à valider (hors énoncé)
+## 8. Décisions
 
-1. **Visibilité imposée** : l'ordre *et* l'affichage de l'école s'appliquent ; seul le classement intelligent reste personnel. Les actions de personnalisation sont refusées pour tous, administrateur compris (il change la politique de l'école, pas son compte).
-2. L'ancien droit `MANAGE_OBSERVATION_THEMES` n'est pas supprimé des adhésions : il est simplement sans effet.
-3. Divergence : le serveur ne choisit jamais à la place de la personne (§ 7).
-4. Jour de classement fixe `Europe/Zurich`.
-5. Un geste sans `observed_at` est daté de sa réception pour la borne d'apprentissage.
-6. Le corps de la première personnalisation est la liste complète des 18 thèmes (le client part de `themes`).
+**Validées par le porteur le 11 novembre 2026**
+
+1. Jour de classement fixe `Europe/Zurich` (le fuseau d'une école ne s'applique plus).
+2. Classements contradictoires : le serveur ne choisit jamais à la place de la personne ; le compte démarre en mode manuel et le client propose le choix (§ 7).
+3. L'ancien droit `MANAGE_OBSERVATION_THEMES` reste enregistré en base mais n'ouvre plus rien.
+
+**Retenues pour la réalisation (hors énoncé, à confirmer)**
+
+4. Un geste sans `observed_at` est daté de sa réception pour la borne d'apprentissage.
+5. Le reset de présentation d'un administrateur agit sur son propre compte, jamais sur celui d'un tiers.
+6. Un compte sans visibilité personnelle, ou dont la visibilité masquerait tout, suit la visibilité de l'école.
 
 ## 9. Ce que web et iOS doivent faire
 
-- Web : déclarer dans `apps/web/server/school-routes.ts` les quatre routes `observation-preferences` (GET ; PUT `ifMatch`, `bodyLimit` 4_096 ; POST `presentation-reset` `ifMatch`, `bodyLimit` 1_024 ; POST `learning-reset` `ifMatch`, `bodyLimit` 1_024), sinon 404 en production. `observation-themes` est déjà déclaré. Ajouter la politique à l'écran d'administration de l'école. `observation-ranking` n'est pas déclaré et n'a pas à l'être.
+- Web : déclarer dans `apps/web/server/school-routes.ts` les quatre routes `observation-preferences` (GET ; PUT `ifMatch`, `bodyLimit` 4_096 ; POST `presentation-reset` `ifMatch`, `bodyLimit` 1_024 ; POST `learning-reset` `ifMatch`, `bodyLimit` 1_024), sinon 404 en production. `observation-themes` est déjà déclaré. Ajouter la politique à l'écran d'administration de l'école ; le réglage du compte sépare ordre (toujours modifiable) et visibilité (selon `visibilityEditable`). `observation-ranking` n'est pas déclaré et n'a pas à l'être.
 - iOS : lire `palette` pour « Signaler » (plus de calcul local de l'ordre) ; écrire via `observation-preferences` ; l'ancienne route reste valable pour les versions installées.
 
 ## 10. Vérifications
 
-Voir la section « 11 novembre 2026 — R08 serveur » de `STATUS.md` : suites exécutées, résultats, et ce qui reste à qualifier (le garde de génération d'une opération quotidienne périmée n'est couvert que par le code et la borne SQL, sans test dédié).
+Voir la section « 11 novembre 2026 — R08 serveur » de `STATUS.md` : suites exécutées, résultats, et ce qui reste à qualifier (la course entre « Recommencer l'apprentissage » et un recalcul quotidien démarré avant est prouvée par un test dédié).

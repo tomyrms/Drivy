@@ -1,7 +1,8 @@
 import {randomUUID} from 'node:crypto';
 import {afterAll,beforeAll,describe,expect,it} from 'vitest';
 import type {Pool} from 'pg';
-import {freshDatabase,harness,prepareSchool,id,type Call} from './support/harness.js';
+import {freshDatabase,harness,prepareSchool,id,issuer,type Call} from './support/harness.js';
+import {loadPreferences} from '../src/observation-preferences.js';
 import {observationThemes} from '../src/observation-themes.js';
 
 /** R08 (#467) : classement intelligent du compte, communs à plusieurs écoles, et « Recommencer l'apprentissage » durable. */
@@ -126,5 +127,67 @@ describe('Recommencer l’apprentissage',()=>{
   const count=async()=>(await pool.query("SELECT count(*)::int AS n FROM drivy.operation WHERE command_type='REFRESH_OBSERVATION_RANKING'")).rows[0].n as number;
   const before=await count();
   expect((await call('GET',prefs)).json().data.palette).toEqual(reset.json().data.palette);expect(await count()).toBe(before);
+ });
+});
+
+describe('classement du compte sur le catalogue complet',()=>{
+ const themesRoute='/observation-themes';
+ const fullRank=async()=>(await pool.query('SELECT ranked_order FROM drivy.person_observation_preference WHERE person_id=$1',[id.instructor])).rows[0].ranked_order as string[];
+ /** Masque (ou réaffiche) « Placement » dans la référence de l'école A, qui reste en visibilité imposée. */
+ const setPlacement=async(visible:boolean)=>{
+  const school=(await call('GET',themesRoute,undefined,null,'demo-admin')).json().data;
+  const saved=await call('PUT',themesRoute,save({themes:school.themes.map((theme:{key:string;visible:boolean})=>({key:theme.key,visible:theme.key==='placement'?visible:theme.visible}))}),school.version,'demo-admin');
+  expect(saved.statusCode,saved.body).toBe(200);
+ };
+ it('masquer un thème dans A puis ouvrir B ne détruit ni son rang global ni ses habitudes, même après un rafraîchissement fait depuis A',async()=>{
+  // Les habitudes de « Placement » sont acquises dans l'école B, où il est affiché ; la borne d'apprentissage est reculée pour les compter.
+  await pool.query("UPDATE drivy.person_observation_preference SET learning_since=now()-interval '60 days' WHERE person_id=$1",[id.instructor]);
+  for(let day=1;day<=10;day++)for(const slot of [21,22,23])await pastLesson(inB(),day,slot,'placement',5);
+  for(let round=0;round<4;round++){await yesterday(id.instructor);expect((await call('GET',prefs)).statusCode).toBe(200);}
+  const rankInB=(await fullRank()).indexOf('placement');
+  expect(rankInB).toBeGreaterThanOrEqual(0);
+  // L'école A masque « Placement ». Un nouveau jour : le classement est refait DEPUIS A.
+  await setPlacement(false);
+  await yesterday(id.instructor);
+  const fromA=await call('GET',prefs);expect(fromA.statusCode,fromA.body).toBe(200);
+  expect(fromA.json().data.palette).not.toContain('placement');
+  const ranked=await fullRank();
+  // Le classement du compte garde les dix-huit thèmes, « Placement » compris, à un rang qui n'a pas reculé.
+  expect(ranked).toHaveLength(18);expect(ranked.indexOf('placement')).toBeGreaterThanOrEqual(0);expect(ranked.indexOf('placement')).toBeLessThanOrEqual(rankInB);
+  // B (où il est affiché) montre ce même classement, filtré par sa propre visibilité : « Placement » est là, à son rang.
+  const inSchoolB=(await call('GET',`/v1/schools/${id.schoolB}/observation-preferences`)).json().data;
+  expect(inSchoolB.palette).toContain('placement');
+  expect(inSchoolB.palette).toEqual(ranked.filter(key=>inSchoolB.themes.find((theme:{key:string;visible:boolean})=>theme.key===key)!.visible));
+  // Les autres chemins qui écrivent le classement partent eux aussi du catalogue complet.
+  const mode=await call('PUT',prefs,save({mode:'MANUAL'}),fromA.json().data.version);expect(mode.statusCode,mode.body).toBe(200);
+  const again=await call('PUT',prefs,save({mode:'SMART'}),mode.json().data.version);expect(again.statusCode,again.body).toBe(200);
+  expect(await fullRank()).toHaveLength(18);
+  const learning=await call('POST',`${prefs}/learning-reset`,save(),again.json().data.version);expect(learning.statusCode,learning.body).toBe(200);
+  expect(await fullRank()).toHaveLength(18);expect(learning.json().data.palette).not.toContain('placement');
+  await setPlacement(true);
+ });
+});
+
+describe('course entre « Recommencer l’apprentissage » et un recalcul quotidien démarré avant',()=>{
+ it('le recalcul périmé n’écrit rien : l’ancien apprentissage n’est pas réintroduit',async()=>{
+  const log={warn:()=>undefined} as never;
+  // Un classement appris, et un nouveau jour : la prochaine lecture est due.
+  await pool.query("UPDATE drivy.person_observation_preference SET learning_since=now()-interval '60 days' WHERE person_id=$1",[id.instructor]);
+  for(let day=1;day<=10;day++)for(const slot of [20])await pastLesson(inA(),day,slot,'braking',4);
+  await yesterday(id.instructor);
+  const account=(await call('GET',prefs)).json().data as {version:number;palette:string[];learning:{generation:number}};
+  await yesterday(id.instructor);
+  let resetPalette:string[]=[];
+  const refresh=await loadPreferences(pool,{issuer,subject:'demo-instructor'},id.schoolA,log,'race',async()=>{
+   // Entre la lecture (qui a vu le recalcul dû) et son exécution, le moniteur recommence l'apprentissage.
+   const reset=await call('POST',`${prefs}/learning-reset`,save(),account.version);expect(reset.statusCode,reset.body).toBe(200);resetPalette=reset.json().data.palette;
+  });
+  const after=(await call('GET',prefs)).json().data;
+  expect(after.learning.generation).toBe(account.learning.generation+1);
+  // La remise à zéro a repris la main : classement des références, version seulement avancée par elle, rien écrit par le recalcul périmé.
+  expect(after.palette).toEqual(resetPalette);expect(refresh.data.palette).toEqual(resetPalette);expect(after.version).toBe(account.version+1);
+  expect(after.rankedOn).toBe(new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Zurich'}));
+  // Les gestes d'avant la remise à zéro n'ont aucune influence : le classement est celui des références seules.
+  expect(after.palette).toEqual((await call('GET',prefs)).json().data.palette);
  });
 });

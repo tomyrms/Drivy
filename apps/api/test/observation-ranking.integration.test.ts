@@ -112,7 +112,7 @@ describe('classement intelligent : habitudes',()=>{
   expect(rows.slice(0,5).map(row=>row.palette_position)).toEqual(Array(5).fill(before.order.indexOf('observation')+1));expect(rows[5]).toEqual({theme_key:null,palette_position:null});
   expect((await call('GET',path)).json().data).toEqual(before);
  });
- it('masquer un thème le retire aussitôt du classement ; réaffiché, il retrouve sa place, ou celle que son historique lui donne',async()=>{
+ it('masquer un thème le retire de la palette sans le retirer du classement du compte ; réaffiché, il retrouve son rang',async()=>{
   const settings=(await call('GET',themes,undefined,null,'demo-admin')).json().data,before=(await call('GET',path)).json().data;
   const hidden=settings.themes.map((theme:{key:string;visible:boolean})=>({key:theme.key,visible:theme.visible&&theme.key!=='indicators'}));
   const saved=await call('PUT',themes,{operationId:randomUUID(),themes:hidden},settings.version,'demo-admin');expect(saved.statusCode,saved.body).toBe(200);
@@ -120,15 +120,15 @@ describe('classement intelligent : habitudes',()=>{
   expect(without.order).toEqual(before.order.filter((key:string)=>key!=='indicators'));
   const original=settings.themes.map((theme:{key:string;visible:boolean})=>({key:theme.key,visible:theme.visible}));
   const shown=await call('PUT',themes,{operationId:randomUUID(),themes:original},saved.json().data.version,'demo-admin');expect(shown.statusCode,shown.body).toBe(200);
-  // Réaffiché le jour même : le classement enregistré le connaît encore.
+  // Réaffiché le jour même : le classement du compte le connaissait encore.
   expect((await call('GET',path)).json().data.order).toEqual(before.order);
-  // Masqué pendant un reclassement, il en sort ; réaffiché ensuite, il part en fin jusqu'au lendemain…
+  // Masqué pendant un reclassement du jour, il sort de la palette mais pas du classement du compte…
   const again=await call('PUT',themes,{operationId:randomUUID(),themes:hidden},shown.json().data.version,'demo-admin');expect(again.statusCode,again.body).toBe(200);
   await yesterday(id.instructor);expect((await call('GET',path)).json().data.order).not.toContain('indicators');
   const back=await call('PUT',themes,{operationId:randomUUID(),themes:original},again.json().data.version,'demo-admin');expect(back.statusCode,back.body).toBe(200);
-  expect((await call('GET',path)).json().data.order.at(-1)).toBe('indicators');
-  // … où son historique le replace d'un coup, sans la limite de montée.
-  await yesterday(id.instructor);expect((await call('GET',path)).json().data.order.indexOf('indicators')).toBeLessThan(2);
+  // … et, réaffiché, retrouve aussitôt son rang (il ne repart pas en fin de liste).
+  expect((await call('GET',path)).json().data.order.indexOf('indicators')).toBeLessThan(2);
+  expect((await pool.query('SELECT cardinality(ranked_order) AS n FROM drivy.person_observation_preference WHERE person_id=$1',[id.instructor])).rows[0].n).toBe(18);
  });
 });
 

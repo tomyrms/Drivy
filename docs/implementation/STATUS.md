@@ -2201,3 +2201,14 @@ Branche `tomyrms/r08-serveur`. Contrat : `r08-contrat-serveur-20261111.md` ; con
 - Garde de génération d'une opération quotidienne périmée : couvert par le code et la borne SQL, sans test dédié.
 - Web (#468) et iOS (#469) : déclarer les routes dans la passerelle, écrans non réalisés ici. Aucun résultat sur appareil, aucune CI Apple, aucun déploiement.
 - Décisions conservatrices à valider : voir § 8 du contrat.
+
+### Mise à jour du 12 novembre 2026 — corrections de revue de la PR #479
+
+- Ordre toujours personnel : en visibilité imposée, l'ordre est accepté et seule la visibilité personnelle est refusée (`403 OBSERVATION_PERSONALIZATION_DISABLED`, rien d'écrit) ; la visibilité enregistrée reste en réserve. Corps du `PUT` : `{operationId, mode?, order?, visibility?}` (ancien `themes` retiré). `GET themes` : ordre personnel, visibilité effective, `schoolVisible`, `visibilityEditable`.
+- Classement du compte sur le catalogue complet (18 clés), filtré seulement pour la palette ; un thème masqué dans l'école A garde rang et habitudes dans l'école B, y compris après un rafraîchissement fait depuis A.
+- Reset de présentation : administrateur toujours, moniteur en école libre seulement ; la référence de l'école ouverte est copiée sur le compte.
+- Preuves ajoutées : course « Recommencer l'apprentissage » contre un recalcul quotidien démarré avant (seam `afterRead` de `loadPreferences`) ; reset scolaire vers les valeurs d'origine de Drivy (`PUT observation-themes`, aucun compte touché) ; libre, imposé, libre avec ordre déplacé pendant la phase imposée.
+- Trois décisions marquées « validées par le porteur » (11 novembre 2026) dans le contrat : jour `Europe/Zurich`, divergences non départagées, ancien droit inerte.
+- Vérifications : typecheck propre ; suites ciblées préférences 22, apprentissage 9, classement et migration verts ; suite API complète : 103 fichiers sur 105 réussis, 1178 tests réussis, 7 ignorés, 2 en échec hors R08 (`g1c` SMTP, Mailpit absent) et `course-worker-process` (exige Node 24, local 26.8.1).
+- Base de test : conteneur `drivy-r08-pg2` sur le port 55640 (le port 55373 est tombé dans une plage réservée par Windows).
+- Reste à qualifier : web (#468) et iOS (#469) ; routes à déclarer dans `apps/web/server/school-routes.ts` ; aucun appareil, aucune CI Apple, aucun déploiement.
