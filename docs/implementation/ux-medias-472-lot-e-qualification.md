@@ -56,6 +56,7 @@ Légende : T = test unitaire ou UI écrit, R = relecture de code, X = non couver
 | « Réessayer » de 15,7 pt (iPhone) et 16 pt (iPad) | Mesuré par le test ; cause lue dans le code : cadre minimal posé après le bouton, donc hors de sa zone active | `MessagingPendingMediaView`, `MessagingMediaBubbleViews` : cadre 44 pt et `contentShape` dans le libellé |
 | Repère de pages absent sur iPhone | Vu dans la hiérarchie du run : visionneuse PDF affichée (« 2 pages » dans la barre de défilement) mais aucun `messaging.media.page` ; cause : `pages.refresh()` appelé avant la création du PDFView (hypothèse sur l'absence de notification de changement de page, à l'ouverture, en iPhone) | `MessagingMediaViewer` : nombre de pages lu depuis le document |
 | Test paysage iPhone | Échec de `isHittable` sur cadre invalide (journal) ; atteignabilité réelle en paysage : non vue | helper `reveal` fondé sur le cadre, attente de la rotation |
+| Test paysage iPhone (run 43295833950, SHA 7f82155b) | Vu dans la hiérarchie du journal : fenêtre 874 × 402, barre de navigation 24–78, fil (Table) 78–314 ; photo reçue à y = -24,3, hauteur 173,3, donc centre sous la barre ; le point d'activation tombe hors du fil. La photo (173 pt) tient dans le fil (236 pt). Supposé : l'élément recouvrant est la barre de navigation (pas de capture de l'écran d'échec examinée) | Défaut du test : `isReachable` exige le centre dans le tableau du fil (marge 8 pt) et `reveal` défile par petits pas dans les deux sens ; aucune assertion affaiblie |
 
 ## Commandes recommandées
 

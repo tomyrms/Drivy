@@ -135,22 +135,39 @@ final class MessagingMediaUITests: XCTestCase {
                                          "messaging.media.received.open", prefix)).firstMatch
     }
 
-    /// Ramène un élément à l'écran sans supposer le sens du défilement de la liste (retournée par Exyte).
+    /// Ramène un élément dans la zone visible du fil, sans supposer le sens du défilement (liste retournée par Exyte).
+    /// Le défilement se fait par petits pas : un grand geste ferait passer la pièce d'un bord à l'autre.
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
         // `isHittable` signale un échec (et non `false`) quand le cadre est invalide (hors écran, taille nulle, rotation en
-        // cours : run 43287772177, paysage iPhone). On juge donc sur le cadre : non vide, centre dans la fenêtre.
+        // cours : run 43287772177, paysage iPhone). On juge donc sur le cadre, rapporté à la zone du fil réellement visible.
         _ = element.waitForExistence(timeout: 15)
         if isReachable(element, in: app) { return }
-        for _ in 0..<3 where !isReachable(element, in: app) { app.swipeDown() }
-        for _ in 0..<6 where !isReachable(element, in: app) { app.swipeUp() }
-        XCTAssertTrue(isReachable(element, in: app), "Pièce introuvable à l'écran après défilement")
+        for _ in 0..<8 where !isReachable(element, in: app) { nudge(app, fingerDown: true) }
+        for _ in 0..<16 where !isReachable(element, in: app) { nudge(app, fingerDown: false) }
+        XCTAssertTrue(isReachable(element, in: app), "Pièce introuvable dans la zone visible du fil après défilement")
+    }
+
+    /// Zone visible du fil : le tableau, sous la barre de navigation et au-dessus du composeur (run 43295833950 : en
+    /// paysage iPhone le centre de la photo était dans la fenêtre mais sous la barre, y = 62 pour un fil commençant à 78).
+    private func threadArea(_ app: XCUIApplication) -> CGRect {
+        let table = app.tables.firstMatch
+        if table.exists, !table.frame.isEmpty { return table.frame }
+        return app.windows.firstMatch.frame
     }
 
     private func isReachable(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
         guard element.exists else { return false }
-        let frame = element.frame, window = app.windows.firstMatch.frame
-        guard !frame.isEmpty, !window.isEmpty else { return false }
-        return window.contains(CGPoint(x: frame.midX, y: frame.midY))
+        let frame = element.frame, area = threadArea(app)
+        guard !frame.isEmpty, !area.isEmpty else { return false }
+        return area.insetBy(dx: 0, dy: 8).contains(CGPoint(x: frame.midX, y: frame.midY))
+    }
+
+    private func nudge(_ app: XCUIApplication, fingerDown: Bool) {
+        let table = app.tables.firstMatch
+        let area = table.exists ? table : app.windows.firstMatch
+        let start = area.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: fingerDown ? 0.3 : 0.7))
+        let end = area.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: fingerDown ? 0.6 : 0.4))
+        start.press(forDuration: 0.05, thenDragTo: end)
     }
 
     /// Attend la fin de la rotation : la fenêtre est plus large que haute en paysage.
