@@ -65,8 +65,18 @@ Colonne plus étroite : la largeur suit, la hauteur reste bornée. L'espace est 
 - `MessagingUI/MessagingMediaQualificationFixture.swift` : la fixture du simulateur fournit aussi la capacité (miniature synthétique, sans compter de requête de fichier).
 - Tests : `DrivyTests/MessagingMediaThumbnailLoaderTests.swift` (géométrie, chargeur), `MessagingMediaThumbnailCapabilityTests` à la fin de `MessagingMediaCoordinatorTests.swift` ; ajoutés à la portée `messaging` de `scripts/ios/test-selection.sh`. `project.yml` référence les dossiers entiers, aucun fichier à déclarer.
 
+## Pièce visible : jamais d'attente sans fin
+
+Une cellule encore à l'écran ne reste pas sur l'indicateur d'attente quand sa demande s'arrête :
+
+- `suspend()` (changement de contexte ou d'accès) : les pièces visibles passent à `unavailable(retryable: true)` et gardent leur message pour une reprise sur geste ; les pièces hors écran repassent à `idle`.
+- Pièce non autorisée au dépilage ou à l'arrivée du résultat : `unavailable(retryable: false)` si elle est visible, `idle` sinon, jamais redemandée.
+- Résultat `.cancelled` avec un billet encore valide (annulation extérieure) : la pièce visible est redemandée.
+
 ## Exécuté / non vérifié
 
-- Écrit sur un poste Windows sans compilateur Swift : relu, non compilé ni exécuté localement. L'état d'exécution réel est celui du run Apple de la branche (voir le rapport et `STATUS.md`).
+- Écrit sur un poste Windows sans compilateur Swift : relu, non compilé ni exécuté localement.
+- Run Apple 43230205594 (SHA `016c39f4`, portée `messaging`) : compilation réussie, 253 tests, un seul échec : `MessagingMediaThumbnailLoaderTests.testConcurrencyIsBoundedAndQueuedItemsFollow`. Cause : défaut du test, pas du produit. Le fournisseur factice retient chaque appel ; le test ne libérait qu'une fois les deux premiers appels, puis les deux suivants (démarrés ensuite par le chargeur) restaient retenus, d'où deux demandes en vol et des pièces jamais chargées jusqu'à l'échéance. Le test libère maintenant à chaque tour d'attente. `scripts/ios/test_test_selection.py` aligné sur les trois classes ajoutées (27 tests Python passent en local).
+- Suite : nouveau run de la portée `messaging` sur la branche (résultat à consigner).
 - Non essayé : rendu réel des `#Preview`, VoiceOver, grandes tailles de texte, gestes, appareil physique, performance de défilement sur un long fil.
 - Hors périmètre : `MessagingMediaPreview`, `MessagingMemoryPDF`, la feuille d'aperçu (lot #474), compositeur et intentions en attente (lots #475/#476). Le texte de repli « Photo » / « PDF » de la bulle texte au-dessus d'une pièce jointe n'est pas modifié.

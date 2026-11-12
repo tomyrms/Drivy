@@ -135,8 +135,11 @@ final class MessagingMediaThumbnailLoaderTests: XCTestCase {
         XCTAssertEqual(loader.inflightCount, 2)
         XCTAssertEqual(loader.queuedCount, 3)
 
-        await provider.releaseAll()
-        let done = await waitUntil { messages.allSatisfy { loader.slot(for: $0.id).phase == .loaded } }
+        // Les demandes suivantes démarrent à mesure : on libère à chaque tour d'attente.
+        let done = await waitUntil {
+            await provider.releaseAll()
+            return messages.allSatisfy { loader.slot(for: $0.id).phase == .loaded }
+        }
         XCTAssertTrue(done)
         let peak = await provider.peakConcurrency
         XCTAssertLessThanOrEqual(peak, 2)
@@ -186,9 +189,79 @@ final class MessagingMediaThumbnailLoaderTests: XCTestCase {
         await provider.releaseAll()
         _ = await waitUntil { loader.inflightCount == 0 }
 
-        XCTAssertEqual(loader.slot(for: message.id).phase, .idle)
+        XCTAssertEqual(loader.slot(for: message.id).phase, .unavailable(retryable: true),
+                       "La cellule encore visible n'attend pas sans fin.")
         XCTAssertNil(loader.slot(for: message.id).image)
         XCTAssertEqual(loader.decodedCount, 0)
+    }
+
+    func testSuspendedVisibleCellCanBeRetriedOnGesture() async {
+        let provider = ThumbnailProviderDouble(holding: false)
+        let loader = makeLoader(provider)
+        let message = wire()
+        loader.appear(message)
+        _ = await waitUntil { loader.slot(for: message.id).phase == .loaded }
+
+        loader.suspend()
+        XCTAssertEqual(loader.slot(for: message.id).phase, .unavailable(retryable: true))
+        XCTAssertNil(loader.slot(for: message.id).image)
+
+        loader.retry(message.id)
+        let back = await waitUntil { loader.slot(for: message.id).phase == .loaded }
+        XCTAssertTrue(back)
+    }
+
+    func testSuspendLeavesHiddenCellsIdle() async {
+        let provider = ThumbnailProviderDouble(holding: false)
+        let loader = makeLoader(provider)
+        let message = wire()
+        loader.appear(message)
+        _ = await waitUntil { loader.slot(for: message.id).phase == .loaded }
+        loader.disappear(message.id)
+
+        loader.suspend()
+
+        XCTAssertEqual(loader.slot(for: message.id).phase, .idle)
+        loader.retry(message.id)
+        XCTAssertEqual(loader.slot(for: message.id).phase, .idle, "Une pièce hors écran n'est pas relancée.")
+    }
+
+    func testQueuedVisibleCellThatBecomesUnauthorizedIsExplicitlyUnavailable() async {
+        let provider = ThumbnailProviderDouble(holding: true)
+        let loader = makeLoader(provider, concurrent: 1)
+        let first = wire(), second = wire()
+        loader.appear(first)
+        _ = await waitUntil { await provider.callCount == 1 }
+        loader.appear(second)
+        loader.isAuthorized = { $0 != second.id }
+
+        let settled = await waitUntil {
+            await provider.releaseAll()
+            return loader.slot(for: second.id).phase != .loading
+        }
+
+        XCTAssertTrue(settled, "Pas d'attente sans fin pour une pièce visible devenue interdite.")
+        XCTAssertEqual(loader.slot(for: second.id).phase, .unavailable(retryable: false))
+        let calls = await provider.callCount
+        XCTAssertEqual(calls, 1, "Une pièce non autorisée n'est jamais demandée.")
+    }
+
+    func testVisibleResultRefusedAtArrivalIsExplicitlyUnavailable() async {
+        let provider = ThumbnailProviderDouble(holding: true)
+        let loader = makeLoader(provider)
+        let message = wire()
+        loader.appear(message)
+        _ = await waitUntil { await provider.callCount == 1 }
+
+        loader.isAuthorized = { _ in false }
+        let settled = await waitUntil {
+            await provider.releaseAll()
+            return loader.slot(for: message.id).phase != .loading
+        }
+
+        XCTAssertTrue(settled)
+        XCTAssertEqual(loader.slot(for: message.id).phase, .unavailable(retryable: false))
+        XCTAssertNil(loader.slot(for: message.id).image)
     }
 
     func testResultIsDroppedWhenTheMessageIsNoLongerAuthorized() async {

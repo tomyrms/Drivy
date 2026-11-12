@@ -195,12 +195,19 @@ final class MessagingMediaThumbnailLoader {
         tickets.removeAll()
         queue.removeAll()
         loadedOrder.removeAll()
-        wires.removeAll()
-        visible.removeAll()
-        for slot in slots.values {
-            slot.phase = .idle
+        // Une cellule encore à l'écran ne reste jamais sur une attente sans fin : elle passe à
+        // « indisponible » avec reprise ciblée (la demande repart sur geste, avec le contexte courant).
+        for (id, slot) in slots {
             slot.image = nil
+            if visible.contains(id), wires[id] != nil {
+                slot.phase = .unavailable(retryable: true)
+            } else {
+                slot.phase = .idle
+                wires[id] = nil
+                visible.remove(id)
+            }
         }
+        wires = wires.filter { visible.contains($0.key) }
     }
 
     // MARK: File et exécution
@@ -230,7 +237,9 @@ final class MessagingMediaThumbnailLoader {
             let id = queue.removeFirst()
             guard let wire = wires[id], let slot = slots[id] else { continue }
             guard isAuthorized(id) else {
-                slot.phase = .idle
+                // Retiré, supprimé ou révoqué : jamais redemandé ; si la cellule est encore là,
+                // l'état est explicite plutôt qu'une attente.
+                slot.phase = visible.contains(id) ? .unavailable(retryable: false) : .idle
                 continue
             }
             start(id, wire: wire, provider: provider)
@@ -280,13 +289,16 @@ final class MessagingMediaThumbnailLoader {
         guard let slot = slots[id] else { return }
         switch outcome {
         case .cancelled:
+            // Annulation extérieure alors que la cellule est toujours là : on redemande.
             slot.phase = .idle
+            if visible.contains(id), wires[id] != nil { enqueue(id, front: true) }
+            return
         case .failed(let retryable):
             slot.phase = .unavailable(retryable: retryable)
         case .image(let decoded):
             guard isAuthorized(id) else {
-                slot.phase = .idle
                 slot.image = nil
+                slot.phase = visible.contains(id) ? .unavailable(retryable: false) : .idle
                 wires[id] = nil
                 return
             }

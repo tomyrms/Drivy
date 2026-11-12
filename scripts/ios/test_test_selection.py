@@ -33,7 +33,8 @@ MESSAGING_SUITES = ['MessagingOptimisticMutationTests', 'MessagingProtectedStore
                     'MessagingExyteThreadTests', 'MessagingThreadTests', 'MessagingMediaContentTests', 'MatrixMessagingCryptographyTests',
                     'MatrixMessagingReportSealingTests', 'MessagingReportInboxTests',
                     'MessagingReportTransportTests', 'MatrixMessagingRelayIntegrationTests', 'MatrixMessagingSealedReportRelayTests',
-                    'RelayReadinessDiagnosticTests']
+                    'RelayReadinessDiagnosticTests', 'MessagingMediaBubbleGeometryTests', 'MessagingMediaThumbnailLoaderTests',
+                    'MessagingMediaThumbnailCapabilityTests']
 MESSAGING_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in MESSAGING_SUITES]
 # Messagerie récupérable (#428, #435, #436, #445) : suites neuves puis régressions, sans le relais réel.
 MESSAGING_RECOVERY_SUITES = ['MessagingSendRecoveryTests', 'MatrixMessagingBackupRecoveryTests', 'MessagingForegroundAlertTests',

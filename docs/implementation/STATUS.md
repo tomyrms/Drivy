@@ -1,7 +1,8 @@
 ## 12 novembre 2026 — Épic UX médias #472, lot A
 
 - Fil de messagerie (#473) : photos en bulles à espace réservé par ratio (borné [0,6 ; 2], 260 × 340 pt au plus), PDF en cartes lisibles, chargeur de miniatures borné (3 en vol, 24 images décodées, résultat tardif ignoré) et capacité interne additive `MessagingMediaThumbnailProviding` ; le protocole gelé `MessagingMediaRuntime` est inchangé. Détail : `docs/implementation/ux-medias-472-lot-a-fil.md`.
-- Tests écrits (géométrie, chargeur, capacité du coordinateur), ajoutés à la portée `messaging` ; relus sans compilateur local. Résultat d'exécution : run Apple de la branche `tomyrms/ux-medias-473-fil` consigné dans le rapport, pas encore qualifié ici.
+- Tests écrits (géométrie, chargeur, capacité du coordinateur), ajoutés à la portée `messaging` ; relus sans compilateur local.
+- Run Apple 43230205594 (`016c39f4`, portée `messaging`) : compilation réussie, 253 tests, 1 test en échec (`testConcurrencyIsBoundedAndQueuedItemsFollow`, défaut du test : les demandes suivantes restaient retenues par le faux fournisseur). Corrigé ; une pièce visible ne reste plus sur une attente sans fin (`suspend`, refus d'autorisation). Nouveau run à qualifier.
 - Non essayé : rendu des `#Preview`, VoiceOver, grandes tailles de texte, gestes, appareil physique.
 
 ## 12 novembre 2026 — Départ de trajet : demande au sort inconnu gardée (#106, L1)
