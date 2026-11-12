@@ -402,8 +402,12 @@ private struct MessagingPDFReader: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .task {
             guard !loaded else { return }
-            document = PDFDocument(data: data)
+            let opened = PDFDocument(data: data)
+            document = opened
             loaded = true
+            // Le PDFView n'existe pas encore (il naît au rendu qui suit) : `refresh()` ne trouverait pas `view` et le
+            // nombre de pages resterait à 0 jusqu'au premier changement de page (run UI 43287772177, iPhone : repère absent).
+            pages.count = opened?.pageCount ?? 0
             pages.refresh()
         }
     }

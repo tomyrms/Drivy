@@ -56,10 +56,18 @@ struct MessagingPendingMediaView: View {
                 .accessibilityIdentifier("messaging.media.pending.state")
             }
             if let title = presentation.retryTitle {
-                Button(title) { Task { await thread.retryMediaSend(entry.id) } }
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(DrivyTheme.accent)
-                    .frame(minHeight: DrivyLayout.tapTarget)
+                // Zone de toucher dans le libellé : un cadre posé après le bouton n'agrandit pas sa zone active (run 43287772177 : 16 pt).
+                Button {
+                    Task { await thread.retryMediaSend(entry.id) }
+                } label: {
+                    Text(title)
+                        .font(.footnote.weight(.semibold))
+                        .padding(.horizontal, DrivySpacing.s)
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(DrivyTheme.accent)
                     // Les envois passent l'un après l'autre : la reprise attend la fin de celui qui est en cours.
                     .disabled(thread.mediaComposer?.sending == true)
                     .accessibilityIdentifier("messaging.media.retry")

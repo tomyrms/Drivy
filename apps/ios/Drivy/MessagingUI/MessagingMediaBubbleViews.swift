@@ -274,10 +274,17 @@ struct MessagingThreadMediaAttachmentView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("messaging.media.open.error")
                 if failure.canRetry {
-                    Button("Réessayer") { Task { await thread.openMedia(wire) } }
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(DrivyTheme.accent)
-                        .frame(minHeight: DrivyLayout.tapTarget)
+                    Button {
+                        Task { await thread.openMedia(wire) }
+                    } label: {
+                        Text("Réessayer")
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, DrivySpacing.s)
+                            .frame(minHeight: DrivyLayout.tapTarget)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(DrivyTheme.accent)
                         .accessibilityLabel(MessagingMediaActionText.openRetry)
                         .accessibilityIdentifier("messaging.media.open.retry")
                 }

@@ -49,6 +49,14 @@ Légende : T = test unitaire ou UI écrit, R = relecture de code, X = non couver
 
 `MatrixMessagingRelayIntegrationTests.testRealRelayExchangeIdempotenceRecoveryAndContextRefusal` (run 43286133550, étape READINESS, `transport=TIMEOUT`). Journal : connexion et TLS terminés après ~9,5 s, requête émise, aucune réponse avant le délai de 20 s. Cause : hypothèse, non prouvée (charge du runner ; le script de démarrage avait déjà obtenu une réponse du relais). Correction : `apps/ios/DrivyTests/RelayReadinessWait.swift`, attente bornée (3 essais supplémentaires, 2 s de pause, session neuve, erreurs -1001/-1004/-1005 seulement), utilisée par les classes `MatrixMessagingRelayIntegrationTests`, `MatrixMessagingSealedReportRelayTests` et `MessagingMediaRealRelayTests`. Couverture : aucun test dédié (attente réseau) ; effet à constater sur les runs Apple.
 
+## Défauts trouvés par le run UI 43287772177
+
+| Défaut | Constat | Correction |
+| --- | --- | --- |
+| « Réessayer » de 15,7 pt (iPhone) et 16 pt (iPad) | Mesuré par le test ; cause lue dans le code : cadre minimal posé après le bouton, donc hors de sa zone active | `MessagingPendingMediaView`, `MessagingMediaBubbleViews` : cadre 44 pt et `contentShape` dans le libellé |
+| Repère de pages absent sur iPhone | Vu dans la hiérarchie du run : visionneuse PDF affichée (« 2 pages » dans la barre de défilement) mais aucun `messaging.media.page` ; cause : `pages.refresh()` appelé avant la création du PDFView (hypothèse sur l'absence de notification de changement de page, à l'ouverture, en iPhone) | `MessagingMediaViewer` : nombre de pages lu depuis le document |
+| Test paysage iPhone | Échec de `isHittable` sur cadre invalide (journal) ; atteignabilité réelle en paysage : non vue | helper `reveal` fondé sur le cadre, attente de la rotation |
+
 ## Commandes recommandées
 
 Campagne UI et captures (une seule commande, iPhone puis iPad) :

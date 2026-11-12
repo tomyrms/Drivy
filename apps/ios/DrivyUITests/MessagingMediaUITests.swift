@@ -137,9 +137,31 @@ final class MessagingMediaUITests: XCTestCase {
 
     /// Ramène un élément à l'écran sans supposer le sens du défilement de la liste (retournée par Exyte).
     private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
-        if element.waitForExistence(timeout: 15), element.isHittable { return }
-        for _ in 0..<3 where !(element.exists && element.isHittable) { app.swipeDown() }
-        for _ in 0..<6 where !(element.exists && element.isHittable) { app.swipeUp() }
+        // `isHittable` signale un échec (et non `false`) quand le cadre est invalide (hors écran, taille nulle, rotation en
+        // cours : run 43287772177, paysage iPhone). On juge donc sur le cadre : non vide, centre dans la fenêtre.
+        _ = element.waitForExistence(timeout: 15)
+        if isReachable(element, in: app) { return }
+        for _ in 0..<3 where !isReachable(element, in: app) { app.swipeDown() }
+        for _ in 0..<6 where !isReachable(element, in: app) { app.swipeUp() }
+        XCTAssertTrue(isReachable(element, in: app), "Pièce introuvable à l'écran après défilement")
+    }
+
+    private func isReachable(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard element.exists else { return false }
+        let frame = element.frame, window = app.windows.firstMatch.frame
+        guard !frame.isEmpty, !window.isEmpty else { return false }
+        return window.contains(CGPoint(x: frame.midX, y: frame.midY))
+    }
+
+    /// Attend la fin de la rotation : la fenêtre est plus large que haute en paysage.
+    private func waitForLandscape(_ app: XCUIApplication) {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let frame = app.windows.firstMatch.frame
+            if frame.width > frame.height { return }
+            Thread.sleep(forTimeInterval: 0.3)
+        }
+        XCTFail("La rotation en paysage ne s'est pas terminée")
     }
 
     private func closeButton(_ app: XCUIApplication) -> XCUIElement { app.buttons["messaging.media.close"] }
@@ -251,6 +273,7 @@ final class MessagingMediaUITests: XCTestCase {
     func testViewerStaysUsableInLandscape() {
         let app = launch()
         XCUIDevice.shared.orientation = .landscapeLeft
+        waitForLandscape(app)
         let photo = received("Photo, ", in: app)
         reveal(photo, in: app)
         XCTAssertTrue(photo.exists)
