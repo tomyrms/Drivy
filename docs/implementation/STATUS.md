@@ -1,4 +1,67 @@
+## 12 novembre 2026 — Départ de trajet : demande au sort inconnu gardée (#106, L1)
+
+- Écart confirmé puis corrigé dans `SchoolCapturePreparationWorkspace.swift` : une demande de départ inconnue de l'école, ou jamais émise, n'est plus retirée automatiquement après 120 s (`verifyStart`, `reconcilePendingStarts`). Elle reste en file et est signalée ; la personne relit le départ (même clé d'opération) ou abandonne la demande après confirmation. `settledRequestAge` ne sert plus qu'à ne pas déclarer « inconnue » une demande encore en route.
+- Tests ajoutés dans `SchoolCaptureLifecycleTests` : demande de 200 s toujours présente (émise ou non), abandon explicite retire, relecture reprend la même clé. Statut d'exécution : voir le run Apple consigné dans le rapport de la branche `tomyrms/l1-depart-trajet-20261112`.
+- Non vérifié : rendu de l'écran « Départ à vérifier », parcours physique GPS, réessai jusqu'à l'autorisation de l'école (la confirmation reprend `review.pendingMutation`, lu mais non rejoué par un test).
+
 # État de la réalisation
+
+## 11 novembre 2026 — Restes de réactivité #106 / #131 / #105
+
+Branche `tomyrms/restes-reactivite-20261111` sur `ff79607a` ; rien déployé, aucune issue fermée. Détail dans
+`docs/implementation/reactivite-restes-20261111.md`.
+
+Exécuté, sur `23487c5b` :
+
+- Tests métier, portée `all` : 632 tests, 0 échec,
+  [43066913872](https://github.com/tomyrms/Drivy/actions/runs/43066913872). Les cinq régressions natives de #131 passent ;
+  le scénario de relais réel de `MatrixMessagingRelayIntegrationTests` passe (une exécution).
+- UI iPhone `SchoolPlanningCancellationUITests` (3) et deux tests de `MessagingLatencyUITests` : verts,
+  [43068112256](https://github.com/tomyrms/Drivy/actions/runs/43068112256).
+- Web : seuils d'attente 5 s / 10 s et onglet dupliqué, tests unitaires ajoutés (6), non rejoués en navigateur.
+
+Deuxième passe (mêmes jour et branche) :
+
+- Web, local (Windows/Node, vitest) : `command-migration-106` (5), `draft-rebase-sequence-106` (4), `entry-client-131` (15),
+  `member-commands-131` (7) ajoutés ; `npm run typecheck` propre. Suite complète : 943 tests passent, 2 échecs connus de
+  `pending-recovery-106` (`playwright-core` absent).
+- iOS : `SchoolCourseFollow131Tests` (5) écrit sans compilateur local ; qualifié par le run [43082421565](https://github.com/tomyrms/Drivy/actions/runs/43082421565) (SHA `33640951`, portée `all`) : vert, 632 tests XCTest et 1 306 tests Swift Testing, 0 échec. Un premier run (43081282148) avait échoué à la compilation de ce fichier, corrigé.
+- `matrice-couverture-131.md` mise à jour : huit écritures sans test dédié désormais couvertes par des tests de contrat
+  (sans rendu). L1 (expiration générale) reste une décision du porteur ; L2 et L3 documentés dans
+  `reactivite-restes-20261111.md`.
+
+Troisième passe (12 novembre) : le porteur a tranché L1 (« garder et lui demander », aucune expiration), consigné dans
+`decisions-2026-11-12.md`. Web conforme et prouvé (`command-retention-106.test.ts`, 3 tests : l'horloge avance de dix ans,
+rien ne part, rien ne disparaît sans le geste de la personne). Écart iOS relevé et non corrigé : retrait automatique après 120 s
+d'une demande de départ inconnue de l'école (`SchoolCapturePreparationWorkspace.swift:661`). Cadrage de #68 écrit dans
+`hebergement-68-cadrage-20261112.md`, documentation seulement.
+
+Échoué ou non qualifié :
+
+- `MessagingLatencyUITests.testFifteenSecondResponseKeepsReactionAndComposerUsable` : rouge dans 43068112256, vert seul dans
+  [43075946109](https://github.com/tomyrms/Drivy/actions/runs/43075946109). Instable, cause non établie.
+- Cause du délai READINESS du relais non expliquée ; annulation avant envoi générale, expiration, migration avec files
+  remplies côté iOS, multi-appareils, parcours rendus des formulaires web.
+- Aucune mesure sur appareil physique (GPS, batterie, VoiceOver).
+## 11 novembre 2026 — Restes iOS et messagerie (#449, #97, #78)
+
+Branche `tomyrms/restes-ios-messagerie-20261111`, depuis `origin/master` `ff79607a`. Rien de déployé, aucune issue fermée.
+
+Exécuté sur le runner Apple (`refonte-ios.yml`, SHA `d87f6bf5`) :
+
+- Run 43105920984 : `SchoolBoxesUITests` (7 tests) et `MessagingLatencyUITests/testFifteenSecondResponseKeepsReactionAndComposerUsable`, iPhone, verts (8/8).
+- Run 43105900777 : `MessagingReportScreensUITests` (deux scénarios média mixtes), iPhone et iPad, verts.
+- `python -m unittest scripts.ios.test_messaging_log_guard` : garde statique, aucune sortie console ni journal système dans le code natif de la messagerie (preuve statique seulement).
+
+Causes trouvées :
+
+- #449 : le tirage pour actualiser partait du champ de recherche (défaut du test) ; puis `scrollTo` ne défile que vers le bas (Réessayer dépassé) et la feuille de leçon n'était pas fermée par un glisser (défauts du test).
+- #97 : `contains("")` est faux en Swift (test) ; le témoin de la fixture était recréé à chaque rendu du parent, donc jamais alimenté (défaut de la fixture DEBUG, pas du produit) ; en très grand texte, le glisser rapide dépassait le paragraphe (test).
+- Latence : fenêtre de confirmation de 12 s comptée depuis la fin de la saisie, trop courte sur runner chargé ; la hiérarchie finale montrait la bulle confirmée (test).
+
+Échecs intermédiaires, tous diagnostiqués puis corrigés : 43066986206, 43067201639, 43076595321, 43081428904. Runs annulés : 43081344057 (mauvais SHA, lancé par erreur), 43087261671 et 43087280652 (pause du porteur).
+
+Reste à qualifier : aucun résultat physique (appareil, APNs réel, VoiceOver, GPS, batterie) ; MSG-09 deux appareils réels ; MSG-13, MSG-15/16 et résidence suisse du stockage médias (#68) ; MSG-18 sur appareil ; panne du chat pendant une leçon sur le terrain. Détail dans `docs/qa/messaging-78-20261023.md`. Tests API sans PostgreSQL non relancés ici.
 
 ## 11 novembre 2026 — Intégration des trois branches d'audit
 
@@ -2178,3 +2241,28 @@ les bornes et l'absence de changement métier/serveur. Cette exception est inté
 nouveaux tests et les parcours iPhone/iPad doivent encore être compilés et exécutés sur Apple.
 La prochaine qualification porte sur le candidat complet ; aucune fusion master ou bascule
 homelab n'est encore annoncée. Leur autorisation est acquise, avec sauvegarde préalable vérifiée.
+
+## 11 novembre 2026 — CI de master rouge corrigée, restes serveur de #37 et #50
+
+**Exécuté.** Les workflows « Refonte · vérifications » (job « Web et BFF ») et « Refonte · ouverture école
+navigateur » échouaient depuis le 5 novembre à `playwright-core install --with-deps chromium`, sur
+`Temporary failure resolving 'azure.archive.ubuntu.com'`. Cause établie en comparant un journal en échec
+(`43046719913`) et un journal réussi (`43029756647`) : même étape, même image, le miroir apt Azure se résout sur
+certains runners seulement ; l'échec touche aussi des dispatchs, ce n'est donc pas une différence push/PR.
+Correctif : `scripts/qualification/install-playwright-browser.sh` retire les miroirs sans DNS, replie sur les
+miroirs officiels, réduit les délais apt et réessaie trois fois ; les trois workflows qui installaient un
+navigateur l'appellent. Sur la branche `tomyrms/restes-serveur-20261111`, au `62f64cc5` : vérifications
+`43066470393` vert (web 908 réussis + 1 échec attendu sur 909 ; serveur sur PostgreSQL réelle 1149/1149, dont
+`course-worker-process` 7/7 avec SIGTERM sous Linux), navigateur `43066475650` vert.
+
+**Livré sans activation.** #50 : `infra/deploy/configure-identity-smtp.py` (simulation par défaut, n'écrit que
+`smtpServer`, secrets lus dans des fichiers 0600 hors dépôt), 16 tests locaux, procédure dans
+`recuperation-activation-50.md`. #37 : un test API sur l'horloge d'appareil fausse (le serveur seul décide de
+l'échéance d'annulation), et la relecture critère par critère dans `cours-collectifs-cloture-37-20261111.md`.
+
+**À qualifier.** Le repli DNS du script n'a pas été exercé en CI (le DNS répondait) : seule une simulation locale
+avec miroirs factices le couvre. Le script SMTP n'a jamais parlé à un Keycloak réel ; aucun courrier n'a été
+envoyé. Restent hors dépôt : choix du fournisseur SMTP (#50), réception APNs, VoiceOver et parcours Face ID sur
+appareil (#37, #50), recomptage de la matrice #83. Rien n'est déployé, aucune issue n'est fermée par ce lot.
+
+**Contenu de messagerie encodé à clés triées (12 novembre).** `MessagingPlainContent.encoded()` ne fixait pas l'ordre des clés : deux encodages du même contenu pouvaient différer, alors que le signalement promet les mêmes octets (`MessagingThreadTests` ligne 401, rouge sur le run 43200045962 relancé). L'encodeur trie désormais les clés ; le décodage est inchangé. À qualifier : run Apple sur le commit suivant.

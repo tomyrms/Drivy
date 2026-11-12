@@ -173,7 +173,7 @@ final class MessagingReportScreensUITests: XCTestCase {
         let witness = app.staticTexts["messaging.report.fixture"]
         XCTAssertTrue(witness.waitForExistence(timeout: 10))
         let match = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", expected), object: witness)
-        XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 10), .completed)
+        XCTAssertEqual(XCTWaiter.wait(for: [match], timeout: 10), .completed, "Témoin attendu \(expected), relevé \(witness.label)")
     }
 
     private func dismissReportConfirmation(in app: XCUIApplication) {
@@ -228,7 +228,8 @@ final class MessagingReportScreensUITests: XCTestCase {
             let text = app.staticTexts["messaging.report.disclosure." + part]
             XCTAssertTrue(text.exists)
             XCTAssertTrue(text.label.contains(first))
-            XCTAssertTrue(text.label.contains(second))
+            // `contains("")` est faux : un second repère vide (blocs « file » et « privacy ») n'en exige aucun.
+            XCTAssertTrue(second.isEmpty || text.label.contains(second), text.label)
             // A partially hittable paragraph is not proof that its complete disclosure was visible.
             var visible = false
             for gesture in 0...10 {
@@ -246,11 +247,14 @@ final class MessagingReportScreensUITests: XCTestCase {
                 let startY = downward ? top + 12 : bottom - 12
                 let endY = startY + (downward ? distance : -distance)
                 let origin = app.coordinate(withNormalizedOffset: .zero)
+                // Lent et tenu : un glisser rapide laisse une inertie qui dépasse le bloc, surtout en très grand texte.
                 origin.withOffset(CGVector(dx: bounds.midX, dy: startY)).press(forDuration: 0.05,
-                    thenDragTo: origin.withOffset(CGVector(dx: bounds.midX, dy: endY)))
+                    thenDragTo: origin.withOffset(CGVector(dx: bounds.midX, dy: endY)), withVelocity: .slow, thenHoldForDuration: 0.3)
             }
             capture("report-mixed-\(largeText ? "large" : "normal")-\(part)")
-            XCTAssertTrue(visible, "Le bloc \(part) doit être entièrement visible après défilement borné")
+            let finalBounds = content.frame.intersection(app.windows.firstMatch.frame)
+            XCTAssertTrue(visible, "Le bloc \(part) doit être entièrement visible après défilement borné : bloc \(text.frame), "
+                + "zone \(finalBounds), barre \(app.navigationBars["Signalement"].frame.maxY), confirmer \(confirm.frame.minY), hittable \(text.isHittable)")
         }
         XCTAssertTrue(confirm.isHittable)
         XCTAssertTrue(cancel.isHittable)
