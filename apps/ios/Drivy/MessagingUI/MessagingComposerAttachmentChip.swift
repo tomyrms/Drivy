@@ -62,7 +62,7 @@ struct MessagingComposerAttachmentChip: View {
     let remove: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
-    static let tile: CGFloat = 56
+    nonisolated static let tile: CGFloat = 56
 
     var body: some View {
         HStack(spacing: DrivySpacing.xs) {
@@ -143,9 +143,10 @@ struct MessagingComposerThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .task(id: revision) {
             image = nil
-            let bytes = data, scale = displayScale
+            // Valeurs copiées avant de quitter le MainActor : la tâche détachée ne touche à aucun membre isolé.
+            let bytes = data, scale = displayScale, side = MessagingComposerAttachmentChip.tile
             let decoded = await Task.detached(priority: .userInitiated) {
-                MessagingImageDecoder.decode(bytes, viewportLongestSide: MessagingComposerAttachmentChip.tile, displayScale: scale)
+                MessagingImageDecoder.decode(bytes, viewportLongestSide: side, displayScale: scale)
             }.value
             guard !Task.isCancelled else { return }
             image = decoded?.cgImage
