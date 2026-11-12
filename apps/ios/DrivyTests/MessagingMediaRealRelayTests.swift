@@ -358,7 +358,7 @@ final class MessagingMediaRealRelayTests: XCTestCase {
 
         // 1. Readiness : prouve l'école média dédiée, sans changer les champs canoniques.
         enter(MediaRelayStage.readiness)
-        let probe = try await SchoolURLSessionTransport()
+        let probe = try await RelayReadinessWait
             .send(URLRequest(url: base.appendingPathComponent("qualification/ready")))
         if let mismatch = mediaReadinessMismatch(status: probe.status, data: probe.data, readiness) {
             XCTFail("Le relais ne correspond pas aux fixtures média : \(mismatch).")

@@ -1,13 +1,15 @@
 import XCTest
 
 /// Vraies vues, octets et runtime synthétiques en mémoire. Aucune preuve E2EE/serveur.
-/// À exécuter sur iPhone et iPad ; NON EXÉCUTÉ sur le poste Windows de rédaction.
+/// À exécuter sur iPhone et iPad ; NON EXÉCUTÉ sur le poste Windows de rédaction. Les captures sont des pièces jointes
+/// du résultat (`capture`), nommées `media-<état>-<clair|sombre>` ; aucune donnée hors fixture.
 @MainActor
 final class MessagingMediaUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     override func tearDown() {
         XCUIDevice.shared.appearance = .light
+        XCUIDevice.shared.orientation = .portrait
         super.tearDown()
     }
 
@@ -16,11 +18,20 @@ final class MessagingMediaUITests: XCTestCase {
         app.launchArguments = ["-messaging-ui-fixture", "-messaging-ui-rich", "-messaging-ui-media",
                                "-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"] + extra
         app.launch()
+        // En mode sombre et AccessibilityXXXL le runner met 10 à 20 s à se stabiliser entre deux écrans (journal du run
+        // 43278793085 : « Wait for … to idle » de 7 à 12 s) ; on attend donc davantage, et on fait défiler la liste
+        // des conversations au cas où l'entrée serait hors écran (les lignes hors écran n'existent pas dans la hiérarchie).
         let entry = app.buttons["messages-entry"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        XCTAssertTrue(entry.waitForExistence(timeout: 30))
         entry.tap()
         let general = app.buttons["messaging.general.open"]
-        XCTAssertTrue(general.waitForExistence(timeout: 10))
+        if !general.waitForExistence(timeout: 30) {
+            for _ in 0..<5 where !general.exists {
+                app.swipeUp()
+                _ = general.waitForExistence(timeout: 3)
+            }
+        }
+        XCTAssertTrue(general.exists, "Entrée « Général » introuvable après attente et défilement")
         general.tap()
         XCTAssertTrue(app.buttons["messaging.compose.more"].waitForExistence(timeout: 10))
         return app
@@ -87,6 +98,23 @@ final class MessagingMediaUITests: XCTestCase {
         capture("media-caption-keyboard")
     }
 
+    /// #475 : le champ reste visible pendant la sélection, sert de légende et revient intact au retrait.
+    func testCaptionIsTheDraftAndSurvivesRemoval() {
+        let app = launch()
+        let main = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
+        XCTAssertTrue(main.waitForExistence(timeout: 10))
+        main.tap()
+        main.typeText("Bonjour")
+        select("photo", in: app)
+        let caption = app.descendants(matching: .any)["messaging.media.caption"].firstMatch
+        XCTAssertTrue(caption.waitForExistence(timeout: 5))
+        XCTAssertEqual(caption.value as? String, "Bonjour")
+        capture("media-caption-from-draft")
+        app.buttons["messaging.media.selection.remove"].tap()
+        XCTAssertTrue(app.buttons["messaging.media.selection.open"].waitForNonExistence(timeout: 5))
+        XCTAssertEqual(main.value as? String, "Bonjour")
+    }
+
     func testReceivedPieceOpensInExistingThread() {
         let app = launch()
         let received = app.buttons["messaging.media.received.open"].firstMatch
@@ -96,6 +124,184 @@ final class MessagingMediaUITests: XCTestCase {
         capture("media-received-preview")
         app.buttons["Fermer"].tap()
         XCTAssertTrue(app.buttons["messaging.compose.more"].exists)
+    }
+
+    // MARK: Parcours de bout en bout (#478)
+
+    /// Bouton d'ouverture d'une pièce reçue par son début de libellé (« Photo, » ou « Document PDF ») : les deux
+    /// partagent l'identifiant `messaging.media.received.open`.
+    private func received(_ prefix: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons.matching(NSPredicate(format: "identifier == %@ AND label BEGINSWITH %@",
+                                         "messaging.media.received.open", prefix)).firstMatch
+    }
+
+    /// Ramène un élément dans la zone visible du fil, sans supposer le sens du défilement (liste retournée par Exyte).
+    /// Le défilement se fait par petits pas : un grand geste ferait passer la pièce d'un bord à l'autre.
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        // `isHittable` signale un échec (et non `false`) quand le cadre est invalide (hors écran, taille nulle, rotation en
+        // cours : run 43287772177, paysage iPhone). On juge donc sur le cadre, rapporté à la zone du fil réellement visible.
+        _ = element.waitForExistence(timeout: 15)
+        if isReachable(element, in: app) { return }
+        for _ in 0..<8 where !isReachable(element, in: app) { nudge(app, fingerDown: true) }
+        for _ in 0..<16 where !isReachable(element, in: app) { nudge(app, fingerDown: false) }
+        XCTAssertTrue(isReachable(element, in: app), "Pièce introuvable dans la zone visible du fil après défilement")
+    }
+
+    /// Zone visible du fil : le tableau, sous la barre de navigation et au-dessus du composeur (run 43295833950 : en
+    /// paysage iPhone le centre de la photo était dans la fenêtre mais sous la barre, y = 62 pour un fil commençant à 78).
+    private func threadArea(_ app: XCUIApplication) -> CGRect {
+        let table = app.tables.firstMatch
+        if table.exists, !table.frame.isEmpty { return table.frame }
+        return app.windows.firstMatch.frame
+    }
+
+    private func isReachable(_ element: XCUIElement, in app: XCUIApplication) -> Bool {
+        guard element.exists else { return false }
+        let frame = element.frame, area = threadArea(app)
+        guard !frame.isEmpty, !area.isEmpty else { return false }
+        return area.insetBy(dx: 0, dy: 8).contains(CGPoint(x: frame.midX, y: frame.midY))
+    }
+
+    private func nudge(_ app: XCUIApplication, fingerDown: Bool) {
+        let table = app.tables.firstMatch
+        let area = table.exists ? table : app.windows.firstMatch
+        let start = area.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: fingerDown ? 0.3 : 0.7))
+        let end = area.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: fingerDown ? 0.6 : 0.4))
+        start.press(forDuration: 0.05, thenDragTo: end)
+    }
+
+    /// Attend la fin de la rotation : la fenêtre est plus large que haute en paysage.
+    private func waitForLandscape(_ app: XCUIApplication) {
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let frame = app.windows.firstMatch.frame
+            if frame.width > frame.height { return }
+            Thread.sleep(forTimeInterval: 0.3)
+        }
+        XCTFail("La rotation en paysage ne s'est pas terminée")
+    }
+
+    private func closeButton(_ app: XCUIApplication) -> XCUIElement { app.buttons["messaging.media.close"] }
+
+    /// Photo reçue : miniature visible dans le fil, plein écran, fermeture au même endroit ; PDF reçu : idem, plusieurs pages.
+    private func runThreadJourney(appearance: XCUIDevice.Appearance, label: String) {
+        XCUIDevice.shared.appearance = appearance
+        let app = launch()
+        let photo = received("Photo, ", in: app), pdf = received("Document PDF", in: app)
+        reveal(pdf, in: app)
+        reveal(photo, in: app)
+        XCTAssertTrue(photo.exists && pdf.exists, "Photo et PDF reçus absents du fil")
+        // La miniature a remplacé l'attente : ni « Chargement » ni « Aperçu indisponible ».
+        let deadline = Date().addingTimeInterval(20)
+        while Date() < deadline, (photo.value as? String) == "Chargement" { Thread.sleep(forTimeInterval: 0.5) }
+        XCTAssertNotEqual(photo.value as? String, "Chargement")
+        XCTAssertNotEqual(photo.value as? String, "Aperçu indisponible")
+        XCTAssertGreaterThanOrEqual(photo.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(pdf.frame.height, 44)
+        capture("media-thread-photo-pdf-\(label)")
+
+        photo.tap()
+        let close = closeButton(app)
+        XCTAssertTrue(close.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["messaging.media.preview"].firstMatch.exists)
+        XCTAssertGreaterThanOrEqual(close.frame.height, 44)
+        capture("media-viewer-photo-\(label)")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(photo.exists, "Le fil a perdu la photo à la fermeture")
+        XCTAssertTrue(app.buttons["messaging.compose.more"].exists)
+
+        reveal(pdf, in: app)
+        pdf.tap()
+        XCTAssertTrue(close.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["messaging.media.page"].firstMatch.waitForExistence(timeout: 15),
+                      "Indicateur de pages absent : le PDF de la fixture a deux pages")
+        capture("media-viewer-pdf-\(label)")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10))
+        XCTAssertTrue(pdf.exists)
+    }
+
+    func testReceivedPhotoAndPDFOpenFullScreenAndCloseLight() { runThreadJourney(appearance: .light, label: "clair") }
+
+    func testReceivedPhotoAndPDFOpenFullScreenAndCloseDark() { runThreadJourney(appearance: .dark, label: "sombre") }
+
+    /// Légende dans le champ principal → envoi → bulle en attente → échec confirmé avec reprise ciblée → confirmée.
+    /// `slow` rend l'attente observable ; `fail-once` refuse le premier envoi (échec, pas résultat inconnu).
+    private func runSendJourney(appearance: XCUIDevice.Appearance, label: String) {
+        XCUIDevice.shared.appearance = appearance
+        let app = launch(extra: ["-messaging-ui-media-slow", "-messaging-ui-media-fail-once"])
+        app.buttons["messaging.compose.more"].tap()
+        let sample = app.buttons["messaging.media.fixture.pdf"]
+        XCTAssertTrue(sample.waitForExistence(timeout: 5))
+        sample.tap()
+        XCTAssertTrue(app.buttons["messaging.media.selection.open"].waitForExistence(timeout: 20))
+        let caption = app.descendants(matching: .any)["messaging.media.caption"].firstMatch
+        XCTAssertTrue(caption.waitForExistence(timeout: 5))
+        caption.tap()
+        caption.typeText("Consignes de la leçon")
+        XCTAssertEqual(caption.value as? String, "Consignes de la leçon")
+        capture("media-composer-attachment-caption-\(label)")
+
+        let send = app.buttons["messaging.media.send"]
+        XCTAssertTrue(send.isHittable)
+        send.tap()
+        let pending = app.descendants(matching: .any)["messaging.media.pending"].firstMatch
+        XCTAssertTrue(pending.waitForExistence(timeout: 10), "Bulle en attente absente du fil")
+        capture("media-pending-sending-\(label)")
+
+        let retry = app.buttons["messaging.media.retry"].firstMatch
+        XCTAssertTrue(retry.waitForExistence(timeout: 20), "Reprise ciblée absente après l'échec")
+        XCTAssertEqual(retry.label, "Réessayer")
+        XCTAssertGreaterThanOrEqual(retry.frame.height, 44)
+        XCTAssertFalse(app.staticTexts["Envoyé"].exists, "Succès annoncé avant l'accusé")
+        capture("media-failed-retry-\(label)")
+
+        retry.tap()
+        XCTAssertTrue(app.staticTexts["Envoyé"].waitForExistence(timeout: 20))
+        XCTAssertTrue(retry.waitForNonExistence(timeout: 10), "Reprise encore proposée après la confirmation")
+        capture("media-confirmed-\(label)")
+    }
+
+    func testCaptionSendPendingFailureRetryConfirmedLight() { runSendJourney(appearance: .light, label: "clair") }
+
+    func testCaptionSendPendingFailureRetryConfirmedDark() { runSendJourney(appearance: .dark, label: "sombre") }
+
+    /// Retrait de la pièce : la légende saisie reste dans le champ (aucune perte de texte), cibles d'au moins 44 pt.
+    func testRemovingTheAttachmentKeepsTheCaptionAndTapTargets() {
+        let app = launch()
+        select("photo", in: app)
+        let caption = app.descendants(matching: .any)["messaging.media.caption"].firstMatch
+        XCTAssertTrue(caption.waitForExistence(timeout: 5))
+        caption.tap()
+        caption.typeText("Légende à garder")
+        let open = app.buttons["messaging.media.selection.open"], remove = app.buttons["messaging.media.selection.remove"]
+        XCTAssertGreaterThanOrEqual(open.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(remove.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(remove.frame.width, 44)
+        remove.tap()
+        XCTAssertTrue(open.waitForNonExistence(timeout: 5))
+        let main = app.descendants(matching: .any)["messaging.compose.text"].firstMatch
+        XCTAssertTrue(main.waitForExistence(timeout: 5))
+        XCTAssertEqual(main.value as? String, "Légende à garder")
+    }
+
+    /// Paysage (iPhone) ou fenêtre pivotée (iPad) : la visionneuse reste dans l'écran et se ferme.
+    func testViewerStaysUsableInLandscape() {
+        let app = launch()
+        XCUIDevice.shared.orientation = .landscapeLeft
+        waitForLandscape(app)
+        let photo = received("Photo, ", in: app)
+        reveal(photo, in: app)
+        XCTAssertTrue(photo.exists)
+        photo.tap()
+        let close = closeButton(app)
+        XCTAssertTrue(close.waitForExistence(timeout: 10))
+        XCTAssertTrue(close.isHittable)
+        XCTAssertTrue(app.windows.firstMatch.frame.contains(close.frame), "Fermer sort de l'écran en paysage")
+        capture("media-viewer-photo-landscape")
+        close.tap()
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10))
     }
 
     private func capture(_ name: String) {

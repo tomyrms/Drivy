@@ -185,7 +185,13 @@ final class MatrixMessagingRelayIntegrationTests: XCTestCase {
 
         // Readiness proves that this is our disposable fixture server, not merely an open port.
         enter("READINESS")
-        let readiness = try await sendReadiness(URLRequest(url: base.appendingPathComponent("qualification/ready")))
+        let readinessRequest = URLRequest(url: base.appendingPathComponent("qualification/ready"))
+        let readiness: SchoolHTTPResponse
+        do { readiness = try await sendReadiness(readinessRequest) }
+        catch where RelayReadinessWait.isTransient(error) {
+            // Premier essai (avec phases observées) perdu sur un runner chargé : attente bornée, voir RelayReadinessWait.
+            readiness = try await RelayReadinessWait.retry(readinessRequest)
+        }
         if let mismatch = relayReadinessMismatch(status: readiness.status, data: readiness.data,
                                                 schoolID: school, instructorID: instructor, learnerID: learner) {
             XCTFail("Le relais ne correspond pas aux fixtures canoniques de qualification : \(mismatch.text).")

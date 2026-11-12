@@ -1,3 +1,39 @@
+## 12 novembre 2026 — Épic UX médias #472, lot E : fluidité, accessibilité, qualification (#477, #478)
+
+- IPA d'essai : accès Messages inclus par défaut dans `ipa-essai.yml` (push et lancement manuel), à la demande du porteur ; `-f messaging_qualification=false` produit une IPA sans Messages ; les appels de la validation finale restent explicites. Contrôle `test-workflows.mjs` et README de qualification mis à jour.
+- Revue critique des lots A à D, corrections ciblées : recalcul quadratique de la visibilité des médias dans le fil supprimé (`MessagingConversationView`) ; carte d'envoi en attente lue comme un seul élément VoiceOver, sans annonce de progression non mesurée ; libellés VoiceOver distincts pour « Réessayer l’aperçu » et « Réessayer l’ouverture » ; trait bouton sur l'ouverture de la pièce du composeur.
+- Fixture : `-messaging-ui-media-fail-once` (premier envoi refusé, reprise ciblée puis confirmation). Tests UI ajoutés dans `MessagingMediaUITests` : photo et PDF reçus (clair, sombre), légende → envoi → attente → échec → reprise → confirmé (clair, sombre), retrait sans perte de texte, visionneuse en paysage. Deux tests unitaires ajoutés à `MessagingMediaStatesTests`.
+- Matrice critère par critère et liste « non essayé » : `docs/implementation/ux-medias-472-lot-e-qualification.md`. Rien compilé ni exécuté sur le poste Windows ; un run unitaire Apple lancé, résultat à consigner. Campagne UI et captures : non lancées.
+- Non essayé : appareil physique, VoiceOver réel, gestes réels, mesures de performance sur appareil (non mesuré).
+- Test du relais instable : `testRealRelayExchangeIdempotenceRecoveryAndContextRefusal` a échoué au run 43286133550 (étape READINESS, délai de 20 s ; connexion et TLS établis après ~9,5 s, aucune réponse). Hypothèse retenue d'après les phases du journal : runner chargé, relais lent à répondre au premier appel ; le relais était pourtant prêt au démarrage. Correctif : attente bornée commune `RelayReadinessWait` (3 essais supplémentaires, 2 s de pause, erreurs de transport transitoires seulement) dans les trois classes qui sondent `/qualification/ready` ; aucun test désactivé ni affaibli, relais et production inchangés. Efficacité : à confirmer par le run Apple.
+- Run UI 43287772177 (7019ca7e) : 3 défauts corrigés après lecture des artefacts. (1) Zone de toucher de « Réessayer » dans le fil de 16 pt (cadre posé hors du libellé du bouton) : cadre et `contentShape` dans le libellé, pour l'envoi en attente et la reprise d'ouverture. (2) Repère « Page n sur N » absent sur iPhone : le nombre de pages restait à 0 car le PDFView n'existait pas encore au premier rafraîchissement ; il est lu depuis le document. (3) Test paysage : `isHittable` échoue sur un cadre invalide ; le helper juge sur le cadre et attend la fin de la rotation. À confirmer par un nouveau run UI.
+- Run UI 43295833950 (7f82155b) : iPad 12/12, iPhone 11/12. Seul échec, `testViewerStaysUsableInLandscape` : la photo reçue (cadre y = -24,3, hauteur 173,3) avait son centre (y ≈ 62) dans la fenêtre mais sous la barre de navigation (le fil commence à y = 78, hauteur 236) ; le point d'activation était invalide. Défaut du test, pas du produit (la photo tient dans le fil). `reveal`/`isReachable` jugent maintenant sur le tableau du fil et défilent par petits pas. À confirmer par un nouveau run UI.
+
+## 12 novembre 2026 — Épic UX médias #472, lot D : composeur (#475)
+
+- Composeur : la pièce choisie apparaît en miniature (photo, décodage ImageIO sous-échantillonné hors MainActor) ou en carte compacte (PDF : nom, taille), tuile de 56 pt réservée, retrait ciblé 44 pt, aperçu au toucher. Le champ principal reste visible et sert de légende : légende et brouillon sont UNE valeur (rien de masqué, de perdu ni de dupliqué) ; retrait et remplacement la conservent. Envoi : un seul bouton d'état occupé, pas de double envoi, succès annoncé seulement après écriture durable.
+- Nouveau fichier `MessagingComposerAttachmentChip.swift` ; `MessagingMediaComposerModel` : `caption` raccordé au brouillon par `MessagingCaptionChannel`, `selectionError`, `selectionRevision`. Protocole UI `MessagingMediaRuntime` inchangé. Détail : `docs/implementation/ux-medias-472-lot-d-composeur.md`.
+- Tests écrits : `MessagingMediaComposerDraftTests` (portée `messaging`) et un test UI (`testCaptionIsTheDraftAndSurvivesRemoval`) ; relus sans compilateur local. `test_test_selection.py` passe (27 tests). Résultat du run Apple : à consigner.
+- Non essayé : rendu réel, VoiceOver, Dynamic Type, iPad en fenêtre étroite, clavier, appareil physique.
+
+## 12 novembre 2026 — Épic UX médias #472, lot C (#476)
+
+- Ouverture par pièce, intentions média projetées dans le fil avec reprise ciblée, visionneuse alimentée (chargement, prêt, échec, relance), liste d'envois retirée du panneau. Détails : `docs/implementation/ux-medias-472-lot-c-etats.md`.
+- Tests : `MessagingMediaStatesTests` ajouté à la portée `messaging` ; `test_test_selection.py` vert en local. Compilation et tests Swift : à qualifier par le run Apple. Appareil, VoiceOver, gestes : non essayés.
+
+## 12 novembre 2026 — Épic UX médias #472, lot A
+
+- Fil de messagerie (#473) : photos en bulles à espace réservé par ratio (borné [0,6 ; 2], 260 × 340 pt au plus), PDF en cartes lisibles, chargeur de miniatures borné (3 en vol, 24 images décodées, résultat tardif ignoré) et capacité interne additive `MessagingMediaThumbnailProviding` ; le protocole gelé `MessagingMediaRuntime` est inchangé. Détail : `docs/implementation/ux-medias-472-lot-a-fil.md`.
+- Tests écrits (géométrie, chargeur, capacité du coordinateur), ajoutés à la portée `messaging` ; relus sans compilateur local.
+- Run Apple 43230205594 (`016c39f4`, portée `messaging`) : compilation réussie, 253 tests, 1 test en échec (`testConcurrencyIsBoundedAndQueuedItemsFollow`, défaut du test : les demandes suivantes restaient retenues par le faux fournisseur). Corrigé ; une pièce visible ne reste plus sur une attente sans fin (`suspend`, refus d'autorisation). Nouveau run à qualifier.
+- Non essayé : rendu des `#Preview`, VoiceOver, grandes tailles de texte, gestes, appareil physique.
+
+## 12 novembre 2026 — Epic UX médias #472, lot B (#474)
+
+- Visionneuse de photos plein écran (`MessagingMediaViewer.swift`) : `UIScrollView` avec pincement, double toucher centré sur le point touché, déplacement borné, réajustement à la rotation et au redimensionnement iPad ; décodage ImageIO unique, borné et hors du thread principal ; bouton « Fermer » seul moyen de sortie. Lecteur PDF PDFKit en mémoire conservé (actions externes neutralisées), indicateur de page et dézoom limité à la page entière. Interface d'état `loading / ready / failed + reprise` prête pour #476. Détail : `docs/implementation/ux-medias-472-lot-b-visionneuse.md`.
+- Exécuté : `test_test_selection.py` (27 tests). Run Apple [43228983783](https://github.com/tomyrms/Drivy/actions/runs/43228983783) vert sur `f8bfa059` (portée `messaging`, iPhone simulateur) : compilation et `MessagingMediaViewerTests` (16 tests). Tests UI média : `MessagingMediaUITests` relu sans adaptation nécessaire, exécution à suivre.
+- Non essayé : gestes réels, rotation, iPad, VoiceOver, grandes tailles de texte, PDF multi-pages réel, tests UI média contre la couverture plein écran, capture vidéo de l'issue.
+
 ## 12 novembre 2026 — Départ de trajet : demande au sort inconnu gardée (#106, L1)
 
 - Écart confirmé puis corrigé dans `SchoolCapturePreparationWorkspace.swift` : une demande de départ inconnue de l'école, ou jamais émise, n'est plus retirée automatiquement après 120 s (`verifyStart`, `reconcilePendingStarts`). Elle reste en file et est signalée ; la personne relit le départ (même clé d'opération) ou abandonne la demande après confirmation. `settledRequestAge` ne sert plus qu'à ne pas déclarer « inconnue » une demande encore en route.

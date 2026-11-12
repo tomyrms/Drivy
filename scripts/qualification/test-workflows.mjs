@@ -87,9 +87,15 @@ test('accès Messages physique explicite identique dans tests natifs et IPA', ()
   }
   for (const file of ['refonte-ios.yml', 'ipa-essai.yml']) {
     const workflow = workflows.get(file);
-    assert.equal(workflow.on.workflow_dispatch.inputs.messaging_qualification.default, false);
-    assert.equal(workflow.on.workflow_call.inputs.messaging_qualification.default, false);
     const job = Object.values(workflow.jobs)[0];
+    assert.equal(workflow.on.workflow_call.inputs.messaging_qualification.default, false);
+    if (file === 'ipa-essai.yml') {
+      // IPA d'essai : Messages inclus par défaut (dispatch et push), décochable ; les appels de la finale restent explicites.
+      assert.equal(workflow.on.workflow_dispatch.inputs.messaging_qualification.default, true);
+      assert.equal(job.env.DRIVY_MESSAGING_QUALIFICATION, "${{ github.event_name == 'push' && '1' || (inputs.messaging_qualification && '1' || '0') }}");
+      continue;
+    }
+    assert.equal(workflow.on.workflow_dispatch.inputs.messaging_qualification.default, false);
     assert.equal(job.env.DRIVY_MESSAGING_QUALIFICATION, "${{ inputs.messaging_qualification && '1' || '0' }}");
   }
 });

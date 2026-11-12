@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       messaging_qualification:
-        description: Inclure l'accès Messages de qualification physique, sans fixtures ni validation générale
+        description: Inclure l'accès Messages (oui par défaut ; décocher pour une IPA sans Messages), sans fixtures ni validation générale
         type: boolean
-        default: false
+        default: true
 permissions:
   contents: read
 concurrency:
@@ -38,7 +38,8 @@ jobs:
     timeout-minutes: 20
     env:
       QUALIFICATION_SHA: ${{ inputs.qualification_sha }}
-      DRIVY_MESSAGING_QUALIFICATION: ${{ inputs.messaging_qualification && '1' || '0' }}
+      # Messages inclus par défaut : un push (sans entrée) et un lancement manuel l'activent ; un lancement à false ou un appel de workflow non.
+      DRIVY_MESSAGING_QUALIFICATION: ${{ github.event_name == 'push' && '1' || (inputs.messaging_qualification && '1' || '0') }}
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       DRIVY_API_BASE_URL: ${{ vars.DRIVY_API_BASE_URL }}
       DRIVY_OIDC_ISSUER: ${{ vars.DRIVY_OIDC_ISSUER }}

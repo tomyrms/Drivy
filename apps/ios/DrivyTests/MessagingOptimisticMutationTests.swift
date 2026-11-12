@@ -33,6 +33,22 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         XCTFail("Condition non atteinte", file: file, line: line)
     }
 
+    /// « Réessayer » ne relance que si aucune requête n'est déjà en vol pour la cible. Le statut `.uncertain` est posé AVANT la
+    /// fin de la boucle d'envoi (persistance puis retour) : un appel trop tôt n'est qu'une relecture et ne renvoie rien.
+    /// On répète donc l'appel jusqu'à voir la requête repartir ; `retryMutations` ne renvoie rien tant qu'une requête
+    /// est en vol, la répétition ne duplique aucun envoi.
+    private func retryUntilTransmitted(_ workspace: MessagingWorkspace, _ actions: GatedActions, calls expected: Int,
+                                       file: StaticString = #filePath, line: UInt = #line) async {
+        for _ in 0..<100 {
+            workspace.retryMutations(for: wire())
+            for _ in 0..<20 {
+                if await actions.calls.count >= expected { return }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        XCTFail("La reprise n'a pas renvoyé la requête", file: file, line: line)
+    }
+
     private func thumbs(_ workspace: MessagingWorkspace) -> [UUID] {
         workspace.message(messageID, in: conversation)?.meta.reactions.first { $0.emoji == "👍" }?.personIDs ?? []
     }
@@ -86,11 +102,12 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .uncertain }
         XCTAssertEqual(thumbs(workspace), [account])
         await actions.fail(emoji: "👍", with: nil)
-        workspace.retryMutations(for: wire())
+        await retryUntilTransmitted(workspace, actions, calls: 2)
         await until { workspace.mutation(.reaction("👍"), on: self.wire())?.status == .confirmed }
         let calls = await actions.calls
         XCTAssertEqual(calls, ["reaction 👍 true", "reaction 👍 true"])
         let requestIDs = await actions.requestIDs
+        guard requestIDs.count >= 2 else { return XCTFail("Deux requêtes attendues, \(requestIDs.count) reçue(s)") }
         XCTAssertEqual(requestIDs[0], requestIDs[1])
     }
 
@@ -212,6 +229,7 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         await until { await resumedActions.calls == ["reaction 👍 true", "reaction 👍 false"] }
         let requestIDs = await resumedActions.requestIDs
         XCTAssertEqual(requestIDs.first, stored.value.transmittingID)
+        guard requestIDs.count >= 2 else { return XCTFail("Deux requêtes attendues, \(requestIDs.count) reçue(s)") }
         XCTAssertNotEqual(requestIDs[0], requestIDs[1], "Le nouveau choix a sa propre identité de requête.")
         await until { reopened.pendingMutations.isEmpty }
         await firstActions.releaseAll()
@@ -324,9 +342,10 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         XCTAssertEqual(waiting, ["reaction 👍 true", "reaction 👍 true"])
         XCTAssertEqual(workspace.actionError, .mutationReceiptUnavailable)
         await actions.fail(emoji: "👍", with: nil)
-        workspace.retryMutations(for: wire())
+        await retryUntilTransmitted(workspace, actions, calls: 3)
         await until { await actions.calls.count == 4 }
         let ids = await actions.requestIDs
+        guard ids.count >= 4 else { return XCTFail("Quatre requêtes attendues, \(ids.count) reçue(s)") }
         XCTAssertEqual(ids[0], ids[1]); XCTAssertEqual(ids[1], ids[2]); XCTAssertNotEqual(ids[2], ids[3])
     }
 
@@ -346,6 +365,7 @@ final class MessagingOptimisticMutationTests: XCTestCase {
         let reopened = await make(GatedActions(holding: false), service: MutableService(wire()), store: store, directory: restoredDirectory)
         await until { await restoredDirectory.calls.count == 2 }
         let requests = await restoredDirectory.calls
+        guard requests.count >= 2 else { return XCTFail("Deux requêtes attendues, \(requests.count) reçue(s)") }
         XCTAssertEqual(requests[0].mutedUntil, untilDate)
         XCTAssertEqual(requests.map(\.version), [7, 8])
         XCTAssertEqual(requests.map(\.lastReadSequence), [4, 4], "Aucun faux accusé de lecture ajouté par la reprise.")

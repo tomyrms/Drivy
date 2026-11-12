@@ -204,12 +204,15 @@ actor MessagingMediaQualificationRuntime: MessagingMediaRuntime {
     private let reportBoundary: MessagingReportQualificationBoundary?
     private let slow: Bool
     private var unknownOnce: Bool
+    /// `-messaging-ui-media-fail-once` (#478) : premier envoi refusé (échec confirmé, reprise « Réessayer »), le suivant aboutit.
+    private var failOnce: Bool
     private var items: [UUID: MessagingMediaPendingSnapshot] = [:]
     init(scope: MessagingScope, arguments: [String], reportBoundary: MessagingReportQualificationBoundary? = nil) {
         self.scope = scope
         self.reportBoundary = reportBoundary
         slow = arguments.contains("-messaging-ui-media-slow")
         unknownOnce = arguments.contains("-messaging-ui-media-unknown-once")
+        failOnce = arguments.contains("-messaging-ui-media-fail-once")
     }
     func prepare(_ data: Data, suggestedName: String) async throws -> MessagingPreparedMedia {
         if slow { try await Task.sleep(for: .seconds(3)) }
@@ -230,6 +233,7 @@ actor MessagingMediaQualificationRuntime: MessagingMediaRuntime {
     func send(clientMessageID: UUID) async -> MessagingMediaDelivery {
         if slow { try? await Task.sleep(for: .seconds(2)) }
         if unknownOnce { unknownOnce = false; return .pending(.resultUnknown) }
+        if failOnce { failOnce = false; return .pending(.unavailable) }
         guard let item = items.removeValue(forKey: clientMessageID) else { return .pending(.removed) }
         return .confirmed(MessagingAcknowledgement(clientMessageID: clientMessageID, serverMessageID: UUID(),
             conversationID: item.conversationID, schoolID: scope.schoolID, acceptedAt: Date(), senderID: scope.accountID), cleanupPending: false)
@@ -242,5 +246,21 @@ actor MessagingMediaQualificationRuntime: MessagingMediaRuntime {
         return try await prepare(input.data, suggestedName: input.suggestedName)
     }
     func invalidate() async {}
+}
+
+/// Miniature synthétique de la fixture (#473) : octets générés en mémoire, aucune lecture de
+/// fichier, aucun cache réel. N'enregistre pas de « demande de fichier » du témoin de signalement.
+extension MessagingMediaQualificationRuntime: MessagingMediaThumbnailProviding {
+    func thumbnail(for message: MessagingWireMessage) async throws -> Data {
+        guard !message.meta.deletedForEveryone, message.meta.media?.deleted == false,
+              let input = try MessagingMediaQualificationSamples.received(message.id) else {
+            throw MessagingMediaRuntimeFailure.removed
+        }
+        let prepared = try MessagingMediaPreparer().prepare(input.data, suggestedName: input.suggestedName)
+        guard prepared.mime.isImage, let thumbnail = prepared.thumbnail else {
+            throw MessagingMediaRuntimeFailure.invalidFormat
+        }
+        return thumbnail
+    }
 }
 #endif
