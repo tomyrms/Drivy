@@ -22,6 +22,8 @@ beforeAll(async()=>{
  await legacy(id.schoolA,id.instructorMember,'SMART',order('speed'),'2026-11-10');
  await legacy(id.schoolB,id.instructorMemberB,'MANUAL',[],null);
  await legacy(id.schoolA,id.adminMember,'MANUAL',[],null);
+ // Ancien droit de gestion scolaire, accordé avant la migration à un moniteur : il doit rester enregistré sans rien ouvrir.
+ await pool.query("UPDATE drivy.membership SET grants=ARRAY['MANAGE_OBSERVATION_THEMES'] WHERE id=$1",[id.otherInstructorMember]);
  await migrator.query(await readFile(new URL('../migrations/20261111_observation_preferences.sql',import.meta.url),'utf8'));
  ({call,app}=await harness(pool));
 });
@@ -69,6 +71,39 @@ describe('migration 20261111 sur des données antérieures',()=>{
   expect(await adopt()).toBe(1);
   expect(await account(id.instructor)).toMatchObject({version:2,mode:'SMART',ranked_order:order('speed'),theme_order:null,hidden_themes:null});
   expect(await adopt()).toBe(0);
+ });
+ it('école sans configuration, ancien grant de gestion et anciens clients : rien ne change de sens ni de droit (R08 #470)',async()=>{
+  type Theme={key:string;visible:boolean};
+  // L'école B n'a jamais eu de configuration : références Drivy, visibilité imposée, gérable par son administrateur.
+  const themesB=`/v1/schools/${id.schoolB}/observation-themes`;
+  const b=(await call('GET',themesB)).json().data;
+  expect(b).toMatchObject({personalizationAllowed:false,canManage:true});
+  expect(b.themes.map((theme:Theme)=>[theme.key,theme.visible])).toEqual(observationThemes.map(theme=>[theme.key,theme.defaultVisible]));
+  const prefsB=(await call('GET',`/v1/schools/${id.schoolB}/observation-preferences`)).json().data;
+  expect(prefsB).toMatchObject({schoolId:id.schoolB,personalizationAllowed:false,visibilityCustomized:false});
+  expect(prefsB.themes.every((theme:{visible:boolean;schoolVisible:boolean;visibilityEditable:boolean})=>theme.visible===theme.schoolVisible&&!theme.visibilityEditable)).toBe(true);
+  // L'ancien droit « Gérer les signalements » accordé avant la migration reste enregistré et n'ouvre ni la lecture de gestion ni l'écriture.
+  const grantee=(await call('GET','/observation-themes',undefined,null,'demo-other-instructor')).json().data;
+  expect(grantee.canManage).toBe(false);
+  const refused=await call('PUT','/observation-themes',{operationId:crypto.randomUUID(),themes:grantee.themes.map((theme:Theme)=>({key:theme.key,visible:theme.visible})),personalizationAllowed:true},grantee.version,'demo-other-instructor');
+  expect(refused.statusCode).toBe(403);expect(refused.json().code).toBe('OBSERVATION_THEMES_ACCESS_REQUIRED');
+  expect((await pool.query('SELECT grants FROM drivy.membership WHERE id=$1',[id.otherInstructorMember])).rows[0].grants).toEqual(['MANAGE_OBSERVATION_THEMES']);
+  expect((await call('GET','/observation-themes',undefined,null,'demo-other-instructor')).json().data.personalizationAllowed).toBe(false);
+  // Ancien client des thèmes de l'école (sans politique) : la configuration reprise est réécrite à l'identique, la politique reste imposée.
+  const school=(await call('GET','/observation-themes',undefined,null,'demo-admin')).json().data;
+  expect(school.themes[0].key).toBe('speed');expect(school.themes.find((theme:Theme)=>theme.key==='motorway').visible).toBe(false);
+  const rewritten=await call('PUT','/observation-themes',{operationId:crypto.randomUUID(),themes:school.themes.map((theme:Theme)=>({key:theme.key,visible:theme.visible}))},school.version,'demo-admin');
+  expect(rewritten.statusCode,rewritten.body).toBe(200);
+  expect(rewritten.json().data).toMatchObject({personalizationAllowed:false,version:school.version+1});
+  expect(rewritten.json().data.themes.map((theme:Theme)=>[theme.key,theme.visible])).toEqual(school.themes.map((theme:Theme)=>[theme.key,theme.visible]));
+  // Ancien client du classement : même forme, lit et écrit le compte repris.
+  const legacyRanking=await call('GET','/observation-ranking',undefined,null,'demo-other-instructor');expect(legacyRanking.statusCode,legacyRanking.body).toBe(200);
+  expect(legacyRanking.json().data).toMatchObject({membershipId:id.otherInstructorMember,schoolId:id.schoolA,mode:'SMART'});
+  const accountBefore=await account(id.otherInstructor);
+  const legacyOff=await call('PUT','/observation-ranking',{operationId:crypto.randomUUID(),mode:'MANUAL'},legacyRanking.json().data.version,'demo-other-instructor');
+  expect(legacyOff.statusCode,legacyOff.body).toBe(200);
+  expect(await account(id.otherInstructor)).toMatchObject({mode:'MANUAL',version:accountBefore.version+1});
+  expect((await pool.query('SELECT count(*)::int AS n FROM drivy.observation_ranking WHERE membership_id=$1 AND mode=$2',[id.otherInstructorMember,'MANUAL'])).rows[0].n).toBe(0);
  });
  it('l’ancienne table n’est plus modifiable par le service',async()=>{
   const db=await pool.connect();

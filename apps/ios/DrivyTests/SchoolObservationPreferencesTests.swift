@@ -828,3 +828,71 @@ private actor PreferencesSchool: SchoolHTTPTransport {
         #expect(SchoolLessonSignalOrderFileStore(scope: scope, directory: folder).order(for: lesson) == nil)
     }
 }
+
+// MARK: - Qualification transverse R08 (#470)
+
+@MainActor struct SchoolObservationPreferencesQualificationTests {
+    private func store(_ school: PreferencesSchool) -> SchoolObservationPreferencesStore {
+        let scope = ConfigurationFixture.scope()
+        return SchoolObservationPreferencesStore(scope: scope, client: makeClient(school, scope: scope),
+            accountCache: AccountCacheStub(), policyCache: PolicyCacheStub())
+    }
+
+    private func settled(_ store: SchoolObservationPreferencesStore) async throws {
+        try await HubFixture.wait { !store.isSaving && !store.isResetting }
+    }
+
+    /// Scénarios 1 et 3 de #470, côté store : libre, puis imposée, puis libre. La visibilité personnelle enregistrée reste en
+    /// réserve pendant la phase imposée, l'ordre déplacé entre-temps est conservé, et rien n'est réécrit à la place de la personne.
+    @Test func freeThenImposedThenFreeKeepsThePersonalVisibilityAndTheOrderMovedInBetween() async throws {
+        let school = PreferencesSchool()
+        let model = store(school)
+        await model.refresh()
+        #expect(model.canEditVisibility)
+        model.setVisible(false, key: "speed")
+        try await settled(model)
+        #expect(model.palette == PreferencesSchool.schoolDisplayed.filter { $0 != "speed" })
+        // L'école impose sa visibilité : la palette montre « Vitesse », l'ordre reste modifiable, la visibilité non.
+        await school.impose(true)
+        await model.refresh()
+        #expect(!model.personalizationAllowed && !model.canEditVisibility && model.canReorder)
+        #expect(model.palette == PreferencesSchool.schoolDisplayed)
+        let first = model.confirmedThemes[0].key
+        model.move(key: first, by: 1)
+        try await settled(model)
+        let moved = model.confirmedThemes.map(\.key)
+        #expect(moved[0] != first && moved[1] == first)
+        #expect(model.palette == moved.filter { PreferencesSchool.schoolDisplayed.contains($0) })
+        // Retour à la personnalisation libre : la visibilité enregistrée est retrouvée, avec l'ordre choisi entre-temps.
+        await school.impose(false)
+        await model.refresh()
+        #expect(model.personalizationAllowed && model.canEditVisibility)
+        #expect(model.confirmedThemes.map(\.key) == moved)
+        #expect(model.confirmedThemes.first { $0.key == "speed" }?.visible == false)
+        #expect(model.palette == moved.filter { PreferencesSchool.schoolDisplayed.contains($0) && $0 != "speed" })
+        // Aucune écriture de visibilité n'a eu lieu pendant la phase imposée.
+        let writes = await school.writes
+        #expect(writes.count == 2 && writes[0].visibilityKeys != nil && writes[1].visibilityKeys == nil && writes[1].order != nil)
+        #expect(model.failureMessage == nil)
+    }
+
+    /// Scénario 9 de #470 : l'élève seul n'a ni écran ni store de préférences, et rien n'est demandé au service.
+    @Test func aLearnerAloneHasNoPreferencesStoreAndNothingIsRequested() async {
+        let school = PreferencesSchool()
+        let agenda = SchoolAgendaClient(baseURL: URL(string: ConfigurationFixture.scope().apiBaseURL)!, tokenSource: HubToken(), transport: school)
+        func membership(_ roles: [String]) -> SchoolMembership {
+            SchoolMembership(membershipId: ConfigurationFixture.membershipID, schoolId: ConfigurationFixture.schoolID,
+                schoolName: "École de test", roles: roles, grants: [], accessEpoch: 1)
+        }
+        func person(_ roles: [String]) -> SchoolPerson {
+            SchoolPerson(personId: ConfigurationFixture.personID, version: 1, displayName: "Élève de test", locale: "fr", memberships: [membership(roles)])
+        }
+        for roles in [["LEARNER"], ["STUDENT"], [String]()] {
+            #expect(agenda.observationPreferencesStore(person: person(roles), membership: membership(roles)) == nil)
+        }
+        #expect(agenda.observationPreferencesStore(person: nil, membership: membership(["INSTRUCTOR"])) == nil)
+        let reads = await school.reads
+        let writes = await school.writes
+        #expect(reads == 0 && writes.isEmpty)
+    }
+}
