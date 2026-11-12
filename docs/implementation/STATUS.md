@@ -5,6 +5,12 @@
 - Run Apple 43230205594 (`016c39f4`, portée `messaging`) : compilation réussie, 253 tests, 1 test en échec (`testConcurrencyIsBoundedAndQueuedItemsFollow`, défaut du test : les demandes suivantes restaient retenues par le faux fournisseur). Corrigé ; une pièce visible ne reste plus sur une attente sans fin (`suspend`, refus d'autorisation). Nouveau run à qualifier.
 - Non essayé : rendu des `#Preview`, VoiceOver, grandes tailles de texte, gestes, appareil physique.
 
+## 12 novembre 2026 — Epic UX médias #472, lot B (#474)
+
+- Visionneuse de photos plein écran (`MessagingMediaViewer.swift`) : `UIScrollView` avec pincement, double toucher centré sur le point touché, déplacement borné, réajustement à la rotation et au redimensionnement iPad ; décodage ImageIO unique, borné et hors du thread principal ; bouton « Fermer » seul moyen de sortie. Lecteur PDF PDFKit en mémoire conservé (actions externes neutralisées), indicateur de page et dézoom limité à la page entière. Interface d'état `loading / ready / failed + reprise` prête pour #476. Détail : `docs/implementation/ux-medias-472-lot-b-visionneuse.md`.
+- Exécuté : `test_test_selection.py` (27 tests). Run Apple [43228983783](https://github.com/tomyrms/Drivy/actions/runs/43228983783) vert sur `f8bfa059` (portée `messaging`, iPhone simulateur) : compilation et `MessagingMediaViewerTests` (16 tests). Tests UI média : `MessagingMediaUITests` relu sans adaptation nécessaire, exécution à suivre.
+- Non essayé : gestes réels, rotation, iPad, VoiceOver, grandes tailles de texte, PDF multi-pages réel, tests UI média contre la couverture plein écran, capture vidéo de l'issue.
+
 ## 12 novembre 2026 — Départ de trajet : demande au sort inconnu gardée (#106, L1)
 
 - Écart confirmé puis corrigé dans `SchoolCapturePreparationWorkspace.swift` : une demande de départ inconnue de l'école, ou jamais émise, n'est plus retirée automatiquement après 120 s (`verifyStart`, `reconcilePendingStarts`). Elle reste en file et est signalée ; la personne relit le départ (même clé d'opération) ou abandonne la demande après confirmation. `settledRequestAge` ne sert plus qu'à ne pas déclarer « inconnue » une demande encore en route.
