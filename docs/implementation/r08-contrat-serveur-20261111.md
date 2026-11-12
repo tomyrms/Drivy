@@ -125,7 +125,7 @@ Le client peut proposer ces configurations pour préremplir ; la première écri
 2. Classements contradictoires : le serveur ne choisit jamais à la place de la personne ; le compte démarre en mode manuel et le client propose le choix (§ 7).
 3. L'ancien droit `MANAGE_OBSERVATION_THEMES` reste enregistré en base mais n'ouvre plus rien.
 
-**Retenues pour la réalisation (hors énoncé, à confirmer)**
+**Validées par le porteur le 12 novembre 2026**
 
 4. Un geste sans `observed_at` est daté de sa réception pour la borne d'apprentissage.
 5. Le reset de présentation d'un administrateur agit sur son propre compte, jamais sur celui d'un tiers.
