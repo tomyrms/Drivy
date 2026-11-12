@@ -2312,3 +2312,13 @@ appareil (#37, #50), recomptage de la matrice #83. Rien n'est déployé, aucune 
 **Vu dans un vrai navigateur** (Edge piloté par Playwright sur l'aperçu local, captures hors dépôt) : déplacement au clavier avec focus conservé, noms accessibles (arbre d'accessibilité), écran imposé (un seul interrupteur, pas de remise de l'affichage), états conflit, refus et réponse perdue sans « Enregistré », focus clavier visible sur la case de l'école, 375 px et bureau en clair et en sombre. Défauts trouvés et corrigés : colonne étroite qui écrasait les noms lettre par lettre, débordement horizontal de 45 px à 375 px, focus de la case peu visible.
 
 **Reste à qualifier.** Lecteur d'écran réel, tactile et glisser au pointeur sur appareil, iPhone/Safari, parcours sur un serveur réel (bascule libre/imposée), la CI de la branche (voir la PR).
+
+## 12 novembre 2026 — R08 iPhone et iPad (#469)
+
+Branche `tomyrms/r08-ios` (contient aussi le serveur de `tomyrms/r08-serveur`, PR #479).
+
+**Exécuté** : Profil, Paramètres, Signalements lit et écrit `observation-preferences` (GET, PUT ordre / mode / visibilité séparables, `presentation-reset`, `learning-reset`). Copies locales séparées : compte (version, mode, ordre, borne d'apprentissage) et politique de l'école (visibilité effective, palette), isolées par origine d'API et identité, versions suivies à part ; la copie des thèmes de l'école passe au format 2 avec l'identité. Palette = ordre personnel filtré par la visibilité effective, jamais réécrite comme ordre global ; instantané de leçon (clés de palette, format 2) conservé après arrêt de l'app. Écran absent pour l'élève seul ; rétablir ordre et visibilité selon la matrice ; « Recommencer l'apprentissage » discret avec confirmation ; choix des anciennes configurations hors leçon ; purge de tous les caches à la déconnexion. Anciens fichiers par école ou adhésion effacés au premier usage.
+
+**Qualifié** : run Apple 43223060940 (`unit_only`, périmètre `all`, SHA 2eabd4f5), succès : toute la suite métier DrivyTests, dont les nouveaux tests des préférences (contrat, store, copies locales, palette de leçon, instantané). Deux essais précédents ont échoué sur des attentes de test (isolation MainActor, ordre d'envoi de la visibilité, palette du mode intelligent), corrigées.
+
+**Reste à qualifier** : parcours UI iPhone et iPad non rejoués ; glisser réel, VoiceOver, Dynamic Type et iPad sur appareil : non essayés ; aucun déploiement.
