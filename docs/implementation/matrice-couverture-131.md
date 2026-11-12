@@ -1,6 +1,8 @@
 # Matrice de couverture écran × rôle × action (#131, étape 1)
 
 État lu : `17b6b667f84135b912927a35ec6c2b6df9ccdaf0` (`master`, 3 novembre 2026 ; branche de travail `tomyrms/lotc-matrice-131`).
+Mise à jour du 11 novembre 2026 (branche `tomyrms/restes-reactivite-20261111`) : colonne « Preuve » relue pour W01, W03 à W06, W47, W48 et I39,
+qui ont reçu un test de contrat ; le reste du constat est inchangé.
 Document de constat : aucun code applicatif modifié. Les actions d'écriture sont rattachées à leur issue propriétaire ; une
 action sans émetteur réel est notée **absente**, jamais inventée pour remplir le tableau. Une information absente du code est
 écrite « non trouvé ».
@@ -64,12 +66,12 @@ action sans émetteur réel est notée **absente**, jamais inventée pour rempli
 
 | # | Rôle | Action | Mode | Endpoint | Autorité · version | Source locale | Persistance | Dépendances | Confirmation | Refus | Inconnu | Issue | Preuve |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| W01 | visiteur | Vérifier un code d'accès (aperçu) | G | `POST /app/bff/access-code` → `POST /v1/access-codes/preview` | public · limiteur par IP | `apps/web/client/portal/entry/use-account-entry.ts:59` | aucune | aucune | réponse | message, saisie gardée | — | #120 (ouverte) | non prouvé |
+| W01 | visiteur | Vérifier un code d'accès (aperçu) | G | `POST /app/bff/access-code` → `POST /v1/access-codes/preview` | public · limiteur par IP | `apps/web/client/portal/entry/use-account-entry.ts:59` | aucune | aucune | réponse | message, saisie gardée | — | #120 (ouverte) | `apps/web/test/entry-client-131.test.ts` (contrat d'échange et normalisation du code ; formulaire non rendu) |
 | W02 | visiteur | Se connecter (mot de passe) | G | BFF `password-login` | visiteur · CSRF | `apps/web/client/portal/entry/use-account-entry.ts:81` | aucune | session relue après (`apps/web/client/portal/entry/use-entry-session.ts:56`) | réponse puis `/me` | message, champs gardés | — | #120 (ouverte) | `apps/web/test/protocol-session.test.ts` |
-| W03 | visiteur | Créer un compte avec le code | G | `POST /v1/accounts` (BFF) | public · limiteur | `apps/web/client/portal/entry/use-account-entry.ts:101` | aucune | compte créé chez le fournisseur | réponse | message, champs gardés | — | #120 (ouverte) | non prouvé |
-| W04 | compte | Accepter une invitation reçue | G | `POST /v1/invitations/accept` | invitation + adhésion · `operationId` | `apps/web/client/portal/entry/use-entry-session.ts:206` | mémoire (jeton en fragment, `main.tsx:16`) | aucune | réponse | `incertain` + « Retrouver la demande » | `incertain` (`apps/web/client/portal/entry/entry-page.tsx:37`) | #120 (ouverte) | non prouvé |
-| W05 | compte | Fermer une invitation non voulue | G | `POST /v1/invitations/clear` | authentifié | `apps/web/client/portal/entry/use-entry-session.ts:189` | — | aucune | réponse | message | — | #120 (ouverte) | non prouvé |
-| W06 | compte | Se déconnecter | G | BFF `endSession` | authentifié | `apps/web/client/portal/entry/use-entry-session.ts:175` | — | aucune | réponse | message | — | #120 (ouverte) | non prouvé |
+| W03 | visiteur | Créer un compte avec le code | G | `POST /v1/accounts` (BFF) | public · limiteur | `apps/web/client/portal/entry/use-account-entry.ts:101` | aucune | compte créé chez le fournisseur | réponse | message, champs gardés | — | #120 (ouverte) | `apps/web/test/entry-client-131.test.ts` (envoi, refus propres, invitation e-mail ; formulaire non rendu) |
+| W04 | compte | Accepter une invitation reçue | G | `POST /v1/invitations/accept` | invitation + adhésion · `operationId` | `apps/web/client/portal/entry/use-entry-session.ts:206` | mémoire (jeton en fragment, `main.tsx:16`) | aucune | réponse | `incertain` + « Retrouver la demande » | `incertain` (`apps/web/client/portal/entry/entry-page.tsx:37`) | #120 (ouverte) | `apps/web/test/entry-client-131.test.ts` (incertain, aperçu écarté ; page non rendue) |
+| W05 | compte | Fermer une invitation non voulue | G | `POST /v1/invitations/clear` | authentifié | `apps/web/client/portal/entry/use-entry-session.ts:189` | — | aucune | réponse | message | — | #120 (ouverte) | `apps/web/test/entry-client-131.test.ts` (envoi et session perdue ; page non rendue) |
+| W06 | compte | Se déconnecter | G | BFF `endSession` | authentifié | `apps/web/client/portal/entry/use-entry-session.ts:175` | — | aucune | réponse | message | — | #120 (ouverte) | `apps/web/test/entry-client-131.test.ts` (sans session, avec session, réponse perdue) |
 | W07 | visiteur | Récupérer l'accès | G | `POST /app/bff/account-recovery/start` | public | `apps/web/client/portal/entry/recovery-page.tsx:36` | — | aucune | réponse | message | — | #120 (ouverte) | `apps/web/test/account-recovery.test.ts` |
 | W08 | compte | Choisir une école | R | `GET /v1/me` | authentifié | `apps/web/client/portal/entry/use-entry-session.ts:81` | mémoire | `/me` lisible | — | — | — | #120 (ouverte) | `apps/web/client/portal/entry/entry-model.test.ts` |
 
@@ -153,8 +155,8 @@ Refus du portail pour un compte non administration : `apps/web/client/console/ac
 | # | Rôle | Action | Mode | Endpoint | Autorité · version | Source locale | Persistance | Dépendances | Confirmation | Refus | Inconnu | Issue | Preuve |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | W46 | ADMIN | Lire les membres et leurs droits | R | `GET …/members` | ADMIN | `apps/web/client/portal/access/members.ts` (`useMembers`) | cache mémoire | aucune | — | — | — | #122 (fermée) | non prouvé |
-| W47 | ADMIN | Modifier rôles et droits d'un membre | G | `PATCH …/members/:id` | ADMIN + réauthentification · `If-Match` adhésion | `apps/web/client/portal/access/access-controller.ts:116` | aucune | version de l'adhésion, motif | réponse | message, brouillon gardé (`:124`) | panneau | #122 (fermée) | non prouvé |
-| W48 | ADMIN | Retirer un accès | G | `POST …/members/:id/deactivate` | ADMIN + réauthentification | `apps/web/client/portal/team/team-controller.ts:57` | aucune | motif + accusé, dernier administrateur refusé | réponse | message, motif gardé | panneau | #122 (fermée) | non prouvé |
+| W47 | ADMIN | Modifier rôles et droits d'un membre | G | `PATCH …/members/:id` | ADMIN + réauthentification · `If-Match` adhésion | `apps/web/client/portal/access/access-controller.ts:116` | aucune | version de l'adhésion, motif | réponse | message, brouillon gardé (`:124`) | panneau | #122 (fermée) | `apps/web/test/member-commands-131.test.ts` (PATCH, `If-Match`, 412, réponse perdue, double appui, sérialisation ; panneau non rendu) |
+| W48 | ADMIN | Retirer un accès | G | `POST …/members/:id/deactivate` | ADMIN + réauthentification | `apps/web/client/portal/team/team-controller.ts:57` | aucune | motif + accusé, dernier administrateur refusé | réponse | message, motif gardé | panneau | #122 (fermée) | `apps/web/test/member-commands-131.test.ts` (POST `deactivate`, dernier administrateur, sérialisation ; panneau non rendu) |
 
 ### 4.10 Invitations — section `invitations` (`pages.tsx:16`, audiences `learners` / `team`)
 
@@ -271,7 +273,7 @@ Refus du portail pour un compte non administration : `apps/web/client/console/ac
 | I36 | LEARNER | Rejoindre ou quitter la liste d'attente | G | `POST …/waitlist`, `…/waitlist/leave` | LEARNER | `apps/ios/Drivy/SchoolAgendaUI/SchoolCourseEnrollmentWorkspace.swift:242-255` | coffre `SchoolCourseIntents` | série complète | réponse | message, intention gardée | reprise | #126 (fermée) | `apps/ios/DrivyTests/SchoolAgendaCoursesTests.swift` |
 | I37 | LEARNER | Accepter ou décliner une place proposée | G | `POST …/course-offers/:id/accept\|decline` | LEARNER | `apps/ios/Drivy/SchoolAgendaUI/SchoolCourseEnrollmentWorkspace.swift:242-255` | coffre `SchoolCourseIntents` | offre non expirée (`:182-183`) | réponse | message | reprise | #126 (fermée) | `apps/ios/DrivyTests/SchoolAgendaCoursesTests.swift` |
 | I38 | LEARNER | Annuler une inscription | G | `POST …/course-enrollments/:id/cancel` | LEARNER · version inscription | `apps/ios/Drivy/SchoolAgendaUI/SchoolCourseEnrollmentViews.swift:58-68` | coffre `SchoolCourseIntents` | délai d'annulation (`:336`) | réponse | message | reprise | #126 (fermée) | `apps/ios/DrivyTests/SchoolAgendaCoursesTests.swift` |
-| I39 | LEARNER | Être prévenu des prochaines sessions | O | `PUT\|POST …/course-follows/me/:typeId` | membre élève · clé naturelle | `apps/ios/Drivy/SchoolAgendaUI/SchoolCourseEnrollmentWorkspace.swift:213` → `apps/ios/Drivy/SchoolAgendaAPI/SchoolCourseClient.swift:484` | appel direct, sans file | type de cours publié | réponse | message, état revient | — | #126 (fermée) | non prouvé |
+| I39 | LEARNER | Être prévenu des prochaines sessions | O | `PUT\|POST …/course-follows/me/:typeId` | membre élève · clé naturelle | `apps/ios/Drivy/SchoolAgendaUI/SchoolCourseEnrollmentWorkspace.swift:213` → `apps/ios/Drivy/SchoolAgendaAPI/SchoolCourseClient.swift:484` | appel direct, sans file | type de cours publié | réponse | message, état revient | — | #126 (fermée) | `apps/ios/DrivyTests/SchoolCourseFollow131Tests.swift` (PUT/POST, réponse incohérente, échec, lecture ; à qualifier par la CI Apple) |
 | I40 | LEARNER | Demander un déplacement ou une annulation | G | `POST …/lessons/:id/change-requests` | LEARNER de la leçon · `operationId` par essai | `apps/ios/Drivy/SchoolAgendaAPI/SchoolLessonChangeClient.swift:101` (`apps/ios/Drivy/SchoolLessonReportUI/SchoolLessonChangeUI.swift:193`) | appel direct (pas de file) | leçon planifiée, une demande en attente | réponse | message | — | #109 (fermée) | `apps/ios/DrivyTests/SchoolLessonChangeTests.swift` |
 | I41 | LEARNER | Retirer sa demande | G | `POST …/lesson-change-requests/:id/withdraw` | LEARNER demandeur · `If-Match` | `apps/ios/Drivy/SchoolAgendaAPI/SchoolLessonChangeClient.swift:109` (`SchoolLessonChangeUI.swift:186`) | appel direct | demande en attente | réponse | message | — | #109 (fermée) | `apps/ios/DrivyTests/SchoolLessonChangeTests.swift` |
 
@@ -393,10 +395,12 @@ examens, éditeur de cours, inscription à un cours, présence, règlements, rev
 réglages de notifications, thèmes de signalements, aide, réglages moniteur, réglages élève, trajets de l'élève, édition du
 profil, mon profil, profil d'un élève, fil de messages, appareils de messagerie, sauvegarde des clés, signalements reçus.
 
-Actions d'écriture **non prouvées** (aucun test dédié trouvé) : `W01`, `W03`, `W04`, `W05`, `W06`, `W47`, `W48`, `I39`.
-Quatre lectures ou actions locales sont aussi sans preuve : `W46` (membres), `W66` (trajets), `W67` (recherche de
-trajets), `I12` (ouverture du portail web). Aucune n'est présentée comme qualifiée : elles restent à couvrir par la
-campagne #131 §2-3.
+Actions d'écriture **sans test dédié au 3 novembre** : `W01`, `W03`, `W04`, `W05`, `W06`, `W47`, `W48`, `I39`. Le 11 novembre 2026
+(branche `tomyrms/restes-reactivite-20261111`), chacune a reçu un test de contrat : ce que le client envoie et ce qu'il
+conclut de chaque réponse (web : vitest sans DOM ; iOS : transport simulé, à qualifier par la CI Apple). Ce n'est pas un
+parcours rendu : le comportement des formulaires et des panneaux reste à couvrir par la campagne navigateur #131 §2-3.
+Quatre lectures ou actions locales restent sans preuve : `W46` (membres), `W66` (trajets), `W67` (recherche de
+trajets), `I12` (ouverture du portail web). Aucune n'est présentée comme qualifiée.
 
 Action d'écriture sans issue propriétaire : `W17` (export CSV des mesures) — aucune issue #104/#106–#130 ne la nomme ;
 rattachée au socle `#106` (ouverte) pour ne pas l'attribuer à un ticket fermé.

@@ -248,6 +248,24 @@ describe('#41 annulations et changements de dates',()=>{
   await pool.query(`UPDATE drivy.course_enrollment SET self_cancel_deadline=now()+interval '2 seconds' WHERE id=$1`,[e.id]);
   expect((await call('POST',`/course-enrollments/${e.id}/cancel`,{operationId:randomUUID()},e.version,'demo-alice')).statusCode).toBe(200);
  });
+ it('horloge de l’appareil fausse : seule l’heure du serveur décide de l’échéance, dans les deux sens',async()=>{
+  const forged=(skewHours:number)=>{const at=new Date(Date.now()+skewHours*3_600_000);return {date:at.toUTCString(),'x-client-time':at.toISOString(),'x-request-time':at.toUTCString()};};
+  // Échéance dépassée côté serveur : un appareil réglé deux jours en arrière n'obtient pas de fenêtre de plus.
+  const closed=await published();
+  const late=(await enroll(closed.id,'demo-alice')).json().data.me.enrollment;
+  await pool.query(`UPDATE drivy.course_enrollment SET self_cancel_deadline=now()-interval '1 minute' WHERE id=$1`,[late.id]);
+  const refused=await call('POST',`/course-enrollments/${late.id}/cancel`,{operationId:randomUUID()},late.version,'demo-alice',forged(-48));
+  expect(refused.statusCode,refused.body).toBe(409);expect(refused.json().code).toBe('COURSE_SELF_CANCEL_CLOSED');
+  expect((await me(closed.id,'demo-alice')).json().data.me).toMatchObject({state:'ENROLLED'});
+  expect(await learnerReservations(closed.id,id.alice)).toBe(1);
+  // Échéance encore ouverte côté serveur : un appareil réglé deux jours en avant ne perd pas son droit.
+  const open=await published();
+  const early=(await enroll(open.id,'demo-bob')).json().data.me.enrollment;
+  const ok=await call('POST',`/course-enrollments/${early.id}/cancel`,{operationId:randomUUID()},early.version,'demo-bob',forged(48));
+  expect(ok.statusCode,ok.body).toBe(200);
+  expect(await learnerReservations(open.id,id.bob)).toBe(0);
+  await cancelAll(closed.id);
+ });
  it('délai de 48 h : nouvelles inscriptions seulement ; élève et moniteur sans droit ne le changent pas',async()=>{
   expect((await call('PUT','/course-policy',{operationId:randomUUID(),selfCancelHours:48,offerResponseMinutes:null},1,'demo-alice')).statusCode).toBe(403);
   const s=await published();

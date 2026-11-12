@@ -1,4 +1,5 @@
-import { useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
+import { nextTierDelayMs, waitText, waitTier, type WaitTier } from '../../pending-wait';
 import { commandSpecs } from '../../command-core';
 import { commandStore, pendingActions, useCommandSnapshot } from '../../command-store';
 import { commandRefreshesSchool } from '../../command-conflicts';
@@ -7,6 +8,29 @@ import { useConsole } from '../../console/context';
 import { Alert, AlertTitle, AlertDescription } from '../../components/ui/alert';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../../components/ui/dialog';
+
+/** Palier d'attente d'une demande en cours : compté depuis que cet écran la voit travailler, jamais depuis une date ancienne. */
+function useWaitTier(working: boolean): WaitTier {
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!working) { setElapsed(0); return; }
+    const start = Date.now();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const arm = (now: number) => {
+      const delay = nextTierDelayMs(now);
+      if (delay === null) return;
+      timer = setTimeout(() => { const next = Date.now() - start; setElapsed(next); arm(next); }, delay);
+    };
+    setElapsed(0); arm(0);
+    return () => { if (timer) clearTimeout(timer); };
+  }, [working]);
+  return waitTier(elapsed);
+}
+
+function WaitLine({ working }: { working: boolean }) {
+  const text = waitText(useWaitTier(working));
+  return text ? <p>{text}</p> : null;
+}
 
 /** Same durable command store, new presentation. A closed form never means a cancelled command. */
 export function PortalPendingRequests() {
@@ -57,7 +81,7 @@ function PendingRequests() {
       const resendReason = available.resend && !resend ? lessonResendReason({ kind: entry.meta.kind, command: entry.command }) : null;
       return <Alert role="status" aria-live="polite" className="min-w-0 grid-cols-1 break-words" key={entry.meta.operationId}>
         <AlertTitle id={index === 0 ? 'pending-title' : undefined} tabIndex={-1}>{busy ? entry.phase === 'sending' ? 'Enregistrement en cours…' : 'Vérification en cours…' : 'Résultat à vérifier'}</AlertTitle>
-        <AlertDescription><p>{commandSpecs[entry.meta.kind].label}</p>{entry.message && <p>{entry.message}</p>}{resendReason && resendReason !== entry.message && <p>{resendReason}</p>}</AlertDescription>
+        <AlertDescription><p>{commandSpecs[entry.meta.kind].label}</p><WaitLine key={entry.phase} working={busy} />{entry.message && <p>{entry.message}</p>}{resendReason && resendReason !== entry.message && <p>{resendReason}</p>}</AlertDescription>
         {!busy && <div className="mt-4 grid min-w-0 grid-cols-1 gap-2 sm:flex sm:flex-wrap">
           <Button onClick={() => void act(entry.meta.operationId)}>Vérifier le résultat</Button>
           {resend && <Button variant="outline" onClick={() => void act(entry.meta.operationId, true)}>Renvoyer la même demande</Button>}

@@ -48,11 +48,19 @@ import XCTest
         for _ in 0..<30 { app.swipeDown() }
     }
 
+    /// Le geste part sous la barre de navigation (titre large et champ de recherche, y 62 à 176 sur iPhone) : parti de 15 % de la liste
+    /// (y 131), il tombait dans le champ de recherche et ne tirait jamais la liste (runs 43020463769 et 43024752953 : aucune boîte
+    /// relue). Lent, avec maintien, pour dépasser le seuil du tirer-pour-actualiser et s'y tenir.
     private func pullToRefresh(_ app: XCUIApplication) {
         scrollToTop(app)
         let list = app.collectionViews.firstMatch.exists ? app.collectionViews.firstMatch : app.tables.firstMatch
-        list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15))
-            .press(forDuration: 0.05, thenDragTo: list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85)))
+        let field = app.searchFields.firstMatch
+        let bar = app.navigationBars.firstMatch
+        let barBottom = max(field.exists ? field.frame.maxY : 0, bar.exists ? bar.frame.maxY : 0)
+        let startY = barBottom > 0 ? barBottom + 10 - list.frame.minY : list.frame.height * 0.2
+        let start = list.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: list.frame.width * 0.5, dy: startY))
+        let end = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+        start.press(forDuration: 0.1, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.5)
     }
 
     private func backToList(_ app: XCUIApplication) {
@@ -156,7 +164,9 @@ import XCTest
         let kept = row(app, "Élève examen", 1)
         XCTAssertTrue(scrollTo(kept, in: app), "Lecture précédente des examens perdue : \(app.debugDescription)")
 
-        XCTAssertTrue(scrollTo(retry, in: app))
+        // scrollTo ne défile que vers le bas : la ligne conservée a dépassé le bouton, on remonte avant de le rejoindre.
+        scrollToTop(app)
+        XCTAssertTrue(scrollTo(retry, in: app), "Réessayer perdu après la lecture conservée : \(app.debugDescription)")
         retry.tap()
         let expansion = app.buttons["pending-exams-expansion"]
         XCTAssertTrue(scrollTo(expansion, in: app), app.debugDescription)
@@ -180,7 +190,10 @@ import XCTest
         XCTAssertTrue(send.waitForExistence(timeout: 20), app.debugDescription)
         send.tap()
         XCTAssertTrue(app.buttons["lesson-change-refuse"].waitForNonExistence(timeout: 20), "Refus non confirmé : \(app.debugDescription)")
-        app.swipeDown()
+        // La fiche de leçon est une feuille : on la ferme par son bouton (un glisser vers le bas ne la ferme que depuis le haut du contenu).
+        let close = app.buttons["Fermer"]
+        if close.waitForExistence(timeout: 10) { close.tap() }
+        XCTAssertTrue(close.waitForNonExistence(timeout: 10), "La fiche de leçon est restée ouverte : \(app.debugDescription)")
         backToList(app)
         // Aucun tirage : la demande traitée a disparu de la boîte.
         let gone = NSPredicate(format: "label BEGINSWITH %@", "Élève demande 9,")
