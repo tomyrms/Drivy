@@ -243,4 +243,20 @@ actor MessagingMediaQualificationRuntime: MessagingMediaRuntime {
     }
     func invalidate() async {}
 }
+
+/// Miniature synthétique de la fixture (#473) : octets générés en mémoire, aucune lecture de
+/// fichier, aucun cache réel. N'enregistre pas de « demande de fichier » du témoin de signalement.
+extension MessagingMediaQualificationRuntime: MessagingMediaThumbnailProviding {
+    func thumbnail(for message: MessagingWireMessage) async throws -> Data {
+        guard !message.meta.deletedForEveryone, message.meta.media?.deleted == false,
+              let input = try MessagingMediaQualificationSamples.received(message.id) else {
+            throw MessagingMediaRuntimeFailure.removed
+        }
+        let prepared = try MessagingMediaPreparer().prepare(input.data, suggestedName: input.suggestedName)
+        guard prepared.mime.isImage, let thumbnail = prepared.thumbnail else {
+            throw MessagingMediaRuntimeFailure.invalidFormat
+        }
+        return thumbnail
+    }
+}
 #endif

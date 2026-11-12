@@ -1,3 +1,10 @@
+## 12 novembre 2026 — Épic UX médias #472, lot A
+
+- Fil de messagerie (#473) : photos en bulles à espace réservé par ratio (borné [0,6 ; 2], 260 × 340 pt au plus), PDF en cartes lisibles, chargeur de miniatures borné (3 en vol, 24 images décodées, résultat tardif ignoré) et capacité interne additive `MessagingMediaThumbnailProviding` ; le protocole gelé `MessagingMediaRuntime` est inchangé. Détail : `docs/implementation/ux-medias-472-lot-a-fil.md`.
+- Tests écrits (géométrie, chargeur, capacité du coordinateur), ajoutés à la portée `messaging` ; relus sans compilateur local.
+- Run Apple 43230205594 (`016c39f4`, portée `messaging`) : compilation réussie, 253 tests, 1 test en échec (`testConcurrencyIsBoundedAndQueuedItemsFollow`, défaut du test : les demandes suivantes restaient retenues par le faux fournisseur). Corrigé ; une pièce visible ne reste plus sur une attente sans fin (`suspend`, refus d'autorisation). Nouveau run à qualifier.
+- Non essayé : rendu des `#Preview`, VoiceOver, grandes tailles de texte, gestes, appareil physique.
+
 ## 12 novembre 2026 — Départ de trajet : demande au sort inconnu gardée (#106, L1)
 
 - Écart confirmé puis corrigé dans `SchoolCapturePreparationWorkspace.swift` : une demande de départ inconnue de l'école, ou jamais émise, n'est plus retirée automatiquement après 120 s (`verifyStart`, `reconcilePendingStarts`). Elle reste en file et est signalée ; la personne relit le départ (même clé d'opération) ou abandonne la demande après confirmation. `settledRequestAge` ne sert plus qu'à ne pas déclarer « inconnue » une demande encore en route.

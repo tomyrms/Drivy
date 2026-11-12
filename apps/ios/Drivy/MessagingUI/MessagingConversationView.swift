@@ -64,6 +64,8 @@ private enum ExyteBubbleMetrics {
     let workspace: MessagingWorkspace
     let composer: MessagingComposerModel
     let mediaComposer: MessagingMediaComposerModel?
+    /// Miniatures du fil (#473) : une capacité interne du runtime média, absente des compositions qui ne la fournissent pas.
+    let thumbnails: MessagingMediaThumbnailLoader?
     let conversationID: UUID
     let isGeneral: Bool
     /// Mise en évidence brève après une citation, une épingle ou une recherche (identifiant serveur).
@@ -96,6 +98,14 @@ private enum ExyteBubbleMetrics {
         self.conversationID = conversationID
         self.isGeneral = isGeneral
         self.mediaComposer = workspace.mediaRuntime.map { MessagingMediaComposerModel(runtime: $0, conversationID: conversationID) }
+        self.thumbnails = workspace.mediaRuntime.map {
+            MessagingMediaThumbnailLoader(provider: $0 as? any MessagingMediaThumbnailProviding)
+        }
+        // Relue à l'arrivée de chaque miniature : un message supprimé, retiré ou devenu illisible ne réaffiche rien.
+        thumbnails?.isAuthorized = { [weak self] id in
+            guard let self, let fresh = self.workspace.message(id, in: self.conversationID) else { return false }
+            return self.mediaAttachment(fresh) != nil
+        }
     }
 
     private var access: MessagingConversationAccess { workspace.access(for: conversationID) }
@@ -120,6 +130,18 @@ private enum ExyteBubbleMetrics {
         await mediaComposer?.open(current) {
             guard let fresh = self.workspace.message(message.id, in: self.conversationID) else { return false }
             return self.mediaAttachment(fresh) != nil
+        }
+    }
+
+    /// Une image apparaît : sa miniature est demandée, puis celles de ses deux voisines images (file d'attente seulement).
+    func thumbnailAppeared(_ message: MessagingWireMessage) {
+        guard let thumbnails else { return }
+        thumbnails.appear(message)
+        let all = workspace.visibleMessages(conversationID)
+        guard let index = all.firstIndex(where: { $0.id == message.id }) else { return }
+        for neighbour in [index - 1, index + 1] where all.indices.contains(neighbour) {
+            let candidate = all[neighbour]
+            if mediaAttachment(candidate)?.mime.isImage == true { thumbnails.prefetch(candidate) }
         }
     }
 
@@ -797,7 +819,10 @@ private struct MessagingThreadLifecycle: ViewModifier {
             }
             .onAppear { connectivity.start() }
             .onDisappear { thread.cancelMenu(); thread.mediaComposer?.suspend(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
-            .onChange(of: thread.visibleMediaIDs) { _, ids in thread.mediaComposer?.dismissRemovedPreview(visibleIDs: ids) }
+            .onChange(of: thread.visibleMediaIDs) { _, ids in
+                thread.mediaComposer?.dismissRemovedPreview(visibleIDs: ids)
+                thread.thumbnails?.discard(keeping: ids)
+            }
             .onChange(of: lastDelivered?.id) { _, _ in
                 guard let last = lastDelivered else { return }
                 if last.senderID == workspace.scope.accountID {
@@ -815,7 +840,7 @@ private struct MessagingThreadLifecycle: ViewModifier {
             }
             .onChange(of: workspace.error) { _, failure in
                 if failure == .contextChanged || failure == .accessChanged {
-                    thread.cancelMenu(); composer.reset(); thread.mediaComposer?.suspend()
+                    thread.cancelMenu(); composer.reset(); thread.mediaComposer?.suspend(); thread.thumbnails?.suspend()
                     Task { await workspace.mediaRuntime?.invalidate() }
                 }
             }
@@ -868,16 +893,9 @@ private struct MessagingThreadRow: View {
                         // marge haute de la ligne (la bulle occupe la hauteur restante, donc son centre est à `marge / 2` plus bas).
                         .alignmentGuide(.bubbleCenter) { $0[VerticalAlignment.center] + bubbleTop / 2 }
                     if let wire = item.message, let media = thread.mediaAttachment(wire), thread.mediaComposer != nil {
-                        Button { Task { await thread.openMedia(wire) } } label: {
-                            MessagingMediaFileLabel(name: media.name, mime: media.mime, byteSize: media.size)
-                                .padding(DrivySpacing.s)
-                                .frame(minHeight: DrivyLayout.tapTarget)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(thread.reporting || thread.mediaComposer?.opening == true)
-                        .accessibilityLabel("Ouvrir \(media.name)")
-                        .accessibilityIdentifier("messaging.media.received.open")
-                        .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
+                        MessagingThreadMediaAttachmentView(thread: thread, wire: wire, media: media, mine: mine)
+                            .padding(.vertical, DrivySpacing.xxs)
+                            .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
                     }
                     MessagingThreadStateLine(thread: thread, item: item)
                         .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
