@@ -131,6 +131,7 @@ struct MessagingImageBubble: View {
                     .buttonStyle(.plain)
                     .foregroundStyle(DrivyTheme.accent)
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .accessibilityLabel(MessagingMediaActionText.thumbnailRetry)
                     .accessibilityIdentifier("messaging.media.thumbnail.retry")
                 }
             }
@@ -262,7 +263,7 @@ struct MessagingThreadMediaAttachmentView: View {
         switch thread.mediaComposer?.openState(for: wire.id) {
         case .opening?:
             HStack(spacing: DrivySpacing.xs) {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small).accessibilityHidden(true)
                 Text("Ouverture…").font(.footnote).foregroundStyle(DrivyTheme.muted)
             }
             .accessibilityElement(children: .combine)
@@ -277,6 +278,7 @@ struct MessagingThreadMediaAttachmentView: View {
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(DrivyTheme.accent)
                         .frame(minHeight: DrivyLayout.tapTarget)
+                        .accessibilityLabel(MessagingMediaActionText.openRetry)
                         .accessibilityIdentifier("messaging.media.open.retry")
                 }
             }

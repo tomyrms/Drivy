@@ -1,3 +1,10 @@
+## 12 novembre 2026 — Épic UX médias #472, lot E : fluidité, accessibilité, qualification (#477, #478)
+
+- Revue critique des lots A à D, corrections ciblées : recalcul quadratique de la visibilité des médias dans le fil supprimé (`MessagingConversationView`) ; carte d'envoi en attente lue comme un seul élément VoiceOver, sans annonce de progression non mesurée ; libellés VoiceOver distincts pour « Réessayer l’aperçu » et « Réessayer l’ouverture » ; trait bouton sur l'ouverture de la pièce du composeur.
+- Fixture : `-messaging-ui-media-fail-once` (premier envoi refusé, reprise ciblée puis confirmation). Tests UI ajoutés dans `MessagingMediaUITests` : photo et PDF reçus (clair, sombre), légende → envoi → attente → échec → reprise → confirmé (clair, sombre), retrait sans perte de texte, visionneuse en paysage. Deux tests unitaires ajoutés à `MessagingMediaStatesTests`.
+- Matrice critère par critère et liste « non essayé » : `docs/implementation/ux-medias-472-lot-e-qualification.md`. Rien compilé ni exécuté sur le poste Windows ; un run unitaire Apple lancé, résultat à consigner. Campagne UI et captures : non lancées.
+- Non essayé : appareil physique, VoiceOver réel, gestes réels, mesures de performance sur appareil (non mesuré).
+
 ## 12 novembre 2026 — Épic UX médias #472, lot D : composeur (#475)
 
 - Composeur : la pièce choisie apparaît en miniature (photo, décodage ImageIO sous-échantillonné hors MainActor) ou en carte compacte (PDF : nom, taille), tuile de 56 pt réservée, retrait ciblé 44 pt, aperçu au toucher. Le champ principal reste visible et sert de légende : légende et brouillon sont UNE valeur (rien de masqué, de perdu ni de dupliqué) ; retrait et remplacement la conservent. Envoi : un seul bouton d'état occupé, pas de double envoi, succès annoncé seulement après écriture durable.

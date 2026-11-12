@@ -38,15 +38,21 @@ struct MessagingPendingMediaView: View {
             .frame(maxWidth: MessagingMediaBubbleGeometry.maximumWidth, minHeight: DrivyLayout.tapTarget, alignment: .leading)
             .background(DrivyTheme.accentSoft, in: shape)
             .overlay(shape.strokeBorder(DrivyTheme.border, lineWidth: 1))
+            // Un seul arrêt VoiceOver pour la pièce (nature, nom, taille) ; l'état suit dans sa propre ligne (#477).
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(MessagingComposerAttachmentText.accessibilityLabel(
+                name: entry.snapshot.name, mime: entry.snapshot.mime, byteSize: entry.snapshot.byteSize))
             if presentation.showsProgress || presentation.text != nil {
                 HStack(spacing: DrivySpacing.xs) {
-                    if presentation.showsProgress { ProgressView().controlSize(.small) }
+                    // Indéterminé : jamais annoncé comme un progrès (aucune mesure d'octets).
+                    if presentation.showsProgress { ProgressView().controlSize(.small).accessibilityHidden(true) }
                     if let text = presentation.text {
                         Text(text).font(.footnote).foregroundStyle(color(presentation.tone))
                             .multilineTextAlignment(.trailing)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("messaging.media.pending.state")
             }
             if let title = presentation.retryTitle {

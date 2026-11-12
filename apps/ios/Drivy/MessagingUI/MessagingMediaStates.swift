@@ -34,6 +34,13 @@ struct MessagingMediaOpenFailure: Equatable, Sendable {
     }
 }
 
+/// Libellés VoiceOver des actions de reprise du fil (#477) : le bouton dit CE qu'il relance, pas seulement « Réessayer »,
+/// puisque plusieurs pièces peuvent en porter un à l'écran. Constantes pures, testées.
+enum MessagingMediaActionText {
+    static let thumbnailRetry = "Réessayer l’aperçu"
+    static let openRetry = "Réessayer l’ouverture"
+}
+
 /// Phase d'une intention d'envoi média projetée dans le fil.
 enum MessagingMediaIntentionPhase: Hashable, Sendable {
     /// Un appel d'envoi est en cours pour cette intention (première tentative ou reprise).

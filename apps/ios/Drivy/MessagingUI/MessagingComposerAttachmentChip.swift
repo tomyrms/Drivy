@@ -89,6 +89,7 @@ struct MessagingComposerAttachmentChip: View {
             .accessibilityLabel(MessagingComposerAttachmentText.accessibilityLabel(
                 name: media.name, mime: media.mime, byteSize: media.data.count))
             .accessibilityHint("Ouvre l’aperçu")
+            .accessibilityAddTraits(.isButton)
             .accessibilityIdentifier("messaging.media.selection.open")
             Button(action: remove) {
                 Image(systemName: "xmark")

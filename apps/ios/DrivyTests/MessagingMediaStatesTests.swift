@@ -177,6 +177,29 @@ final class MessagingMediaStatesTests: XCTestCase {
         }
         XCTFail("condition not reached")
     }
+
+    // MARK: Libellés VoiceOver (#477)
+
+    func testRetryActionsNameWhatTheyRelaunch() {
+        XCTAssertEqual(MessagingMediaActionText.thumbnailRetry, "Réessayer l’aperçu")
+        XCTAssertEqual(MessagingMediaActionText.openRetry, "Réessayer l’ouverture")
+        XCTAssertNotEqual(MessagingMediaActionText.thumbnailRetry, MessagingMediaActionText.openRetry)
+    }
+
+    func testEveryIntentionPhaseHasAShortSpokenLabelAndNeverAProgressFigure() {
+        let phases: [MessagingMediaIntentionPhase] = [
+            .sending, .toVerify, .failed(.unavailable), .failed(.resultUnknown), .failed(.membersChanged),
+            .failed(.accessChanged), .confirmed(cleanupPending: false), .confirmed(cleanupPending: true)]
+        for phase in phases {
+            let presentation = MessagingMediaIntentionPresentation(phase)
+            XCTAssertFalse(presentation.accessibilityLabel.isEmpty)
+            XCTAssertLessThanOrEqual(presentation.accessibilityLabel.count, 48)
+            XCTAssertFalse(presentation.accessibilityLabel.contains("%"))
+            XCTAssertFalse((presentation.text ?? "").contains("%"))
+        }
+        XCTAssertTrue(MessagingMediaIntentionPresentation(.sending).showsProgress)
+        XCTAssertNil(MessagingMediaIntentionPresentation(.sending).retryTitle)
+    }
 }
 
 private actor StatesRuntimeDouble: MessagingMediaRuntime {

@@ -112,17 +112,29 @@ private enum ExyteBubbleMetrics {
     private var accountID: UUID { workspace.scope.accountID }
 
     func mediaAttachment(_ message: MessagingWireMessage) -> MessagingMediaAttachment? {
+        mediaAttachment(message, visibleIDs: nil)
+    }
+
+    /// `visibleIDs` : identifiants visibles déjà calculés par l'appelant qui parcourt tout le fil (#477) ; sans eux, la
+    /// visibilité est relue pour ce seul message. Mêmes règles dans les deux cas.
+    private func mediaAttachment(_ message: MessagingWireMessage, visibleIDs: Set<UUID>?) -> MessagingMediaAttachment? {
         guard !message.meta.deletedForEveryone, message.meta.media?.deleted == false,
-              workspace.mutation(.deleteForEveryone, on: message) == nil,
-              workspace.visibleMessages(conversationID).contains(where: { $0.id == message.id }),
+              workspace.mutation(.deleteForEveryone, on: message) == nil else { return nil }
+        let visible = visibleIDs?.contains(message.id)
+            ?? workspace.visibleMessages(conversationID).contains(where: { $0.id == message.id })
+        guard visible,
               let attachment = workspace.contents[message.id]?.media,
               attachment.id == message.meta.media?.mediaID,
               attachment.size == message.meta.media?.byteSize else { return nil }
         return attachment
     }
 
+    /// Un seul parcours du fil : l'ancienne forme relisait la liste visible pour CHAQUE message (quadratique), et ce
+    /// calcul est relu à chaque évaluation de la vue.
     var visibleMediaIDs: Set<UUID> {
-        Set(workspace.visibleMessages(conversationID).filter { mediaAttachment($0) != nil }.map(\.id))
+        let visible = workspace.visibleMessages(conversationID)
+        let ids = Set(visible.map(\.id))
+        return Set(visible.filter { mediaAttachment($0, visibleIDs: ids) != nil }.map(\.id))
     }
 
     func openMedia(_ message: MessagingWireMessage) async {
