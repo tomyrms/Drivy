@@ -589,8 +589,11 @@ struct MessagingConversationView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbar }
         .modifier(lifecycle)
-        .sheet(item: Binding(get: { thread.mediaComposer?.preview }, set: { thread.mediaComposer?.preview = $0 })) { preview in
-            MessagingMediaPreview(media: preview.media)
+        // Plein écran, hors du fil : fermer rend le fil, le brouillon et la réponse tels quels. `preview = nil`
+        // (retrait, révocation, changement de contexte) ferme aussi la visionneuse.
+        .fullScreenCover(item: Binding(get: { thread.mediaComposer?.preview }, set: { thread.mediaComposer?.preview = $0 })) { preview in
+            MessagingMediaPreview(media: preview.media) { thread.mediaComposer?.preview = nil }
+                .id(preview.id)
         }
         .sheet(item: $thread.menuTarget, onDismiss: { thread.completeMenuChoice() }) { target in
             MessagingMessageMenu(thread: thread, displayID: target.id)

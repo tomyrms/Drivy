@@ -30,7 +30,7 @@ REACTIVITY_SUITES = ['SchoolNotificationSettingsTests', 'AccountIntentStorageTes
                      'SchoolPushCenterTests', 'SchoolPushRegistrationTests', 'SchoolBoxesRefreshTests']
 REACTIVITY_OPTIONS = ['-only-testing:DrivyTests/' + suite for suite in REACTIVITY_SUITES]
 MESSAGING_SUITES = ['MessagingOptimisticMutationTests', 'MessagingProtectedStoreTests', 'MessagingCoreTests', 'MessagingHTTPTransportTests',
-                    'MessagingExyteThreadTests', 'MessagingThreadTests', 'MessagingMediaContentTests', 'MatrixMessagingCryptographyTests',
+                    'MessagingExyteThreadTests', 'MessagingThreadTests', 'MessagingMediaContentTests', 'MessagingMediaViewerTests', 'MatrixMessagingCryptographyTests',
                     'MatrixMessagingReportSealingTests', 'MessagingReportInboxTests',
                     'MessagingReportTransportTests', 'MatrixMessagingRelayIntegrationTests', 'MatrixMessagingSealedReportRelayTests',
                     'RelayReadinessDiagnosticTests']
