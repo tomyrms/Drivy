@@ -61,7 +61,7 @@ describe('Navigation entre les tâches de gestion', () => {
     expect(restore(`/app/gestion/${school}/signalements/`).section).toBe('signalements');
     expect(workspaceFor('signalements').home).toBe('configuration');
     expect(workspaces.find(workspace => workspace.key === 'settings')?.items.map(item => item.section)).toEqual(['configuration', 'confidentialite', 'champs-profil', 'signalements', 'apercu']);
-    expect(sectionTitles.signalements).toBe('Signalements');
+    expect(sectionTitles.signalements).toBe('Signalements de l’école');
     // Chaque rubrique du menu existe, et aucune n'est rangée deux fois dans le même espace.
     for (const workspace of workspaces) {
       const sections = workspace.items.map(item => `${item.section}/${item.query?.audience ?? ''}`);

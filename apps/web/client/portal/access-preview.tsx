@@ -8,6 +8,7 @@ import { PortalFrame } from './frame';
 import { AccessPilot } from './access/access-page';
 import { portalPages, portalSections } from './pages';
 import { PortalPreferencesPage } from './account/preferences-page';
+import { PortalSignalsPreferencesPage } from './account/signals-preferences-page';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
@@ -32,6 +33,10 @@ const allowedScenes: readonly string[] = ['login', 'schools', 'empty', 'invitati
 const entryScene = previewPage && entryScenes[previewPage] ? requestedScene && allowedScenes.includes(requestedScene) ? requestedScene as EntryScene : entryScenes[previewPage] : null;
 if (entryScene) installEntryPreview(entryScene); else installPreviewTransport();
 if (previewPage === 'preparation') previewSchool.status = 'DRAFT';
+// Signalements du compte : `?role=moniteur` se lit comme un moniteur sans droit d'administration ; `?scenario=refused|conflict|slow|lost-reply` règle le prochain enregistrement.
+if (new URLSearchParams(location.search).get('role') === 'moniteur') { previewMembership.roles = ['INSTRUCTOR']; previewMembership.grants = ['TAKE_ATTENDANCE']; }
+const requestedScenario = new URLSearchParams(location.search).get('scenario');
+if (requestedScenario && ['refused', 'slow', 'lost-reply', 'conflict'].includes(requestedScenario)) setPreviewScenario(requestedScenario as PreviewScenario);
 commandStore.scopeToPerson(ids.person);
 commandStore.scopeToAccess(ids.school, ids.admin, 1);
 // The first published link (no page parameter) keeps opening the access editor directly.
@@ -88,5 +93,6 @@ function Preview() {
 const openingRoutes = { ...entryRoutes, account: '?page=ecoles', invitation: '?page=invitation', recover: '?page=recuperation', opening: '?page=ouverture', preferences: '?page=preferences', school: () => '?page=preparation' };
 createRoot(document.getElementById('root')!).render(entryScene ? <EntryPreview scene={entryScene} />
   : previewPage === 'preferences' ? <PortalPreferencesPage back="?page=agenda" />
+  : previewPage === 'signalements-compte' ? <PortalSignalsPreferencesPage />
   : previewPage === 'ouverture' || previewPage === 'operateur' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={previewPage === 'operateur'} routes={openingRoutes} destination={() => '?page=preparation'} />
   : <Preview />);

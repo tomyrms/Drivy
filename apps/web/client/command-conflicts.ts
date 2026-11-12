@@ -25,6 +25,8 @@ export function commandConflictKeys(command: ConflictSubject): readonly string[]
   if (['activate', 'applySetupDraft', 'updateModules', 'updateMember', 'deactivateMember'].includes(kind)) return ['*'];
   if (['updateSchool', 'saveSetup', 'saveSetupDraft', 'saveDataPolicy'].includes(kind)) return ['school'];
   if (kind === 'saveObservationThemes') return ['observation-themes'];
+  // Les préférences appartiennent au compte : un seul envoi à la fois, quelle que soit l'école ouverte.
+  if (['saveObservationPreferences', 'resetObservationPresentation', 'resetObservationLearning'].includes(kind)) return ['observation-preferences'];
   if (kind === 'saveCoursePolicy') return ['course-policy'];
   if (['createProfilePolicy', 'publishProfilePolicy'].includes(kind)) return ['profile-policy'];
   // One invitation is ordered with itself (its version); a creation waits only for an identical request (same address, same operation).

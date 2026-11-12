@@ -500,7 +500,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     } });
   if (options.staticRoot) {
     await app.register(staticFiles,{root:options.staticRoot,prefix:'/app/',index:false,wildcard:false,cacheControl:false});
-    for (const path of ['/app','/app/','/app/recover','/app/preferences','/app/preferences/','/app/invitation','/app/ouvrir','/app/operateur','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
+    for (const path of ['/app','/app/','/app/recover','/app/preferences','/app/preferences/','/app/preferences/signalements','/app/preferences/signalements/','/app/invitation','/app/ouvrir','/app/operateur','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
   }
   app.setNotFoundHandler(async (_request,reply) => reply.status(404).send({code:'NOT_FOUND',title:'Page introuvable.'}));
   return app;

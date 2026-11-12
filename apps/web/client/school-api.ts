@@ -152,9 +152,27 @@ export const observationThemeSchema = z.object({
   visible: z.boolean(), defaultVisible: z.boolean(), defaultPosition: z.number().int().min(0).max(99),
 });
 export const observationThemesSchema = z.object({
-  id, schoolId: id, version, canManage: z.boolean(), themes: z.array(observationThemeSchema).min(1).max(40),
+  id, schoolId: id, version, canManage: z.boolean(), personalizationAllowed: z.boolean(), themes: z.array(observationThemeSchema).min(1).max(40),
 }).refine(value => new Set(value.themes.map(theme => theme.key)).size === value.themes.length, { message: 'Clés de thème en double.' })
   .refine(value => new Set(value.themes.map(theme => theme.defaultPosition)).size === value.themes.length, { message: 'Positions d’origine en double.' });
+
+/**
+ * Préférences de signalements du COMPTE, lues dans le cadre de l'école ouverte (R08, #465) : l'ordre est toujours personnel,
+ * la visibilité l'est seulement si l'école le permet. `palette` est ce que « Signaler » affiche, calculé par le serveur.
+ */
+const themeKey = z.string().regex(/^[a-z][a-z0-9-]{0,39}$/);
+export const observationPreferenceThemeSchema = observationThemeSchema.extend({ schoolVisible: z.boolean(), visibilityEditable: z.boolean() });
+export const observationPreferencesSchema = z.object({
+  id, schoolId: id, version, personalizationAllowed: z.boolean(), orderCustomized: z.boolean(), visibilityCustomized: z.boolean(),
+  mode: z.enum(['MANUAL', 'SMART']), themes: z.array(observationPreferenceThemeSchema).min(1).max(40), palette: z.array(themeKey).min(1).max(40),
+  rankedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+  learning: z.object({ generation: z.number().int().min(0), since: timestamp.nullable() }),
+  adoption: z.object({ candidates: z.array(z.object({
+    schoolId: id, schoolName: z.string().max(300), mode: z.enum(['MANUAL', 'SMART']),
+    themes: z.array(z.object({ key: themeKey, visible: z.boolean() })).max(40),
+  })).min(2).max(50) }).nullable(),
+}).refine(value => new Set(value.themes.map(theme => theme.key)).size === value.themes.length, { message: 'Clés de thème en double.' })
+  .refine(value => value.palette.every(key => value.themes.some(theme => theme.key === key)), { message: 'Palette hors catalogue.' });
 
 export type School = z.infer<typeof schoolSchema>;
 export type Permit = z.infer<typeof permitSchema>;
@@ -179,6 +197,8 @@ export type ServiceProduct = z.infer<typeof productSchema>;
 export type ProfilePolicy = z.infer<typeof profilePolicySchema>;
 export type ObservationTheme = z.infer<typeof observationThemeSchema>;
 export type ObservationThemes = z.infer<typeof observationThemesSchema>;
+export type ObservationPreferences = z.infer<typeof observationPreferencesSchema>;
+export type ObservationAdoptionCandidate = NonNullable<ObservationPreferences['adoption']>['candidates'][number];
 export type Page<T> = { items: T[]; nextCursor: string | null };
 
 export type RawResponse = { status: number; body: unknown; etag: string | null; code: string };
@@ -241,6 +261,13 @@ export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: st
 /** Lecture des signalements de l'école ; une réponse qui n'est pas celle de cette école est refusée. */
 export async function readObservationThemes(schoolId: string): Promise<ObservationThemes> {
   const result = await readSchool(schoolId, 'observation-themes', observationThemesSchema);
+  if (result.schoolId.toLowerCase() !== schoolId.toLowerCase()) throw new RequestFailure('INVALID_RESPONSE');
+  return result;
+}
+
+/** Préférences du compte dans l'école ouverte ; une réponse qui n'est pas celle de cette école est refusée. */
+export async function readObservationPreferences(schoolId: string): Promise<ObservationPreferences> {
+  const result = await readSchool(schoolId, 'observation-preferences', observationPreferencesSchema);
   if (result.schoolId.toLowerCase() !== schoolId.toLowerCase()) throw new RequestFailure('INVALID_RESPONSE');
   return result;
 }

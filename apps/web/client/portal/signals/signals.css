@@ -1,4 +1,4 @@
-.signals-page { width: min(100%, 1120px); margin-inline: auto; display: grid; gap: 24px; }
+.signals-page { container-type: inline-size; width: min(100%, 1120px); margin-inline: auto; display: grid; gap: 24px; }
 .signals-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .signals-heading h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
 .signals-counter { margin-top: 6px; color: var(--muted-foreground); font-size: .9rem; }
@@ -15,7 +15,7 @@
 .signals-handle:active { cursor: grabbing; }
 .signals-handle svg { width: 18px; height: 18px; }
 .signals-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; font-weight: 550; }
-.signals-name > span:last-child { overflow-wrap: anywhere; }
+.signals-name > span:last-child { overflow-wrap: break-word; }
 .signals-icon { width: 32px; height: 32px; flex-shrink: 0; display: grid; place-items: center; border-radius: 8px; background: var(--muted); color: var(--primary); }
 .signals-icon svg { width: 20px; height: 20px; }
 .signals-moves { display: flex; gap: 2px; }
@@ -25,15 +25,33 @@
 .signals-preview-trigger { width: 100%; justify-content: space-between; font-weight: 650; }
 .signals-preview-trigger svg { transition: transform 150ms ease; }
 .signals-tiles { list-style: none; margin: 0; padding: 4px 8px 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.signals-tiles li { display: grid; justify-items: center; gap: 6px; padding: 10px 4px; border-radius: 10px; background: var(--muted); text-align: center; font-size: .72rem; line-height: 1.25; overflow-wrap: anywhere; }
+.signals-tiles li { display: grid; justify-items: center; gap: 6px; padding: 10px 4px; border-radius: 10px; background: var(--muted); text-align: center; font-size: .72rem; line-height: 1.25; overflow-wrap: break-word; }
 .signals-savebar { position: sticky; bottom: 16px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
 .signals-status { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: .9rem; }
 .signals-status svg { width: 16px; height: 16px; color: var(--primary); }
 .signals-actions { display: flex; gap: 8px; }
+.signals-policy { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.signals-policy label { font-weight: 550; cursor: pointer; }
+.signals-state { color: var(--muted-foreground); font-size: .85rem; white-space: nowrap; }
+.signals-badge { display: inline-flex; align-items: center; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-size: .8rem; font-weight: 550; }
+.signals-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.signals-choice { display: grid; gap: 4px; margin: 0; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.signals-choice legend { font-weight: 650; padding-inline: 4px; }
+.signals-choice label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.signals-switchline { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.signals-switchline label { font-weight: 550; }
+.signals-school-select { min-height: 44px; width: 100%; max-width: 360px; padding: 0 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: inherit; font: inherit; }
 
-@media (max-width: 1023px) {
-  .signals-layout { grid-template-columns: 1fr; }
+/* Le conteneur de la page, pas la fenêtre, décide : le portail laisse parfois une colonne étroite même sur grand écran. */
+@container (max-width: 820px) {
+  .signals-layout { grid-template-columns: minmax(0, 1fr); }
   .signals-preview { position: static; order: -1; }
+}
+@container (max-width: 480px) {
+  .signals-icon { display: none; }
+}
+.signals-tools > * { max-width: 100%; white-space: normal; text-align: start; height: auto; }
+@media (max-width: 1023px) {
   .signals-savebar { bottom: calc(88px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 640px) {
@@ -46,3 +64,5 @@
 @media (prefers-reduced-motion: reduce) {
   .is-dragging-list .signals-row:not(.is-dragging), .signals-preview-trigger svg { transition: none; }
 }
+/* Focus clavier toujours visible sur les commandes de ces écrans, quel que soit le composant sous-jacent. */
+.signals-page [data-slot="checkbox"]:focus-visible, .signals-page [data-slot="switch"]:focus-visible, .signals-page [data-slot="radio-group-item"]:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
