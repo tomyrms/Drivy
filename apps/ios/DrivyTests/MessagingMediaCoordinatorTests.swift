@@ -1910,6 +1910,7 @@ private actor FakeMediaCache: MessagingMediaCache {
     }
 
     func putOriginal(_ data: Data, for mediaID: UUID) { originals[mediaID] = data }
+    func putThumbnail(_ data: Data, for mediaID: UUID) { thumbnails[mediaID] = data }
 
     func data(mediaID: UUID, scope: MessagingScope) async throws -> Data? {
         if let dataGate { await dataGate.wait() }
@@ -2137,4 +2138,178 @@ private actor RevocationRecordingRuntime: MessagingMediaRuntime, MessagingMediaR
         throw MessagingMediaRuntimeFailure.unavailable
     }
     func invalidate() async {}
+}
+
+/// Capacité interne de miniature du coordinateur (#473). Mêmes doubles que ci-dessus ; non
+/// exécutés sur ce poste Windows : aucun résultat natif n'est revendiqué avant le runner Apple.
+final class MessagingMediaThumbnailCapabilityTests: XCTestCase {
+    private let school = UUID()
+    private let account = UUID()
+
+    private struct Fixture {
+        let coordinator: MessagingMediaCoordinator
+        let cache: FakeMediaCache
+        let transport: FakeMediaTransport
+        let message: MessagingWireMessage
+        let mediaID: UUID
+    }
+
+    private func makeFixture(mime: MessagingMediaAttachment.MIME = .png,
+                             thumbnail: Data? = Data([9]),
+                             deletedForEveryone: Bool = false) async throws -> Fixture {
+        let scope = MessagingScope(accountID: account, schoolID: school, accessEpoch: 4,
+                                   apiBaseURL: "https://api.example.invalid/")
+        let messageID = UUID()
+        let conversation = UUID()
+        let sealed = try AESCTRMediaCryptography().seal(Data([1, 2, 3, 4]))
+        let width: Int? = mime == .pdf ? nil : 2
+        let attachment = try MessagingMediaAttachment(id: sealed.mediaID, size: sealed.byteSize,
+            mime: mime, name: mime == .pdf ? "document.pdf" : "photo.png",
+            width: width, height: width, file: sealed.info)
+        let content = try MessagingMediaContentV3(text: nil, media: attachment)
+        let bytes = try MessagingMediaContent.messageContent(content, mentions: nil)
+        let reference = try MessagingMessageMediaReference(mediaID: sealed.mediaID,
+            byteSize: sealed.byteSize, deleted: false)
+        var meta = MessagingMessageMeta()
+        meta.sequence = 12
+        meta.media = reference
+        meta.deletedForEveryone = deletedForEveryone
+        let message = MessagingWireMessage(id: messageID, conversationID: conversation,
+            schoolID: school, senderID: UUID(), acceptedAt: Date(),
+            ciphertext: deletedForEveryone ? nil : MessagingCiphertext(scheme: "TEST", keyID: "k",
+                                                                       payload: Data("ENVELOPE".utf8)),
+            meta: meta)
+        let cache = FakeMediaCache()
+        let encryption = FakeMediaEncryption()
+        await encryption.setMatrixContent(bytes, for: messageID)
+        let transport = FakeMediaTransport()
+        await transport.setDownloadData(sealed.ciphertext)
+        let coordinator = MessagingMediaCoordinator(scope: scope,
+            preparer: StubPreparer(mime: mime, width: width, height: width, thumbnail: thumbnail),
+            cryptography: AESCTRMediaCryptography(), outbox: FakeMediaOutbox(), cache: cache,
+            encryption: encryption, sending: FakeMediaMessageSender(),
+            transportFactory: { transport }, currentScope: { scope })
+        return Fixture(coordinator: coordinator, cache: cache, transport: transport,
+                       message: message, mediaID: sealed.mediaID)
+    }
+
+    func testThumbnailComesFromTheProtectedCacheWithoutAnyDownload() async throws {
+        let fixture = try await makeFixture()
+        await fixture.cache.putThumbnail(Data([7, 7]), for: fixture.mediaID)
+
+        let data = try await fixture.coordinator.thumbnail(for: fixture.message)
+
+        XCTAssertEqual(data, Data([7, 7]))
+        let downloads = await fixture.transport.downloadCount
+        XCTAssertEqual(downloads, 0)
+    }
+
+    func testMissingThumbnailDownloadsOnceThenIsServedFromTheCache() async throws {
+        let fixture = try await makeFixture(thumbnail: Data([9]))
+
+        let first = try await fixture.coordinator.thumbnail(for: fixture.message)
+        let second = try await fixture.coordinator.thumbnail(for: fixture.message)
+
+        XCTAssertEqual(first, Data([9]))
+        XCTAssertEqual(second, Data([9]))
+        let downloads = await fixture.transport.downloadCount
+        let stored = await fixture.cache.thumbnailStoreCount
+        XCTAssertEqual(downloads, 1, "L'original autorisé n'est téléchargé qu'une fois.")
+        XCTAssertEqual(stored, 1, "La miniature est mise en cache protégé une seule fois.")
+    }
+
+    func testThumbnailRefusesAPDFWithoutTouchingTheNetwork() async throws {
+        let fixture = try await makeFixture(mime: .pdf, thumbnail: nil)
+        do {
+            _ = try await fixture.coordinator.thumbnail(for: fixture.message)
+            XCTFail("Un PDF n'a pas de miniature.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .invalidFormat)
+        }
+        let downloads = await fixture.transport.downloadCount
+        XCTAssertEqual(downloads, 0)
+    }
+
+    func testThumbnailRefusesAMessageDeletedForEveryone() async throws {
+        let fixture = try await makeFixture(deletedForEveryone: true)
+        do {
+            _ = try await fixture.coordinator.thumbnail(for: fixture.message)
+            XCTFail("Un message supprimé pour tous ne rend aucune miniature.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .removed)
+        }
+        let downloads = await fixture.transport.downloadCount
+        XCTAssertEqual(downloads, 0)
+    }
+
+    func testThumbnailRefusesARevokedMediaEvenWhenACopyIsKnown() async throws {
+        let fixture = try await makeFixture()
+        await fixture.cache.putThumbnail(Data([7]), for: fixture.mediaID)
+        await fixture.coordinator.revoke(mediaIDs: [fixture.mediaID],
+                                         conversationID: fixture.message.conversationID)
+        do {
+            _ = try await fixture.coordinator.thumbnail(for: fixture.message)
+            XCTFail("Un média révoqué ne rend plus de miniature.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .removed)
+        }
+    }
+
+    func testRevocationDuringTheThumbnailWriteNeverReturnsTheLateThumbnail() async throws {
+        let fixture = try await makeFixture()
+        let gate = Gate()
+        await fixture.cache.setThumbnailGate(gate)
+        let coordinator = fixture.coordinator
+        let message = fixture.message
+        let task = Task { try await coordinator.thumbnail(for: message) }
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = try? await task.value
+            XCTFail("La lecture n'a pas atteint l'écriture de miniature."); return
+        }
+
+        await coordinator.revoke(mediaIDs: [fixture.mediaID], conversationID: message.conversationID)
+        await gate.open()
+
+        do {
+            _ = try await task.value
+            XCTFail("Une révocation pendant le chargement ne doit jamais rendre la miniature.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .removed)
+        }
+        let thumbnails = await fixture.cache.thumbnails
+        XCTAssertNil(thumbnails[fixture.mediaID], "La copie tardive est purgée.")
+    }
+
+    func testInvalidationDuringTheThumbnailWriteNeverReturnsTheLateThumbnail() async throws {
+        let fixture = try await makeFixture()
+        let gate = Gate()
+        await fixture.cache.setThumbnailGate(gate)
+        let coordinator = fixture.coordinator
+        let message = fixture.message
+        let task = Task { try await coordinator.thumbnail(for: message) }
+        let arrived = await gate.waitUntilWaiting()
+        guard arrived else {
+            await gate.open()
+            _ = try? await task.value
+            XCTFail("La lecture n'a pas atteint l'écriture de miniature."); return
+        }
+
+        await coordinator.invalidate()
+        await gate.open()
+
+        do {
+            _ = try await task.value
+            XCTFail("Un changement de contexte ne doit jamais rendre la miniature.")
+        } catch let failure as MessagingMediaRuntimeFailure {
+            XCTAssertEqual(failure, .contextChanged)
+        }
+    }
+
+    func testCoordinatorExposesTheCapabilityByOptionalCastOnTheFrozenProtocol() async throws {
+        let fixture = try await makeFixture()
+        let runtime: any MessagingMediaRuntime = fixture.coordinator
+        XCTAssertNotNil(runtime as? any MessagingMediaThumbnailProviding)
+    }
 }

@@ -66,3 +66,18 @@ protocol MessagingMediaRevocationReceiving: Sendable {
     /// effacement physique.
     func revoke(mediaIDs: [UUID], conversationID: UUID) async
 }
+
+/// Capacité additive **interne** (#473) : obtenir la miniature protégée d'un média image
+/// déjà autorisé dans le fil, sans l'ouvrir. Elle n'est pas une méthode du protocole UI gelé :
+/// l'interface la découvre par cast optionnel et les compositions qui ne l'implémentent pas
+/// restent valides (la bulle affiche alors un état « indisponible » sans reprise).
+///
+/// Contrat : les octets rendus sont une miniature JPEG ou PNG bornée (≤ 512 px par axe,
+/// ≤ 128 Kio) issue du cache protégé. Si elle y manque, l'implémentation télécharge
+/// l'original autorisé, le valide, produit la miniature et la met en cache chiffré. Aucune
+/// URL, aucun fichier en clair, aucun cache standard. Un PDF est refusé (`invalidFormat`).
+/// Une invalidation, une révocation ou un changement de contexte survenus pendant
+/// l'opération se traduisent par un refus, jamais par une miniature rendue.
+protocol MessagingMediaThumbnailProviding: Sendable {
+    func thumbnail(for message: MessagingWireMessage) async throws -> Data
+}

@@ -19,7 +19,8 @@ typealias MessagingMediaTransportFactory = @MainActor @Sendable () async throws 
 ///
 /// Il ne crée aucun texte d'interface, ne journalise aucun identifiant, nom, clé, hash
 /// ou contenu, et ne promet ni livraison au destinataire ni effacement physique.
-actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocationReceiving {
+actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocationReceiving,
+                                 MessagingMediaThumbnailProviding {
     private static let maximumMentions = 8
 
     private let scope: MessagingScope
@@ -613,6 +614,87 @@ actor MessagingMediaCoordinator: MessagingMediaRuntime, MessagingMediaRevocation
         let cache = self.cache
         let scope = self.scope
         _ = await Task.detached { try? await cache.purge(mediaIDs: unique, scope: scope) }.value
+    }
+
+    // MARK: Miniature (#473)
+
+    /// Miniature protégée d'un média image du fil. Même authentification que `open` : contenu
+    /// déchiffré, référence serveur concordante, média non révoqué. Le cache est lu d'abord ;
+    /// en son absence, `open` télécharge, valide, met l'original et la miniature en cache
+    /// chiffré, puis la miniature est rendue. Aucun octet n'est écrit en clair.
+    func thumbnail(for message: MessagingWireMessage) async throws -> Data {
+        try await ensureActive()
+        guard message.schoolID == scope.schoolID else {
+            throw MessagingMediaRuntimeFailure.contextChanged
+        }
+        guard !message.meta.deletedForEveryone else {
+            throw MessagingMediaRuntimeFailure.removed
+        }
+
+        let decrypted: MessagingDecryptedContent
+        do {
+            decrypted = try await encryption.decryptContent(message, scope: scope)
+        } catch is MessagingDecryptionFailure {
+            throw MessagingMediaRuntimeFailure.unreadable
+        } catch let failure as MessagingFailure {
+            throw Self.map(failure)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw MessagingMediaRuntimeFailure.unreadable
+        }
+        try await ensureActive()
+
+        guard decrypted.provenance == .matrixContent,
+              let content = MessagingPlainContent.decodeMatrixContent(decrypted.bytes),
+              let media = content.media else {
+            throw MessagingMediaRuntimeFailure.invalidContent
+        }
+        guard let reference = message.meta.media, !reference.deleted else {
+            throw MessagingMediaRuntimeFailure.removed
+        }
+        guard reference.mediaID == media.id, reference.byteSize == media.size else {
+            throw MessagingMediaRuntimeFailure.integrity
+        }
+        guard media.mime.isImage else {
+            throw MessagingMediaRuntimeFailure.invalidFormat
+        }
+        guard !revokedMedia.contains(media.id) else {
+            try? await cache.purge(mediaIDs: [media.id], scope: scope)
+            throw MessagingMediaRuntimeFailure.removed
+        }
+
+        var cached: Data?
+        try Task.checkCancellation()
+        do {
+            cached = try await cache.thumbnail(mediaID: media.id, scope: scope)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            // Un cache fermé n'autorise aucun repli clair : on retente le chemin authentifié.
+            cached = nil
+        }
+        try Task.checkCancellation()
+        try await ensureActive()
+        guard !revokedMedia.contains(media.id) else {
+            try? await cache.purge(mediaIDs: [media.id], scope: scope)
+            throw MessagingMediaRuntimeFailure.removed
+        }
+        if let cached, !cached.isEmpty { return cached }
+
+        // Miniature absente : lecture complète autorisée (téléchargement au besoin), qui
+        // valide l'original avant d'écrire quoi que ce soit dans le cache protégé.
+        let prepared = try await open(message)
+        try Task.checkCancellation()
+        try await ensureActive()
+        guard !revokedMedia.contains(media.id) else {
+            try? await cache.purge(mediaIDs: [media.id], scope: scope)
+            throw MessagingMediaRuntimeFailure.removed
+        }
+        guard let thumbnail = prepared.thumbnail, !thumbnail.isEmpty else {
+            throw MessagingMediaRuntimeFailure.unreadable
+        }
+        return thumbnail
     }
 
     // MARK: Interne

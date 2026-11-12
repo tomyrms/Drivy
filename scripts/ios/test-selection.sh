@@ -70,7 +70,8 @@ elif [[ "$unit_only" == 1 ]]; then
     for suite in MessagingOptimisticMutationTests MessagingProtectedStoreTests MessagingCoreTests MessagingHTTPTransportTests \
       MessagingExyteThreadTests MessagingThreadTests MessagingMediaContentTests MatrixMessagingCryptographyTests \
       MatrixMessagingReportSealingTests MessagingReportInboxTests MessagingReportTransportTests \
-      MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests RelayReadinessDiagnosticTests; do
+      MatrixMessagingRelayIntegrationTests MatrixMessagingSealedReportRelayTests RelayReadinessDiagnosticTests \
+      MessagingMediaBubbleGeometryTests MessagingMediaThumbnailLoaderTests MessagingMediaThumbnailCapabilityTests; do
       test_options+=("-only-testing:DrivyTests/$suite")
     done
   elif [[ "$unit_test_scope" == messaging-recovery ]]; then
