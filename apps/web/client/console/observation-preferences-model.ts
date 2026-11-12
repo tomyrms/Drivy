@@ -147,3 +147,24 @@ export const learningResetCopy = (dirty: boolean) => ({
   title: 'Recommencer l’apprentissage ?',
   message: `Le classement intelligent repart de votre ordre manuel et n’apprend que des nouveaux signalements. Aucune observation n’est supprimée.${dirty ? ' Les modifications non enregistrées sont abandonnées.' : ''}`,
 });
+
+/**
+ * Ce que dit la barre d'enregistrement. Un envoi dont le résultat est incertain (`pending`) n'est JAMAIS « Enregistré » : seule une
+ * confirmation de l'école (`done`) l'est, et un envoi encore suivi passe devant.
+ */
+export function saveStatus(state: { busy: boolean; pending: boolean; done: 'save' | 'presentation' | 'learning' | null; dirty: boolean }): string | null {
+  if (state.busy) return 'Enregistrement…';
+  if (state.pending) return 'Résultat à vérifier';
+  if (state.done === 'save') return 'Enregistré';
+  return state.dirty ? 'Modifications non enregistrées' : null;
+}
+
+/** Brouillons d'un seul compte et d'une seule école à la fois : changer de portée en rend un magasin neuf, jamais celui d'avant. */
+export class ScopedDrafts {
+  private key: string | null = null;
+  private drafts = new Map<string, unknown>();
+  forScope(key: string | null): Map<string, unknown> {
+    if (key !== this.key) { this.key = key; this.drafts = new Map(); }
+    return this.drafts;
+  }
+}

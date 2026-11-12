@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { commandStore } from '../../command-store';
 import { ScopedReadCache } from '../../console/load-model';
 import { readError, type ConsoleContextValue } from '../../console/context';
-import { canPersonalizeSignals } from '../../console/observation-preferences-model';
+import { canPersonalizeSignals, ScopedDrafts } from '../../console/observation-preferences-model';
 import { meSchema, request, RequestFailure, sessionSchema } from '../../protocol';
 import type { Me, Member } from '../../protocol';
 import { readSchool, schoolSchema, type School } from '../../school-api';
@@ -100,7 +100,8 @@ export function usePersonalScope(initialSchoolId?: string) {
 
   const scopeKey = state.status === 'ready' ? `${state.me.personId}/${state.membership.schoolId}/${state.membership.membershipId}/${state.membership.accessEpoch}` : null;
   // Drafts and reads belong to one account, school and access: any change of the four starts them again.
-  const drafts = useMemo(() => new Map<string, unknown>(), [scopeKey]);
+  const draftStore = useRef(new ScopedDrafts());
+  const drafts = useMemo(() => draftStore.current.forScope(scopeKey), [scopeKey]);
   const readCache = useMemo(() => new ScopedReadCache(), [scopeKey]);
   useEffect(() => () => readCache.invalidate(), [readCache]);
 

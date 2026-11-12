@@ -5,7 +5,7 @@ import { useCommandSnapshot } from '../../command-store';
 import { ConsoleContext, useCommandRunner, useConsole, useLoad, useSectionDraft } from '../../console/context';
 import {
   applyCandidate, baselineOf, canResetPresentation, isPreferenceDirty, learningResetCopy, preferenceBody, preferenceProblem, preferenceRefusal,
-  presentationResetCopy, previewKeys, refusalNotice, schoolOfReturn, usableDraft, type PreferenceDraft, type PreferenceRefusal,
+  presentationResetCopy, previewKeys, refusalNotice, saveStatus, schoolOfReturn, usableDraft, type PreferenceDraft, type PreferenceRefusal,
 } from '../../console/observation-preferences-model';
 import { readObservationPreferences, type ObservationPreferences } from '../../school-api';
 import { BrandSymbol } from '../../BrandSymbol';
@@ -183,7 +183,7 @@ export function PersonalEditor({ data, reload }: { data: ObservationPreferences;
     const row = current.rows.find(item => item.key === key);
     return row ? [{ key: row.key, title: row.title }] : [];
   });
-  const status = runner.busy ? 'Enregistrement…' : runner.pending ? 'Résultat à vérifier' : done === 'save' ? 'Enregistré' : dirty ? 'Modifications non enregistrées' : null;
+  const status = saveStatus({ busy: runner.busy, pending: runner.pending !== undefined, done, dirty });
   const resetAllowed = canResetPresentation({ administrator, personalizationAllowed: data.personalizationAllowed });
   const copy = confirm === 'learning' ? learningResetCopy(dirty) : presentationResetCopy(school.name, { personalizationAllowed: data.personalizationAllowed, dirty });
 
