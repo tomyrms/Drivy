@@ -245,11 +245,47 @@ struct MessagingThreadMediaAttachmentView: View {
     let media: MessagingMediaAttachment
     let mine: Bool
 
+    /// Seule CETTE pièce est désactivée pendant son ouverture (#476) : les autres restent touchables.
     private var isDisabled: Bool {
-        thread.reporting || thread.mediaComposer?.opening == true
+        thread.reporting || thread.mediaComposer?.isOpening(wire.id) == true
     }
 
     var body: some View {
+        VStack(alignment: mine ? .trailing : .leading, spacing: DrivySpacing.xxs) {
+            attachment
+            openStatus
+        }
+    }
+
+    /// Ouverture en cours ou en échec, au bon média ; la reprise relance cette ouverture et aucune autre action.
+    @ViewBuilder private var openStatus: some View {
+        switch thread.mediaComposer?.openState(for: wire.id) {
+        case .opening?:
+            HStack(spacing: DrivySpacing.xs) {
+                ProgressView().controlSize(.small)
+                Text("Ouverture…").font(.footnote).foregroundStyle(DrivyTheme.muted)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("messaging.media.opening")
+        case .failed(let failure)?:
+            VStack(alignment: mine ? .trailing : .leading, spacing: DrivySpacing.xxs) {
+                Text(failure.message).font(.footnote).foregroundStyle(DrivyTheme.danger)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("messaging.media.open.error")
+                if failure.canRetry {
+                    Button("Réessayer") { Task { await thread.openMedia(wire) } }
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(DrivyTheme.accent)
+                        .frame(minHeight: DrivyLayout.tapTarget)
+                        .accessibilityIdentifier("messaging.media.open.retry")
+                }
+            }
+        case nil:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder private var attachment: some View {
         if media.mime == .pdf {
             MessagingPDFCard(name: media.name, byteSize: media.size, mine: mine, isDisabled: isDisabled) {
                 Task { await thread.openMedia(wire) }

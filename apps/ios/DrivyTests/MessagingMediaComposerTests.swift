@@ -151,10 +151,10 @@ final class MessagingMediaComposerTests: XCTestCase {
                 visible = false
             }
         XCTAssertNil(model.preview)
-        XCTAssertFalse(model.opening)
+        XCTAssertFalse(model.isOpening(message.id))
     }
 
-    func testRemovingSelectionDuringOpenDiscardsResultAndAllowsNextOpen() async throws {
+    func testRemovingSelectionDuringOpenClosesViewerAndAllowsNextOpen() async throws {
         let runtime = MediaRuntimeDouble()
         let messageB = try Self.message()
         let model = MessagingMediaComposerModel(runtime: runtime, conversationID: messageB.conversationID)
@@ -168,18 +168,18 @@ final class MessagingMediaComposerTests: XCTestCase {
         try await withHeldOperation("B while A selected", entered: { await runtime.opening },
             release: { await runtime.releaseOpen() },
             operation: { await model.open(messageB, stillVisible: { true }) }) {
-                XCTAssertTrue(model.opening)
+                XCTAssertTrue(model.isOpening(messageB.id))
                 model.removeSelection()
-                XCTAssertFalse(model.opening)
+                XCTAssertNil(model.preview)
                 XCTAssertNil(model.selection)
             }
-        XCTAssertFalse(model.opening)
+        XCTAssertFalse(model.isOpening(messageB.id))
         XCTAssertNil(model.preview)
         XCTAssertEqual(model.pendingItems.map(\.id), [pendingID])
         let messageC = try Self.message(conversationID: messageB.conversationID)
         await model.open(messageC, stillVisible: { true })
         XCTAssertEqual(model.preview?.messageID, messageC.id)
-        XCTAssertFalse(model.opening)
+        XCTAssertFalse(model.isOpening(messageC.id))
     }
 
     func testRemovingSelectionDuringPreparationDiscardsLateInput() async throws {

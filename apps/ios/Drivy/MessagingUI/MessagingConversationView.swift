@@ -127,10 +127,31 @@ private enum ExyteBubbleMetrics {
 
     func openMedia(_ message: MessagingWireMessage) async {
         guard let current = workspace.message(message.id, in: conversationID), mediaAttachment(current) != nil else { return }
-        await mediaComposer?.open(current) {
+        await mediaComposer?.open(current, title: mediaAttachment(current)?.name ?? "Pièce jointe") {
             guard let fresh = self.workspace.message(message.id, in: self.conversationID) else { return false }
             return self.mediaAttachment(fresh) != nil
         }
+    }
+
+    /// Reprise ciblée d'une ouverture en échec : relance cette pièce seulement, depuis la visionneuse ou la bulle.
+    func retryOpen(_ messageID: UUID) async {
+        guard let current = workspace.message(messageID, in: conversationID) else { return }
+        await openMedia(current)
+    }
+
+    /// Action « Réessayer » de la visionneuse en échec ; absente pour un aperçu local (sélection) sans message.
+    func viewerRetry(_ messageID: UUID?) -> (() -> Void)? {
+        guard let messageID else { return nil }
+        return { [weak self] in
+            guard let self else { return }
+            _ = Task { await self.retryOpen(messageID) }
+        }
+    }
+
+    /// Reprise explicite d'une intention d'envoi : même identifiant de geste, jamais une nouvelle identité.
+    func retryMediaSend(_ id: UUID) async {
+        await mediaComposer?.retry(id)
+        await refreshAfterMediaSend()
     }
 
     /// Une image apparaît : sa miniature est demandée, puis celles de ses deux voisines images (file d'attente seulement).
@@ -148,13 +169,15 @@ private enum ExyteBubbleMetrics {
     func refreshAfterMediaSend() async {
         guard mediaComposer?.confirmation != nil else { return }
         await workspace.refreshVisible(conversationID: conversationID)
+        mediaComposer?.reconcile(visibleMessageIDs: Set(workspace.visibleMessages(conversationID).map(\.id)))
         scrollToNewest()
     }
 
     var items: [MessagingThreadItem] {
         MessagingThreadProjection.items(messages: workspace.visibleMessages(conversationID),
-            pending: composer.visibleQueue, accountID: accountID,
-            clientIDs: MessagingThreadProjection.clientIDs(workspace.sendStates),
+            pending: composer.visibleQueue, mediaPending: mediaComposer?.timelineEntries ?? [], accountID: accountID,
+            clientIDs: MessagingThreadProjection.clientIDs(workspace.sendStates)
+                .merging(mediaComposer?.confirmedClientIDs ?? [:]) { text, _ in text },
             pendingDates: composer.queuedDates, now: Date())
     }
 
@@ -199,6 +222,7 @@ private enum ExyteBubbleMetrics {
             hasher.combine(presentation.accessibilityLabel)
             hasher.combine(presentation.canRetry)
         }
+        if let entry = item.mediaPending { hasher.combine(entry.phase) }
         if let wire = item.message {
             hasher.combine(wire.meta.pinned)
             hasher.combine(wire.meta.replyToMessageID)
@@ -221,6 +245,8 @@ private enum ExyteBubbleMetrics {
             if let text = content?.text { return MessagingMentionToken.styled(text, names: workspace.knownDisplayNames) }
             return AttributedString(content?.summary ?? "Message")
         }
+        // Même texte que le message confirmé qui prendra la place : légende, sinon le repli « Photo » / « PDF ».
+        if let entry = item.mediaPending { return AttributedString(entry.snapshot.caption ?? entry.snapshot.mime.fallbackBody) }
         guard let wire = item.message else { return AttributedString() }
         // L'effacement chez tous n'est annoncé qu'après la relecture serveur.
         if !wire.meta.deletedForEveryone, workspace.mutation(.deleteForEveryone, on: wire) != nil {
@@ -269,6 +295,14 @@ private enum ExyteBubbleMetrics {
 
     /// Coches seulement pour un événement réel : accusé serveur pour « envoyé », reçu de lecture pour « lu ».
     private func status(_ item: MessagingThreadItem) -> ExyteChat.Message.Status? {
+        if let entry = item.mediaPending {
+            // Coche d'envoi seulement après l'accusé durable ; ni coche ni animation pour un résultat à vérifier.
+            switch entry.phase {
+            case .sending: return .sending
+            case .confirmed: return .sent
+            case .toVerify, .failed: return nil
+            }
+        }
         if let presentation = sendPresentation(item) {
             if presentation.isAccepted { return .sent }
             if presentation.showsSendingIndicator { return .sending }
@@ -328,6 +362,9 @@ private enum ExyteBubbleMetrics {
             }
         } else if let presentation = sendPresentation(item) {
             parts.append(presentation.accessibilityLabel)
+        } else if let entry = item.mediaPending {
+            parts.append(entry.snapshot.name)
+            parts.append(MessagingMediaIntentionPresentation(entry.phase).accessibilityLabel)
         }
         return parts.joined(separator: ", ")
     }
@@ -613,8 +650,12 @@ struct MessagingConversationView: View {
         .modifier(lifecycle)
         // Plein écran, hors du fil : fermer rend le fil, le brouillon et la réponse tels quels. `preview = nil`
         // (retrait, révocation, changement de contexte) ferme aussi la visionneuse.
-        .fullScreenCover(item: Binding(get: { thread.mediaComposer?.preview }, set: { thread.mediaComposer?.preview = $0 })) { preview in
-            MessagingMediaPreview(media: preview.media) { thread.mediaComposer?.preview = nil }
+        .fullScreenCover(item: Binding(get: { thread.mediaComposer?.preview },
+                                       set: { if $0 == nil { thread.mediaComposer?.closePreview() } })) { preview in
+            // Chargement, prêt et échec se succèdent dans la même présentation (#476) ; fermer annule l'ouverture en vol.
+            MessagingMediaViewer(state: preview.state, title: preview.title,
+                                 retry: thread.viewerRetry(preview.messageID),
+                                 close: { thread.mediaComposer?.closePreview() })
                 .id(preview.id)
         }
         .sheet(item: $thread.menuTarget, onDismiss: { thread.completeMenuChoice() }) { target in
@@ -824,6 +865,7 @@ private struct MessagingThreadLifecycle: ViewModifier {
             .onDisappear { thread.cancelMenu(); thread.mediaComposer?.suspend(); connectivity.stop(); MessagingActiveConversation.clear(conversationID) }
             .onChange(of: thread.visibleMediaIDs) { _, ids in
                 thread.mediaComposer?.dismissRemovedPreview(visibleIDs: ids)
+                thread.mediaComposer?.reconcile(visibleMessageIDs: Set(workspace.visibleMessages(conversationID).map(\.id)))
                 thread.thumbnails?.discard(keeping: ids)
             }
             .onChange(of: lastDelivered?.id) { _, _ in
@@ -839,7 +881,12 @@ private struct MessagingThreadLifecycle: ViewModifier {
             }
             .onChange(of: connectivity.available) { _, available in
                 workspace.setNetworkAvailable(available)
-                if available { Task { await workspace.refreshVisible(conversationID: conversationID) } }
+                if available {
+                    Task {
+                        await workspace.refreshVisible(conversationID: conversationID)
+                        await thread.mediaComposer?.refreshPending()
+                    }
+                }
             }
             .onChange(of: workspace.error) { _, failure in
                 if failure == .contextChanged || failure == .accessChanged {
@@ -899,6 +946,10 @@ private struct MessagingThreadRow: View {
                         MessagingThreadMediaAttachmentView(thread: thread, wire: wire, media: media, mine: mine)
                             .padding(.vertical, DrivySpacing.xxs)
                             .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
+                    } else if let entry = item.mediaPending {
+                        MessagingPendingMediaView(thread: thread, entry: entry)
+                            .padding(.vertical, DrivySpacing.xxs)
+                            .modifier(BubbleAligned(mine: true, isGeneral: thread.isGeneral))
                     }
                     MessagingThreadStateLine(thread: thread, item: item)
                         .modifier(BubbleAligned(mine: mine, isGeneral: thread.isGeneral))
@@ -955,7 +1006,7 @@ private struct MessagingThreadRow: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(thread.accessibilityLabel(item))
-                .accessibilityIdentifier(item.pending == nil ? "messaging.message" : "messaging.pending")
+                .accessibilityIdentifier(item.pending == nil && item.mediaPending == nil ? "messaging.message" : "messaging.pending")
                 .accessibilityActions { actions(item) }
         }
     }
@@ -1537,7 +1588,6 @@ private struct MessagingThreadFooter: View {
                     .font(.subheadline).foregroundStyle(DrivyTheme.muted)
                     .frame(maxWidth: .infinity).padding()
                     .accessibilityIdentifier("messaging.readonly")
-                    if thread.mediaComposer?.opening == true { ProgressView("Ouverture…") }
                     if let error = thread.mediaComposer?.error {
                         Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
                             .fixedSize(horizontal: false, vertical: true)

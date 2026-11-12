@@ -6,6 +6,8 @@ struct MessagingThreadItem: Identifiable, Sendable {
     enum Source: Sendable {
         case message(MessagingWireMessage)
         case pending(MessagingPending)
+        /// Intention média (#476) : même identité d'affichage que le message confirmé qui la remplace.
+        case mediaPending(MessagingMediaPendingEntry)
     }
 
     let id: String
@@ -23,6 +25,11 @@ struct MessagingThreadItem: Identifiable, Sendable {
         if case .pending(let entry) = source { return entry }
         return nil
     }
+
+    var mediaPending: MessagingMediaPendingEntry? {
+        if case .mediaPending(let entry) = source { return entry }
+        return nil
+    }
 }
 
 enum MessagingThreadProjection {
@@ -31,7 +38,10 @@ enum MessagingThreadProjection {
     /// - Parameters:
     ///   - clientIDs: message serveur → envoi local qui l'a produit, connu après l'accusé.
     ///   - pendingDates: première présentation de chaque envoi en attente, pour un placement stable.
-    static func items(messages: [MessagingWireMessage], pending: [MessagingPending], accountID: UUID,
+    /// - mediaPending: intentions média (#476), après les envois texte ; un message serveur déjà présent pour la même
+    ///   intention (`clientIDs`) garde la place et l'identité, la bulle locale n'est alors pas doublée.
+    static func items(messages: [MessagingWireMessage], pending: [MessagingPending],
+                      mediaPending: [MessagingMediaPendingEntry] = [], accountID: UUID,
                       clientIDs: [UUID: UUID], pendingDates: [UUID: Date], now: Date) -> [MessagingThreadItem] {
         var seen: Set<String> = []
         var result: [MessagingThreadItem] = []
@@ -49,6 +59,12 @@ enum MessagingThreadProjection {
             guard seen.insert(id).inserted else { continue }
             result.append(MessagingThreadItem(id: id, source: .pending(entry), senderID: accountID,
                                               date: max(pendingDates[entry.clientMessageID] ?? now, floor)))
+        }
+        for entry in mediaPending {
+            let id = entry.snapshot.clientMessageID.uuidString
+            guard seen.insert(id).inserted else { continue }
+            result.append(MessagingThreadItem(id: id, source: .mediaPending(entry), senderID: accountID,
+                                              date: max(entry.snapshot.createdAt, floor)))
         }
         return result
     }
