@@ -26,14 +26,10 @@ struct SchoolStaffSettingsView: View {
         return (agendaClient.scope(person: person, membership: membership), agendaClient.planningClient)
     }
 
-    /// Pour tout moniteur ou compte de l’administration : chacun y règle son propre classement. L’ordre et
-    /// l’affichage de l’école ne s’y modifient que si elle a dit que ce compte peut les gérer.
-    private var observationThemes: SchoolObservationThemeStore? {
-        agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership)
-    }
-
-    private var observationRanking: SchoolObservationRankingStore? {
-        agendaClient?.observationRankingStore(person: workspace.person, membership: workspace.membership)
+    /// Pour tout moniteur ou compte de l’administration : chacun règle les signalements de son propre compte. Aucun
+    /// réglage de l’école ici : l’administration la configure sur le web.
+    private var observationPreferences: SchoolObservationPreferencesStore? {
+        agendaClient?.observationPreferencesStore(person: workspace.person, membership: workspace.membership)
     }
 
     var body: some View {
@@ -62,7 +58,7 @@ struct SchoolStaffSettingsView: View {
                 .drivyFormRows()
             }
             let planning = self.planning
-            let themes = self.observationThemes
+            let themes = self.observationPreferences
             if planning != nil || themes != nil {
                 // Chaque ligne se lit par son titre : un en-tête de section le redirait.
                 Section {
@@ -76,7 +72,7 @@ struct SchoolStaffSettingsView: View {
                     }
                     if let themes {
                         NavigationLink {
-                            SchoolObservationThemeSettingsView(store: themes, ranking: observationRanking)
+                            SchoolObservationThemeSettingsView(store: themes, isAdministrator: workspace.membership?.roles.contains("ADMIN") == true)
                         } label: {
                             Text("Signalements")
                                 .foregroundStyle(DrivyTheme.text)

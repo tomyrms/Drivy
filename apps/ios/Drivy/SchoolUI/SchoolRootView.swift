@@ -760,6 +760,8 @@ struct SchoolRootView: View {
             joinsByCodeAfterSignIn = false
             closeAll()
             workspace?.reset()
+            // Réglages de signalements, politique de l’école et palettes figées : rien ne reste pour le compte suivant.
+            SchoolObservationPreferencesStores.purgeAll()
             showsAccount = false
         }
         // L’appareil est retiré tant que le jeton d’accès vaut encore ; une panne ne retient pas la déconnexion.

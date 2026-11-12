@@ -1,46 +1,52 @@
 import SwiftUI
 
-/// Réglage des signalements : lesquels « Signaler » propose pendant une leçon, et dans quel ordre.
-/// Liste groupée native, comme le Profil dont elle vient. Deux réglages distincts s’y rencontrent :
-/// - l’ordre et l’affichage **de l’école**, pour qui peut les gérer (le droit vient de l’école, qui le revérifie à
-///   chaque écriture) : poignées et glisser-déposer du système, chaque changement part aussitôt ;
-/// - le **classement intelligent**, propre à chaque moniteur : l’école range alors ses signalements d’après ses
-///   usages. La liste montre cet ordre automatique sans poignées ; il ne s’écrit jamais dans l’ordre de l’école,
-///   que l’on retrouve intact en désactivant l’option.
-/// Un moniteur sans droit de gestion lit la liste des thèmes affichés et règle seulement son classement.
+/// Réglage des signalements du compte : lesquels « Signaler » propose pendant une leçon, et dans quel ordre.
+/// Liste groupée native, comme le Profil dont elle vient. Tout se règle pour son propre compte :
+/// - l’ordre manuel est toujours modifiable (poignées et glisser-déposer du système, chaque changement part aussitôt) ;
+/// - l’affichage ne l’est que si l’école le permet ; sinon les rangées se lisent seulement, avec la mention de l’école ;
+/// - le classement intelligent se règle toujours : le service range alors « Signaler » d’après les usages du compte,
+///   sans jamais réécrire l’ordre manuel, que l’on retrouve intact en le désactivant.
+/// Rien ici ne modifie la configuration de l’école : cela se fait sur le web, par l’administration.
 struct SchoolObservationThemeSettingsView: View {
-    let store: SchoolObservationThemeStore
-    /// `nil` : pas de classement pour ce compte ; l’écran est alors celui de l’ordre de l’école seul.
-    var ranking: SchoolObservationRankingStore? = nil
+    let store: SchoolObservationPreferencesStore
+    /// Le compte administre l’école : il peut toujours rétablir l’ordre et la visibilité de référence.
+    var isAdministrator = false
     @State private var showsPreview = false
-    @State private var confirmsReset = false
+    @State private var confirmsPresentationReset = false
+    @State private var confirmsLearningReset = false
+    @State private var showsAdoption = false
+    /// Le choix d’une ancienne configuration se propose une fois par ouverture de l’écran.
+    @State private var offeredAdoption = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Les rangées portent déjà leur espacement vertical : sans cela, la liste le double.
     private var rowInsets: EdgeInsets { EdgeInsets(top: 0, leading: DrivySpacing.m, bottom: 0, trailing: DrivySpacing.m) }
     private var noticeInsets: EdgeInsets { EdgeInsets(top: DrivySpacing.xs, leading: 0, bottom: DrivySpacing.xs, trailing: 0) }
 
-    /// L’ordre montré est celui du classement : dès le geste, pendant l’envoi compris.
-    private var isAutomatic: Bool { ranking?.displayedMode == .smart }
-    /// Réordonner à la main : seulement l’ordre de l’école, par qui peut le gérer.
-    private var reorders: Bool { store.canEdit && !isAutomatic }
-    /// L’ordre montré : celui de l’école, ou son réarrangement automatique (affichés d’abord, masqués ensuite).
-    /// `store.displayed` reste l’ordre de l’école : c’est lui, et lui seul, que les écritures envoient.
-    private var shownThemes: [SchoolObservationTheme] {
-        isAutomatic ? SchoolObservationRankingOrder.arranged(store.displayed, order: ranking?.effectiveOrder) : store.displayed
+    private var reorders: Bool { store.canReorder && !store.isResetting }
+    private var shownThemes: [SchoolObservationPreferencesTheme] { store.displayedThemes }
+    /// Un compte de l’administration, ou une école qui laisse chacun régler son affichage.
+    private var offersPresentationReset: Bool {
+        store.canReorder && (isAdministrator || store.personalizationAllowed)
+    }
+
+    /// Les thèmes que « Signaler » affiche, dans l’ordre où il les affiche.
+    private var previewThemes: [SchoolObservationTheme] {
+        let byKey = Dictionary(store.confirmedThemes.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+        return (store.palette ?? []).compactMap { key in
+            guard var theme = byKey[key]?.asTheme else { return nil }
+            theme.visible = true
+            return theme
+        }
     }
 
     var body: some View {
         List {
             messages
-            rankingSection
-            if store.configuration.isFromServer {
-                if store.canEdit {
-                    themeSection
-                    resetSection
-                } else {
-                    readOnlySection
-                }
+            smartSection
+            if store.policy != nil, store.account != nil {
+                themeSection
+                resetSection
             } else if store.isLoading {
                 Section {
                     DrivySkeletonRows(count: 6, lines: 1).drivySkeleton("Chargement des signalements…")
@@ -51,7 +57,7 @@ struct SchoolObservationThemeSettingsView: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
-        // Poignées visibles sans mode à ouvrir quand l’ordre se règle à la main ; aucune en ordre automatique.
+        // Poignées visibles sans mode à ouvrir : l’ordre manuel se règle toujours.
         .environment(\.editMode, .constant(reorders ? .active : .inactive))
         .frame(maxWidth: DrivyLayout.formColumn)
         .frame(maxWidth: .infinity)
@@ -61,63 +67,62 @@ struct SchoolObservationThemeSettingsView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("Aperçu") { showsPreview = true }
-                    .disabled(!store.configuration.isFromServer)
+                    .disabled(previewThemes.isEmpty)
                     .accessibilityIdentifier("observation-themes-preview")
             }
         }
         .sheet(isPresented: $showsPreview) {
-            SchoolObservationThemePreviewSheet(themes: shownThemes)
+            SchoolObservationThemePreviewSheet(themes: previewThemes)
         }
-        // Même forme que les autres confirmations de Drivy : une alerte, un titre, ce qui change, Annuler puis Rétablir.
-        .alert("Rétablir la configuration d’origine ?", isPresented: $confirmsReset) {
+        // Même forme que les autres confirmations de Drivy : une alerte, un titre, ce qui change, Annuler puis le verbe.
+        .alert("Rétablir l’ordre et la visibilité ?", isPresented: $confirmsPresentationReset) {
             Button("Annuler", role: .cancel) { }
-            Button("Rétablir", role: .destructive) {
-                guard store.canEdit, !store.isOriginal else { return }
-                store.resetAll()
-            }
-            .accessibilityIdentifier("observation-themes-confirm-reset")
+            Button("Rétablir", role: .destructive) { store.resetPresentation() }
+                .accessibilityIdentifier("observation-themes-confirm-reset")
         } message: {
-            Text(ranking == nil
-                ? "Les signalements de l’école et leur ordre reviennent à ceux d’origine."
-                : "Les signalements de l’école et leur ordre reviennent à ceux d’origine. Ton classement intelligent ne change pas.")
+            Text("Ton ordre et ton affichage reviennent à ceux de l’école. Cela ne change que ton compte.")
+        }
+        .alert("Recommencer l’apprentissage ?", isPresented: $confirmsLearningReset) {
+            Button("Annuler", role: .cancel) { }
+            Button("Recommencer", role: .destructive) { store.resetLearning() }
+                .accessibilityIdentifier("observation-learning-confirm-reset")
+        } message: {
+            Text("Le classement intelligent repart de zéro, sans tenir compte de tes signalements passés.")
+        }
+        // Plusieurs écoles, des réglages différents : la personne choisit, le service ne le fait jamais à sa place.
+        .confirmationDialog("Reprendre quels réglages ?", isPresented: $showsAdoption, titleVisibility: .visible) {
+            ForEach(store.adoption?.candidates ?? []) { candidate in
+                Button(candidate.schoolName) { store.adopt(candidate) }
+            }
+            Button("Pas maintenant", role: .cancel) { }
         }
         // Retour à l’état confirmé après un échec, configuration relue, changement de mode : les rangées glissent à leur place.
         .animation(DrivyMotion.context(reduceMotion), value: shownThemes.map(\.key))
-        .animation(DrivyMotion.context(reduceMotion), value: isAutomatic)
-        .onChange(of: store.saveState) { _, state in announce(state) }
-        .onChange(of: ranking?.confirmedChanges) { _, _ in announceRanking() }
-        .onChange(of: ranking?.failureMessage) { _, message in
+        .animation(DrivyMotion.context(reduceMotion), value: store.displayedMode)
+        .onChange(of: store.confirmedChanges) { _, _ in announceConfirmed() }
+        .onChange(of: store.failureMessage) { _, message in
             if let message { AccessibilityNotification.Announcement(message).post() }
         }
-        .onDisappear {
-            store.clearNotice()
-            ranking?.clearNotice()
+        .onChange(of: store.adoption) { _, _ in offerAdoptionOnce() }
+        .onDisappear { store.clearNotice() }
+        .task {
+            _ = await store.refresh()
+            offerAdoptionOnce()
         }
-        .task { _ = await store.refresh() }
-        .task { _ = await ranking?.refresh() }
         .accessibilityIdentifier("observation-themes")
+    }
+
+    private func offerAdoptionOnce() {
+        guard !offeredAdoption, store.adoption != nil else { return }
+        offeredAdoption = true
+        showsAdoption = true
     }
 
     // MARK: Messages
 
     /// Un message seulement pour l’inhabituel : un échec, un réglage changé ailleurs, une lecture impossible.
     @ViewBuilder private var messages: some View {
-        if let ranking {
-            if let message = ranking.failureMessage {
-                Section {
-                    SchoolErrorNotice(message: message, retry: ranking.canRetry ? { ranking.retry() } : nil)
-                        .listRowInsets(noticeInsets)
-                }
-                .drivyClearRow()
-            } else if let notice = ranking.notice {
-                Section {
-                    DrivyInlineMessage(text: notice, tone: .warning)
-                        .listRowInsets(noticeInsets)
-                }
-                .drivyClearRow()
-            }
-        }
-        if case .failed(let message) = store.saveState {
+        if let message = store.failureMessage {
             Section {
                 SchoolErrorNotice(message: message, retry: store.canRetry ? { store.retry() } : nil)
                     .listRowInsets(noticeInsets)
@@ -129,9 +134,10 @@ struct SchoolObservationThemeSettingsView: View {
                     .listRowInsets(noticeInsets)
             }
             .drivyClearRow()
-        } else if !store.isLoading, !store.canEdit, let error = store.loadError {
+        } else if !store.isLoading, store.policy == nil || store.account == nil {
             Section {
-                SchoolErrorNotice(message: error, retry: { Task { await store.refresh() } })
+                SchoolErrorNotice(message: "Les signalements n’ont pas pu être chargés.",
+                                  retry: { Task { await store.refresh() } })
                     .listRowInsets(noticeInsets)
             }
             .drivyClearRow()
@@ -140,25 +146,19 @@ struct SchoolObservationThemeSettingsView: View {
 
     // MARK: Classement intelligent
 
-    /// Absent tant que l’école n’a pas répondu, et pour une école qui ne connaît pas encore le classement.
-    /// L’interrupteur montre la proposition pendant l’envoi, puis l’état que l’école confirme.
-    @ViewBuilder private var rankingSection: some View {
-        if let ranking, ranking.isAvailable {
+    /// L’interrupteur montre la proposition pendant l’envoi, puis l’état que le service confirme.
+    @ViewBuilder private var smartSection: some View {
+        if store.canReorder {
             Section {
-                Toggle(isOn: Binding(get: { ranking.displayedMode == .smart }, set: { ranking.setSmart($0) })) {
-                    VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                        Text("Classement intelligent")
-                            .foregroundStyle(DrivyTheme.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text("Organise automatiquement vos signalements selon vos habitudes d’utilisation.")
-                            .font(.footnote)
-                            .foregroundStyle(DrivyTheme.muted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.vertical, DrivySpacing.xs)
+                Toggle(isOn: Binding(get: { store.displayedMode == .smart }, set: { store.setSmart($0) })) {
+                    Text("Classement intelligent")
+                        .foregroundStyle(DrivyTheme.text)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, DrivySpacing.xs)
                 }
                 .drivyControlTint()
                 .frame(minHeight: DrivyLayout.tapTarget)
+                .disabled(store.isResetting)
                 .listRowInsets(rowInsets)
                 .accessibilityIdentifier("observation-ranking-smart")
             }
@@ -166,21 +166,12 @@ struct SchoolObservationThemeSettingsView: View {
         }
     }
 
-    private func announceRanking() {
-        guard let ranking else { return }
-        let spoken = ranking.mode == .smart ? "Classement intelligent activé" : "Classement intelligent désactivé"
-        AccessibilityNotification.Announcement(spoken).post()
-    }
-
     // MARK: Thèmes
 
     private var themeSection: some View {
         let themes = shownThemes
-        // Aucun déplacement en ordre automatique : ni poignée, ni glisser-déposer.
         let move: ((IndexSet, Int) -> Void)? = reorders ? { source, destination in
-            var moved = store.displayed
-            moved.move(fromOffsets: source, toOffset: destination)
-            store.propose(moved)
+            store.move(fromOffsets: source, toOffset: destination)
         } : nil
         return Section {
             ForEach(themes) { theme in
@@ -190,11 +181,11 @@ struct SchoolObservationThemeSettingsView: View {
             .onMove(perform: move)
             .moveDisabled(!reorders)
         } header: {
-            // Compteur et indication sur une ligne quand elle tient ; sinon l’indication passe dessous.
+            // Compteur et mention sur une ligne quand elle tient ; sinon la mention passe dessous.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: DrivySpacing.s) {
                     countText
-                    automaticText
+                    managedText
                     Spacer(minLength: DrivySpacing.xs)
                     saveStatus
                 }
@@ -204,7 +195,7 @@ struct SchoolObservationThemeSettingsView: View {
                         Spacer(minLength: DrivySpacing.xs)
                         saveStatus
                     }
-                    automaticText
+                    managedText
                 }
             }
             .drivyFormSectionHeader()
@@ -217,146 +208,134 @@ struct SchoolObservationThemeSettingsView: View {
             .accessibilityIdentifier("observation-themes-count")
     }
 
-    /// Seule indication du mode dans la liste : discrète, à côté du compteur.
-    @ViewBuilder private var automaticText: some View {
-        if isAutomatic {
-            Text("Ordre automatique")
-                .accessibilityIdentifier("observation-themes-automatic")
+    /// Seule indication de l’école dans la liste : l’affichage qu’elle impose, discrète, à côté du compteur.
+    @ViewBuilder private var managedText: some View {
+        if !store.canEditVisibility {
+            Text("Géré par l’école")
+                .accessibilityIdentifier("observation-themes-managed")
         }
     }
 
     private var countLabel: String {
         let visible = store.visibleCount
-        return "\(visible) \(visible > 1 ? "affichés" : "affiché") sur \(store.displayed.count)"
+        return "\(visible) \(visible > 1 ? "affichés" : "affiché") sur \(shownThemes.count)"
     }
 
-    /// L’interrupteur est la rangée : son libellé nomme le thème, son état dit s’il est proposé en leçon. Il reste
-    /// actif en ordre automatique : afficher ou masquer un thème modifie la configuration de l’école, envoyée
-    /// dans son ordre à elle (`store.setVisible` part de `store.displayed`).
-    /// « Monter » et « Descendre » font le même déplacement que la poignée, pour VoiceOver et la commande vocale ;
-    /// ils n’existent pas en ordre automatique.
-    private func row(_ theme: SchoolObservationTheme, position: Int, count: Int) -> some View {
-        Toggle(isOn: Binding(get: { theme.visible }, set: { store.setVisible($0, key: theme.key) })) {
+    /// Affichage modifiable : l’interrupteur est la rangée, son libellé nomme le thème, son état dit s’il est proposé
+    /// en leçon. Affichage imposé : une rangée de lecture, qui dit seulement si le thème est masqué.
+    /// « Monter » et « Descendre » font le même déplacement que la poignée, pour VoiceOver et la commande vocale.
+    @ViewBuilder private func row(_ theme: SchoolObservationPreferencesTheme, position: Int, count: Int) -> some View {
+        if store.canEditVisibility {
+            Toggle(isOn: Binding(get: { theme.visible }, set: { store.setVisible($0, key: theme.key) })) {
+                label(theme)
+            }
+            .drivyControlTint()
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .disabled(store.isResetting)
+            .accessibilityHint("Position \(position) sur \(count)")
+            .accessibilityActions { moveActions(theme) }
+            .accessibilityIdentifier("observation-theme-\(theme.key)")
+        } else {
             HStack(spacing: DrivySpacing.s) {
-                DrivyObservationGlyphImage(glyph: theme.glyph)
-                    .foregroundStyle(theme.visible ? DrivyTheme.accent : DrivyTheme.textTertiary)
-                    .frame(width: 24, height: 24)
-                    .accessibilityHidden(true)
-                Text(theme.title)
-                    .foregroundStyle(DrivyTheme.text)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.vertical, DrivySpacing.xs)
-        }
-        .drivyControlTint()
-        .frame(minHeight: DrivyLayout.tapTarget)
-        // Un thème que l’école ne liste pas encore (école plus ancienne que l’app) reste masqué et ne se règle pas.
-        .disabled(!store.canEdit || store.configuration.unlisted.contains(theme.key))
-        .accessibilityHint("Position \(position) sur \(count)")
-        .accessibilityActions {
-            if reorders {
-                Button("Monter") { move(theme, by: -1) }
-                Button("Descendre") { move(theme, by: 1) }
-            }
-        }
-        .accessibilityIdentifier("observation-theme-\(theme.key)")
-    }
-
-    private func move(_ theme: SchoolObservationTheme, by delta: Int) {
-        guard reorders, let index = store.move(key: theme.key, by: delta) else { return }
-        let spoken: String = "\(theme.title), position \(index + 1) sur \(store.displayed.count)"
-        AccessibilityNotification.Announcement(spoken).post()
-    }
-
-    // MARK: Lecture seule
-
-    /// Moniteur sans droit de gestion : les thèmes que « Signaler » lui propose, dans l’ordre montré. Des rangées
-    /// simples : ni interrupteur grisé, ni poignée.
-    private var readOnlySection: some View {
-        let themes = shownThemes.filter(\.visible)
-        return Section {
-            ForEach(themes) { theme in
-                HStack(spacing: DrivySpacing.s) {
-                    DrivyObservationGlyphImage(glyph: theme.glyph)
-                        .foregroundStyle(DrivyTheme.accent)
-                        .frame(width: 24, height: 24)
-                        .accessibilityHidden(true)
-                    Text(theme.title)
-                        .foregroundStyle(DrivyTheme.text)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                label(theme)
+                Spacer(minLength: DrivySpacing.xs)
+                if !theme.visible {
+                    Text("Masqué")
+                        .font(.footnote)
+                        .foregroundStyle(DrivyTheme.muted)
                 }
-                .padding(.vertical, DrivySpacing.xs)
-                .frame(minHeight: DrivyLayout.tapTarget)
-                .listRowInsets(rowInsets)
-                .accessibilityElement(children: .combine)
-                .accessibilityValue("Position \((themes.firstIndex(of: theme) ?? 0) + 1) sur \(themes.count)")
-                .accessibilityIdentifier("observation-theme-\(theme.key)")
             }
-        } header: {
-            if isAutomatic {
-                Text("Ordre automatique")
-                    .drivyFormSectionHeader()
-                    .accessibilityIdentifier("observation-themes-automatic")
-            }
+            .frame(minHeight: DrivyLayout.tapTarget)
+            .accessibilityElement(children: .combine)
+            .accessibilityValue("Position \(position) sur \(count)")
+            .accessibilityActions { moveActions(theme) }
+            .accessibilityIdentifier("observation-theme-\(theme.key)")
         }
-        .drivyFormRows()
+    }
+
+    private func label(_ theme: SchoolObservationPreferencesTheme) -> some View {
+        HStack(spacing: DrivySpacing.s) {
+            DrivyObservationGlyphImage(glyph: theme.asTheme.glyph)
+                .foregroundStyle(theme.visible ? DrivyTheme.accent : DrivyTheme.textTertiary)
+                .frame(width: 24, height: 24)
+                .accessibilityHidden(true)
+            Text(theme.title)
+                .foregroundStyle(DrivyTheme.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, DrivySpacing.xs)
+    }
+
+    @ViewBuilder private func moveActions(_ theme: SchoolObservationPreferencesTheme) -> some View {
+        if reorders {
+            Button("Monter") { move(theme, by: -1) }
+            Button("Descendre") { move(theme, by: 1) }
+        }
+    }
+
+    private func move(_ theme: SchoolObservationPreferencesTheme, by delta: Int) {
+        guard reorders, let index = store.move(key: theme.key, by: delta) else { return }
+        let spoken: String = "\(theme.title), position \(index + 1) sur \(shownThemes.count)"
+        AccessibilityNotification.Announcement(spoken).post()
     }
 
     // MARK: État d’enregistrement
 
-    /// Discret, sur la ligne du compteur. « Enregistré » ne s’écrit qu’après la réponse de l’école ; un échec
+    /// Discret, sur la ligne du compteur. « Enregistré » ne s’annonce qu’après la réponse du service ; un échec
     /// se dit plus haut, avec sa reprise.
     @ViewBuilder private var saveStatus: some View {
-        switch store.saveState {
-        case .saving:
+        if store.isSaving || store.isResetting {
             HStack(spacing: DrivySpacing.xxs) {
                 ProgressView().controlSize(.small)
                 Text("Enregistrement…")
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("observation-themes-saving")
-        case .saved:
-            Label("Enregistré", systemImage: "checkmark")
-                .labelStyle(.titleAndIcon)
-                .accessibilityIdentifier("observation-themes-saved")
-        case .idle, .failed:
-            EmptyView()
         }
     }
 
-    private func announce(_ state: SchoolObservationThemeStore.SaveState) {
-        switch state {
-        case .saved: AccessibilityNotification.Announcement("Enregistré").post()
-        case .failed(let message): AccessibilityNotification.Announcement(message).post()
-        case .idle, .saving: break
+    private func announceConfirmed() {
+        let spoken: String
+        switch store.lastConfirmedReset {
+        case .presentation: spoken = "Ordre et visibilité rétablis"
+        case .learning: spoken = "Apprentissage recommencé"
+        case nil: spoken = "Enregistré"
         }
+        AccessibilityNotification.Announcement(spoken).post()
     }
 
-    // MARK: Réinitialisation
+    // MARK: Remises à zéro
 
-    /// Remettre l’ordre ne masque ni n’affiche rien : aucun accord demandé ; sans objet en ordre automatique.
-    /// Rétablir l’origine change aussi l’affichage : une seule question, puis l’envoi.
-    private var resetSection: some View {
-        Section {
-            if !isAutomatic {
-                Button { store.resetOrder() } label: {
-                    Text("Réinitialiser l’ordre").frame(maxWidth: .infinity, alignment: .leading)
+    /// Deux actions rares, en bas de l’écran. Rétablir l’ordre et la visibilité ne touche que ce compte ; « Recommencer
+    /// l’apprentissage » reste disponible même quand l’école impose son affichage.
+    @ViewBuilder private var resetSection: some View {
+        if offersPresentationReset || store.hasLearningReset {
+            Section {
+                if offersPresentationReset {
+                    Button { confirmsPresentationReset = true } label: {
+                        Text("Rétablir l’ordre et la visibilité").frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.drivyText)
+                    .disabled(store.isBusy)
+                    .listRowInsets(rowInsets)
+                    .accessibilityIdentifier("observation-themes-reset-all")
                 }
-                .buttonStyle(.drivyText)
-                .disabled(!store.canEdit || store.isOriginalOrder)
-                .listRowInsets(rowInsets)
-                .accessibilityIdentifier("observation-themes-reset-order")
+                if store.hasLearningReset {
+                    Button { confirmsLearningReset = true } label: {
+                        Text("Recommencer l’apprentissage du classement intelligent")
+                            .font(.footnote)
+                            .foregroundStyle(DrivyTheme.muted)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(minHeight: DrivyLayout.tapTarget)
+                    .disabled(store.isBusy)
+                    .listRowInsets(rowInsets)
+                    .accessibilityIdentifier("observation-learning-reset")
+                }
             }
-            Button { confirmsReset = true } label: {
-                Text("Rétablir la configuration d’origine").frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .buttonStyle(.drivyText)
-            .disabled(!store.canEdit || store.isOriginal)
-            .listRowInsets(rowInsets)
-            .accessibilityIdentifier("observation-themes-reset-all")
+            .drivyFormRows()
         }
-        .drivyFormRows()
     }
 }
 
