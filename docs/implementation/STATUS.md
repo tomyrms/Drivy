@@ -4,6 +4,7 @@
 - Fixture : `-messaging-ui-media-fail-once` (premier envoi refusé, reprise ciblée puis confirmation). Tests UI ajoutés dans `MessagingMediaUITests` : photo et PDF reçus (clair, sombre), légende → envoi → attente → échec → reprise → confirmé (clair, sombre), retrait sans perte de texte, visionneuse en paysage. Deux tests unitaires ajoutés à `MessagingMediaStatesTests`.
 - Matrice critère par critère et liste « non essayé » : `docs/implementation/ux-medias-472-lot-e-qualification.md`. Rien compilé ni exécuté sur le poste Windows ; un run unitaire Apple lancé, résultat à consigner. Campagne UI et captures : non lancées.
 - Non essayé : appareil physique, VoiceOver réel, gestes réels, mesures de performance sur appareil (non mesuré).
+- Test du relais instable : `testRealRelayExchangeIdempotenceRecoveryAndContextRefusal` a échoué au run 43286133550 (étape READINESS, délai de 20 s ; connexion et TLS établis après ~9,5 s, aucune réponse). Hypothèse retenue d'après les phases du journal : runner chargé, relais lent à répondre au premier appel ; le relais était pourtant prêt au démarrage. Correctif : attente bornée commune `RelayReadinessWait` (3 essais supplémentaires, 2 s de pause, erreurs de transport transitoires seulement) dans les trois classes qui sondent `/qualification/ready` ; aucun test désactivé ni affaibli, relais et production inchangés. Efficacité : à confirmer par le run Apple.
 
 ## 12 novembre 2026 — Épic UX médias #472, lot D : composeur (#475)
 

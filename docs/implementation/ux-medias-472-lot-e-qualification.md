@@ -45,6 +45,10 @@ Légende : T = test unitaire ou UI écrit, R = relecture de code, X = non couver
 | #478 | Parcours de bout en bout | T UI : photo reçue, PDF reçu, légende → envoi → attente → échec → reprise → confirmé, retrait sans perte |
 | #478 | Captures iPhone et iPad, clair et sombre | Écrites (`media-<état>-<clair|sombre>`) ; produites seulement par le run UI recommandé ci-dessous : non lancé |
 
+## Test du relais instable
+
+`MatrixMessagingRelayIntegrationTests.testRealRelayExchangeIdempotenceRecoveryAndContextRefusal` (run 43286133550, étape READINESS, `transport=TIMEOUT`). Journal : connexion et TLS terminés après ~9,5 s, requête émise, aucune réponse avant le délai de 20 s. Cause : hypothèse, non prouvée (charge du runner ; le script de démarrage avait déjà obtenu une réponse du relais). Correction : `apps/ios/DrivyTests/RelayReadinessWait.swift`, attente bornée (3 essais supplémentaires, 2 s de pause, session neuve, erreurs -1001/-1004/-1005 seulement), utilisée par les classes `MatrixMessagingRelayIntegrationTests`, `MatrixMessagingSealedReportRelayTests` et `MessagingMediaRealRelayTests`. Couverture : aucun test dédié (attente réseau) ; effet à constater sur les runs Apple.
+
 ## Commandes recommandées
 
 Campagne UI et captures (une seule commande, iPhone puis iPad) :

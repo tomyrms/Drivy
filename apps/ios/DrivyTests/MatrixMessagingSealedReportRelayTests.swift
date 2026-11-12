@@ -45,7 +45,7 @@ final class MatrixMessagingSealedReportRelayTests: XCTestCase {
         let bRelay = MessagingCryptoHTTPRelay(baseURL: base, token: { "demo-alice" }, invalidate: { _ in false }, currentScope: { bScope })
 
         stage = "READINESS"
-        let readiness = try await SchoolURLSessionTransport().send(URLRequest(url: base.appendingPathComponent("qualification/ready")))
+        let readiness = try await RelayReadinessWait.send(URLRequest(url: base.appendingPathComponent("qualification/ready")))
         guard readiness.status == 200,
               let ready = try JSONSerialization.jsonObject(with: readiness.data) as? [String: Any],
               ready["fixture"] as? String == "drivy-messaging-relay-v1",
