@@ -97,13 +97,15 @@ deux simulateurs, avec une limite de 90 minutes. L'IPA est un job séparé pour
 
 ### IPA pour recette physique de Messages
 
-L'accès physique est compilé uniquement sur demande explicite, sans fixture de
+L'IPA d'essai (`ipa-essai.yml`) inclut l'accès Messages par défaut, au push comme
+au lancement manuel (décision du porteur du 12 novembre 2026), sans fixture de
 conversation ni simulation de réussite. Il ne nécessite pas d'avoir déjà achevé
-la recette VoiceOver physique, précisément destinée à cette IPA. Exemple réservé
-au coordinateur :
+la recette VoiceOver physique, précisément destinée à cette IPA. Les appels de
+workflow (validation finale) restent explicites, défaut faux. Exemple réservé
+au coordinateur, pour une IPA sans Messages :
 
 ```console
-gh workflow run ipa-essai.yml --repo tomyrms/Drivy --ref <SHA_CANDIDAT> -f messaging_qualification=true
+gh workflow run ipa-essai.yml --repo tomyrms/Drivy --ref <SHA_CANDIDAT> -f messaging_qualification=false
 ```
 
 Pour tester et construire ce même mode dans la campagne finale, ajouter
