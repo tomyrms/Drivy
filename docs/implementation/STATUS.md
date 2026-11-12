@@ -2178,3 +2178,37 @@ les bornes et l'absence de changement métier/serveur. Cette exception est inté
 nouveaux tests et les parcours iPhone/iPad doivent encore être compilés et exécutés sur Apple.
 La prochaine qualification porte sur le candidat complet ; aucune fusion master ou bascule
 homelab n'est encore annoncée. Leur autorisation est acquise, avec sauvegarde préalable vérifiée.
+
+## 11 novembre 2026 — R08 serveur (#465, #466, #467)
+
+Branche `tomyrms/r08-serveur`. Contrat : `r08-contrat-serveur-20261111.md` ; contrat machine : `apps/api/contracts/observation-preferences.json`.
+
+**Livré (API + migration `20261111_observation_preferences.sql`)**
+
+- Politique de l'école séparée des préférences du compte : `personalization_allowed` (faux pour toutes les écoles existantes), gestion de la référence réservée à l'administrateur.
+- Préférences et classement intelligent au niveau du compte (`person_observation_preference`, RLS forcée), routes `observation-preferences` (GET, PUT, `presentation-reset`, `learning-reset`) ; anciennes routes `observation-themes` et `observation-ranking` compatibles.
+- « Recommencer l'apprentissage » : borne durable (génération + date) lue par la fonction d'usage ; aucune donnée pédagogique supprimée.
+- Reprise de l'existant répétable, sans écrasement ; divergences exposées comme candidats, jamais départagées.
+
+**Exécuté, sur une vraie PostgreSQL 55373 (Docker `drivy-r08-pg`)**
+
+- `npm run typecheck` : propre.
+- Sept fichiers ciblés (préférences 16, apprentissage 7, migration 5, classement, thèmes, capture, capture-observations) : 7 fichiers, 62/62 réussis.
+- Suite API complète : 4 fichiers en échec sur 105, 1168 réussis, 7 ignorés. Les échecs ne relèvent pas de R08 : `course-worker-process` (exige Node 24, runtime local 26.8.1) ; `g1c` (deux tests SMTP réel, Mailpit absent) ; `capture` et `capture-observations` échouaient sur un compteur de tables que j'avais modifié à tort, rétabli, puis relancés verts (inventaires limités aux migrations numérotées).
+
+**Reste à qualifier**
+
+- Garde de génération d'une opération quotidienne périmée : couvert par le code et la borne SQL, sans test dédié.
+- Web (#468) et iOS (#469) : déclarer les routes dans la passerelle, écrans non réalisés ici. Aucun résultat sur appareil, aucune CI Apple, aucun déploiement.
+- Décisions conservatrices à valider : voir § 8 du contrat.
+
+### Mise à jour du 12 novembre 2026 — corrections de revue de la PR #479
+
+- Ordre toujours personnel : en visibilité imposée, l'ordre est accepté et seule la visibilité personnelle est refusée (`403 OBSERVATION_PERSONALIZATION_DISABLED`, rien d'écrit) ; la visibilité enregistrée reste en réserve. Corps du `PUT` : `{operationId, mode?, order?, visibility?}` (ancien `themes` retiré). `GET themes` : ordre personnel, visibilité effective, `schoolVisible`, `visibilityEditable`.
+- Classement du compte sur le catalogue complet (18 clés), filtré seulement pour la palette ; un thème masqué dans l'école A garde rang et habitudes dans l'école B, y compris après un rafraîchissement fait depuis A.
+- Reset de présentation : administrateur toujours, moniteur en école libre seulement ; la référence de l'école ouverte est copiée sur le compte.
+- Preuves ajoutées : course « Recommencer l'apprentissage » contre un recalcul quotidien démarré avant (seam `afterRead` de `loadPreferences`) ; reset scolaire vers les valeurs d'origine de Drivy (`PUT observation-themes`, aucun compte touché) ; libre, imposé, libre avec ordre déplacé pendant la phase imposée.
+- Trois décisions marquées « validées par le porteur » (11 novembre 2026) dans le contrat : jour `Europe/Zurich`, divergences non départagées, ancien droit inerte.
+- Vérifications : typecheck propre ; suites ciblées préférences 22, apprentissage 9, classement et migration verts ; suite API complète : 103 fichiers sur 105 réussis, 1178 tests réussis, 7 ignorés, 2 en échec hors R08 (`g1c` SMTP, Mailpit absent) et `course-worker-process` (exige Node 24, local 26.8.1).
+- Base de test : conteneur `drivy-r08-pg2` sur le port 55640 (le port 55373 est tombé dans une plage réservée par Windows).
+- Reste à qualifier : web (#468) et iOS (#469) ; routes à déclarer dans `apps/web/server/school-routes.ts` ; aucun appareil, aucune CI Apple, aucun déploiement.

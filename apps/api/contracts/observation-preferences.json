@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:observation-preferences:1",
+  "$comment": "Extension du 11 novembre 2026 (R08 : #465, #466, #467). OpenAPI canonique 3.11.0 conservé : ces routes ne figurent pas au canon. Routes /v1/schools/{schoolId}/observation-preferences : GET (ETag), PUT (If-Match + Idempotency-Key), POST presentation-reset et learning-reset (If-Match + Idempotency-Key). Les préférences appartiennent au compte (personne), communes à toutes ses écoles ; {schoolId} ne désigne que l'école ouverte, dont la politique et la configuration de référence servent à calculer la palette. L'ordre est toujours personnel (manuel ou intelligent) ; seule la visibilité dépend de la politique de l'école ouverte. Le classement intelligent du compte porte sur le catalogue complet, filtré seulement pour la palette. Le reset de présentation copie la référence de l'école ouverte sur le compte. /observation-themes gagne personalizationAllowed (lecture et écriture facultative) et sa gestion est réservée à l'administrateur ; /observation-ranking garde sa forme d'origine mais lit et écrit le compte. Contrat détaillé : docs/implementation/r08-contrat-serveur-20261111.md.",
+  "$defs": {
+    "ThemeKey": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$"},
+    "Theme": {
+      "type": "object",
+      "required": ["key", "title", "competencyKeys", "visible", "defaultVisible", "defaultPosition"],
+      "properties": {
+        "key": {"$ref": "#/$defs/ThemeKey"},
+        "title": {"type": "string"},
+        "competencyKeys": {"type": "array", "items": {"type": "string"}, "description": "Déprécié : plus aucune règle ne le lit."},
+        "visible": {"type": "boolean"},
+        "defaultVisible": {"type": "boolean"},
+        "defaultPosition": {"type": "integer", "minimum": 0}
+      }
+    },
+    "PreferenceTheme": {
+      "allOf": [{"$ref": "#/$defs/Theme"}],
+      "type": "object",
+      "required": ["key", "title", "competencyKeys", "visible", "defaultVisible", "defaultPosition", "schoolVisible", "visibilityEditable"],
+      "properties": {
+        "visible": {"type": "boolean", "description": "Visibilité EFFECTIVE dans l'école ouverte : celle de l'école si elle l'impose, sinon la visibilité personnelle enregistrée (à défaut, celle de l'école)."},
+        "schoolVisible": {"type": "boolean", "description": "Visibilité de référence de l'école ouverte."},
+        "visibilityEditable": {"type": "boolean", "description": "Vrai si l'école autorise la personnalisation : la visibilité de ce thème peut être modifiée depuis le compte. L'ordre, lui, est toujours modifiable."}
+      }
+    },
+    "AdoptionCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schoolId", "schoolName", "mode", "themes"],
+      "properties": {
+        "schoolId": {"type": "string", "format": "uuid"},
+        "schoolName": {"type": "string"},
+        "mode": {"enum": ["MANUAL", "SMART"]},
+        "themes": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["key", "visible"], "properties": {"key": {"$ref": "#/$defs/ThemeKey"}, "visible": {"type": "boolean"}}}}
+      }
+    },
+    "Preferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "schoolId", "version", "personalizationAllowed", "orderCustomized", "visibilityCustomized", "mode", "themes", "palette", "rankedOn", "learning", "adoption"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid", "description": "Identifiant de la personne connectée."},
+        "schoolId": {"type": "string", "format": "uuid", "description": "École ouverte, celle de la route."},
+        "version": {"type": "integer", "minimum": 1, "description": "À renvoyer dans If-Match. 1 tant que le compte n'a rien enregistré."},
+        "personalizationAllowed": {"type": "boolean", "description": "Politique de l'école ouverte : les moniteurs peuvent-ils personnaliser ordre et affichage ?"},
+        "orderCustomized": {"type": "boolean", "description": "Le compte a un ordre manuel à lui ; sinon l'ordre de référence de l'école ouverte s'applique. L'ordre personnel s'applique dans toutes les écoles, imposées ou non."},
+        "visibilityCustomized": {"type": "boolean", "description": "La visibilité personnelle du compte est celle qui s'applique dans cette école (politique ouverte ET visibilité enregistrée). Faux en visibilité imposée : la visibilité enregistrée reste en réserve."},
+        "mode": {"enum": ["MANUAL", "SMART"]},
+        "themes": {"type": "array", "minItems": 18, "maxItems": 18, "items": {"$ref": "#/$defs/PreferenceTheme"}, "description": "Catalogue complet dans l'ordre manuel personnel (sinon celui de l'école), avec la visibilité effective de l'école ouverte et le droit de la modifier : la base de l'écran de réglage."},
+        "palette": {"type": "array", "items": {"$ref": "#/$defs/ThemeKey"}, "minItems": 1, "description": "Ce que « Signaler » affiche, dans cet ordre : ordre personnel (manuel ou intelligent) filtré par la visibilité effective de l'école ouverte. Calculé par le service, jamais réécrit dans les préférences."},
+        "rankedOn": {"type": ["string", "null"], "format": "date", "description": "Jour (Europe/Zurich) du dernier classement ; null hors mode intelligent."},
+        "learning": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["generation", "since"],
+          "properties": {"generation": {"type": "integer", "minimum": 0}, "since": {"type": ["string", "null"], "format": "date-time", "description": "Borne durable : aucun geste observé avant elle n'est lu."}}
+        },
+        "adoption": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "object", "additionalProperties": false, "required": ["candidates"], "properties": {"candidates": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/AdoptionCandidate"}}}}
+          ],
+          "description": "Non nul seulement tant que le compte n'a rien enregistré et que ses écoles portent des configurations différentes."
+        }
+      }
+    },
+    "SaveCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "anyOf": [{"required": ["mode"]}, {"required": ["order"]}, {"required": ["visibility"]}],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "mode": {"enum": ["MANUAL", "SMART"]},
+        "order": {
+          "type": "array",
+          "minItems": 18,
+          "maxItems": 18,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/ThemeKey"},
+          "description": "Ordre manuel personnel : les dix-huit clés du catalogue, chacune une fois. Toujours accepté, même quand l'école impose sa visibilité. Peut être envoyé seul."
+        },
+        "visibility": {
+          "type": "array",
+          "minItems": 18,
+          "maxItems": 18,
+          "items": {"type": "object", "additionalProperties": false, "required": ["key", "visible"], "properties": {"key": {"$ref": "#/$defs/ThemeKey"}, "visible": {"type": "boolean"}}},
+          "description": "Visibilité personnelle : les dix-huit clés, sans doublon, au moins une visible. Refusée (403 OBSERVATION_PERSONALIZATION_DISABLED) si l'école impose sa visibilité ; celle déjà enregistrée reste alors en réserve. Peut être envoyée seule."
+        }
+      }
+    },
+    "ResetCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId"],
+      "properties": {"operationId": {"type": "string", "format": "uuid"}}
+    },
+    "Envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["data", "requestId", "serverTime"],
+      "properties": {"data": {"$ref": "#/$defs/Preferences"}, "requestId": {"type": "string"}, "serverTime": {"type": "string", "format": "date-time"}}
+    },
+    "SchoolThemes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "schoolId", "version", "canManage", "personalizationAllowed", "themes"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "schoolId": {"type": "string", "format": "uuid"},
+        "version": {"type": "integer", "minimum": 1},
+        "canManage": {"type": "boolean", "description": "Vrai pour l'administrateur de l'école seulement. L'ancien droit MANAGE_OBSERVATION_THEMES d'un moniteur n'ouvre plus rien."},
+        "personalizationAllowed": {"type": "boolean", "description": "Faux par défaut et pour toutes les écoles existantes (visibilité imposée)."},
+        "themes": {"type": "array", "minItems": 18, "maxItems": 18, "items": {"$ref": "#/$defs/Theme"}}
+      }
+    },
+    "SchoolThemesCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "themes"],
+      "properties": {
+        "operationId": {"type": "string", "format": "uuid"},
+        "themes": {"type": "array", "minItems": 18, "maxItems": 18, "items": {"type": "object", "additionalProperties": false, "required": ["key", "visible"], "properties": {"key": {"$ref": "#/$defs/ThemeKey"}, "visible": {"type": "boolean"}}}, "description": "Référence de l'école : ordre et visibilité d'origine du catalogue pour tout nouveau profil ou reset. L'envoi de l'ordre et de l'affichage d'origine (defaultPosition, defaultVisible) est le reset scolaire."},
+        "personalizationAllowed": {"type": "boolean", "description": "Absent = politique inchangée (anciens clients)."}
+      }
+    },
+    "LegacyRanking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "schoolId", "membershipId", "version", "mode", "order", "rankedOn"],
+      "properties": {
+        "id": {"type": "string", "format": "uuid"},
+        "schoolId": {"type": "string", "format": "uuid"},
+        "membershipId": {"type": "string", "format": "uuid"},
+        "version": {"type": "integer", "minimum": 1, "description": "Version du compte, commune à /observation-preferences."},
+        "mode": {"enum": ["MANUAL", "SMART"]},
+        "order": {"type": "array", "items": {"$ref": "#/$defs/ThemeKey"}, "description": "Vide en mode manuel."},
+        "rankedOn": {"type": ["string", "null"], "format": "date"}
+      }
+    }
+  }
+}
