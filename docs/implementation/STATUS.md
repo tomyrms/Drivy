@@ -2265,3 +2265,4 @@ avec miroirs factices le couvre. Le script SMTP n'a jamais parlé à un Keycloak
 envoyé. Restent hors dépôt : choix du fournisseur SMTP (#50), réception APNs, VoiceOver et parcours Face ID sur
 appareil (#37, #50), recomptage de la matrice #83. Rien n'est déployé, aucune issue n'est fermée par ce lot.
 
+**Contenu de messagerie encodé à clés triées (12 novembre).** `MessagingPlainContent.encoded()` n'fixait pas l'ordre des clés : deux encodages du même contenu pouvaient différer, alors que le signalement promet les mêmes octets (`MessagingThreadTests` ligne 401, rouge sur le run 43200045962 relancé). L'encodeur trie désormais les clés ; le décodage est inchangé. À qualifier : run Apple sur le commit suivant.
