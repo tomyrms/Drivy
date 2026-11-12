@@ -5,6 +5,11 @@
 - Tests écrits : `MessagingMediaComposerDraftTests` (portée `messaging`) et un test UI (`testCaptionIsTheDraftAndSurvivesRemoval`) ; relus sans compilateur local. `test_test_selection.py` passe (27 tests). Résultat du run Apple : à consigner.
 - Non essayé : rendu réel, VoiceOver, Dynamic Type, iPad en fenêtre étroite, clavier, appareil physique.
 
+## 12 novembre 2026 — Épic UX médias #472, lot C (#476)
+
+- Ouverture par pièce, intentions média projetées dans le fil avec reprise ciblée, visionneuse alimentée (chargement, prêt, échec, relance), liste d'envois retirée du panneau. Détails : `docs/implementation/ux-medias-472-lot-c-etats.md`.
+- Tests : `MessagingMediaStatesTests` ajouté à la portée `messaging` ; `test_test_selection.py` vert en local. Compilation et tests Swift : à qualifier par le run Apple. Appareil, VoiceOver, gestes : non essayés.
+
 ## 12 novembre 2026 — Épic UX médias #472, lot A
 
 - Fil de messagerie (#473) : photos en bulles à espace réservé par ratio (borné [0,6 ; 2], 260 × 340 pt au plus), PDF en cartes lisibles, chargeur de miniatures borné (3 en vol, 24 images décodées, résultat tardif ignoré) et capacité interne additive `MessagingMediaThumbnailProviding` ; le protocole gelé `MessagingMediaRuntime` est inchangé. Détail : `docs/implementation/ux-medias-472-lot-a-fil.md`.

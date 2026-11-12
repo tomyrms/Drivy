@@ -12,31 +12,11 @@ struct MessagingMediaComposerPanel: View {
             // composeur (MessagingThreadComposer) ; voir MessagingComposerAttachmentChip.
             MessagingComposerSelectionSection(model: model)
             if model.sending { ProgressView("Envoi…") }
-            if model.opening { ProgressView("Ouverture…") }
+            // Les intentions en attente et leurs reprises vivent dans le fil (#476), à l'emplacement de leur pièce.
             if let error = model.error, error != model.selectionError {
                 Text(error).font(.footnote).foregroundStyle(DrivyTheme.danger)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("messaging.media.error")
-                if model.selection == nil {
-                    Button("Actualiser les envois") { Task { await model.load() } }.frame(minHeight: DrivyLayout.tapTarget)
-                }
-            }
-            ForEach(model.pendingItems) { item in
-                VStack(alignment: .leading, spacing: DrivySpacing.xxs) {
-                    MessagingMediaFileLabel(name: item.name, mime: item.mime, byteSize: item.byteSize)
-                    if let failure = model.failures[item.id] {
-                        Text(MessagingMediaComposerModel.label(failure)).font(.footnote).foregroundStyle(DrivyTheme.warning)
-                    } else if !model.sending {
-                        Text("Envoi à vérifier").font(.footnote).foregroundStyle(DrivyTheme.warning)
-                    }
-                    if !model.sending {
-                        Button(model.failures[item.id] == .membersChanged ? "Vérifier et renvoyer aux participants" : "Vérifier et renvoyer") {
-                            Task { await model.retry(item.id); if model.confirmation != nil { await didConfirm() } }
-                        }
-                        .frame(minHeight: DrivyLayout.tapTarget)
-                        .accessibilityIdentifier("messaging.media.retry")
-                    }
-                }
             }
             if model.confirmation != nil {
                 Label("Envoyé", systemImage: "checkmark").font(.footnote).foregroundStyle(DrivyTheme.success)
