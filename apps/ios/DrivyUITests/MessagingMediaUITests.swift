@@ -16,11 +16,20 @@ final class MessagingMediaUITests: XCTestCase {
         app.launchArguments = ["-messaging-ui-fixture", "-messaging-ui-rich", "-messaging-ui-media",
                                "-AppleLanguages", "(fr)", "-AppleLocale", "fr_CH"] + extra
         app.launch()
+        // En mode sombre et AccessibilityXXXL le runner met 10 à 20 s à se stabiliser entre deux écrans (journal du run
+        // 43278793085 : « Wait for … to idle » de 7 à 12 s) ; on attend donc davantage, et on fait défiler la liste
+        // des conversations au cas où l'entrée serait hors écran (les lignes hors écran n'existent pas dans la hiérarchie).
         let entry = app.buttons["messages-entry"]
-        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        XCTAssertTrue(entry.waitForExistence(timeout: 30))
         entry.tap()
         let general = app.buttons["messaging.general.open"]
-        XCTAssertTrue(general.waitForExistence(timeout: 10))
+        if !general.waitForExistence(timeout: 30) {
+            for _ in 0..<5 where !general.exists {
+                app.swipeUp()
+                _ = general.waitForExistence(timeout: 3)
+            }
+        }
+        XCTAssertTrue(general.exists, "Entrée « Général » introuvable après attente et défilement")
         general.tap()
         XCTAssertTrue(app.buttons["messaging.compose.more"].waitForExistence(timeout: 10))
         return app
