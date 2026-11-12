@@ -657,12 +657,9 @@ struct SchoolCaptureStartReview: Identifiable {
             }
         } catch SchoolCaptureFailure.operationUnknown {
             guard isCurrent(request) else { return }
-            // Hors délai réseau, une demande inconnue de l’école n’existera plus : elle est classée sans autre geste.
-            if Date().timeIntervalSince(queued.mutation.createdAt) > Self.settledRequestAge,
-               (try? await store.discardUnknown(id: queued.id, scope: scope)) != nil {
-                try? await reloadQueue(request)
-                if isCurrent(request) { startMessage = "Cette demande n’était pas arrivée à l’école. Elle est retirée ; tu peux démarrer le trajet." }
-            } else { unknownRequestIDs.insert(queued.id) }
+            // Décision L1 (12 novembre 2026) : aucune suppression par délai. La demande reste ; l’école ne la connaît
+            // pas, la personne choisit de relire le départ (même clé) ou d’abandonner la demande.
+            unknownRequestIDs.insert(queued.id)
         } catch { if isCurrent(request) { fail(error) } }
     }
 
@@ -677,24 +674,21 @@ struct SchoolCaptureStartReview: Identifiable {
     }
 
     /// Une demande plus ancienne que ce délai n’est plus en vol : les délais réseau (30 s) sont écoulés.
+    /// Ce délai ne sert qu’à ne pas déclarer « inconnue » une demande encore en route ; il ne retire jamais rien.
     static let settledRequestAge: TimeInterval = 120
 
-    /// Lecture automatique et bornée des départs en attente, sans rien réémettre ni relancer de GPS :
-    /// une demande jamais émise ou inconnue de l’école est classée ; les autres restent à vérifier.
+    /// Lecture automatique et bornée des départs en attente, sans rien réémettre, retirer ni relancer de GPS :
+    /// une demande jamais émise ou inconnue de l’école est seulement signalée, pour proposer à la personne de
+    /// relire le départ (même clé) ou de l’abandonner (décision L1). Les autres restent à vérifier.
     private func reconcilePendingStarts(_ request: UUID) async {
-        guard let store, isCurrent(request) else { return }
+        guard isCurrent(request) else { return }
         let now = Date()
         let candidates = pendingStarts.filter {
             $0.mutation.scope == scope && now.timeIntervalSince($0.mutation.createdAt) > Self.settledRequestAge
         }.prefix(3)
-        guard !candidates.isEmpty else { return }
-        var changed = false
         for queued in candidates {
             guard isCurrent(request) else { return }
-            if queued.state == .queued {
-                if (try? await store.settleStartWithoutAuthorization(id: queued.id, scope: scope, refusedByServer: false)) != nil { changed = true }
-                continue
-            }
+            if queued.state == .queued { unknownRequestIDs.insert(queued.id); continue }
             let mutation = queued.mutation, client = self.client
             let outcome = await Self.withDeadline(seconds: 5) { () -> Bool? in
                 do { _ = try await client.receipt(for: mutation); return false }
@@ -702,9 +696,8 @@ struct SchoolCaptureStartReview: Identifiable {
                 catch { return nil }
             }
             guard isCurrent(request) else { return }
-            if outcome == true, (try? await store.discardUnknown(id: queued.id, scope: scope)) != nil { changed = true }
+            if outcome == true { unknownRequestIDs.insert(queued.id) }
         }
-        if changed { try? await reloadQueue(request) }
     }
 
     private static func withDeadline<T: Sendable>(seconds: Double, _ work: @escaping @Sendable () async -> T?) async -> T? {

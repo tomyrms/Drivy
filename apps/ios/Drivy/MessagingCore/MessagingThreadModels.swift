@@ -64,7 +64,9 @@ struct MessagingPlainContent: Codable, Sendable, Equatable {
     /// Refuser ici évite qu'un média parte comme texte ou soit stocké dans une enveloppe qui ne le porte pas.
     func encoded() throws -> Data {
         guard media == nil else { throw MessagingFailure.invalidResponse }
-        let data = try JSONEncoder().encode(Envelope(v: Self.version, text: text, poll: poll))
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(Envelope(v: Self.version, text: text, poll: poll))
         guard data.count <= 16_384 else { throw MessagingFailure.invalidResponse }
         return data
     }

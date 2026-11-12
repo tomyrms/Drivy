@@ -142,6 +142,46 @@ import Testing
         await fixture.waitUntilSettled()
     }
 
+    // Décision L1 (12 novembre 2026) : une demande de départ au sort inconnu n'est jamais retirée par un délai.
+    @Test(arguments: [false, true])
+    func anUnknownStartOlderThanTheSettleDelayStaysUntilTheUserChooses(attempted: Bool) async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        await model.load()
+        let queued = try await fixture.stageOldStart(model: model, attempted: attempted)
+        await model.load()
+        #expect(model.pendingStarts.map(\.id) == [queued.id])
+        #expect(model.unknownRequestIDs.contains(queued.id) && model.mayAbandon(queued))
+        #expect(try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId!).map(\.id) == [queued.id])
+        // Une lecture de plus ne change rien : toujours là, jamais retirée sans geste.
+        await model.load()
+        #expect(model.pendingStarts.map(\.id) == [queued.id])
+    }
+
+    @Test func abandoningAnUnknownStartRemovesItOnlyAfterTheExplicitGesture() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        await model.load()
+        let queued = try await fixture.stageOldStart(model: model, attempted: true)
+        await model.load()
+        #expect(model.mayAbandon(queued))
+        await model.abandon(queued)
+        #expect(model.pendingStarts.isEmpty)
+        #expect(try await fixture.store.pending(scope: fixture.scope, deviceID: fixture.capture.deviceId!).isEmpty)
+    }
+
+    @Test func retryingAnUnknownStartKeepsTheSameOperationKey() async throws {
+        let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
+        let model = fixture.preparation()
+        await model.load()
+        let queued = try await fixture.stageOldStart(model: model, attempted: true)
+        await model.load()
+        #expect(model.mayReviewPendingStart(queued))
+        let review = try #require(await model.reviewStart(resuming: queued))
+        #expect(review.pendingMutation == queued.mutation && review.pendingMutation?.id == queued.id)
+        #expect(model.pendingStarts.map(\.id) == [queued.id])
+    }
+
     @Test func aClosedPreparationIsNeverReadyForAOneStepStart() async throws {
         let fixture = try await CaptureLifecycleFixture.make(startImmediately: false)
         let model = fixture.preparation()
@@ -669,6 +709,20 @@ import Testing
         return measured
     }
 
+    /// Demande de départ créée il y a 200 s (au-delà de `settledRequestAge`), émise ou non, conforme à la leçon lue.
+    func stageOldStart(model: SchoolCapturePreparationWorkspace, attempted: Bool) async throws -> SchoolCaptureQueuedMutation {
+        let operation = UUID(), device = try #require(capture.deviceId), notice = try #require(model.notice)
+        let fresh = try SchoolCapturePendingMutation.make(id: operation, scope: scope, kind: .startCapture,
+            targetID: capture.lessonId, expectedVersion: 1, body: SchoolStartCaptureBody(operationId: operation, deviceId: device,
+                choiceId: capture.choiceId, choiceVersion: 1, noticeVersionId: notice.noticeVersionId, explicitStartConfirmed: true,
+                deviceAssessmentId: try #require(capture.deviceAssessmentId)))
+        let old = SchoolCapturePendingMutation(id: fresh.id, scope: fresh.scope, kind: fresh.kind, targetID: fresh.targetID,
+            segmentID: nil, chunkIndex: nil, expectedVersion: fresh.expectedVersion, createdAt: Date().addingTimeInterval(-200), body: fresh.body)
+        try await store.stage(old)
+        if attempted { _ = try await store.markAttempted(id: operation, scope: scope) }
+        return try #require(try await store.pending(scope: scope, deviceID: device).first { $0.id == operation })
+    }
+
     func assessment(scope: SchoolCommandScope) throws -> SchoolCapturePendingMutation {
         let id = UUID(), device = try #require(capture.deviceId)
         return try SchoolCapturePendingMutation.make(id: id, scope: scope, kind: .assessDevice, targetID: device,
@@ -823,6 +877,11 @@ private actor CaptureLifecycleServer: SchoolHTTPTransport {
             return try ok(SchoolPerson(personId: scope.personID, version: 1, displayName: "Moniteur synthétique", locale: "fr",
                 memberships: [.init(membershipId: scope.membershipID, schoolId: scope.schoolID, schoolName: "École synthétique",
                     roles: roles, grants: [], accessEpoch: epoch)]))
+        }
+        // Reçu d'opération : l'école ne connaît aucune demande de départ envoyée par ces tests.
+        if request.httpMethod == "GET", url.pathComponents.dropLast().last == "operations" {
+            return SchoolHTTPResponse(data: Data("{\"code\":\"NOT_FOUND\"}".utf8), status: 404,
+                url: url, contentType: "application/problem+json")
         }
         if held { await withCheckedContinuation { waiters.append($0) } }
         let leaf = url.lastPathComponent.lowercased()

@@ -8,7 +8,8 @@ import SwiftUI
 struct MessagingQualificationFixture: View {
     @State private var workspace: MessagingWorkspace
     private let keys = MessagingQualificationKeys()
-    private let reportWitness: MessagingReportQualificationWitness?
+    /// En @State comme l'espace de travail : l'init de cette vue rejoue à chaque rendu du parent et recréerait un témoin jamais alimenté.
+    @State private var reportWitness: MessagingReportQualificationWitness?
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
@@ -17,7 +18,7 @@ struct MessagingQualificationFixture: View {
         let rich = arguments.contains("-messaging-ui-rich")
         let reportMedia = arguments.contains("-messaging-ui-report-media")
         let witness = reportMedia ? MessagingReportQualificationWitness() : nil
-        reportWitness = witness
+        _reportWitness = State(initialValue: witness)
         let reportBoundary = witness.map { MessagingReportQualificationBoundary(scope: scope, witness: $0) }
         let seed = rich ? MessagingQualificationHTTP.seed(me: scope.accountID) : []
         let transport = MessagingQualificationHTTP(scope: scope,
@@ -54,14 +55,23 @@ struct MessagingQualificationFixture: View {
                 let inbox = MessagingInboxView(workspace: workspace, keys: keys, currentScope: { [scope = workspace.scope] in scope })
                 if let reportWitness {
                     return AnyView(inbox.safeAreaInset(edge: .bottom) {
-                            Text(reportWitness.summary).font(.caption2)
-                                .dynamicTypeSize(.medium)
-                                .accessibilityIdentifier("messaging.report.fixture")
+                        MessagingReportWitnessLabel(witness: reportWitness)
                     })
                 }
                 return AnyView(inbox)
             }))
             .environment(\.locale, Locale(identifier: "fr_CH"))
+    }
+}
+
+/// Témoin du signalement : une vue à part lit le compteur dans son propre corps, pour que SwiftUI en suive chaque changement
+/// (lu dans la fermeture d'un modificateur, il est resté figé à l'état initial pendant les parcours de médias signalés).
+private struct MessagingReportWitnessLabel: View {
+    let witness: MessagingReportQualificationWitness
+    var body: some View {
+        Text(witness.summary).font(.caption2)
+            .dynamicTypeSize(.medium)
+            .accessibilityIdentifier("messaging.report.fixture")
     }
 }
 
