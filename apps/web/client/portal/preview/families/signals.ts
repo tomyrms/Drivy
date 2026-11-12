@@ -12,7 +12,7 @@ const catalogue: readonly [string, string][] = [
   ['moving-off', 'Démarrage'], ['manoeuvres', 'Manœuvres'], ['motorway', 'Autoroute'], ['signage', 'Signalisation'],
   ['vehicle', 'Maîtrise du véhicule'], ['eco-driving', 'Éco-conduite'],
 ];
-const settings = { id: previewId(800), schoolId: ids.school, version: 1, canManage: true,
+const settings = { id: previewId(800), schoolId: ids.school, version: 1, canManage: true, personalizationAllowed: true,
   themes: catalogue.map(([key, title], index) => ({ key, title, visible: index < 12, defaultVisible: index < 12, defaultPosition: index })) };
 
 export const signalsFamily: PreviewFamily = {
@@ -28,6 +28,7 @@ export const signalsFamily: PreviewFamily = {
     const known = new Map(settings.themes.map(theme => [theme.key, theme]));
     if (wanted.length !== known.size || wanted.some(item => !known.has(item.key)) || !wanted.some(item => item.visible)) return tools.reply(400, { code: 'INVALID_REQUEST' });
     settings.themes = wanted.map(item => ({ ...known.get(item.key)!, visible: item.visible }));
+    if (typeof request.body.personalizationAllowed === 'boolean') settings.personalizationAllowed = request.body.personalizationAllowed;
     settings.version++;
     return tools.commit('saveObservationThemes', settings);
   },

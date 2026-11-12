@@ -50,7 +50,7 @@ async function loadPage() {
   const consoleParts = path.split('/');
   const knownConsole = /^\/app\/gestion(\/|$)/.test(path) && consoleParts.length <= 5
     && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
-  const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
+  const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/preferences/signalements', '/app/ouvrir', '/app/operateur'].includes(path);
   root.render(<LoadingPage />);
   try {
     if (!knownEntry && !knownConsole) {
@@ -62,6 +62,9 @@ async function loadPage() {
     } else if (path === '/app/preferences') {
       const { PortalPreferencesPage } = await import('./portal/account/preferences-page');
       root.render(<PortalPreferencesPage />);
+    } else if (path === '/app/preferences/signalements') {
+      const { PortalSignalsPreferencesPage } = await import('./portal/account/signals-preferences-page');
+      root.render(<PortalSignalsPreferencesPage />);
     } else if (isOpening || path === '/app/operateur') {
       const { SchoolOpeningPage } = await import('./portal/opening/opening-page');
       root.render(<SchoolOpeningPage link={openingLink} operator={!isOpening} />);

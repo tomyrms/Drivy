@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, useSyncExternalStore } from 'react';
-import { ArrowLeft, ChevronRight, KeyRound, Monitor, Moon, School, Sun } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Flag, KeyRound, Monitor, Moon, School, Sun } from 'lucide-react';
+import { canPersonalizeSignals, schoolOfReturn, signalsPreferencesHref } from '../../console/observation-preferences-model';
 import { meSchema, request, RequestFailure, sessionSchema } from '../../protocol';
 import { load, saveNotificationPreferences, visibleNotificationKeys } from '../../notification-preferences-model';
 import { NotificationPreferenceStore } from '../../notification-preferences-store';
@@ -50,6 +51,8 @@ export function PortalPreferencesPage({ back = preferencesReturn(window.location
 
       <NotificationsSection />
 
+      <SignalsLink back={back} />
+
       <section className="account-section" aria-labelledby={`${uid}-help`}>
         <h2 id={`${uid}-help`}>Compte et aide</h2>
         <ul className="account-links">
@@ -64,6 +67,30 @@ export function PortalPreferencesPage({ back = preferencesReturn(window.location
       </section>
     </main>
   </div>;
+}
+
+/**
+ * Signalements du compte (R08) : proposés aux seuls comptes moniteur ou administrateur. L'élève seul ne voit rien ; en cas d'échec de
+ * lecture, la ligne reste absente (la page elle-même relit tout et le dit).
+ */
+function SignalsLink({ back }: { back: string }) {
+  const uid = useId();
+  const [open, setOpen] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    request('me', meSchema).then(result => {
+      if (!live) return;
+      setOpen(result.data.memberships.some(member => canPersonalizeSignals(member.roles)) ? (schoolOfReturn(back) ?? null) : undefined);
+    }, () => { if (live) setOpen(undefined); });
+    return () => { live = false; };
+  }, [back]);
+  if (open === undefined) return null;
+  return <section className="account-section" aria-labelledby={`${uid}-signals`}>
+    <h2 id={`${uid}-signals`}>Signalements</h2>
+    <ul className="account-links">
+      <li><a href={signalsPreferencesHref({ returnTo: back, ...(open ? { schoolId: open } : {}) })}><Flag aria-hidden="true" /><span>Ordre et affichage de mes signalements</span><ChevronRight aria-hidden="true" /></a></li>
+    </ul>
+  </section>;
 }
 
 const groups = [{ id: 'courses', title: 'Cours collectifs' }, { id: 'messages', title: 'Messages' }, { id: 'lessons', title: 'Leçons' }] as const;
