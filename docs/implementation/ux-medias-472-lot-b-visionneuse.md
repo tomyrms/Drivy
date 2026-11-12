@@ -42,6 +42,8 @@ struct MessagingMediaPreview: View {   // état « prêt » seulement, branché 
 
 ## Exécuté / non vérifié
 
+Exécuté sur Apple : run [43228983783](https://github.com/tomyrms/Drivy/actions/runs/43228983783) vert sur `f8bfa059` (portée `messaging`, iPhone simulateur) : compilation et `MessagingMediaViewerTests`. Tests UI existants relus face à `.fullScreenCover` : `MessagingMediaUITests` n'utilise que l'identifiant des boutons de sélection et « Fermer » (aucun `swipeDown`, aucun `messaging.media.preview`), `MessagingReportScreensUITests` n'ouvre pas l'aperçu ; aucune adaptation nécessaire, exécution UI à suivre.
+
 Exécuté en local : `scripts/ios/test_test_selection.py` (27 tests, sélection incluant la nouvelle classe). Aucune toolchain Swift sur la machine de travail ; la compilation et les 16 tests de `MessagingMediaViewerTests` (géométrie, bornes, double toucher, taille de décodage, décodeur sur PNG synthétiques) dépendent du run Apple, voir `STATUS.md`.
 
 Non essayé : pincement, double toucher, déplacement, rotation et redimensionnement iPad sur appareil ou simulateur ; VoiceOver (étiquettes, actions Agrandir/Réduire) ; grandes tailles de texte ; qualité visuelle de la barre et de l'indicateur de page ; PDF multi-pages réel (dézoom minimal, indicateur) ; capture vidéo demandée par l'issue ; parcours sur le build intégré (#478). Les tests UI existants (`MessagingMediaUITests`, `MessagingReportScreensUITests`) cherchent « Fermer » et ne sont pas modifiés ; leur exécution contre la couverture plein écran reste à faire.
