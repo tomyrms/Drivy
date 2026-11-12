@@ -1,3 +1,10 @@
+## 12 novembre 2026 — Épic UX médias #472, lot D : composeur (#475)
+
+- Composeur : la pièce choisie apparaît en miniature (photo, décodage ImageIO sous-échantillonné hors MainActor) ou en carte compacte (PDF : nom, taille), tuile de 56 pt réservée, retrait ciblé 44 pt, aperçu au toucher. Le champ principal reste visible et sert de légende : légende et brouillon sont UNE valeur (rien de masqué, de perdu ni de dupliqué) ; retrait et remplacement la conservent. Envoi : un seul bouton d'état occupé, pas de double envoi, succès annoncé seulement après écriture durable.
+- Nouveau fichier `MessagingComposerAttachmentChip.swift` ; `MessagingMediaComposerModel` : `caption` raccordé au brouillon par `MessagingCaptionChannel`, `selectionError`, `selectionRevision`. Protocole UI `MessagingMediaRuntime` inchangé. Détail : `docs/implementation/ux-medias-472-lot-d-composeur.md`.
+- Tests écrits : `MessagingMediaComposerDraftTests` (portée `messaging`) et un test UI (`testCaptionIsTheDraftAndSurvivesRemoval`) ; relus sans compilateur local. `test_test_selection.py` passe (27 tests). Résultat du run Apple : à consigner.
+- Non essayé : rendu réel, VoiceOver, Dynamic Type, iPad en fenêtre étroite, clavier, appareil physique.
+
 ## 12 novembre 2026 — Épic UX médias #472, lot A
 
 - Fil de messagerie (#473) : photos en bulles à espace réservé par ratio (borné [0,6 ; 2], 260 × 340 pt au plus), PDF en cartes lisibles, chargeur de miniatures borné (3 en vol, 24 images décodées, résultat tardif ignoré) et capacité interne additive `MessagingMediaThumbnailProviding` ; le protocole gelé `MessagingMediaRuntime` est inchangé. Détail : `docs/implementation/ux-medias-472-lot-a-fil.md`.
