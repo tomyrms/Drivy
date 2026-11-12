@@ -523,7 +523,7 @@ private actor PreferencesSchool: SchoolHTTPTransport {
         try await settled(model)
         writes = await school.writes
         #expect(writes.count == 1 && writes[0].mode == "SMART" && writes[0].order == chosen.themes.map(\.key))
-        #expect(writes[0].visibilityKeys == chosen.themes.map(\.key))
+        #expect(Set(writes[0].visibilityKeys ?? []) == Set(chosen.themes.map(\.key)) && writes[0].visibilityKeys?.count == chosen.themes.count)
         #expect(model.mode == .smart && model.confirmedThemes.map(\.key) == chosen.themes.map(\.key))
         // La première écriture ferme le choix : il ne se propose plus.
         #expect(model.adoption == nil)
@@ -542,7 +542,8 @@ private actor PreferencesSchool: SchoolHTTPTransport {
         let writes = await school.writes
         #expect(writes.count == 1 && writes[0].visibilityKeys == nil && writes[0].order == chosen.themes.map(\.key))
         let shown = Set(PreferencesSchool.schoolDisplayed)
-        #expect(model.palette == chosen.themes.map(\.key).filter { shown.contains($0) })
+        // Le service synthétique classe en mode intelligent : la palette vient de lui, filtrée par l'école, jamais de l'ordre brut.
+        #expect(model.mode == .smart && model.palette == Array(chosen.themes.map(\.key).filter { shown.contains($0) }.reversed()))
     }
 
     // MARK: Accès retiré
