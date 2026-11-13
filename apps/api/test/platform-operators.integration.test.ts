@@ -419,6 +419,80 @@ test('retrait de soi-même : accepté tant qu’un autre reste, tracé au nom de
   expect((await api(B, 'GET', '/v1/platform/me')).statusCode).toBe(200);
 });
 
+test('retrait d’un opérateur : ses invitations en attente sont révoquées avec lui, un code qu’il avait émis ne s’accepte plus (I1)', async () => {
+  const a = await idOf(A), b = await idOf(B);
+  const fromA = await invite(A, 'target@example.invalid'), secondFromA = await invite(A, 'second@example.invalid');
+  const fromB = await invite(B, 'kept@example.invalid');
+  // Une invitation déjà acceptée reste acceptée : seule l'attente est révoquée.
+  const used = await invite(A, 'used@example.invalid');
+  expect((await accept('used|used@example.invalid', used.code)).statusCode).toBe(201);
+  const removal = await revokeOperator(B, a, 1);
+  expect(removal.statusCode, removal.body).toBe(200);
+  const rows = (await pool.query<{ invitee_email: string; status: string; revoked_by: string | null }>('SELECT invitee_email,status,revoked_by FROM drivy.platform_operator_invitation')).rows;
+  const byEmail = Object.fromEntries(rows.map(row => [row.invitee_email, row]));
+  expect(byEmail['target@example.invalid']).toMatchObject({ status: 'REVOKED', revoked_by: b });
+  expect(byEmail['second@example.invalid']).toMatchObject({ status: 'REVOKED', revoked_by: b });
+  expect(byEmail['used@example.invalid']).toMatchObject({ status: 'USED', revoked_by: null });
+  expect(byEmail['kept@example.invalid']).toMatchObject({ status: 'AVAILABLE' });
+  // Le code de l'opérateur retiré est refusé à l'aperçu comme à l'acceptation : aucune ligne d'opérateur n'est créée.
+  for (const [code, subject, email] of [[fromA.code, 'target', 'target@example.invalid'], [secondFromA.code, 'second', 'second@example.invalid']] as const) {
+    const refused = await accept(`${subject}|${email}`, code);
+    expect([refused.statusCode, refused.json().code], refused.body).toEqual([410, 'PLATFORM_INVITATION_REVOKED']);
+    expect((await preview(`${subject}|${email}`, code)).statusCode).toBe(410);
+    expect((await pool.query('SELECT 1 FROM drivy.platform_operator WHERE subject=$1', [subject])).rowCount).toBe(0);
+    expect((await api(subject, 'GET', '/v1/platform/me')).statusCode).toBe(403);
+  }
+  // L'invitation d'un opérateur resté dans l'équipe n'est pas touchée.
+  expect((await preview('kept|kept@example.invalid', fromB.code)).statusCode).toBe(200);
+  expect((await accept('kept|kept@example.invalid', fromB.code)).statusCode).toBe(201);
+  // La console le reflète : liste lue par l'opérateur resté, journal avec le nombre d'invitations révoquées.
+  const listed = (await api(B, 'GET', '/v1/platform/invitations')).json().data.items as Array<{ maskedEmail: string; status: string }>;
+  expect(Object.fromEntries(listed.map(item => [item.maskedEmail, item.status]))).toMatchObject({
+    't***@example.invalid': 'REVOKED', 's***@example.invalid': 'REVOKED', 'u***@example.invalid': 'USED', 'k***@example.invalid': 'USED' });
+  const entries = await journal("action='REVOKE_PLATFORM_OPERATOR' AND result='SUCCESS'");
+  expect(entries).toHaveLength(1);
+  expect(entries[0].changes).toMatchObject({ self: false, status: { from: 'ACTIVE', to: 'REVOKED' }, revokedInvitations: 2 });
+  expect(JSON.stringify(entries[0])).not.toContain(fromA.code);
+  expect(await journal("action='REVOKE_PLATFORM_INVITATION'")).toHaveLength(0);
+});
+
+test('retrait de soi-même : les invitations en attente de l’opérateur partent aussi, au nom de l’opérateur encore actif au moment du retrait (I1)', async () => {
+  const b = await idOf(B);
+  const own = await invite(B, 'own@example.invalid');
+  const response = await revokeOperator(B, b, 1);
+  expect(response.statusCode, response.body).toBe(200);
+  const row = (await pool.query('SELECT status,revoked_by FROM drivy.platform_operator_invitation WHERE invitee_email=$1', ['own@example.invalid'])).rows[0];
+  expect(row).toMatchObject({ status: 'REVOKED', revoked_by: b });
+  expect((await accept('own|own@example.invalid', own.code)).statusCode).toBe(410);
+  expect((await journal("action='REVOKE_PLATFORM_OPERATOR'"))[0].changes).toMatchObject({ self: true, revokedInvitations: 1 });
+  // Aucune invitation en attente : le compte est zéro, jamais absent.
+  await seedPlatformOperator(pool, 'op-c', { displayName: 'Claire Exemple' });
+  const c = await idOf('op-c');
+  expect((await revokeOperator(A, c, 1)).statusCode).toBe(200);
+  expect((await journal(`action='REVOKE_PLATFORM_OPERATOR' AND subject_id='${c}'`))[0].changes).toMatchObject({ revokedInvitations: 0 });
+});
+
+test('défense en profondeur : une invitation dont l’auteur n’est plus actif n’est acceptable ni par le service ni par la base, même sans révocation (I1)', async () => {
+  const orphan = await invite(A, 'orphan@example.invalid'), fine = await invite(B, 'fine@example.invalid');
+  const idByEmail = async (email: string) => (await pool.query<{ id: string }>('SELECT id FROM drivy.platform_operator_invitation WHERE invitee_email=$1', [email])).rows[0]!.id;
+  const insertAs = (subject: string, email: string, code: string, invitationId: string) => asApp(subject,
+    "INSERT INTO drivy.platform_operator(id,issuer,subject,display_name,contact_email,added_via,invitation_id) VALUES(gen_random_uuid(),$1,$2,'Invité','"
+    + email + "','INVITATION',$3)", [issuer, subject, invitationId], { email, hash: hashOf(code) });
+  // Témoin : la base laisse entrer le porteur d'un code dont l'auteur est actif.
+  expect((await insertAs('witness', 'fine@example.invalid', fine.code, await idByEmail('fine@example.invalid'))).error).toBeUndefined();
+  // Retrait en SQL direct, hors du service : l'invitation de A reste AVAILABLE, son auteur ne l'est plus.
+  await pool.query("UPDATE drivy.platform_operator SET status='REVOKED',revoked_at=now(),revoked_by=$1 WHERE id=$2", [await idOf(B), await idOf(A)]);
+  expect((await pool.query('SELECT status FROM drivy.platform_operator_invitation WHERE invitee_email=$1', ['orphan@example.invalid'])).rows[0].status).toBe('AVAILABLE');
+  const refused = await accept('orphan|orphan@example.invalid', orphan.code);
+  expect([refused.statusCode, refused.json().code], refused.body).toEqual([410, 'PLATFORM_INVITATION_REVOKED']);
+  expect((await preview('orphan|orphan@example.invalid', orphan.code)).statusCode).toBe(410);
+  const insert = await insertAs('orphan', 'orphan@example.invalid', orphan.code, await idByEmail('orphan@example.invalid'));
+  expect(insert.error?.code).toBe('42501');
+  expect((await pool.query('SELECT 1 FROM drivy.platform_operator WHERE subject=$1', ['orphan'])).rowCount).toBe(0);
+  // L'invitation d'un auteur encore actif reste acceptable par le service.
+  expect((await accept('fine|fine@example.invalid', fine.code)).statusCode).toBe(201);
+});
+
 test('versions et reçus des retraits : pas d’écrasement silencieux, rejeu à l’identique, double envoi simultané', async () => {
   const b = await idOf(B);
   const target = `/v1/platform/operators/${b}/revoke`;
