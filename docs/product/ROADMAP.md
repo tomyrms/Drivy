@@ -2,7 +2,7 @@
 
 [← Présentation du projet](../../README.md) · [Organisation du suivi](SETUP.md)
 
-Dernière mise à jour : **4 novembre 2026**.
+Dernière mise à jour : **11 novembre 2026**.
 
 **Conserver les idées aujourd'hui. Créer les issues lorsqu'elles sont prêtes.**
 
@@ -14,10 +14,10 @@ Une initiative n'est ni une fonctionnalité livrée, ni un cahier des charges va
 
 | ID | Initiative | Maturité | Horizon | Prochaine décision utile |
 | --- | --- | --- | --- | --- |
-| R01 | [Administration de la plateforme](initiatives/R01-administration-plateforme.md) | Idée | À définir | Choisir les opérations indispensables et les métadonnées accessibles. |
+| R01 | [Administration de la plateforme](initiatives/R01-administration-plateforme.md) | Cadré | À planifier | Réaliser et qualifier [l’epic #452](https://github.com/tomyrms/Drivy/issues/452) et ses 11 lots. |
 | R02 | [Assistance autorisée](initiatives/R02-assistance-autorisee.md) | À étudier | À définir | Cadrer la finalité, les autorisations et les garanties juridiques et de sécurité. |
-| R03 | [Modules et offres commerciales](initiatives/R03-modules-et-offres.md) | Idée | À définir | Définir le socle et les fonctions optionnelles, avant les prix. |
-| R04 | [Abonnements et facturation SaaS](initiatives/R04-facturation-saas.md) | Idée | À définir | Définir ce que Drivy vend, facture et considère comme payé. |
+| R03 | [Modules et offres commerciales](initiatives/R03-modules-et-offres.md) | Cadré | Volet V1 dans R01 | Offres/modules par école suivis dans [#452](https://github.com/tomyrms/Drivy/issues/452) ; extensions à préciser. |
+| R04 | [Abonnements et facturation SaaS](initiatives/R04-facturation-saas.md) | Cadré | Volet manuel dans R01 | Initial + mensuel, PDF/QR et règlements manuels dans [#452](https://github.com/tomyrms/Drivy/issues/452) ; encaissement automatisé différé. |
 | R05 | [Site vitrine et commercialisation](initiatives/R05-site-vitrine.md) | Idée | À définir | Définir le public, les preuves et le parcours de demande de démonstration. |
 | R06 | [Revue finale de chaque page web](initiatives/R06-revue-finale-web.md) | Idée | Fin du périmètre fonctionnel web | Confirmer la stabilité suffisante, puis revoir chaque page avec Impeccable et Uncodixfy. |
 | R07 | [Revue finale de chaque écran Swift](initiatives/R07-revue-finale-swift.md) | Idée | Après R06 validée et stabilisation native | Retrouver le skill personnel « Swift native composant », puis l'utiliser avec Impeccable et Uncodixfy. |
@@ -32,7 +32,9 @@ Une initiative n'est ni une fonctionnalité livrée, ni un cahier des charges va
 
 Un espace réservé à l'exploitant pour gérer les auto-écoles clientes, leurs offres, leurs modules et leur relation commerciale avec Drivy.
 
-À cadrer : opérations minimales, rôles, métadonnées nécessaires, traçabilité et traitement des écoles pilotes ou archivées. L'accès commercial ne donne pas automatiquement accès aux élèves, aux trajets ou aux messages. Le revenu de Drivy reste distinct du chiffre d'affaires propre d'une auto-école.
+**Cadrage validé le 11 novembre 2026 : [epic #452](https://github.com/tomyrms/Drivy/issues/452) et 11 sous-tâches ouvertes.** Codes copiés et transmis manuellement, deux opérateurs, écoles/offres/modules, initial + mensuel, essais/remises, PDF/QR, règlements manuels, résiliation confirmée, relances et suspension configurable.
+
+L’accès commercial ne donne pas automatiquement accès aux élèves, trajets ou messages. Le revenu de Drivy reste distinct du chiffre d’affaires d’une école. Les tickets sont créés ; leur réalisation n’est pas attestée par cette roadmap.
 
 **Fiche : [Administration de la plateforme](initiatives/R01-administration-plateforme.md).**
 
@@ -48,7 +50,7 @@ Aider une école dans son contexte avec une autorisation explicite, limitée et 
 
 Permettre aux écoles de choisir une offre adaptée à leurs besoins, notamment sans messagerie ou sans cours collectifs lorsqu'elles ne les utilisent pas.
 
-À cadrer : socle, modules, droits commerciaux côté serveur, choix de l'école et permissions des utilisateurs. Définir aussi les effets d'une montée ou baisse de gamme sur les engagements, l'historique et la réactivation. Aucune suppression silencieuse des données et aucun prix adopté ici.
+Le premier périmètre d’offres/modules par école est cadré dans [#452](https://github.com/tomyrms/Drivy/issues/452), notamment #455 et #456. Socle, droits commerciaux, choix de l’école et permissions restent distincts. Les engagements et l’historique sont conservés lors d’une transition ; les formules et prix restent configurables.
 
 **Fiche : [Modules et offres](initiatives/R03-modules-et-offres.md).**
 
@@ -56,7 +58,7 @@ Permettre aux écoles de choisir une offre adaptée à leurs besoins, notamment 
 
 Gérer les abonnements que les écoles paient à Drivy : factures, règlement confirmé, renouvellement, changement d'offre et incidents.
 
-À cadrer : unité de prix, périodicité, prestataire, essais, taxes à faire vérifier, prorata, résiliation et délais de grâce. Ne pas confondre ce chantier avec les règlements des élèves auprès de leur école ou la finance future #45.
+Le volet retenu dans [#452](https://github.com/tomyrms/Drivy/issues/452) comprend un montant initial unique, une mensualité par école, remises/essais, PDF avec QR suisse et confirmation manuelle des règlements. L’école consulte ses documents et demande une résiliation confirmée par l’opérateur. Relances et suspension sont configurables ; l’encaissement automatique reste différé. Les paiements élèves → école restent R10.
 
 **Fiche : [Facturation SaaS](initiatives/R04-facturation-saas.md).**
 
@@ -120,9 +122,9 @@ L’audit doit couvrir la structure du schéma, les relations et contraintes, l�
 
 **Maintenant :** poursuivre et stabiliser le périmètre déjà autorisé. Examiner le code récent, les PR et les preuves avant d'assimiler une issue ouverte à une fonctionnalité absente. Le tableau de bord et les statistiques de l'auto-école ont leur suivi de réalisation dans [l'epic #373](https://github.com/tomyrms/Drivy/issues/373), distinct des idées différées.
 
-**Ensuite, lorsque le porteur décide d'ouvrir ces sujets :** cadrer les modules et les offres (R03), envisager un panneau opérateur minimal (R01) et étudier séparément l'assistance (R02).
+**Périmètre commercial cadré le 11 novembre :** [#452](https://github.com/tomyrms/Drivy/issues/452) réunit R01 et les parties de R03/R04 retenues par le porteur. Suivre les dépendances de l’epic ; l’assistance R02 reste séparée.
 
-**Puis :** concevoir la facturation sur les offres retenues (R04) et préparer la présentation commerciale (R05). Le contenu du site vitrine peut avancer sans attendre un système de paiement complet.
+**Extensions ultérieures :** encaissement automatisé de R04 et présentation commerciale R05, sur les offres réellement livrées. Le contenu du site vitrine peut avancer sans attendre un système de paiement automatique.
 
 L'ordre commercial R01–R05 est une proposition de dépendances, pas un calendrier approuvé ; leurs horizons restent « À définir ». **Avant la production durable, R11 prévoit une revue complète du modèle de données une fois le périmètre fonctionnel stabilisé. Pour la finition globale, l'ordre demandé est explicite : périmètre fonctionnel quasiment terminé → R06 web → validation de R06 → R07 Swift.** Définir le périmètre de la version avec le porteur au lancement, sans attendre indéfiniment toutes les idées à très long terme. Les corrections urgentes de sécurité ou de fonctionnement ne sont pas reportées à ces revues.
 
@@ -153,7 +155,7 @@ Le dépôt est public : les documents suivis y sont publics également. Garder l
 
 ## Consignes aux agents
 
-Ne pas développer automatiquement les initiatives R01–R11, ni les convertir en issues sans décision du porteur. Les anciennes issues #63 et #45 sont devenues R09 et R10.
+Ne pas développer automatiquement les initiatives R01–R11, ni les convertir en issues sans décision du porteur. Le périmètre R01 et les volets R03/R04 validés le 11 novembre ont déjà leur suivi dans [#452](https://github.com/tomyrms/Drivy/issues/452) : ne pas recréer ces tickets. Les anciennes issues #63 et #45 sont devenues R09 et R10.
 
 Ne pas rouvrir le lot de finition annulé **#340, #341–#346 et #348–#369**. R06/R07 conservent la demande de revue globale pour plus tard, sans annuler cette décision ni recréer ses tickets maintenant. Ne pas lancer une nouvelle refonte graphique au prétexte d'organiser la roadmap.
 
