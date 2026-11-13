@@ -3,20 +3,20 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import type { Pool } from 'pg';
 import { buildApp } from '../src/app.js';
 import { registerSchoolOpening } from '../src/school-opening.js';
-import { freshDatabase, issuer, id } from './support/harness.js';
+import { freshDatabase, issuer, id, seedPlatformOperator } from './support/harness.js';
 import { seedFixtures } from '../scripts/fixtures.js';
 import { ApiError } from '../src/errors.js';
 
 let pool:Pool,app:ReturnType<typeof buildApp>;
 const operator='opening-operator',base='/v1/operator/school-opening-links';
 const verifyToken=async(header:string|undefined)=>{if(!header?.startsWith('Bearer '))throw new ApiError(401,'AUTHENTICATION_REQUIRED','Connexion requise.');return {issuer,subject:header.slice(7)};};
-const schoolOpening={operators:[{issuer,subject:operator}],validityDays:7};
+const schoolOpening={operators:[],validityDays:7};
 beforeAll(async()=>{
   pool=await freshDatabase();
   app=buildApp({pool,verifyToken,cursorSecret:'opening-synthetic-test-secret-32-characters',schoolOpening});
   if(!app.hasRoute({method:'GET',url:base}))registerSchoolOpening(app,{pool,verifyToken,cursorSecret:'opening-synthetic-test-secret-32-characters',schoolOpening});
 });
-beforeEach(async()=>{await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);});
+beforeEach(async()=>{await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);await seedPlatformOperator(pool,operator);await seedPlatformOperator(pool,'opening-colleague');});
 afterAll(async()=>{await app?.close();await pool?.end();});
 const call=(method:'GET'|'POST',url:string,body?:Record<string,unknown>,subject=operator)=>app.inject({method,url,headers:{authorization:`Bearer ${subject}`,...(body?{'idempotency-key':String(body.operationId)}:{})},...(body?{payload:body}:{})});
 const command=(token:string,extra:Record<string,unknown>={})=>({operationId:randomUUID(),token,schoolName:'École de recette',displayName:'Responsable de recette',contactEmail:'school@example.invalid',contactPhone:null,timeZone:'Europe/Zurich',instructs:false,...extra});
@@ -26,14 +26,26 @@ async function issue() {
   return {token,body,link:response.json().data};
 }
 
-test('opérateur explicite, fermé sans liste ; ADMIN scolaire insuffisant et identité inconnue autorisée comme opérateur',async()=>{
+test('opérateur lu en base : ADMIN scolaire, inconnu et ancien opérateur refusés ; la liste de configuration ne donne rien',async()=>{
   expect((await call('POST',base,{operationId:randomUUID(),token:randomBytes(32).toString('base64url')},'demo-admin')).statusCode).toBe(403);
   expect((await app.inject({url:base})).statusCode).toBe(401);
-  const closed=buildApp({pool,verifyToken,cursorSecret:'opening-test-default-closed-secret-32'});
-  if(!closed.hasRoute({method:'GET',url:base}))registerSchoolOpening(closed,{pool,verifyToken,cursorSecret:'opening-test-default-closed-secret-32'});
-  expect((await closed.inject({url:base,headers:{authorization:`Bearer ${operator}`}})).statusCode).toBe(403);await closed.close();
+  const listed={operators:[{issuer,subject:'configured-only'}],validityDays:7};
+  const configured=buildApp({pool,verifyToken,cursorSecret:'opening-test-config-list-secret-32-chars',schoolOpening:listed});
+  if(!configured.hasRoute({method:'GET',url:base}))registerSchoolOpening(configured,{pool,verifyToken,cursorSecret:'opening-test-config-list-secret-32-chars',schoolOpening:listed});
+  const refused=await configured.inject({url:base,headers:{authorization:'Bearer configured-only'}});expect(refused.statusCode).toBe(403);expect(refused.json().code).toBe('OPERATOR_REQUIRED');await configured.close();
   const created=await issue();expect(created.link.status).toBe('AVAILABLE');
   expect((await pool.query('SELECT 1 FROM drivy.identity_link WHERE subject=$1',[operator])).rowCount).toBe(0);
+  await pool.query("UPDATE drivy.platform_operator SET status='REVOKED',revoked_at=now(),revoked_by=(SELECT id FROM drivy.platform_operator WHERE subject='opening-colleague' AND status='ACTIVE') WHERE subject=$1",[operator]);
+  const former=await call('GET',base);expect(former.statusCode).toBe(403);expect(former.json().code).toBe('OPERATOR_REQUIRED');
+});
+test('création et révocation d’un lien : une ligne du journal commercial sans secret, rien au rejeu',async()=>{
+  const created=await issue();await call('POST',base,created.body);
+  const revoke={operationId:randomUUID()};expect((await call('POST',`${base}/${created.link.id}/revoke`,revoke)).statusCode).toBe(200);
+  expect((await call('POST',`${base}/${created.link.id}/revoke`,revoke)).statusCode).toBe(200);
+  const rows=(await pool.query("SELECT action,result,school_id,actor_name,subject_id,changes FROM drivy.platform_audit_event WHERE action IN('CREATE_SCHOOL_OPENING_LINK','REVOKE_SCHOOL_OPENING_LINK') ORDER BY occurred_at,id")).rows;
+  expect(rows.map(row=>row.action)).toEqual(['CREATE_SCHOOL_OPENING_LINK','REVOKE_SCHOOL_OPENING_LINK']);
+  expect(rows.every(row=>row.result==='SUCCESS'&&row.school_id===null&&row.subject_id===created.link.id)).toBe(true);
+  expect(JSON.stringify(rows).includes(created.token)).toBe(false);
 });
 test('création du lien idempotente, sept jours, secret haché uniquement et GET sans consommation',async()=>{
   const created=await issue(),again=await call('POST',base,created.body);

@@ -7,6 +7,7 @@ import { ApiError, forbidden, notFound } from './errors.js';
 import { rollbackQuietly } from './database.js';
 import { checkIdempotency, commandHash, recordCommand } from './commands.js';
 import { invitationCodeHasher } from './invitation-code.js';
+import { recordPlatformAction, requirePlatformOperator } from './platform-command.js';
 import { createOpeningLinkBody, openingPreviewBody, schoolOpeningBody, openingDigest, openingLinkProjection,
   type OpeningLinkRow, type SchoolOpeningConfig, type SchoolOpeningCommand } from './school-opening-model.js';
 export { readSchoolOpeningConfig } from './school-opening-model.js';
@@ -82,24 +83,29 @@ async function createSchool(pool:Pool,identity:Identity,body:SchoolOpeningComman
   });
 }
 
-/** Opening is closed to operators by default; consumers still need an issued, unexpired bearer link and OIDC. */
+/**
+ * Opening is closed to everyone but the platform team; consumers still need an issued, unexpired bearer link and OIDC.
+ * The operator gate reads the team table of the database on every request (R01-T01). The environment list of operators
+ * (`SCHOOL_OPENING_OPERATORS_JSON`) no longer grants anything by itself: it only feeds the explicit bootstrap script.
+ */
 export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier;cursorSecret:string;invitationCodeSecret?:string;schoolOpening?:SchoolOpeningConfig}) {
   const config=options.schoolOpening ?? {operators:[],validityDays:7};
   const hashOf=openingDigest(invitationCodeHasher(options.cursorSecret,options.invitationCodeSecret));
   const envelope=(data:unknown,request:FastifyRequest)=>({data,requestId:request.id,serverTime:new Date().toISOString()});
   const operator=async(request:FastifyRequest)=>{
     const identity=await options.verifyToken(request.headers.authorization);
-    if(!config.operators.some(candidate=>candidate.issuer===identity.issuer && candidate.subject===identity.subject))
-      throw new ApiError(403,'OPERATOR_REQUIRED','Cet espace est réservé à l’opérateur Drivy.');
-    return identity;
+    const actor=await requirePlatformOperator(options.pool,identity).catch(error=>{
+      throw error instanceof ApiError && error.code==='PLATFORM_OPERATOR_REQUIRED'?new ApiError(403,'OPERATOR_REQUIRED','Cet espace est réservé à l’opérateur Drivy.'):error;
+    });
+    return {identity,actor};
   };
   app.get('/v1/operator/school-opening-links',async request=>{
-    const identity=await operator(request);empty.parse(request.query);
+    const {identity}=await operator(request);empty.parse(request.query);
     const data=await transaction(options.pool,identity,true,undefined,async db=>({items:(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link ORDER BY created_at DESC,id LIMIT 100')).rows.map(openingLinkProjection)}));
     return envelope(data,request);
   });
   app.post('/v1/operator/school-opening-links',async(request,reply)=>{
-    const identity=await operator(request);empty.parse(request.query);const body=createOpeningLinkBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);
+    const {identity,actor}=await operator(request);empty.parse(request.query);const body=createOpeningLinkBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);
     const hash=commandHash(body,null);
     const data=await transaction(options.pool,identity,true,undefined,async db=>{
       await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`opening-operator:${identity.issuer}:${identity.subject}:${body.operationId}`]);
@@ -107,11 +113,13 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
       if(known){if(known.create_hash!==hash)throw mismatch();return openingLinkProjection(known);}
       const row=(await db.query<OpeningLinkRow>(`INSERT INTO drivy.school_opening_link(id,token_hash,reserved_school_id,reserved_membership_id,created_by_issuer,created_by_subject,create_operation_id,create_hash,expires_at)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+make_interval(days=>$9)) RETURNING *`,[randomUUID(),hashOf(body.token),randomUUID(),randomUUID(),identity.issuer,identity.subject,body.operationId,hash,config.validityDays])).rows[0]!;
+      // Journal commercial : l'acteur est l'opérateur confirmé par la base ; ni le code ni le lien n'y figurent.
+      await recordPlatformAction(db,actor,{action:'CREATE_SCHOOL_OPENING_LINK',subject:{type:'SchoolOpeningLink',id:row.id},changes:{expiresAt:row.expires_at.toISOString()}},{operationId:body.operationId});
       return openingLinkProjection(row);
     });reply.status(201);return envelope(data,request);
   });
   app.post('/v1/operator/school-opening-links/:linkId/revoke',async request=>{
-    const identity=await operator(request);empty.parse(request.query);const {linkId}=z.object({linkId:z.uuid()}).parse(request.params);
+    const {identity,actor}=await operator(request);empty.parse(request.query);const {linkId}=z.object({linkId:z.uuid()}).parse(request.params);
     const body=operationBody.parse(request.body);checkIdempotency(request.headers['idempotency-key'],body.operationId);
     const data=await transaction(options.pool,identity,true,undefined,async db=>{
       await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`opening-revoke:${identity.issuer}:${identity.subject}:${body.operationId}`]);
@@ -123,7 +131,9 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
       const row=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE id=$1 FOR UPDATE',[linkId])).rows[0];
       if(!row)throw new ApiError(409,'OPENING_LINK_USED','Ce lien a déjà été utilisé.');
       if(row.status==='REVOKED')throw new ApiError(409,'OPENING_LINK_REVOKED','Ce lien a déjà été révoqué.');
-      return openingLinkProjection((await db.query<OpeningLinkRow>("UPDATE drivy.school_opening_link SET status='REVOKED',revoked_at=clock_timestamp(),revoke_operation_id=$2,revoked_by_issuer=$3,revoked_by_subject=$4 WHERE id=$1 RETURNING *",[linkId,body.operationId,identity.issuer,identity.subject])).rows[0]!);
+      const revoked=(await db.query<OpeningLinkRow>("UPDATE drivy.school_opening_link SET status='REVOKED',revoked_at=clock_timestamp(),revoke_operation_id=$2,revoked_by_issuer=$3,revoked_by_subject=$4 WHERE id=$1 RETURNING *",[linkId,body.operationId,identity.issuer,identity.subject])).rows[0]!;
+      await recordPlatformAction(db,actor,{action:'REVOKE_SCHOOL_OPENING_LINK',subject:{type:'SchoolOpeningLink',id:linkId},changes:{status:{from:'AVAILABLE',to:'REVOKED'}}},{operationId:body.operationId});
+      return openingLinkProjection(revoked);
     });return envelope(data,request);
   });
   app.post('/v1/school-openings/preview',async request=>{
