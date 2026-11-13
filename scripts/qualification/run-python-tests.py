@@ -9,7 +9,8 @@ suite = unittest.TestSuite()
 for directory, pattern in [('scripts/qualification', 'test_*.py'),
                            ('scripts/ios', 'test_test_selection.py'),
                            ('scripts/ios', 'test_visual_capture.py'),
-                           ('infra/deploy', 'test_configure_identity_smtp.py')]:
+                           ('infra/deploy', 'test_configure_identity_smtp.py'),
+                           ('infra/deploy', 'test_install_api_release.py')]:
     discovered = unittest.TestLoader().discover(str(root / directory), pattern=pattern)
     if discovered.countTestCases() == 0:
         raise SystemExit('Suite de scripts vide : ' + pattern)

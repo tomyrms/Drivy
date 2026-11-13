@@ -24,12 +24,59 @@ def execute(arguments, directory, environment, description):
     result = subprocess.run(arguments, cwd=directory, env=environment, capture_output=True)
     if result.returncode:
         raise RuntimeError(description + ' a échoué. Aucun détail de connexion affiché ; vérifier localement.')
+    return result.stdout
+
+
+# Équipe d'opérateurs de la plateforme (R01-T01, #453) : l'autorisation des routes d'ouverture d'école se lit dans la table
+# platform_operator, plus dans la configuration. Sans opérateur actif, l'ouverture d'école est bloquée (403 OPERATOR_REQUIRED) :
+# le déploiement s'arrête avant la bascule du lien plutôt que de le découvrir en production.
+NO_ACTIVE_OPERATOR = 42
+OPERATOR_TEAM_CHECK = """
+import pg from 'pg';
+const client = new pg.Client({ connectionString: process.env.MIGRATION_DATABASE_URL, connectionTimeoutMillis: 5000 });
+try {
+  await client.connect();
+  const { rows } = await client.query("SELECT count(*)::int AS active FROM drivy.platform_operator WHERE status='ACTIVE'");
+  if (!rows[0] || rows[0].active < 1) process.exitCode = 42;
+} finally { await client.end(); }
+"""
+# Seules clés privées transmises à la mise en service : jamais l'environnement runtime entier.
+BOOTSTRAP_KEYS = ('PLATFORM_OPERATORS_BOOTSTRAP_JSON', 'SCHOOL_OPENING_OPERATORS_JSON')
+BOOTSTRAP_FLAG = '--bootstrap-operators'
+
+
+def parse_arguments(argv):
+    if len(argv) not in (3, 4) or argv[1] != '--apply' or (len(argv) == 4 and argv[3] != BOOTSTRAP_FLAG):
+        raise RuntimeError('Usage root CT114 : install-api-release.py --apply /opt/drivy-refonte/releases/<SHA> [' + BOOTSTRAP_FLAG + ']')
+    return Path(argv[2]), len(argv) == 4
+
+
+def bootstrap_environment(migration, runtime):
+    values = {}
+    for source in (runtime, migration):
+        values.update({key: source[key] for key in BOOTSTRAP_KEYS if key in source})
+    return values
+
+
+def ensure_platform_team(node, npm, release, environment, migration, runtime, bootstrap):
+    """Met en service les premiers opérateurs sur demande, puis refuse le déploiement tant qu'aucun opérateur n'est actif."""
+    if bootstrap:
+        report = execute([npm, 'run', 'operators:bootstrap', '--workspace', '@drivy/api', '--', '--legacy-opening-operators'],
+                         release, environment | migration | bootstrap_environment(migration, runtime), 'Mise en service des opérateurs')
+        print(report.decode(errors='replace').strip())
+    check = subprocess.run([node, '--input-type=module', '-e', OPERATOR_TEAM_CHECK], cwd=release, env=environment | migration, capture_output=True)
+    if check.returncode == NO_ACTIVE_OPERATOR:
+        raise RuntimeError("Aucun opérateur de plateforme actif : l'ouverture d'école serait bloquée. Lien courant inchangé. "
+                           'Relancer avec ' + BOOTSTRAP_FLAG + ' (voir docs/implementation/console-operateurs-20261113.md).')
+    if check.returncode:
+        raise RuntimeError("Contrôle de l'équipe d'opérateurs a échoué. Aucun détail de connexion affiché ; vérifier localement.")
 
 
 def main():
-    if os.geteuid() != 0 or len(sys.argv) != 3 or sys.argv[1] != '--apply':
-        raise RuntimeError('Usage root CT114 : install-api-release.py --apply /opt/drivy-refonte/releases/<SHA>')
-    release = Path(sys.argv[2]).resolve()
+    if os.geteuid() != 0:
+        raise RuntimeError('Usage root CT114 : install-api-release.py --apply /opt/drivy-refonte/releases/<SHA> [' + BOOTSTRAP_FLAG + ']')
+    requested, bootstrap = parse_arguments(sys.argv)
+    release = requested.resolve()
     if release.parent != ROOT / 'releases' or not re.fullmatch('[0-9a-f]{40,64}', release.name):
         raise RuntimeError('Chemin de release incorrect.')
     if not (release / 'package-lock.json').is_file() or not (release / 'apps/api/src/main.ts').is_file():
@@ -59,6 +106,8 @@ def main():
         execute([npm, 'ci', '--ignore-scripts', '--include=dev'], web, environment, 'Installation web verrouillée')
         execute([npm, 'run', 'build'], web, environment, 'Compilation web et BFF')
     execute([npm, 'run', 'migrate', '--workspace', '@drivy/api'], release, environment | migration, 'Migration API')
+    # Avant toute bascule et avant le retrait des dépendances de développement (tsx sert à la mise en service).
+    ensure_platform_team(node, npm, release, environment, migration, runtime, bootstrap)
     # Vérifier le rôle réel et l'efficacité de RLS sans contexte, avec la vraie connexion runtime.
     validation = """
 import pg from 'pg';
@@ -124,7 +173,7 @@ try {
     temporary.symlink_to(release)
     os.replace(temporary, current)
     (release / 'deployment.json').write_text(json.dumps({'commit': release.name,
-        'database': 'drivy_refonte', 'runtimeRoleVerified': True, 'serviceStarted': False}) + '\n')
+        'database': 'drivy_refonte', 'runtimeRoleVerified': True, 'platformTeamVerified': True, 'serviceStarted': False}) + '\n')
     print('Release compilée, migrations vérifiées et lien current installé ; aucun service démarré/redémarré.')
 
 

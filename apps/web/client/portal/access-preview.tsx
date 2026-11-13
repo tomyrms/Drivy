@@ -20,6 +20,8 @@ import { memberSchema, readSchool } from '../school-api';
 import { installPreviewTransport, setPreviewScenario, type PreviewScenario } from './preview/transport';
 import { EntryPreview, installEntryPreview, type EntryScene } from './preview/entry-preview';
 import { SchoolOpeningPage } from './opening/opening-page';
+import { PlatformConsolePage } from './platform/platform-page';
+import { PlatformJoinPage } from './platform/platform-join-page';
 import { entryRoutes } from './entry/entry-model';
 import './portal.css';
 
@@ -32,6 +34,9 @@ const allowedScenes: readonly string[] = ['login', 'schools', 'empty', 'invitati
 const entryScene = previewPage && entryScenes[previewPage] ? requestedScene && allowedScenes.includes(requestedScene) ? requestedScene as EntryScene : entryScenes[previewPage] : null;
 if (entryScene) installEntryPreview(entryScene); else installPreviewTransport();
 if (previewPage === 'preparation') previewSchool.status = 'DRAFT';
+// `?page=plateforme&scenario=refused|conflict|slow|lost-reply` : les situations de la console des opérateurs, sans passer par la boîte de scénario.
+const platformScenario = new URLSearchParams(location.search).get('scenario');
+if (previewPage?.startsWith('plateforme') && platformScenario && ['refused', 'slow', 'lost-reply', 'conflict'].includes(platformScenario)) setPreviewScenario(platformScenario as PreviewScenario);
 commandStore.scopeToPerson(ids.person);
 commandStore.scopeToAccess(ids.school, ids.admin, 1);
 // The first published link (no page parameter) keeps opening the access editor directly.
@@ -86,7 +91,10 @@ function Preview() {
 }
 // Personal preferences live outside the school console, as in the real application.
 const openingRoutes = { ...entryRoutes, account: '?page=ecoles', invitation: '?page=invitation', recover: '?page=recuperation', opening: '?page=ouverture', preferences: '?page=preferences', school: () => '?page=preparation' };
+const platformRoutes = { console: '?page=plateforme', join: '?page=plateforme-rejoindre' };
 createRoot(document.getElementById('root')!).render(entryScene ? <EntryPreview scene={entryScene} />
   : previewPage === 'preferences' ? <PortalPreferencesPage back="?page=agenda" />
   : previewPage === 'ouverture' || previewPage === 'operateur' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={previewPage === 'operateur'} routes={openingRoutes} destination={() => '?page=preparation'} />
+  : previewPage === 'plateforme' ? <PlatformConsolePage routes={openingRoutes} platform={platformRoutes} />
+  : previewPage === 'plateforme-rejoindre' ? <PlatformJoinPage routes={openingRoutes} platform={platformRoutes} />
   : <Preview />);

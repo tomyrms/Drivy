@@ -1,5 +1,6 @@
 import { isUUID, matchSchoolRoute, type SchoolMethod } from './school-routes.js';
 import { allowedOpeningRequest, type OpeningGateway } from './opening-routes.js';
+import { allowedPlatformRequest, type PlatformGateway } from './platform-routes.js';
 
 export type ApiResult = { status: number; body: unknown };
 export type ApiGateway = (path: string, accessToken: string, body?: unknown) => Promise<ApiResult>;
@@ -21,6 +22,19 @@ export function createOpeningGateway(baseURL:string):OpeningGateway {
         ...(command.method==='POST'?{'Content-Type':'application/json'}:{}),...(command.idempotencyKey?{'Idempotency-Key':command.idempotencyKey}:{})},
       ...(command.method==='POST'?{body:JSON.stringify(command.body)}:{})});
     return {status:response.status,body:await readJSON(response,256*1024)};
+  };
+}
+
+/** Console des opérateurs : mêmes règles que l'ouverture d'école (liste fermée, pas de redirection), plus la version attendue d'une révocation. */
+export function createPlatformGateway(baseURL:string):PlatformGateway {
+  return async (command,accessToken)=>{
+    if(!allowedPlatformRequest(command))throw new Error('Route API non autorisée.');
+    const response=await fetch(baseURL+command.path,{method:command.method,redirect:'error',signal:AbortSignal.timeout(20_000),
+      headers:{Authorization:`Bearer ${accessToken}`,Accept:'application/json, application/problem+json','Cache-Control':'no-store',
+        ...(command.method==='POST'?{'Content-Type':'application/json'}:{}),...(command.idempotencyKey?{'Idempotency-Key':command.idempotencyKey}:{}),
+        ...(command.ifMatch?{'If-Match':command.ifMatch}:{})},
+      ...(command.method==='POST'?{body:JSON.stringify(command.body)}:{})});
+    return {status:response.status,body:await readJSON(response,1024*1024)};
   };
 }
 

@@ -6,7 +6,7 @@ import type { NewAccount } from '../src/account-provisioning.js';
 import { AttemptLimiter } from '../src/attempt-limiter.js';
 import { ApiError } from '../src/errors.js';
 import { generateInvitationCode } from '../src/invitation-code.js';
-import { freshDatabase, issuer, id } from './support/harness.js';
+import { freshDatabase, issuer, id, seedPlatformOperator } from './support/harness.js';
 import { seedFixtures } from '../scripts/fixtures.js';
 
 let pool:Pool,app:ReturnType<typeof buildApp>;
@@ -19,11 +19,11 @@ let provisionFailure:ApiError|undefined;
 const provisionAccount=async(account:NewAccount)=>{if(provisionFailure)throw provisionFailure;created.push(account);};
 beforeAll(async()=>{
   pool=await freshDatabase();
-  app=buildApp({pool,verifyToken,cursorSecret,provisionAccount,schoolOpening:{operators:[{issuer,subject:operator}],validityDays:7}});
+  app=buildApp({pool,verifyToken,cursorSecret,provisionAccount,schoolOpening:{operators:[],validityDays:7}});
 });
 beforeEach(async()=>{
   created.length=0;provisionFailure=undefined;
-  await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);
+  await pool.query('TRUNCATE drivy.person,drivy.school CASCADE');await seedFixtures(pool,issuer);await seedPlatformOperator(pool,operator);
   const policy=randomUUID(),curriculum=randomUUID();
   await pool.query(`INSERT INTO drivy.school_policy_version(id,school_id,category_code,version,procedure_text,cancellation_policy_text,source_urls,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,'Recette','Recette','{}',true,'Synthétique',$3,now())`,[policy,id.schoolA,id.adminMember]);
   await pool.query(`INSERT INTO drivy.curriculum_version(id,school_id,category_code,revision,approved,approval_reason,created_by,approved_at) VALUES($1,$2,'B',1,true,'Synthétique',$3,now())`,[curriculum,id.schoolA,id.adminMember]);

@@ -33,6 +33,17 @@ export async function freshDatabase({deferCourseMigrations=false,skipMigrations}
  }finally{await migration.end();}
  return pool;
 }
+/**
+ * Opérateur de plateforme synthétique, inséré par la connexion de recette (jamais par une route) : depuis R01-T01 la porte
+ * « opérateur » lit l'équipe en base, et non plus une liste de configuration. Idempotent pour une identité déjà active.
+ */
+export async function seedPlatformOperator(pool:Pool,subject:string,{displayName='Opérateur de recette',email=null}:{displayName?:string;email?:string|null}={}){
+ const known=await pool.query("SELECT id FROM drivy.platform_operator WHERE issuer=$1 AND subject=$2 AND status='ACTIVE'",[issuer,subject]);
+ if(known.rows[0])return known.rows[0].id as string;
+ const operatorId=randomUUID();
+ await pool.query("INSERT INTO drivy.platform_operator(id,issuer,subject,display_name,contact_email,added_via) VALUES($1,$2,$3,$4,$5,'BOOTSTRAP')",[operatorId,issuer,subject,displayName,email]);
+ return operatorId;
+}
 export type Call=(method:'GET'|'POST'|'PUT'|'PATCH',route:string,body?:Record<string,unknown>,version?:number|null,subject?:string,headers?:Record<string,string>)=>Promise<{statusCode:number;json:()=>any;headers:Record<string,unknown>;body:string}>;
 export async function harness(pool:Pool,options:{reauthMaxAgeSeconds?:number;gpsOnlyQualificationSchoolIds?:readonly string[];metricsClock?:()=>Date;logger?:boolean|FastifyServerOptions['logger']}={}){
  const keys=await generateKeyPair('RS256'),key=await exportJWK(keys.publicKey);

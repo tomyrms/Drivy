@@ -22,7 +22,7 @@ export interface EntryAccount { name: string; preferences: string; busy: boolean
 
 /** Standalone page outside the school console: brand, appearance and, once signed in, the account menu. */
 export function EntryFrame({ children, home, account, width = 'narrow', busy = false }: {
-  children: ReactNode; home: string; account?: EntryAccount | null; width?: 'narrow' | 'wide'; busy?: boolean;
+  children: ReactNode; home: string; account?: EntryAccount | null; width?: 'narrow' | 'wide' | 'console'; busy?: boolean;
 }) {
   const theme = useTheme();
   const ThemeIcon = theme.preference === 'system' ? Monitor : theme.preference === 'dark' ? Moon : Sun;

@@ -7,8 +7,9 @@ import type { WebConfig } from './config.js';
 import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { clientKey, RateLimiter } from './rate-limit.js';
 import { SessionStore, bindOpeningIdentity, matchesSecret, type Session, type Tokens } from './session.js';
-import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createPlatformGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest, type OpeningState } from './opening-routes.js';
+import { registerPlatformRoutes, type PlatformGateway, type PlatformRequest } from './platform-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
 class WebError extends Error {
@@ -23,7 +24,9 @@ const previewSchema = z.object({ data: z.object({ invitationId: z.uuid(), school
   notice: z.object({version: z.number().int(), noticeText:z.string(),retentionText:z.string(),contactEmail:z.string()}) }) });
 const digest = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 /** Only a management page of this origin can be a post-login destination. */
-const returnPath = /^\/app\/(?:gestion(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]{1,40})?)?|ouvrir|operateur)$/;
+const returnPath = /^\/app\/(?:gestion(?:\/[0-9a-fA-F-]{36}(?:\/[a-z-]{1,40})?)?|ouvrir|operateur|plateforme(?:\/rejoindre)?)$/;
+/** Destinations that win over a pending school invitation: the person came back for exactly this page. */
+const directReturn = new Set(['/app/ouvrir','/app/operateur','/app/plateforme','/app/plateforme/rejoindre']);
 const loginBody = z.object({ returnTo: z.string().max(200).regex(returnPath).optional(), reauthenticate: z.boolean().optional() }).strict();
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
 const credentials = { email: z.string().trim().min(3).max(254), password: z.string().min(1).max(128) };
@@ -47,7 +50,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; platformGateway?: PlatformGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
@@ -61,6 +64,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const schoolGateway = options.schoolGateway ?? createSchoolGateway(config.apiBaseURL);
   const metricsExportGateway = options.metricsExportGateway ?? createMetricsExportGateway(config.apiBaseURL);
   const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
+  const platformGateway = options.platformGateway ?? createPlatformGateway(config.apiBaseURL);
   const anonymousGateway = options.anonymousGateway ?? createAnonymousGateway(config.apiBaseURL);
   const notificationGateway = options.notificationGateway ?? createNotificationGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
@@ -177,6 +181,14 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     return result;
   };
   registerOpeningRoutes(app,{origin:config.origin,current,protect,admit,open,call:callOpening,send:sendApi,error:(status,code)=>new WebError(status,code)});
+  // Same rules as the opening relay: a write whose session ended is "result unknown", a 401 from the API ends the session.
+  const callPlatform = async(session:Session,command:PlatformRequest):Promise<ApiResult>=>{
+    const result=await platformGateway(command,await accessToken(session));
+    if(!store.isCurrent(session))throw new WebError(401,command.method==='GET'?'SESSION_EXPIRED':'SESSION_LOST_RESULT_UNKNOWN');
+    if(result.status===401){store.destroy(session);throw new WebError(401,'SESSION_EXPIRED');}
+    return result;
+  };
+  registerPlatformRoutes(app,{current,protect,call:callPlatform,send:sendApi,error:(status,code)=>new WebError(status,code)});
   app.get('/app/bff/session',async request => {
     const session = store.get(request.cookies[cookieName]);
     // No session is created for a visitor who only looks: that would let anyone fill the table.
@@ -339,7 +351,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
         return reply.redirect('/app?auth=failed');
       }
       const next = rotateSession(session,tokens); setCookie(reply,next); reply.clearCookie(reloginName,cookieBase);
-      return reply.redirect(transaction.returnTo==='/app/ouvrir' || transaction.returnTo==='/app/operateur' ? transaction.returnTo : next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
+      return reply.redirect(transaction.returnTo && directReturn.has(transaction.returnTo) ? transaction.returnTo : next.invitation ? '/app/invitation' : transaction.returnTo ?? '/app');
     } catch { return reply.redirect('/app?auth=failed'); }
   });
   app.post('/app/bff/logout',async (request,reply) => {
@@ -500,7 +512,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     } });
   if (options.staticRoot) {
     await app.register(staticFiles,{root:options.staticRoot,prefix:'/app/',index:false,wildcard:false,cacheControl:false});
-    for (const path of ['/app','/app/','/app/recover','/app/preferences','/app/preferences/','/app/invitation','/app/ouvrir','/app/operateur','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
+    for (const path of ['/app','/app/','/app/recover','/app/preferences','/app/preferences/','/app/invitation','/app/ouvrir','/app/operateur','/app/plateforme','/app/plateforme/rejoindre','/app/gestion','/app/gestion/*']) app.get(path,async (_request,reply) => reply.sendFile('index.html'));
   }
   app.setNotFoundHandler(async (_request,reply) => reply.status(404).send({code:'NOT_FOUND',title:'Page introuvable.'}));
   return app;
