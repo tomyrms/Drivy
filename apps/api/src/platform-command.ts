@@ -44,6 +44,8 @@ export interface PlatformCommandSpec {
   teamWide?: boolean;
   /** Ce que le journal retient si la commande est refusée. */
   refusal?: Pick<PlatformJournalEntry, 'action' | 'schoolId' | 'subject'>;
+  /** Contexte transactionnel complémentaire (codes d'ouverture d'école : R01-T02). */
+  context?: Pick<PlatformContext, 'openingOperator'>;
 }
 export interface PlatformCommandResult<T> { data: T; status: number; replayed: boolean }
 
@@ -51,7 +53,11 @@ export const teamLockKey = 'drivy.platform_operator.team';
 export const operatorRequired = () => new ApiError(403, 'PLATFORM_OPERATOR_REQUIRED', 'Cet espace est réservé à l’équipe Drivy.');
 export const operationMismatch = () => new ApiError(409, 'IDEMPOTENCY_MISMATCH', 'Cette demande a déjà été utilisée avec un autre contenu.');
 
-export interface PlatformContext { readOnly?: boolean; verifiedEmail?: string; invitationHash?: string }
+export interface PlatformContext {
+  readOnly?: boolean; verifiedEmail?: string; invitationHash?: string;
+  /** Route d'opérateur qui lit ou écrit les codes d'ouverture : pose l'indicateur que les politiques exigent EN PLUS de l'équipe en base. */
+  openingOperator?: boolean;
+}
 
 /** Transaction sous le rôle applicatif : toute lecture et toute écriture passent par les politiques RLS de la base. */
 export async function platformTransaction<T>(pool: Pool, identity: Identity, work: (db: PoolClient) => Promise<T>, context: PlatformContext = {}): Promise<T> {
@@ -60,8 +66,8 @@ export async function platformTransaction<T>(pool: Pool, identity: Identity, wor
     await db.query(context.readOnly ? 'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY' : 'BEGIN');
     await db.query("SET LOCAL lock_timeout='5s'"); await db.query("SET LOCAL statement_timeout='10s'");
     await db.query('SET LOCAL ROLE drivy_app');
-    await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject',$2,true),set_config('app.verified_email',$3,true),set_config('app.platform_invitation_hash',$4,true)",
-      [identity.issuer, identity.subject, context.verifiedEmail ?? '', context.invitationHash ?? '']);
+    await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject',$2,true),set_config('app.verified_email',$3,true),set_config('app.platform_invitation_hash',$4,true),set_config('app.school_opening_operator',$5,true)",
+      [identity.issuer, identity.subject, context.verifiedEmail ?? '', context.invitationHash ?? '', context.openingOperator ? 'true' : 'false']);
     const result = await work(db);
     await db.query('COMMIT');
     return result;
@@ -85,12 +91,13 @@ export async function requirePlatformOperator(pool: Pool, identity: Identity): P
 }
 
 /** Lecture cohérente (un seul instantané) réservée à l'équipe. */
-export async function platformRead<T>(pool: Pool, identity: Identity, work: (db: PoolClient, actor: PlatformActor) => Promise<T>): Promise<T> {
+export async function platformRead<T>(pool: Pool, identity: Identity, work: (db: PoolClient, actor: PlatformActor) => Promise<T>,
+  context: Pick<PlatformContext, 'openingOperator'> = {}): Promise<T> {
   return platformTransaction(pool, identity, async db => {
     const actor = await currentOperator(db, identity);
     if (!actor) throw operatorRequired();
     return work(db, actor);
-  }, { readOnly: true });
+  }, { ...context, readOnly: true });
 }
 
 const secretKey = /token|secret|password|passphrase|authorization|code_?hash|^code$/i;
@@ -146,6 +153,12 @@ export function databaseRefusal(error: unknown): ApiError | undefined {
   if (code === '23505' && constraint === 'platform_operator_active_email') return new ApiError(409, 'PLATFORM_OPERATOR_EXISTS', 'Cette adresse appartient déjà à un opérateur actif.');
   if (code === '23505' && constraint === 'platform_operator_one_per_invitation') return new ApiError(409, 'PLATFORM_INVITATION_USED', 'Cette invitation a déjà été utilisée.');
   if (code === '23505' && constraint === 'platform_operator_invitation_code_hash_key') return new ApiError(409, 'PLATFORM_CODE_TAKEN', 'Ce code est déjà attribué. Générez-en un autre.');
+  // Fiches des écoles clientes (R01-T02).
+  if (code === '23514' && message.includes('platform_client_code_pending')) return new ApiError(409, 'CLIENT_CODE_PENDING', 'Un code d’ouverture est encore utilisable pour cette fiche. Révoquez-le avant de rattacher une école existante.');
+  if (code === '23514' && message.includes('platform_client_school_linked')) return new ApiError(409, 'CLIENT_SCHOOL_LINKED', 'Une école est déjà reliée à cette fiche.');
+  if (code === '23505' && constraint === 'platform_client_school_id_key') return new ApiError(409, 'CLIENT_SCHOOL_ALREADY_LINKED', 'Cette école est déjà reliée à une autre fiche.');
+  if (code === '23505' && constraint === 'school_opening_link_token_hash_key') return new ApiError(409, 'OPENING_CODE_TAKEN', 'Ce code est déjà attribué. Générez-en un autre.');
+  if (code === '23503' && constraint === 'platform_client_school_id_fkey') return new ApiError(404, 'NOT_FOUND', 'Cette école n’existe pas.');
   return undefined;
 }
 
@@ -191,7 +204,7 @@ async function runCommand<T>(pool: Pool, identity: Identity, spec: PlatformComma
     await recordPlatformAction(db, first, effect.journal, { operationId: spec.operationId });
     await effect.apply?.(db);
     return { data: effect.data, status, replayed: false };
-  });
+  }, spec.context ?? {});
 }
 
 /** Exécute une commande de la plateforme : droits relus, idempotence durable, effet + reçu + journal dans un même commit. */

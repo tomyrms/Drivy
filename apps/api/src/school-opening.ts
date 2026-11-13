@@ -111,8 +111,8 @@ export function registerSchoolOpening(app:FastifyInstance,options:{pool:Pool;ver
       await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))',[`opening-operator:${identity.issuer}:${identity.subject}:${body.operationId}`]);
       const known=(await db.query<OpeningLinkRow>('SELECT * FROM drivy.school_opening_link WHERE created_by_issuer=$1 AND created_by_subject=$2 AND create_operation_id=$3',[identity.issuer,identity.subject,body.operationId])).rows[0];
       if(known){if(known.create_hash!==hash)throw mismatch();return openingLinkProjection(known);}
-      const row=(await db.query<OpeningLinkRow>(`INSERT INTO drivy.school_opening_link(id,token_hash,reserved_school_id,reserved_membership_id,created_by_issuer,created_by_subject,create_operation_id,create_hash,expires_at)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+make_interval(days=>$9)) RETURNING *`,[randomUUID(),hashOf(body.token),randomUUID(),randomUUID(),identity.issuer,identity.subject,body.operationId,hash,config.validityDays])).rows[0]!;
+      const row=(await db.query<OpeningLinkRow>(`INSERT INTO drivy.school_opening_link(id,token_hash,reserved_school_id,reserved_membership_id,created_by_issuer,created_by_subject,create_operation_id,create_hash,expires_at,issued_by_operator_id)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()+make_interval(days=>$9),$10) RETURNING *`,[randomUUID(),hashOf(body.token),randomUUID(),randomUUID(),identity.issuer,identity.subject,body.operationId,hash,config.validityDays,actor.operatorId])).rows[0]!;
       // Journal commercial : l'acteur est l'opérateur confirmé par la base ; ni le code ni le lien n'y figurent.
       await recordPlatformAction(db,actor,{action:'CREATE_SCHOOL_OPENING_LINK',subject:{type:'SchoolOpeningLink',id:row.id},changes:{expiresAt:row.expires_at.toISOString()}},{operationId:body.operationId});
       return openingLinkProjection(row);
