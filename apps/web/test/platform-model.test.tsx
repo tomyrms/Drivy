@@ -104,6 +104,11 @@ describe('libellés', () => {
     expect(journalDetail(entry({ changes: { maskedEmail: 'n***@example.test', expiresAt: when } }), format)).toBe('n***@example.test · valable jusqu’au le 2026-11-13');
     expect(journalDetail(entry({ changes: { self: true } }), format)).toBe('retrait volontaire');
     expect(journalDetail(entry({ changes: { expiresAt: 'pas une date' } }), format)).toBeNull();
+    // Le retrait d'un opérateur révoque ses invitations en attente : le journal dit combien, et ne dit rien quand il n'y en avait aucune.
+    expect(journalDetail(entry({ changes: { self: false, revokedInvitations: 0 } }), format)).toBeNull();
+    expect(journalDetail(entry({ changes: { self: false, revokedInvitations: 1 } }), format)).toBe('1 invitation révoquée');
+    expect(journalDetail(entry({ changes: { self: true, revokedInvitations: 2 } }), format)).toBe('retrait volontaire · 2 invitations révoquées');
+    expect(journalDetail(entry({ changes: { revokedInvitations: 'beaucoup' } }), format)).toBeNull();
   });
 });
 

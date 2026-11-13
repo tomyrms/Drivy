@@ -36,13 +36,15 @@ export function usePlatformConsole() {
   const [removing, setRemoving] = useState<PlatformOperator | null>(null);
   const [logoutUnconfirmed, setLogoutUnconfirmed] = useState(readLogoutNotice);
   const running = useRef(false), started = useRef(false), generation = useRef(0), identity = useRef<string | null>(null);
+  /** L'opérateur que l'API a reconnu pour cette session : deux comptes peuvent partager un nom et une adresse, jamais cet identifiant. */
+  const operatorId = useRef<string | null>(null);
   const invite = useRef<{ operationId: string; email: string; validityDays: number } | null>(null);
   const revocations = useRef(new Map<string, { version: number; operationId: string }>());
 
   function purge() {
     setMe(null); setOperators([]); setInvitations([]); setPending(null); setJournal(emptyJournal); setFilter('ALL'); setIssued(null);
     setRemoving(null); setCopied(false); setUncertain(false); setConflict(false);
-    invite.current = null; revocations.current.clear();
+    invite.current = null; revocations.current.clear(); operatorId.current = null;
   }
   /** Retourne le genre d'erreur : un refus « plus opérateur » vide tout, un conflit demande une relecture. */
   function fail(reason: unknown) {
@@ -62,6 +64,7 @@ export function usePlatformConsole() {
     ]);
     // Un autre compte ou un refus est arrivé pendant la lecture : ces réponses ne sont plus celles de l'écran.
     if (current !== generation.current) return;
+    operatorId.current = mine.data.operator.id;
     setMe(mine.data); setOperators(team.data.items); setInvitations(listing.data.items); setPending(listing.pending ?? null);
     setJournal(log.data); setFilter(value); setAccess('allowed');
   }
@@ -82,8 +85,16 @@ export function usePlatformConsole() {
       if (document.visibilityState !== 'visible' || running.current) return;
       try {
         const current = await request('session', sessionSchema);
-        if (identityKey(current) !== identity.current) void boot();
-      } catch { /* La prochaine action le dira. */ }
+        if (identityKey(current) !== identity.current) { void boot(); return; }
+        // Même nom et même adresse ne prouvent pas le même compte : l'opérateur que l'API reconnaît fait foi.
+        if (current.authenticated && operatorId.current) {
+          const mine = await request('platform/me', platformMeResult);
+          if (mine.data.operator.id !== operatorId.current) void boot();
+        }
+      } catch (reason) {
+        // Le compte actif n'est plus opérateur : l'écran se vide au lieu d'attendre la prochaine action. Toute autre panne se dira à la prochaine action.
+        if (platformFailureKind(reason) === 'denied') void boot();
+      }
     };
     document.addEventListener('visibilitychange', check); window.addEventListener('focus', check);
     return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); };
