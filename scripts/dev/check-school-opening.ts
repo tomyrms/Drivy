@@ -26,6 +26,7 @@ import { verifyPersonalWelcome } from './check-personal-welcome.js';
 import { verifyAccountRecovery,type RecoveryAccount } from './check-school-account-recovery.js';
 import { verifySchoolCodeEntry } from './check-school-code-entry.js';
 import { verifyPlatformTeam } from './check-platform-team.js';
+import { verifyPlatformClients } from './check-platform-clients.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -309,6 +310,9 @@ async function main() {
     assert(new URL(page.url()).pathname===`/app/gestion/${school.id}/apercu`
       &&await page.getByRole('link',{name:'Continuer la préparation',exact:true}).count()===0,
       'La création confirmée enchaîne sur les permis enseignés sans écran intermédiaire ni formulaire d’identité répété');
+    // Écoles clientes (R01-T02) : l'opérateur retrouve l'école ouverte par son code, puis crée et révoque un code depuis la console.
+    await verifyPlatformClients({origin,administration,operatorPage,school:{id:school.id,name:'Auto-école Recette · synthétique'},assert,setStage:value=>{stage=value;}});
+    stage='retour au parcours d’ouverture';
     const openReview=async()=>{
       stage='navigation vers le résumé de préparation';
       await page.getByRole('navigation',{name:'Étapes de préparation',exact:true}).getByRole('button',{name:'Résumé',exact:true}).click();
