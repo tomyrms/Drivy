@@ -28,7 +28,12 @@ function assertOpen(row: InvitationRow) {
   if (row.status === 'USED') throw new ApiError(409, 'PLATFORM_INVITATION_USED', 'Cette invitation a déjà été utilisée.');
   if (row.status === 'REVOKED') throw new ApiError(410, 'PLATFORM_INVITATION_REVOKED', 'Cette invitation a été révoquée. Demandez-en une nouvelle.');
   if (invitationStatus(row) === 'EXPIRED') throw new ApiError(410, 'PLATFORM_INVITATION_EXPIRED', 'Cette invitation a expiré. Demandez-en une nouvelle.');
+  // Un code émis par un opérateur retiré ne vaut plus rien. Son retrait révoque déjà ses invitations ; ceci couvre celle qui aurait échappé
+  // à cette révocation (retrait hors service, invitation émise pendant le retrait de son auteur). La base refuse aussi l'entrée dans l'équipe.
+  if (row.creator_active === false) throw new ApiError(410, 'PLATFORM_INVITATION_REVOKED', 'Cette invitation a été révoquée. Demandez-en une nouvelle.');
 }
+/** Lecture d'un code par son porteur : pas de jointure sur l'équipe (il ne la lit pas), l'état de l'auteur vient d'une fonction qui ne rend qu'un booléen. */
+const codeSelect = `SELECT i.*,drivy.platform_invitation_creator_active(i.id) AS creator_active FROM drivy.platform_operator_invitation i WHERE i.code_hash=$1`;
 
 /**
  * Console des opérateurs de la plateforme. Aucun rôle scolaire n'est accordé et aucune table scolaire n'est lue ici.
@@ -49,7 +54,7 @@ export function registerPlatform(app: FastifyInstance, options: { pool: Pool; ve
     finally { finish(failed); if (attempts.size > 1000) attempts.sweep(); }
   }
   const lockInvitationCode = (db: PoolClient, codeHash: string) => db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`platform-code:${codeHash}`]);
-const readInvitation = async (db: PoolClient, id: string) =>(await db.query<InvitationRow>(`${invitationSelect} WHERE i.id=$1`, [id])).rows[0];
+  const readInvitation = async (db: PoolClient, id: string) => (await db.query<InvitationRow>(`${invitationSelect} WHERE i.id=$1`, [id])).rows[0];
 
   app.get('/v1/platform/me', async request => {
     const identity = await identityOf(request); empty.parse(request.query);
@@ -147,9 +152,13 @@ const readInvitation = async (db: PoolClient, id: string) =>(await db.query<Invi
         throw new ApiError(409, 'LAST_PLATFORM_OPERATOR', 'Le dernier opérateur actif ne peut pas être retiré.');
       const revokedAt = (await db.query<{ at: Date }>("SELECT date_trunc('milliseconds',clock_timestamp()) AS at")).rows[0]!.at;
       const data = operatorProjection({ ...locked, status: 'REVOKED', version: locked.version + 1, revoked_at: revokedAt, revoked_by: actor.operatorId }, actor.operatorId);
+      // Les codes que l'opérateur retiré avait émis ne doivent plus ouvrir l'équipe : ils sont révoqués dans la même transaction, tant que l'acteur
+      // est encore actif (c'est aussi le cas d'un retrait de soi-même, appliqué plus bas). La base refuse de toute façon un code dont l'auteur est retiré.
+      const revokedInvitations = (await db.query(`UPDATE drivy.platform_operator_invitation SET status='REVOKED',revoked_at=clock_timestamp(),revoked_by=$2
+        WHERE created_by=$1 AND status='AVAILABLE' AND expires_at>now()`, [id, actor.operatorId])).rowCount ?? 0;
       return {
         data, journal: { action: 'REVOKE_PLATFORM_OPERATOR', subject: { type: 'PlatformOperator', id },
-          changes: { status: { from: 'ACTIVE', to: 'REVOKED' }, self: id === actor.operatorId } },
+          changes: { status: { from: 'ACTIVE', to: 'REVOKED' }, self: id === actor.operatorId, revokedInvitations } },
         // Appliquée après le reçu et le journal : un opérateur qui se retire écrit sa trace tant qu'il en a le droit.
         apply: async client => {
           const updated = await client.query('UPDATE drivy.platform_operator SET status=\'REVOKED\',revoked_at=$2,revoked_by=$3 WHERE id=$1 AND version=$4',
@@ -195,7 +204,7 @@ const readInvitation = async (db: PoolClient, id: string) =>(await db.query<Invi
     const { code } = previewInvitationBody.parse(request.body); const codeHash = hashOf(code);
     const data = await guarded(identity, () => platformTransaction(options.pool, identity, async db => {
       // Pas de jointure sur l'équipe : le porteur du code n'est pas encore opérateur et ne la lit pas.
-      const row = (await db.query<InvitationRow>('SELECT * FROM drivy.platform_operator_invitation WHERE code_hash=$1', [codeHash])).rows[0];
+      const row = (await db.query<InvitationRow>(codeSelect, [codeHash])).rows[0];
       if (!row) throw inviteInvalid();
       assertOpen(row);
       const member = (await db.query<{ id: string | null }>('SELECT drivy.current_platform_operator() AS id')).rows[0]?.id ?? null;
@@ -224,7 +233,7 @@ const readInvitation = async (db: PoolClient, id: string) =>(await db.query<Invi
             throw new ApiError(409, 'PLATFORM_ALREADY_MEMBER', 'Ce compte fait déjà partie de l’équipe.');
           // Un code ne sert qu'une fois : deux acceptations simultanées passent l'une après l'autre, la seconde voit « utilisée ».
           await lockInvitationCode(db, codeHash);
-          const row = (await db.query<InvitationRow>('SELECT * FROM drivy.platform_operator_invitation WHERE code_hash=$1', [codeHash])).rows[0];
+          const row = (await db.query<InvitationRow>(codeSelect, [codeHash])).rows[0];
           if (!row) throw inviteInvalid();
           assertOpen(row);
           if (!identity.verifiedEmail) throw new ApiError(403, 'EMAIL_VERIFICATION_REQUIRED', 'Vérifiez l’adresse e-mail de votre compte avant d’accepter.');

@@ -219,6 +219,8 @@ export function journalDetail(entry: PlatformJournalEntry, format: (iso: string)
   const expires = entry.changes.expiresAt;
   if (typeof expires === 'string' && iso.safeParse(expires).success) parts.push(`valable jusqu’au ${format(expires)}`);
   if (entry.changes.self === true) parts.push('retrait volontaire');
+  const stopped = entry.changes.revokedInvitations;
+  if (typeof stopped === 'number' && Number.isInteger(stopped) && stopped > 0) parts.push(stopped === 1 ? '1 invitation révoquée' : `${stopped} invitations révoquées`);
   return parts.length ? parts.join(' · ') : null;
 }
 

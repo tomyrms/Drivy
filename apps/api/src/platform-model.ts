@@ -63,6 +63,8 @@ export interface InvitationRow {
   id: string; code_hash: string; invitee_email: string; level: 'COMMERCIAL'; status: 'AVAILABLE' | 'USED' | 'REVOKED'; version: number;
   created_by: string; created_at: Date; expires_at: Date; revoked_at: Date | null; revoked_by: string | null; used_at: Date | null; used_by: string | null;
   created_by_name?: string;
+  /** Renseigné seulement par la lecture d'un code (aperçu, acceptation) : l'auteur de l'invitation fait encore partie de l'équipe. */
+  creator_active?: boolean;
 }
 export interface JournalRow {
   id: string; occurred_at: Date; actor_kind: 'OPERATOR' | 'SYSTEM'; actor_operator_id: string | null; actor_name: string; action: string;

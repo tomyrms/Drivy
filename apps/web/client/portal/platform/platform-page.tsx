@@ -168,7 +168,7 @@ function RemovalDialog({ state }: { state: PlatformConsoleState }) {
   return <Dialog open={target !== null} onOpenChange={(open, details) => { if (state.busy) details.cancel(); else if (!open) state.chooseRemoval(null); }}>
     <DialogContent showCloseButton={!state.busy}>
       <DialogHeader><DialogTitle>{target?.self ? 'Vous retirer de l’équipe ?' : `Retirer ${target?.displayName ?? ''} ?`}</DialogTitle>
-        <DialogDescription>{target?.self ? 'Vous perdrez l’accès à cette console dès la confirmation.' : 'Son accès à la console s’arrête dès la confirmation.'}</DialogDescription></DialogHeader>
+        <DialogDescription>{target?.self ? 'Vous perdrez l’accès à cette console, et vos invitations en attente s’arrêteront, dès la confirmation.' : 'Son accès à la console et ses invitations en attente s’arrêtent dès la confirmation.'}</DialogDescription></DialogHeader>
       {state.error && <Alert variant="destructive"><AlertTitle>Retrait non confirmé</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>}
       <DialogFooter><Button variant="outline" disabled={state.busy} onClick={() => state.chooseRemoval(null)}>Garder l’accès</Button>
         <Button variant="destructive" disabled={state.busy} onClick={() => void state.removeOperator()}>{state.busy ? 'Retrait…' : 'Retirer'}</Button></DialogFooter>
