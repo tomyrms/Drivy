@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  actionLabel, formatPlatformCode, invitationStatusLabel, isInviteeEmail, isPlatformCode, journalDetail, levelLabel, notGrantedLabel,
-  platformFailure, platformFailureKind, platformInvitationsResult, platformIssuedResult, platformJournalResult, platformMeResult, platformOperatorsResult,
-  platformPreviewResult, reasonLabel, rightLabel, type PlatformJournalEntry,
+  actionLabel, clientTitle, codeStateLabel, ficheChanges, ficheDraftOf, ficheProblem, formatPlatformCode, invitationStatusLabel, isInviteeEmail, isPlatformCode,
+  journalDetail, levelLabel, linkSourceLabel, notGrantedLabel, platformClientDetailResult, platformClientsResult, platformFailure, platformFailureKind,
+  platformInvitationsResult, platformIssuedCodeResult, platformIssuedResult, platformJournalResult, platformMeResult, platformOperatorsResult,
+  platformPendingCodeResult, platformPreviewResult, platformUnattachedResult, preparationLabel, reasonLabel, rightLabel, schoolStatusLabel, setupProgress,
+  type PlatformClient, type PlatformClientDetail, type PlatformJournalEntry,
 } from '../client/platform-model';
 import { RequestFailure } from '../client/protocol';
 import { PlatformConsolePage } from '../client/portal/platform/platform-page';
 import { PlatformJoinPage } from '../client/portal/platform/platform-join-page';
+import { ClientsSection } from '../client/portal/platform/clients-section';
+import type { PlatformConsoleState } from '../client/portal/platform/use-platform-console';
 
 const id = '5b5f0b2e-7f55-4c52-9c43-3a2a6c0d8e11';
 const when = '2026-11-13T09:30:00.000Z';
@@ -161,5 +165,181 @@ describe('premier affichage (aucune réponse du serveur encore reçue)', () => {
     expect(html).not.toContain('Accepter et rejoindre');
     expect(html).not.toContain('Droits accordés');
     expect(html).not.toContain('Voir les droits');
+  });
+});
+
+// --- Écoles clientes et codes d'ouverture (R01-T02) ---
+const facts = { name: 'Auto-école du Léman', status: 'DRAFT', contactEmail: 'ecole@example.test', contactPhone: null,
+  setup: { step: 'STEP_4', stepsDone: 3, stepsTotal: 6, completedAt: null, savedAt: when } };
+const client: PlatformClient = {
+  id, displayName: 'Auto-école du Léman', preparation: 'IN_PREPARATION', schoolId: id, school: facts as PlatformClient['school'], contactName: 'Sophie Rochat', contactEmail: 'sophie@example.test',
+  latestCode: { id, state: 'USED', expiresAt: when, createdAt: when }, commercial: { state: 'NOT_CONFIGURED', offer: null, dueDates: [] }, version: 2, createdAt: when, updatedAt: when,
+};
+const detail: PlatformClientDetail = {
+  ...client, contactPhone: null, billing: { street: 'Rue du Lac 12', postalCode: '1800', city: 'Vevey', country: null }, internalNotes: 'Reprise de l’ancien site.',
+  link: { source: 'OPENING_CODE', linkedAt: when, issuedByName: 'Camille Aubry' },
+  codes: [{ id, state: 'USED', clientId: id, clientName: 'Auto-école du Léman', createdAt: when, expiresAt: when, usedAt: when, revokedAt: null, issuedByName: 'Camille Aubry',
+    school: { id, ...facts } as PlatformClientDetail['codes'][number]['school'] }],
+};
+
+describe('écoles clientes : contrats du relais', () => {
+  it('accepte l’annuaire paginé et la fiche, avec l’offre et les échéances seulement réservées', () => {
+    expect(platformClientsResult.safeParse({ data: { items: [client], total: 140, nextCursor: 'abc' } }).success).toBe(true);
+    expect(platformClientsResult.safeParse({ data: { items: [], total: 0, nextCursor: null } }).success).toBe(true);
+    expect(platformClientDetailResult.safeParse({ data: detail }).success).toBe(true);
+    // Un lot suivant renseignera l'offre et les échéances : l'écran les tolère sans les interpréter.
+    const later = { ...client, commercial: { state: 'CONFIGURED', offer: { code: 'FUTURE' }, dueDates: [{ on: when }] } };
+    expect(platformClientsResult.safeParse({ data: { items: [later], total: 1, nextCursor: null } }).success).toBe(true);
+  });
+
+  it('refuse une réponse qui sort du contrat plutôt que de l’afficher', () => {
+    expect(platformClientsResult.safeParse({ data: { items: [{ ...client, preparation: 'SUSPENDED' }], total: 1, nextCursor: null } }).success).toBe(false);
+    expect(platformClientsResult.safeParse({ data: { items: [{ ...client, id: 'pas-un-identifiant' }], total: 1, nextCursor: null } }).success).toBe(false);
+    expect(platformClientsResult.safeParse({ data: { items: [client], total: -1, nextCursor: null } }).success).toBe(false);
+    expect(platformClientDetailResult.safeParse({ data: { ...detail, codes: [{ ...detail.codes[0], state: 'PENDING' }] } }).success).toBe(false);
+    expect(platformUnattachedResult.safeParse({ data: { items: [{ id, ...facts, status: 'SUSPENDED' }] } }).success).toBe(false);
+    expect(platformUnattachedResult.safeParse({ data: { items: [{ id, ...facts }] } }).success).toBe(true);
+  });
+
+  it('ne laisse apparaître le code d’ouverture que dans la réponse de création, au bon format', () => {
+    const created = { data: { codeId: id, client: detail }, code: 'DEMK-X7K4', link: 'https://example.test/app/ouvrir#token=DEMK-X7K4' };
+    expect(platformIssuedCodeResult.safeParse(created).success).toBe(true);
+    expect(platformIssuedCodeResult.safeParse({ ...created, code: 'DEMNK-X7K42' }).success).toBe(false);
+    expect(platformIssuedCodeResult.safeParse({ ...created, code: 'DEMO-X7K4' }).success).toBe(false);
+    expect(platformIssuedCodeResult.safeParse({ data: created.data }).success).toBe(false);
+    // L'annuaire, la fiche et la reprise d'une opération ne portent jamais de code.
+    const listed = platformClientsResult.parse({ data: { items: [client], total: 1, nextCursor: null } });
+    const opened = platformClientDetailResult.parse({ data: detail });
+    const waiting = platformPendingCodeResult.parse({ pending: { operationId: id, displayName: 'Auto-école du Léman', validityDays: 7 } });
+    for (const projection of [listed, opened, waiting]) expect(JSON.stringify(projection)).not.toMatch(/[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}/);
+    expect(platformPendingCodeResult.safeParse({ pending: null }).success).toBe(true);
+    expect(platformPendingCodeResult.safeParse({ pending: { operationId: id, validityDays: 90 } }).success).toBe(false);
+  });
+});
+
+describe('écoles clientes : fiche', () => {
+  it('ne propose une modification que pour ce qui a vraiment changé', () => {
+    expect(ficheChanges(detail, ficheDraftOf(detail))).toEqual({});
+    const draft = { ...ficheDraftOf(detail), contactName: '  Sophie Rochat-Martin ', contactEmail: ' SOPHIE@Example.test ', billingCountry: 'Suisse' };
+    // L'adresse est comparée sans casse ni espaces : la même adresse ne repart pas.
+    expect(ficheChanges(detail, draft)).toEqual({ contactName: 'Sophie Rochat-Martin', billingCountry: 'Suisse' });
+  });
+
+  it('une zone vidée part en null, et rien n’est obligatoire', () => {
+    expect(ficheChanges(detail, { ...ficheDraftOf(detail), internalNotes: '   ', billingStreet: '' })).toEqual({ internalNotes: null, billingStreet: null });
+    const blank = ficheDraftOf({ ...detail, displayName: null, contactName: null, contactEmail: null, internalNotes: null, billing: { street: null, postalCode: null, city: null, country: null } });
+    expect(Object.values(blank).every(value => value === '')).toBe(true);
+    expect(ficheProblem(blank)).toBeNull();
+  });
+
+  it('signale avant envoi une adresse invalide ou une zone trop longue, sur la bonne zone', () => {
+    expect(ficheProblem({ ...ficheDraftOf(detail), contactEmail: 'pas-un-email' })).toEqual({ field: 'contactEmail', message: 'Saisissez une adresse e-mail valide.' });
+    expect(ficheProblem({ ...ficheDraftOf(detail), internalNotes: 'a'.repeat(4001) })).toEqual({ field: 'internalNotes', message: 'Ce champ est limité à 4000 caractères.' });
+    expect(ficheProblem({ ...ficheDraftOf(detail), contactPhone: '0'.repeat(33) })?.field).toBe('contactPhone');
+    expect(ficheProblem({ ...ficheDraftOf(detail), internalNotes: 'a'.repeat(4000) })).toBeNull();
+  });
+});
+
+describe('écoles clientes : libellés', () => {
+  it('dit l’état de préparation, de l’école et des codes en français', () => {
+    expect(preparationLabel('AWAITING_SCHOOL')).toBe('En attente de l’école');
+    expect(preparationLabel('IN_PREPARATION')).toBe('En préparation');
+    expect(preparationLabel('ACTIVE')).toBe('Active');
+    expect(preparationLabel('ARCHIVED')).toBe('Archivée');
+    expect(codeStateLabel('AVAILABLE')).toBe('Disponible');
+    expect(codeStateLabel('USED')).toBe('Utilisé');
+    expect(codeStateLabel('EXPIRED')).toBe('Expiré');
+    expect(codeStateLabel('REVOKED')).toBe('Révoqué');
+    expect(schoolStatusLabel('DRAFT')).toBe('Brouillon');
+    expect(linkSourceLabel('EXISTING_SCHOOL')).toBe('École existante rattachée');
+  });
+
+  it('nomme une fiche par son nom commercial, sinon par l’école, sinon sans inventer', () => {
+    expect(clientTitle(client)).toBe('Auto-école du Léman');
+    expect(clientTitle({ displayName: null, school: facts as PlatformClient['school'] })).toBe('Auto-école du Léman');
+    expect(clientTitle({ displayName: null, school: null })).toBe('École sans nom');
+  });
+
+  it('montre la progression enregistrée par l’école, jamais une progression inventée', () => {
+    expect(setupProgress({ stepsDone: 3, stepsTotal: 6, completedAt: null })).toBe('3 sur 6 étapes');
+    expect(setupProgress({ stepsDone: 6, stepsTotal: 6, completedAt: when })).toBe('Préparation terminée');
+    expect(setupProgress({ stepsDone: 0, stepsTotal: 0, completedAt: null })).toBe('Préparation non commencée');
+  });
+
+  it('couvre les actions et les motifs des écoles clientes au journal', () => {
+    for (const action of ['CREATE_PLATFORM_CLIENT', 'UPDATE_PLATFORM_CLIENT', 'ATTACH_EXISTING_SCHOOL', 'CREATE_SCHOOL_OPENING_CODE', 'REVOKE_SCHOOL_OPENING_CODE', 'SCHOOL_OPENED_FROM_CODE'])
+      expect(actionLabel(action)).not.toBe('Action enregistrée');
+    for (const reason of ['CLIENT_CODE_PENDING', 'CLIENT_SCHOOL_LINKED', 'CLIENT_SCHOOL_ALREADY_LINKED', 'OPENING_LINK_USED', 'OPENING_LINK_REVOKED', 'OPENING_LINK_EXPIRED'])
+      expect(reasonLabel(reason)).not.toBeNull();
+  });
+
+  it('explique chaque refus métier des écoles clientes en français, sans afficher de code technique', () => {
+    for (const code of ['CLIENT_CODE_PENDING', 'CLIENT_SCHOOL_LINKED', 'CLIENT_SCHOOL_ALREADY_LINKED', 'OPENING_LINK_USED', 'OPENING_LINK_REVOKED', 'OPENING_LINK_EXPIRED',
+      'PLATFORM_CODE_IN_PROGRESS', 'NOT_FOUND', 'IDEMPOTENCY_MISMATCH']) {
+      const message = platformFailure(new RequestFailure(code, 409));
+      expect(message).toMatch(/[.]$/);
+      expect(message).not.toContain(code);
+    }
+    expect(platformFailureKind(new RequestFailure('CLIENT_SCHOOL_LINKED', 409))).toBe('refused');
+  });
+});
+
+describe('écoles clientes : affichage', () => {
+  /** Un état minimal : seul ce que la section lit. Aucun appel réseau, aucune action. */
+  const state = (clients: Record<string, unknown>) => ({ busy: false, error: null, clients: {
+    page: { items: [client], total: 1, nextCursor: null }, search: '', preparation: 'ALL', selected: null, pending: null, ...clients,
+  } }) as unknown as PlatformConsoleState;
+
+  it('l’annuaire met « Créer un code » en action principale et n’affiche aucun code', () => {
+    const html = renderToStaticMarkup(<ClientsSection state={state({})} />);
+    expect(html).toContain('Créer un code');
+    expect(html).toContain('Rattacher une école');
+    expect(html).toContain('Auto-école du Léman');
+    expect(html).toContain('1 sur 1 école');
+    expect(html).not.toMatch(/[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}/);
+    // Le contenu pédagogique n'est jamais lu ni proposé à l'opérateur.
+    expect(html).not.toMatch(/élève|trajet|message|dossier/i);
+  });
+
+  it('un annuaire vide dit pourquoi, et ne propose « Afficher plus » que s’il reste des écoles', () => {
+    expect(renderToStaticMarkup(<ClientsSection state={state({ page: { items: [], total: 0, nextCursor: null } })} />)).toContain('Aucune école cliente');
+    expect(renderToStaticMarkup(<ClientsSection state={state({ page: { items: [], total: 0, nextCursor: null }, search: 'zzz' })} />)).toContain('Aucune école trouvée');
+    expect(renderToStaticMarkup(<ClientsSection state={state({})} />)).not.toContain('Afficher plus');
+    expect(renderToStaticMarkup(<ClientsSection state={state({ page: { items: [client], total: 140, nextCursor: 'abc' } })} />)).toContain('Afficher plus');
+  });
+
+  it('un code expiré ou révoqué est le seul état inhabituel signalé par un badge', () => {
+    const awaiting = { ...client, preparation: 'AWAITING_SCHOOL', schoolId: null, school: null };
+    const html = (code: PlatformClient['latestCode']) => renderToStaticMarkup(<ClientsSection state={state({ page: { items: [{ ...awaiting, latestCode: code }], total: 1, nextCursor: null } })} />);
+    expect(html({ id, state: 'EXPIRED', expiresAt: when, createdAt: when })).toContain('Code expiré');
+    expect(html({ id, state: 'REVOKED', expiresAt: when, createdAt: when })).toContain('Code révoqué');
+    expect(html({ id, state: 'AVAILABLE', expiresAt: when, createdAt: when })).not.toContain('Code expiré');
+    expect(html(null)).not.toContain('Code révoqué');
+  });
+
+  it('un code créé mais non confié est repris dans l’annuaire, sans le montrer', () => {
+    const html = renderToStaticMarkup(<ClientsSection state={state({ pending: { operationId: id, displayName: 'Auto-école Reprise' } })} />);
+    expect(html).toContain('Code non transmis');
+    expect(html).toContain('Afficher le code');
+    expect(html).not.toMatch(/[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}/);
+  });
+
+  it('la fiche montre l’école, son contact et sa progression, l’offre et les échéances réservées, et rien du contenu pédagogique', () => {
+    const html = renderToStaticMarkup(<ClientsSection state={state({ selected: detail })} />);
+    for (const expected of ['Auto-école du Léman', 'Contact de l’école', '3 sur 6 étapes', 'Ouverte avec un code', 'Offre', 'Non configurée', 'Échéances', 'Aucune', 'Codes d’ouverture', 'Adresse de facturation', 'Notes internes'])
+      expect(html).toContain(expected);
+    expect(html).not.toMatch(/élève|trajet|message|dossier/i);
+    // Une école ouverte n'émet plus de code et ne se rattache plus.
+    expect(html).not.toContain('Créer un code');
+    expect(html).not.toContain('Rattacher une école');
+  });
+
+  it('la fiche d’une école pas encore ouverte propose un code, sauf si un code est déjà disponible', () => {
+    const open = { ...detail, preparation: 'AWAITING_SCHOOL', schoolId: null, school: null, link: null, codes: [{ ...detail.codes[0], state: 'EXPIRED', school: null }] };
+    expect(renderToStaticMarkup(<ClientsSection state={state({ selected: open })} />)).toContain('Créer un code');
+    const waiting = { ...open, codes: [{ ...open.codes[0], state: 'AVAILABLE' }] };
+    const html = renderToStaticMarkup(<ClientsSection state={state({ selected: waiting })} />);
+    expect(html).not.toContain('Créer un code');
+    expect(html).toContain('Révoquer');
   });
 });
