@@ -25,6 +25,7 @@ import { verifySchoolFormations } from './check-school-formations.js';
 import { verifyPersonalWelcome } from './check-personal-welcome.js';
 import { verifyAccountRecovery,type RecoveryAccount } from './check-school-account-recovery.js';
 import { verifySchoolCodeEntry } from './check-school-code-entry.js';
+import { verifyPlatformTeam } from './check-platform-team.js';
 
 const keycloakOrigin='http://127.0.0.1:8081',realmName='drivy-opening-e2e',issuer=`${keycloakOrigin}/realms/${realmName}`;
 const origin='http://127.0.0.1:3002',apiOrigin='http://127.0.0.1:3001';
@@ -65,6 +66,19 @@ function mailLink(text:string,expectedOrigin:string,path:string) {
 function assert(value:unknown,label:string):asserts value {stage=label;if(!value)throw new Error('CHECK_FAILED');checks.push(label);stage=`après « ${label} »`;}
 function docker(args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn('docker',args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('DOCKER_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('DOCKER_FAILED')));});}
 function runBuild(command:string,args:string[]):Promise<void> {return new Promise((done,fail)=>{const child=spawn(command,args,{stdio:'ignore',windowsHide:true});child.on('error',()=>fail(new Error('IDENTITY_BUILD_UNAVAILABLE')));child.on('exit',code=>code===0?done():fail(new Error('IDENTITY_BUILD_FAILED')));});}
+/**
+ * Mise en service de l'opérateur par la voie officielle de l'exploitation (`npm run operators:bootstrap`) : connexion propriétaire des
+ * migrations, identité lue de l'environnement de ce processus seulement, rapport en nombres. Le service métier ne reçoit plus aucune liste.
+ */
+function bootstrapOperators(databaseURL:string,entries:{issuer:string;subject:string;displayName:string}[]):Promise<string> {
+  return new Promise((done,fail)=>{
+    const child=spawn('npm',['run','operators:bootstrap','--silent','--workspace','@drivy/api'],{stdio:['ignore','pipe','ignore'],windowsHide:true,
+      shell:process.platform==='win32',env:{...process.env,MIGRATION_DATABASE_URL:databaseURL,PGOPTIONS:'-c role=drivy_e2e_migrator',PLATFORM_OPERATORS_BOOTSTRAP_JSON:JSON.stringify(entries)}});
+    let report='';child.stdout.on('data',chunk=>{report+=String(chunk);});
+    child.on('error',()=>fail(new Error('OPERATOR_BOOTSTRAP_UNAVAILABLE')));
+    child.on('exit',code=>code===0?done(report):fail(new Error('OPERATOR_BOOTSTRAP_FAILED')));
+  });
+}
 async function buildIdentityProvider(temporary:string) {
   const lock=z.object({keycloak:z.object({version:z.literal('26.7.4'),url:z.url(),sha256:z.string().regex(/^[a-f0-9]{64}$/)})}).parse(
     JSON.parse(await readFile(new URL('../../infra/deploy/runtime-lock.json',import.meta.url),'utf8'))).keycloak;
@@ -130,12 +144,14 @@ async function main() {
     const migrator=new Pool({connectionString:databaseURL,options:'-c role=drivy_e2e_migrator'});
     try{await migrate(migrator);}finally{await migrator.end();}
     runtime=new Pool({connectionString:databaseURL,options:'-c role=drivy_app',max:8});
+    stage='accès à la plateforme : personne avant la mise en service';
+    assert((await administration.query('SELECT count(*)::int AS n FROM drivy.platform_operator')).rows[0].n===0,'Une base migrée n’a aucun opérateur : la mise en service est une étape explicite');
     mailer=new Pool({connectionString:databaseURL,options:'-c role=drivy_invitation_mailer',max:2});
     const runtimeRole=(await runtime.query('SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user')).rows[0];
     assert(!runtimeRole.rolsuper&&!runtimeRole.rolbypassrls,'Le service métier utilise drivy_app sans BYPASSRLS');
 
     stage='serveur OIDC éphémère';temporary=await mkdtemp(resolve(tmpdir(),'drivy-opening-e2e-'));
-    const adminPassword=syntheticSecret(),operatorPassword=syntheticSecret(),consumerPassword=syntheticSecret(),clientSecret=syntheticSecret(),accountsSecret=syntheticSecret(),instructorPassword=syntheticSecret();
+    const adminPassword=syntheticSecret(),operatorPassword=syntheticSecret(),consumerPassword=syntheticSecret(),clientSecret=syntheticSecret(),accountsSecret=syntheticSecret(),instructorPassword=syntheticSecret(),colleaguePassword=syntheticSecret(),inviteePassword=syntheticSecret();
     const envPath=resolve(temporary,'keycloak.env');
     stage='compilation du fournisseur d’identité contre la distribution verrouillée';
     const identityProviderJar=await buildIdentityProvider(temporary);
@@ -161,6 +177,11 @@ async function main() {
         directAccessGrantsEnabled:false,implicitFlowEnabled:false,serviceAccountsEnabled:true,fullScopeAllowed:true,redirectUris:[],webOrigins:[]}];
     realm.users=[{username:'operateur-recette',enabled:true,email:'operator@example.invalid',emailVerified:true,firstName:'Opérateur',lastName:'Synthétique',
       credentials:[{type:'password',value:operatorPassword,temporary:false}]},
+      // Deuxième compte, invité depuis la console : il n'a aucun accès tant qu'il n'a pas accepté un code.
+      {username:'collegue-recette',enabled:true,email:'colleague@example.invalid',emailVerified:true,firstName:'Collègue',lastName:'Synthétique',
+        credentials:[{type:'password',value:colleaguePassword,temporary:false}]},
+      {username:'invite-recette',enabled:true,email:'invitee@example.invalid',emailVerified:true,firstName:'Invité',lastName:'Synthétique',
+        credentials:[{type:'password',value:inviteePassword,temporary:false}]},
       {username:'service-account-drivy-accounts-e2e',enabled:true,serviceAccountClientId:'drivy-accounts-e2e',clientRoles:{'realm-management':['manage-users']}}];
     const realmResponse=await fetch(`${keycloakOrigin}/admin/realms`,{method:'POST',headers:{Authorization:`Bearer ${auth.access_token}`,'Content-Type':'application/json'},body:JSON.stringify(realm)});
     if(!realmResponse.ok)throw new Error('OIDC_REALM_FAILED');
@@ -202,8 +223,15 @@ async function main() {
     const config={origin,apiBaseURL:apiOrigin,issuer,clientId:'drivy-web-e2e',clientSecret,development:true,host:'127.0.0.1',port:3002,accountRecoveryEnabled:true};
     const invitationMail:InvitationMailConfig={webURL:`${origin}/app/invitation`,encryptionKey:randomBytes(32).toString('hex'),host:'127.0.0.1',port:1025,
       secure:false,requireTLS:false,from:'school@drivy.example.invalid'};
+    stage='mise en service de l’opérateur par la voie officielle';
+    const bootstrapReport=await bootstrapOperators(databaseURL,[{issuer,subject:operatorList[0]!.id,displayName:'Opérateur Synthétique'}]);
+    assert(/1 ajouté\(s\), 0 déjà actif\(s\)/.test(bootstrapReport),'La mise en service officielle ajoute l’opérateur et ne rapporte que des nombres');
+    assert((await administration.query("SELECT count(*)::int AS n FROM drivy.platform_operator WHERE status='ACTIVE' AND added_via='BOOTSTRAP'")).rows[0].n===1
+      &&(await administration.query("SELECT count(*)::int AS n FROM drivy.platform_audit_event WHERE action='BOOTSTRAP_PLATFORM_OPERATOR' AND actor_kind='SYSTEM'")).rows[0].n===1,
+      'La mise en service laisse une ligne d’équipe et un événement SYSTEM au journal');
     api=buildApp({pool:runtime,accountRecovery:{available:true,recoveryUrl:origin+'/app/recover'},verifyToken:createTokenVerifier({OIDC_ISSUER:issuer,OIDC_AUDIENCE:'drivy-api',OIDC_JWKS_URL:`${issuer}/protocol/openid-connect/certs`}),
-      cursorSecret:syntheticSecret(),invitationMail,schoolOpening:{operators:[{issuer,subject:operatorList[0]!.id}],validityDays:7},
+      // Aucune liste d'opérateurs en configuration : l'équipe se lit dans la base, et seule la mise en service l'y a mise.
+      cursorSecret:syntheticSecret(),invitationMail,schoolOpening:{operators:[],validityDays:7},
       provisionAccount:createKeycloakProvisioner({baseURL:keycloakOrigin,realm:realmName,clientId:'drivy-accounts-e2e',clientSecret:accountsSecret})});
     const sessionStore=new SessionStore();
     web=await buildWebApp({config,identity:await createIdentityProvider(config),store:sessionStore,staticRoot:fileURLToPath(new URL('../../apps/web/dist/client/',import.meta.url))});
@@ -230,6 +258,9 @@ async function main() {
     const openingCode=await operatorPage.getByLabel('Code d’ouverture',{exact:true}).inputValue();
     assert(/^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(openingCode)&&new URL(openingLink).hash===`#token=${openingCode}`,'Le lien porte un code court, lisible et saisissable à la main');
     assert((await administration.query('SELECT count(*)::int AS n FROM drivy.school')).rows[0].n===0,'Créer ou consulter un lien ne crée pas d’école');
+    await verifyPlatformTeam({browser,origin,keycloakOrigin,administration,operatorPage,colleague:{email:'colleague@example.invalid',password:colleaguePassword},
+      invitee:{email:'invitee@example.invalid',password:inviteePassword},signIn,assert,setStage:value=>{stage=value;}});
+    stage='retour au parcours d’ouverture';
 
     let page=await consumerContext.newPage();page.setDefaultTimeout(20_000);
     stage='inscription libre fermée chez le fournisseur';
