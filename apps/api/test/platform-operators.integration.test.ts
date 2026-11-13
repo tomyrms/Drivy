@@ -35,7 +35,7 @@ beforeAll(async () => {
   app = buildApp({ pool, verifyToken, cursorSecret });
 });
 beforeEach(async () => {
-  await pool.query('TRUNCATE drivy.platform_audit_event, drivy.platform_operation, drivy.platform_operator_invitation, drivy.platform_operator');
+  await pool.query('TRUNCATE drivy.platform_audit_event, drivy.platform_operation, drivy.platform_operator_invitation, drivy.platform_client, drivy.school_opening_link, drivy.platform_operator');
   await seedPlatformOperator(pool, A, { displayName: 'Camille Exemple', email: emailA });
   await seedPlatformOperator(pool, B, { displayName: 'Jean Exemple' });
 });
@@ -110,11 +110,11 @@ test('la porte : seul un opérateur actif relu en base entre, tout autre compte 
     notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'], operator: { displayName: 'Camille Exemple', self: true, maskedEmail: 'c***@example.invalid', status: 'ACTIVE' } });
 });
 
-test('les quatre tables de la plateforme sont sous RLS forcée, comme toute table du schéma', async () => {
+test('les cinq tables de la plateforme sont sous RLS forcée, comme toute table du schéma', async () => {
   // Les tests de capture ne rejouent que les migrations numérotées : ce contrôle couvre la migration datée de la plateforme.
   const rls = await pool.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(
     "SELECT c.relname::text AS relname,relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r' AND c.relname LIKE 'platform\\_%' ORDER BY 1");
-  expect(rls.rows.map(row => row.relname)).toEqual(['platform_audit_event', 'platform_operation', 'platform_operator', 'platform_operator_invitation']);
+  expect(rls.rows.map(row => row.relname)).toEqual(['platform_audit_event', 'platform_client', 'platform_operation', 'platform_operator', 'platform_operator_invitation']);
   for (const row of rls.rows) expect([row.relrowsecurity, row.relforcerowsecurity], row.relname).toEqual([true, true]);
   const unforced = await pool.query("SELECT c.relname::text AS relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r' AND NOT (relrowsecurity AND relforcerowsecurity)");
   expect(unforced.rows).toEqual([]);
@@ -137,7 +137,7 @@ test('l’opérateur ne voit des tables scolaires que ce qu’en voit un inconnu
     expect(result.error ? 0 : result.rows[0]!.n, table).toBe(0);
   }
   // Un compte scolaire (ADMIN) ne lit ni l'équipe, ni les invitations, ni le journal, ni les reçus.
-  for (const table of ['platform_operator', 'platform_operator_invitation', 'platform_audit_event', 'platform_operation']) {
+  for (const table of ['platform_operator', 'platform_operator_invitation', 'platform_audit_event', 'platform_operation', 'platform_client']) {
     expect((await asApp('demo-admin', `SELECT 1 FROM drivy.${table}`)).rowCount, table).toBe(0);
     expect((await asApp('stranger', `SELECT 1 FROM drivy.${table}`)).rowCount, table).toBe(0);
     expect((await asApp(A, `SELECT 1 FROM drivy.${table}`)).error, table).toBeUndefined();
@@ -389,7 +389,7 @@ test('dernier opérateur sous rafale : cinq retraits simultanés en SQL, il en r
 test('retraits croisés par le service : l’un des deux aboutit, l’autre est écarté, jamais zéro opérateur', async () => {
   const [a, b] = [await idOf(A), await idOf(B)];
   for (let round = 0; round < 3; round += 1) {
-    if (round > 0) { await pool.query('TRUNCATE drivy.platform_audit_event, drivy.platform_operation, drivy.platform_operator_invitation, drivy.platform_operator');
+    if (round > 0) { await pool.query('TRUNCATE drivy.platform_audit_event, drivy.platform_operation, drivy.platform_operator_invitation, drivy.platform_client, drivy.school_opening_link, drivy.platform_operator');
       await seedPlatformOperator(pool, A, { displayName: 'Camille Exemple', email: emailA }); await seedPlatformOperator(pool, B, { displayName: 'Jean Exemple' }); }
     const [ida, idb] = [await idOf(A), await idOf(B)];
     const [first, second] = await Promise.all([revokeOperator(A, idb, 1), revokeOperator(B, ida, 1)]);
@@ -510,7 +510,7 @@ test('point d’entrée des lots suivants : acteur de plateforme, école, reçu,
 });
 
 test('mise en service : propriétaire seul, idempotente, tracée au journal par le système, sans identifiant dans le rapport', async () => {
-  await pool.query('TRUNCATE drivy.platform_audit_event, drivy.platform_operation, drivy.platform_operator_invitation, drivy.platform_operator');
+  await pool.query('TRUNCATE drivy.platform_audit_event, drivy.platform_operation, drivy.platform_operator_invitation, drivy.platform_client, drivy.school_opening_link, drivy.platform_operator');
   await expect(bootstrapPlatformOperators(owner, [])).rejects.toThrow(/Aucune identité/);
   const entries = [{ issuer, subject: 'first-account' }, { issuer, subject: 'second-account', displayName: 'Camille Exemple' }];
   expect(await bootstrapPlatformOperators(owner, entries)).toEqual({ added: 2, alreadyActive: 0 });
