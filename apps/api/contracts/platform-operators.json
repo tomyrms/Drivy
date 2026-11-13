@@ -1319,7 +1319,14 @@
             "PLATFORM_CODE_TAKEN",
             "EMAIL_VERIFICATION_REQUIRED",
             "INVITATION_CODE_ATTEMPTS",
-            "SERVICE_UNAVAILABLE"
+            "SERVICE_UNAVAILABLE",
+            "INVALID_CURSOR",
+            "CLIENT_CODE_PENDING",
+            "CLIENT_SCHOOL_LINKED",
+            "CLIENT_SCHOOL_ALREADY_LINKED",
+            "OPENING_CODE_TAKEN",
+            "OPENING_LINK_USED",
+            "OPENING_LINK_REVOKED"
           ]
         },
         "requestId": {

@@ -11,7 +11,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run test/auth.test.ts test/cursor.test.ts test/invitation-code.test.ts test/capture-anchoring.test.ts test/request-hardening.test.ts test/track-matching.test.ts test/next-slot.test.ts test/observation-ranking.test.ts test/school-metrics-model.test.ts test/platform-model.test.ts test/platform-contract.test.ts",
+    "test:unit": "vitest run test/auth.test.ts test/cursor.test.ts test/invitation-code.test.ts test/capture-anchoring.test.ts test/request-hardening.test.ts test/track-matching.test.ts test/next-slot.test.ts test/observation-ranking.test.ts test/school-metrics-model.test.ts test/platform-model.test.ts test/platform-contract.test.ts test/platform-clients-model.test.ts test/platform-clients-contract.test.ts",
     "migrate": "tsx scripts/migrate.ts",
     "operators:bootstrap": "tsx scripts/operators-bootstrap.ts",
     "seed": "tsx scripts/seed.ts",
