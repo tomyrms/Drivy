@@ -7,13 +7,15 @@ import Observation
     func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope)
 }
 
-/// Un fichier JSON par école dans Application Support. Ordre et affichage des thèmes du catalogue : aucune donnée de
-/// personne, donc aucun chiffrement, et rien de commun avec la file chiffrée des demandes. Perdre ce fichier
-/// ramène seulement au repli embarqué jusqu’à la prochaine lecture.
+/// Un fichier JSON par origine d’API, par compte et par école dans Application Support. Ordre et affichage des thèmes
+/// du catalogue : aucune donnée de personne, donc aucun chiffrement, et rien de commun avec la file chiffrée des
+/// demandes. Le compte fait partie de l’identité du fichier : deux comptes d’un même appareil ne partagent rien.
+/// Perdre ce fichier ramène seulement au repli embarqué jusqu’à la prochaine lecture.
 @MainActor final class SchoolObservationThemeFileCache: SchoolObservationThemeCache {
     private struct Stored: Codable {
         let format: Int
         let apiBaseURL: String
+        let personId: UUID
         let schoolId: UUID
         let version: Int
         let themes: [SchoolObservationTheme]
@@ -21,18 +23,20 @@ import Observation
         var foreign: [SchoolObservationForeignTheme]? = nil
         var unlisted: [String]? = nil
     }
+    static let folder = "SchoolObservationReference"
     private let directory: URL
     private let maximumBytes = 64_000
 
     init(directory: URL? = nil) {
         self.directory = directory ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SchoolObservationThemes", isDirectory: true)
+            .appendingPathComponent(Self.folder, isDirectory: true)
     }
 
     func read(scope: SchoolCommandScope) -> SchoolObservationThemeConfiguration? {
         guard let data = try? Data(contentsOf: file(for: scope)), data.count <= maximumBytes,
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
-              stored.format == 1, stored.apiBaseURL == scope.apiBaseURL, stored.schoolId == scope.schoolID,
+              stored.format == 2, stored.apiBaseURL == scope.apiBaseURL, stored.personId == scope.personID,
+              stored.schoolId == scope.schoolID,
               stored.version > 0, !stored.themes.isEmpty else { return nil }
         // Une copie écrite par une version qui connaissait moins de thèmes : les nouveaux ne sont pas réputés
         // connus de l’école avant sa prochaine réponse.
@@ -45,7 +49,7 @@ import Observation
     func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope) {
         // Le repli embarqué ne s’écrit jamais : il passerait ensuite pour une réponse de l’école.
         guard configuration.isFromServer, configuration.version > 0 else { return }
-        let stored = Stored(format: 1, apiBaseURL: scope.apiBaseURL, schoolId: scope.schoolID,
+        let stored = Stored(format: 2, apiBaseURL: scope.apiBaseURL, personId: scope.personID, schoolId: scope.schoolID,
                             version: configuration.version, themes: configuration.themes,
                             foreign: configuration.foreign, unlisted: configuration.unlisted.sorted())
         guard let data = try? JSONEncoder().encode(stored), data.count <= maximumBytes else { return }
@@ -54,7 +58,12 @@ import Observation
     }
 
     private func file(for scope: SchoolCommandScope) -> URL {
-        directory.appendingPathComponent("\(scope.schoolID.uuidString.lowercased()).json")
+        directory.appendingPathComponent("\(SchoolObservationCacheName.origin(scope.apiBaseURL))-\(scope.personID.uuidString.lowercased())-\(scope.schoolID.uuidString.lowercased()).json")
+    }
+
+    /// Oublie la copie de ce compte dans cette école (accès révoqué).
+    func remove(scope: SchoolCommandScope) {
+        try? FileManager.default.removeItem(at: file(for: scope))
     }
 }
 
@@ -260,5 +269,12 @@ extension SchoolAgendaClient {
         let created = SchoolObservationThemeStore(scope: scope, client: client(), cache: makeCache())
         stores[key] = created
         return created
+    }
+
+    /// Déconnexion : plus aucune copie de la configuration d’une école ne reste en mémoire ni sur l’appareil.
+    static func purgeAll() {
+        stores.removeAll()
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.removeItem(at: base.appendingPathComponent(SchoolObservationThemeFileCache.folder, isDirectory: true))
     }
 }

@@ -161,7 +161,7 @@ struct SchoolObservationEditor: Identifiable {
         if let live, live.acceptsSignal, live.isSending || live.owns(pending) { return live }
         let recorder = SchoolLiveObservationRecorder(scope: scope, lessonID: lessonID, client: client,
             themeStore: SchoolObservationThemeStores.store(for: scope, client: client.themeClient),
-            rankingStore: SchoolObservationRankingStores.store(for: scope, client: client.rankingClient),
+            preferencesStore: SchoolObservationPreferencesStores.store(for: scope, client: client.preferencesClient),
             signalOrders: SchoolLessonSignalOrderStores.make(scope), outbox: outbox,
             onSettlement: { [weak self] in
                 guard let self, !self.accessRevoked else { return }
