@@ -3,7 +3,8 @@ import { Check, X } from 'lucide-react';
 import { logoutNoticeText } from '../../logout-notice';
 import { levelLabel, notGrantedLabel, platformRoutes, rightLabel, type PlatformPreview, type PlatformRoutes } from '../../platform-model';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
-import { Button } from '../../components/ui/button';
+import { Button, buttonVariants } from '../../components/ui/button';
+import { cn } from '../../lib/utils';
 import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/field';
 import { Input } from '../../components/ui/input';
 import { Skeleton } from '../../components/ui/skeleton';
@@ -63,7 +64,8 @@ function RightsList({ granted, denied }: { granted: readonly string[]; denied: r
   </>;
 }
 
-function Review({ state, preview, platform }: { state: PlatformJoinState; preview: PlatformPreview; platform: PlatformRoutes }) {
+/** Exportée pour le test de rendu : les liens de cette page doivent rester de vrais liens. */
+export function Review({ state, preview, platform }: { state: PlatformJoinState; preview: PlatformPreview; platform: PlatformRoutes }) {
   const { data } = preview;
   const blocked = !data.matchesAccount || data.alreadyMember;
   return <div className="platform-review">
@@ -75,7 +77,7 @@ function Review({ state, preview, platform }: { state: PlatformJoinState; previe
     {!data.matchesAccount && <Alert variant="destructive"><AlertTitle>Autre adresse</AlertTitle>
       <AlertDescription>Cette invitation est destinée à une autre adresse. Connectez-vous avec le compte invité.</AlertDescription></Alert>}
     {data.alreadyMember && <Alert><AlertTitle>Déjà dans l’équipe</AlertTitle><AlertDescription>Ce compte a déjà accès à la console.</AlertDescription>
-      <Button variant="outline" className="mt-3" nativeButton={false} render={<a href={platform.console} />}>Ouvrir la console</Button></Alert>}
+      <a className={cn(buttonVariants({ variant: 'outline' }), 'mt-3')} href={platform.console}>Ouvrir la console</a></Alert>}
     <Button className="platform-primary" disabled={state.busy || blocked} aria-busy={state.busy} onClick={() => void state.accept()}>{state.busy ? 'Confirmation…' : 'Accepter et rejoindre'}</Button>
     <Button variant="ghost" disabled={state.busy} onClick={state.changeCode}>Changer de code</Button>
   </div>;
@@ -89,12 +91,12 @@ function Uncertain({ state }: { state: PlatformJoinState }) {
   </div>;
 }
 
-function Accepted({ result, platform }: { result: PlatformAccepted; platform: PlatformRoutes }) {
+export function Accepted({ result, platform }: { result: PlatformAccepted; platform: PlatformRoutes }) {
   return <div className="platform-accepted" role="status">
     <section className="platform-review-card" aria-labelledby="platform-accepted-title">
       <h2 id="platform-accepted-title">Vous faites partie de l’équipe</h2>
       <RightsList granted={result.rights} denied={result.notGranted} />
     </section>
-    <Button className="platform-primary" nativeButton={false} render={<a href={platform.console} />}>Ouvrir la console</Button>
+    <a className={cn(buttonVariants(), 'platform-primary')} href={platform.console}>Ouvrir la console</a>
   </div>;
 }

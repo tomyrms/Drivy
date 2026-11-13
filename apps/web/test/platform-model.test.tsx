@@ -3,11 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import {
   actionLabel, formatPlatformCode, invitationStatusLabel, isInviteeEmail, isPlatformCode, journalDetail, levelLabel, notGrantedLabel,
   platformFailure, platformFailureKind, platformInvitationsResult, platformIssuedResult, platformJournalResult, platformMeResult, platformOperatorsResult,
-  platformPreviewResult, reasonLabel, rightLabel, type PlatformJournalEntry,
+  platformPreviewResult, platformRoutes, reasonLabel, rightLabel, type PlatformJournalEntry,
 } from '../client/platform-model';
 import { RequestFailure } from '../client/protocol';
 import { PlatformConsolePage } from '../client/portal/platform/platform-page';
-import { PlatformJoinPage } from '../client/portal/platform/platform-join-page';
+import { Accepted, PlatformJoinPage, Review } from '../client/portal/platform/platform-join-page';
+import type { PlatformJoinState } from '../client/portal/platform/use-platform-join';
 
 const id = '5b5f0b2e-7f55-4c52-9c43-3a2a6c0d8e11';
 const when = '2026-11-13T09:30:00.000Z';
@@ -161,5 +162,28 @@ describe('premier affichage (aucune réponse du serveur encore reçue)', () => {
     expect(html).not.toContain('Accepter et rejoindre');
     expect(html).not.toContain('Droits accordés');
     expect(html).not.toContain('Voir les droits');
+  });
+});
+
+describe('liens de la console et de l’acceptation', () => {
+  // Un Button Base UI rendu en <a> reçoit role="button" : les lecteurs d’écran annonceraient un bouton. Ce sont de vrais liens, stylés comme les boutons du portail.
+  const link = (html: string, label: string) => html.match(new RegExp(`<a [^>]*>${label}</a>`))?.[0] ?? '';
+
+  it('« Ouvrir la console » après acceptation est un lien natif vers la console, sans rôle de bouton', () => {
+    const html = renderToStaticMarkup(<Accepted result={{ operator: { ...operator, self: true }, ...rights } as never} platform={platformRoutes} />);
+    const anchor = link(html, 'Ouvrir la console');
+    expect(anchor).toContain(`href="${platformRoutes.console}"`);
+    expect(anchor).toContain('ui-button');
+    expect(anchor).not.toContain('role=');
+    expect(html).not.toContain('<button');
+  });
+
+  it('« Ouvrir la console » d’un compte déjà dans l’équipe est un lien natif, sans rôle de bouton', () => {
+    const data = { status: 'AVAILABLE', maskedEmail: 'n***@example.test', expiresAt: when, matchesAccount: true, alreadyMember: true, ...rights };
+    const html = renderToStaticMarkup(<Review state={{ busy: false } as PlatformJoinState} preview={{ confirmation: 'c', data } as never} platform={platformRoutes} />);
+    const anchor = link(html, 'Ouvrir la console');
+    expect(anchor).toContain(`href="${platformRoutes.console}"`);
+    expect(anchor).toContain('ui-button-outline');
+    expect(anchor).not.toContain('role=');
   });
 });
