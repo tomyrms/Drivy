@@ -5,6 +5,7 @@
 .entry-main:focus { outline: 0; }
 .entry-main-narrow { max-width: 448px; }
 .entry-main-wide { max-width: 720px; padding-top: 48px; }
+.entry-main-console { max-width: 880px; padding-top: 48px; }
 
 /* Signed-out forms: centred heading, one surface, distinct alternatives below. */
 .entry-auth { display: grid; gap: 24px; }
@@ -105,7 +106,7 @@
 
 @media (max-width: 640px) {
   .entry-main { padding: 32px 20px 48px; gap: 20px; }
-  .entry-main-wide { padding-top: 28px; }
+  .entry-main-wide, .entry-main-console { padding-top: 28px; }
   .entry-card { padding: 20px; }
   .entry-name-row { grid-template-columns: 1fr; gap: 18px; }
   .entry-pending { flex-wrap: wrap; }

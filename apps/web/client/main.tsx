@@ -50,7 +50,7 @@ async function loadPage() {
   const consoleParts = path.split('/');
   const knownConsole = /^\/app\/gestion(\/|$)/.test(path) && consoleParts.length <= 5
     && (!consoleParts[4] || (sectionKeys as readonly string[]).includes(consoleParts[4]));
-  const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur'].includes(path);
+  const knownEntry = ['/app', '/app/invitation', '/app/recover', '/app/preferences', '/app/ouvrir', '/app/operateur', '/app/plateforme', '/app/plateforme/rejoindre'].includes(path);
   root.render(<LoadingPage />);
   try {
     if (!knownEntry && !knownConsole) {
@@ -65,6 +65,12 @@ async function loadPage() {
     } else if (isOpening || path === '/app/operateur') {
       const { SchoolOpeningPage } = await import('./portal/opening/opening-page');
       root.render(<SchoolOpeningPage link={openingLink} operator={!isOpening} />);
+    } else if (path === '/app/plateforme') {
+      const { PlatformConsolePage } = await import('./portal/platform/platform-page');
+      root.render(<PlatformConsolePage />);
+    } else if (path === '/app/plateforme/rejoindre') {
+      const { PlatformJoinPage } = await import('./portal/platform/platform-join-page');
+      root.render(<PlatformJoinPage />);
     } else if (knownConsole) {
       const { PortalConsole } = await import('./portal/portal-console');
       root.render(<PortalConsole />);
