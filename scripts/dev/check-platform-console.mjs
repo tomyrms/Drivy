@@ -395,6 +395,9 @@ for (const kind of ['desktop', 'mobile']) {
     assert.equal(await page.getByRole('tab', { name: 'Écoles' }).count(), 0);
     assert.equal(await page.getByText('Camille Aubry').count(), 0);
     assert.equal(await page.getByText('Auto-école du Léman').count(), 0);
+    // Un lien de navigation est annoncé comme un lien : rôle link, pas button.
+    assert.equal(await page.getByRole('link', { name: 'Saisir un code d’accès' }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Saisir un code d’accès' }).count(), 0);
     await shot(page, `10-acces-refuse-${kind}`);
     ok(`accès refusé ${kind} : aucune donnée de l’équipe affichée, lien vers la saisie d’un code`);
     await context.close();
