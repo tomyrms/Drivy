@@ -18,6 +18,7 @@ import { AccountEntryPanel } from '../entry/account-entry-panel';
 import { EntryFrame } from '../entry/entry-frame';
 import { entryRoutes, type EntryRoutes } from '../entry/entry-model';
 import { PortalSelect } from '../components/portal-select';
+import { AttachDialog, ClientsSection, CodeDialog } from './clients-section';
 import { usePlatformConsole, type PlatformConsoleState } from './use-platform-console';
 import './platform.css';
 
@@ -25,10 +26,10 @@ const dateTime = (value: string) => new Intl.DateTimeFormat('fr-CH', { dateStyle
 const day = (value: string) => new Intl.DateTimeFormat('fr-CH', { dateStyle: 'medium' }).format(new Date(value));
 const validities = [{ value: '1', label: '1 jour' }, { value: '3', label: '3 jours' }, { value: '7', label: '7 jours' }, { value: '14', label: '14 jours' }] as const;
 
-/** Console privée des opérateurs de la plateforme : équipe, invitations, journal. Hors de toute école. */
+/** Console privée des opérateurs de la plateforme : écoles clientes, équipe, invitations, journal. Hors de toute école. */
 export function PlatformConsolePage({ routes = entryRoutes, platform = platformRoutes }: { routes?: EntryRoutes; platform?: PlatformRoutes }) {
   const state = usePlatformConsole();
-  const [tab, setTab] = useState<'team' | 'invitations' | 'journal'>('team');
+  const [tab, setTab] = useState<'clients' | 'team' | 'invitations' | 'journal'>('clients');
   useEffect(() => { document.title = 'Plateforme · Drivy'; }, []);
   const busy = !state.loaded || state.busy;
   const signedIn = state.session?.authenticated === true;
@@ -40,22 +41,25 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
       {state.loaded && !signedIn && !state.error && <AccountEntryPanel routes={routes} onSignedIn={() => void state.boot()} />}
       {state.loaded && signedIn && <div className="platform-identity"><div><strong>{state.session?.user?.displayName}</strong><span>{state.session?.user?.email}</span></div>
         <Button variant="ghost" disabled={busy} onClick={() => void state.changeAccount()}>Changer de compte</Button></div>}
-      {state.conflict ? <Alert><AlertTitle>Liste mise à jour</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>
-        : state.error && !state.removing && !state.uncertain && <Alert variant="destructive"><AlertTitle>Action impossible</AlertTitle><AlertDescription>{state.error}</AlertDescription>
+      {state.conflict ? <Alert><AlertTitle>Données mises à jour</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>
+        : state.error && !state.dialogOpen && !state.uncertain && <Alert variant="destructive"><AlertTitle>Action impossible</AlertTitle><AlertDescription>{state.error}</AlertDescription>
           <Button variant="outline" className="mt-3" disabled={busy} onClick={() => void (signedIn ? state.refresh() : state.boot())}>Actualiser</Button></Alert>}
       {state.loaded && signedIn && state.access === 'denied' && <Empty className="platform-denied" role="alert">
         <EmptyHeader><EmptyMedia variant="icon"><Users aria-hidden="true" /></EmptyMedia><EmptyTitle>Accès refusé</EmptyTitle></EmptyHeader>
         <Button variant="outline" nativeButton={false} render={<a href={platform.join} />}>Saisir un code d’accès</Button></Empty>}
       {state.access === 'allowed' && <Tabs value={tab} onValueChange={value => setTab(value as typeof tab)}>
         <TabsList variant="line" aria-label="Sections de la console">
-          <TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>
+          <TabsTrigger value="clients">Écoles</TabsTrigger><TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>
         </TabsList>
+        <TabsContent value="clients"><ClientsSection state={state} /></TabsContent>
         <TabsContent value="team"><TeamSection state={state} /></TabsContent>
         <TabsContent value="invitations"><InvitationsSection state={state} /></TabsContent>
         <TabsContent value="journal"><JournalSection state={state} /></TabsContent>
       </Tabs>}
     </div>
     <RemovalDialog state={state} />
+    <CodeDialog state={state} />
+    <AttachDialog state={state} />
   </EntryFrame>;
 }
 

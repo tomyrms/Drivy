@@ -47,6 +47,7 @@ export async function verifyPlatformTeam(options: {
     step('équipe lue en base après la mise en service');
     await operatorPage.goto(`${origin}/app/plateforme`);
     await operatorPage.getByRole('heading', { name: 'Plateforme', level: 1, exact: true }).waitFor();
+    await operatorPage.getByRole('tab', { name: 'Équipe', exact: true }).click();
     await operatorPage.getByText('Opérateur Synthétique').first().waitFor();
     assert(await operatorPage.getByText('Vous', { exact: true }).count() === 1
       && await count("SELECT count(*)::int AS n FROM drivy.platform_operator WHERE status='ACTIVE'") === 1,
@@ -102,6 +103,7 @@ export async function verifyPlatformTeam(options: {
     step('acceptation du code par un second compte · ouverture de la console');
     await first.page.getByText('Ouvrir la console', { exact: true }).click();
     await first.page.getByRole('heading', { name: 'Plateforme', level: 1, exact: true }).waitFor();
+    await first.page.getByRole('tab', { name: 'Équipe', exact: true }).click();
     await first.page.getByText('Vous', { exact: true }).first().waitFor();
 
     step('invitation créée par le collègue');
@@ -111,6 +113,7 @@ export async function verifyPlatformTeam(options: {
 
     step('retrait du collègue par l’opérateur');
     await operatorPage.goto(`${origin}/app/plateforme`);
+    await operatorPage.getByRole('tab', { name: 'Équipe', exact: true }).click();
     await operatorPage.getByRole('button', { name: /^Retirer / }).first().waitFor();
     await operatorPage.getByRole('button', { name: /^Retirer / }).first().click();
     await operatorPage.getByRole('dialog').getByRole('button', { name: 'Retirer', exact: true }).click();

@@ -253,23 +253,27 @@ function IssuedCode({ state }: { state: PlatformConsoleState }) {
 /** Rattacher une école déjà ouverte (pilote) à une fiche : elle garde ses accès et ses données, rien n'est recréé ni facturé. */
 export function AttachDialog({ state }: { state: PlatformConsoleState }) {
   const { clients } = state, target = clients.attach;
-  const [text, setText] = useState('');
-  return <Dialog open={target !== null} onOpenChange={(open, details) => { if (state.busy) details.cancel(); else if (!open) { setText(''); clients.stopAttach(); } }}>
-    <DialogContent showCloseButton={!state.busy}>
-      <DialogHeader><DialogTitle>Rattacher une école existante</DialogTitle>
-        {target?.client && <DialogDescription>{clientTitle(target.client)}</DialogDescription>}</DialogHeader>
-      <form className="platform-search" role="search" onSubmit={event => { event.preventDefault(); void clients.searchUnattached(text); }}>
-        <Input type="search" name="q" aria-label="Rechercher une école existante" placeholder="Rechercher une école" autoComplete="off" maxLength={100} value={text} onChange={event => setText(event.target.value)} />
-        <Button type="submit" variant="outline" disabled={state.busy}><Search aria-hidden="true" data-icon="inline-start" />Rechercher</Button>
-      </form>
-      {state.error && <Alert variant="destructive"><AlertTitle>Rattachement non confirmé</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>}
-      {clients.unattached.length === 0
-        ? <Empty><EmptyHeader><EmptyMedia variant="icon"><School aria-hidden="true" /></EmptyMedia><EmptyTitle>Aucune école à rattacher</EmptyTitle></EmptyHeader></Empty>
-        : <ul className="platform-list platform-dialog-list">{clients.unattached.map(school => <li key={school.id}>
-          <div className="platform-summary"><strong>{school.name}</strong>
-            <span>{[schoolStatusLabel(school.status), setupProgress(school.setup), school.contactEmail].filter(Boolean).join(' · ')}</span></div>
-          <Button variant="outline" disabled={state.busy} aria-label={`Rattacher ${school.name}`} onClick={() => void clients.attachSchool(school)}>Rattacher</Button>
-        </li>)}</ul>}
-    </DialogContent>
+  return <Dialog open={target !== null} onOpenChange={(open, details) => { if (state.busy) details.cancel(); else if (!open) clients.stopAttach(); }}>
+    <DialogContent showCloseButton={!state.busy}>{target && <AttachBody state={state} client={target.client} />}</DialogContent>
   </Dialog>;
+}
+
+function AttachBody({ state, client }: { state: PlatformConsoleState; client: PlatformClientDetail | null }) {
+  const { clients } = state;
+  const [text, setText] = useState('');
+  return <>
+    <DialogHeader><DialogTitle>Rattacher une école existante</DialogTitle>{client && <DialogDescription>{clientTitle(client)}</DialogDescription>}</DialogHeader>
+    <form className="platform-search" role="search" onSubmit={event => { event.preventDefault(); void clients.searchUnattached(text); }}>
+      <Input type="search" name="q" aria-label="Rechercher une école existante" placeholder="Rechercher une école" autoComplete="off" maxLength={100} value={text} onChange={event => setText(event.target.value)} />
+      <Button type="submit" variant="outline" disabled={state.busy}><Search aria-hidden="true" data-icon="inline-start" />Rechercher</Button>
+    </form>
+    {state.error && <Alert variant="destructive"><AlertTitle>Rattachement non confirmé</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>}
+    {clients.unattached.length === 0
+      ? <Empty><EmptyHeader><EmptyMedia variant="icon"><School aria-hidden="true" /></EmptyMedia><EmptyTitle>Aucune école à rattacher</EmptyTitle></EmptyHeader></Empty>
+      : <ul className="platform-list platform-dialog-list">{clients.unattached.map(school => <li key={school.id}>
+        <div className="platform-summary"><strong>{school.name}</strong>
+          <span>{[schoolStatusLabel(school.status), setupProgress(school.setup), school.contactEmail].filter(Boolean).join(' · ')}</span></div>
+        <Button variant="outline" disabled={state.busy} aria-label={`Rattacher ${school.name}`} onClick={() => void clients.attachSchool(school)}>Rattacher</Button>
+      </li>)}</ul>}
+  </>;
 }

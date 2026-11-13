@@ -31,6 +31,33 @@
 .platform-group { display: flex; flex-direction: column; gap: 10px; }
 .platform-group h3 { font-size: .9375rem; font-weight: 600; }
 .platform-primary { width: 100%; }
+/* Écoles clientes : annuaire, fiche, codes. */
+.platform-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.platform-search { display: flex; align-items: center; gap: 8px; flex: 1; min-width: min(100%, 260px); max-width: 480px; }
+.platform-search > input { min-width: 0; flex: 1; }
+.platform-search > button { flex-shrink: 0; }
+.platform-filter { flex-wrap: wrap; }
+.platform-count { color: var(--muted-foreground); font-size: .875rem; }
+.platform-list > li:has(> .platform-client) { padding-block: 0; }
+.platform-client { display: flex; align-items: center; gap: 12px; width: 100%; padding-block: 16px; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; border-radius: 8px; }
+.platform-client:hover:not(:disabled) { background: color-mix(in oklab, var(--muted) 60%, transparent); }
+.platform-client:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.platform-client:disabled { cursor: default; opacity: .7; }
+.platform-client > svg { flex-shrink: 0; width: 18px; height: 18px; color: var(--muted-foreground); }
+.platform-fiche { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.platform-back { align-self: flex-start; margin-left: -10px; }
+.platform-fiche-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.platform-fiche-head h3 { font-size: 1.25rem; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
+.platform-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px 24px; margin: 0; padding: 16px 0; border-block: 1px solid var(--border); }
+.platform-facts > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.platform-facts dt { color: var(--muted-foreground); font-size: .875rem; }
+.platform-facts dd { margin: 0; overflow-wrap: anywhere; }
+.platform-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+.platform-address { display: flex; flex-direction: column; gap: 16px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.platform-address > legend { font-size: .875rem; font-weight: 500; margin-bottom: 8px; }
+.platform-issued-dialog { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.platform-copied { min-height: 1.25rem; color: var(--muted-foreground); font-size: .875rem; }
+.platform-dialog-list { max-height: 50vh; overflow-y: auto; }
 @media (max-width: 640px) {
   .platform-identity { flex-direction: column; align-items: flex-start; }
   .platform-identity > button { margin-left: -12px; }
@@ -38,6 +65,9 @@
   .platform-issued, .platform-pending, .platform-review-card { padding: 16px; }
   .platform-list > li { flex-wrap: wrap; }
   .platform-summary { flex-basis: 100%; }
-  .platform-list > li > button { margin-left: -10px; }
+  .platform-list > li > button:not(.platform-client) { margin-left: -10px; }
+  .platform-toolbar, .platform-search { max-width: none; width: 100%; }
+  .platform-search { flex-wrap: nowrap; }
+  .platform-fiche-head > .platform-actions { width: 100%; }
   .platform-section > .platform-form > button { width: 100%; }
 }
