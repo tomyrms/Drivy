@@ -188,7 +188,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if(result.status===401){store.destroy(session);throw new WebError(401,'SESSION_EXPIRED');}
     return result;
   };
-  registerPlatformRoutes(app,{current,protect,call:callPlatform,send:sendApi,error:(status,code)=>new WebError(status,code)});
+  registerPlatformRoutes(app,{origin:config.origin,current,protect,call:callPlatform,send:sendApi,error:(status,code)=>new WebError(status,code)});
   app.get('/app/bff/session',async request => {
     const session = store.get(request.cookies[cookieName]);
     // No session is created for a visitor who only looks: that would let anyone fill the table.

@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { OpeningState, OperatorOpeningState } from './opening-routes.js';
-import type { PlatformInviteState, PlatformJoinState } from './platform-routes.js';
+import type { PlatformCodeState, PlatformInviteState, PlatformJoinState } from './platform-routes.js';
 
 export type Principal = { subject: string; displayName: string; email?: string; emailVerified: boolean; authenticatedAt?: number };
 export type Tokens = { accessToken: string; refreshToken?: string; expiresAt: number; principal: Principal };
@@ -15,6 +15,8 @@ export type Session = {
   opening?: OpeningState; operatorOpening?: OperatorOpeningState;
   /** Console des opérateurs : le code d'une invitation émise et l'acceptation en cours appartiennent au compte qui les a lancés. */
   platformInvite?: PlatformInviteState; platformJoin?: PlatformJoinState;
+  /** Console des opérateurs, écoles clientes : le code d'ouverture tiré pour une opération appartient au compte qui l'a demandée. */
+  platformCode?: PlatformCodeState;
 };
 const random = () => randomBytes(32).toString('base64url');
 
@@ -74,6 +76,7 @@ export class SessionStore {
     // Same rule for the operator console: another account never inherits an invitation code or an acceptance in progress.
     const platformInvite = session.tokens?.principal.subject === tokens.principal.subject ? session.platformInvite : undefined;
     const platformJoin = session.platformJoin?.identity === tokens.principal.subject ? session.platformJoin : undefined;
+    const platformCode = session.tokens?.principal.subject === tokens.principal.subject ? session.platformCode : undefined;
     // An opening link belongs to the account that opened it. The identity recorded at admission is never
     // transferred (the endpoints then refuse with OPENING_IDENTITY_CHANGED). An intention that appears without
     // one belongs to the account of its session, or, before any sign-in, to the identity this browser signs in with.
@@ -87,6 +90,7 @@ export class SessionStore {
     if (operatorOpening) next.operatorOpening = operatorOpening;
     if (platformInvite) next.platformInvite = platformInvite;
     if (platformJoin) next.platformJoin = platformJoin;
+    if (platformCode) next.platformCode = platformCode;
     return next;
   }
   setInvitation(session: Session, token: string, delivery: 'EMAIL' | 'CODE' = 'EMAIL'): void {
@@ -96,7 +100,7 @@ export class SessionStore {
   destroy(session: Session): void {
     this.sessions.delete(session.id);
     delete session.tokens; delete session.login; delete session.invitation; delete session.refresh; delete session.reauthenticating;
-    delete session.opening; delete session.operatorOpening; delete session.platformInvite; delete session.platformJoin;
+    delete session.opening; delete session.operatorOpening; delete session.platformInvite; delete session.platformJoin; delete session.platformCode;
   }
   clear(): void { for (const session of this.sessions.values()) this.destroy(session); }
   sweep(): void { for (const session of this.sessions.values()) if (this.expired(session)) this.destroy(session); }

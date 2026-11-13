@@ -2,13 +2,14 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { matchesSecret, type Session } from './session.js';
+import { openingCode } from './opening-routes.js';
 import type { ApiResult } from './upstream.js';
 
 /**
- * Console des opérateurs de la plateforme (R01-T01). Le navigateur ne parle qu'à ce relais : il ne connaît ni l'API, ni
+ * Console des opérateurs de la plateforme (R01-T01, R01-T02). Le navigateur ne parle qu'à ce relais : il ne connaît ni l'API, ni
  * un jeton, ni l'empreinte d'un code. Les droits sont relus par l'API à chaque appel ; ce relais ne décide de rien.
  */
-export type PlatformRequest = { method: 'GET' | 'POST'; path: string; body?: unknown; idempotencyKey?: string; ifMatch?: string };
+export type PlatformRequest = { method: 'GET' | 'POST' | 'PATCH'; path: string; body?: unknown; idempotencyKey?: string; ifMatch?: string };
 export type PlatformGateway = (command: PlatformRequest, accessToken: string) => Promise<ApiResult>;
 
 const uuidPath = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
@@ -16,21 +17,35 @@ const strongVersion = /^"[1-9][0-9]{0,9}"$/;
 const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations']);
 const operationPath = new RegExp(`^/v1/platform/operations/${uuidPath}$`);
 const revokePath = new RegExp(`^/v1/platform/(?:invitations|operators)/${uuidPath}/revoke$`);
+const clientPath = new RegExp(`^/v1/platform/clients/${uuidPath}$`);
+const attachPath = new RegExp(`^/v1/platform/clients/${uuidPath}/attach-school$`);
+const codeRevokePath = new RegExp(`^/v1/platform/school-codes/${uuidPath}/revoke$`);
 
-function validJournalQuery(query: string): boolean {
+export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
+export const codeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
+
+type QueryRule = (value: string) => boolean;
+const limitUpTo = (max: number): QueryRule => value => /^[1-9][0-9]{0,2}$/.test(value) && Number(value) <= max;
+const cursorRule: QueryRule = value => /^[A-Za-z0-9_-]{1,6000}$/.test(value);
+const uuidRule: QueryRule = value => new RegExp(`^${uuidPath}$`).test(value);
+const oneOf = (values: readonly string[]): QueryRule => value => values.includes(value);
+// La recherche est un texte libre court : pas de caractère de contrôle, longueur bornée comme côté API.
+const searchRule: QueryRule = value => value.length <= 100 && !/[\u0000-\u001f\u007f]/.test(value);
+
+/** Chaque paramètre doit être connu, unique et valide : une requête qui sort de la liste n'est jamais émise. */
+function validQuery(query: string, rules: Record<string, QueryRule>): boolean {
   if (query === '') return true;
   const seen = new Set<string>();
   for (const [key, value] of new URLSearchParams(query)) {
-    if (seen.has(key)) return false;
+    if (seen.has(key) || !Object.hasOwn(rules, key) || !rules[key]!(value)) return false;
     seen.add(key);
-    if (key === 'limit') { if (!/^[1-9][0-9]{0,2}$/.test(value) || Number(value) > 100) return false; }
-    else if (key === 'cursor') { if (!/^[A-Za-z0-9_-]{1,6000}$/.test(value)) return false; }
-    else if (key === 'schoolId') { if (!new RegExp(`^${uuidPath}$`).test(value)) return false; }
-    else if (key === 'result') { if (value !== 'SUCCESS' && value !== 'REFUSED') return false; }
-    else return false;
   }
   return true;
 }
+const journalRules: Record<string, QueryRule> = { limit: limitUpTo(100), cursor: cursorRule, schoolId: uuidRule, result: oneOf(['SUCCESS', 'REFUSED']) };
+const clientListRules: Record<string, QueryRule> = { limit: limitUpTo(100), cursor: cursorRule, q: searchRule, preparation: oneOf(clientPreparations) };
+const codeListRules: Record<string, QueryRule> = { limit: limitUpTo(100), cursor: cursorRule, clientId: uuidRule, state: oneOf(codeStates) };
+const unattachedRules: Record<string, QueryRule> = { limit: limitUpTo(50), q: searchRule };
 
 /** Liste fermée des appels que le relais peut émettre vers l'API de la plateforme : toute autre route reste inaccessible. */
 export function allowedPlatformRequest(request: PlatformRequest): boolean {
@@ -39,14 +54,21 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
   const query = cut < 0 ? '' : request.path.slice(cut + 1);
   if (request.method === 'GET') {
     if (request.body !== undefined || request.idempotencyKey !== undefined || request.ifMatch !== undefined) return false;
-    if (path === '/v1/platform/journal') return validJournalQuery(query);
-    return query === '' && (staticReads.has(path) || operationPath.test(path));
+    if (path === '/v1/platform/journal') return validQuery(query, journalRules);
+    if (path === '/v1/platform/clients') return validQuery(query, clientListRules);
+    if (path === '/v1/platform/school-codes') return validQuery(query, codeListRules);
+    if (path === '/v1/platform/unattached-schools') return validQuery(query, unattachedRules);
+    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path));
   }
-  if (request.method !== 'POST' || query !== '') return false;
+  if ((request.method !== 'POST' && request.method !== 'PATCH') || query !== '') return false;
   const keyed = typeof request.idempotencyKey === 'string' && z.uuid().safeParse(request.idempotencyKey).success;
+  const versioned = typeof request.ifMatch === 'string' && strongVersion.test(request.ifMatch);
+  if (request.method === 'PATCH') return clientPath.test(path) && keyed && versioned;
   if (path === '/v1/platform/invitations/preview') return request.idempotencyKey === undefined && request.ifMatch === undefined;
   if (path === '/v1/platform/invitations' || path === '/v1/platform/invitations/accept') return keyed && request.ifMatch === undefined;
-  if (revokePath.test(path)) return keyed && typeof request.ifMatch === 'string' && strongVersion.test(request.ifMatch);
+  if (revokePath.test(path)) return keyed && versioned;
+  if (path === '/v1/platform/clients' || path === '/v1/platform/school-codes' || codeRevokePath.test(path)) return keyed && request.ifMatch === undefined;
+  if (attachPath.test(path)) return keyed && versioned;
   return false;
 }
 
@@ -74,10 +96,42 @@ const previewResult = z.object({ data: z.object({ status: z.literal('AVAILABLE')
 const acceptedResult = z.object({ data: z.object({ operator: operatorSchema, ...rightsFields }) });
 export type PlatformJoinResult = z.infer<typeof acceptedResult>['data'];
 
+// --- Écoles clientes (R01-T02) : seuls les faits d'école de la projection fixe de l'API sont relayés, jamais un dossier, un trajet ni un message. ---
+const text = (max: number) => z.string().max(max);
+const schoolStatus = z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']);
+const setupSchema = z.object({ step: text(80).nullable(), stepsDone: z.number().int().min(0).max(100), stepsTotal: z.number().int().min(0).max(100),
+  completedAt: iso.nullable(), savedAt: iso.nullable() });
+const schoolFacts = z.object({ name: text(200), status: schoolStatus, contactEmail: text(254), contactPhone: text(32).nullable(), setup: setupSchema });
+const codeStateSchema = z.enum(codeStates);
+const latestCodeSchema = z.object({ id: z.uuid(), state: codeStateSchema, expiresAt: iso, createdAt: iso });
+/** L'emplacement commercial est tolérant : les lots d'offres et de conditions y ajoutent leurs valeurs sans changer cette forme. */
+const commercialSchema = z.object({ state: token, offer: z.unknown(), dueDates: z.array(z.unknown()).max(50) });
+const clientSummarySchema = z.object({ id: z.uuid(), displayName: text(150).nullable(), preparation: z.enum(clientPreparations), schoolId: z.uuid().nullable(),
+  school: schoolFacts.nullable(), contactName: text(200).nullable(), contactEmail: text(254).nullable(), latestCode: latestCodeSchema.nullable(),
+  commercial: commercialSchema, version: z.number().int().positive(), createdAt: iso, updatedAt: iso });
+const codeSchema = z.object({ id: z.uuid(), state: codeStateSchema, clientId: z.uuid().nullable(), clientName: text(150).nullable(), createdAt: iso, expiresAt: iso,
+  usedAt: iso.nullable(), revokedAt: iso.nullable(), issuedByName: text(200).nullable(), school: schoolFacts.extend({ id: z.uuid() }).nullable() });
+const clientDetailSchema = clientSummarySchema.extend({
+  contactPhone: text(32).nullable(),
+  billing: z.object({ street: text(200).nullable(), postalCode: text(20).nullable(), city: text(100).nullable(), country: text(100).nullable() }),
+  internalNotes: text(4000).nullable(),
+  link: z.object({ source: z.enum(['OPENING_CODE', 'EXISTING_SCHOOL']), linkedAt: iso, issuedByName: text(200).nullable() }).nullable(),
+  codes: z.array(codeSchema).max(50),
+});
+const page = <T extends z.ZodType>(item: T) => z.object({ data: z.object({ items: z.array(item).max(100), total: z.number().int().min(0).nullable(), nextCursor: z.string().max(6000).nullable() }) });
+const clientsResult = page(clientSummarySchema);
+const clientResult = z.object({ data: clientDetailSchema });
+const codesResult = page(codeSchema);
+const codeResult = z.object({ data: codeSchema });
+const unattachedResult = z.object({ data: z.object({ items: z.array(z.object({ id: z.uuid(), name: text(200), status: schoolStatus, contactEmail: text(254), contactPhone: text(32).nullable(), setup: setupSchema })).max(50) }) });
+const issuedCodeResult = z.object({ data: z.object({ codeId: z.uuid(), client: clientDetailSchema }) });
+
 // --- État de session : un code émis et une acceptation en cours appartiennent au compte qui les a lancés. ---
 export type PlatformInviteState = { operationId: string; email: string; validityDays?: number; code: string; busy?: boolean };
 export type PlatformJoinState = { identity: string; operationId: string; code?: string; confirmation?: { id: string; digest: string };
   busy?: boolean; submitted?: boolean; uncertain?: boolean; accepted?: PlatformJoinResult };
+/** « Créer un code » : le code naît ici, pour une opération, et est rendu à l'opérateur qui l'a demandée tant qu'il ne l'a pas confié. */
+export type PlatformCodeState = { operationId: string; clientId?: string; displayName?: string; validityDays?: number; code: string; busy?: boolean };
 
 // Code d'accès : 10 caractères sans O/0/I/1 (32 symboles, 50 bits) ; 256 est un multiple de 32, le tirage est sans biais.
 const codeAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -95,12 +149,42 @@ const inviteBody = z.object({ operationId: uuid, email, validityDays: z.number()
 const revokeBody = z.object({ operationId: uuid, version: z.number().int().min(1).max(2_147_483_647) }).strict();
 const journalParams = z.object({ limit: z.coerce.number().int().min(1).max(100).optional(), cursor: z.string().regex(/^[A-Za-z0-9_-]{1,6000}$/).optional(),
   schoolId: uuid.optional(), result: z.enum(['SUCCESS', 'REFUSED']).optional() }).strict();
+const cursorText = z.string().regex(/^[A-Za-z0-9_-]{1,6000}$/);
+const searchText = z.string().trim().max(100).refine(value => !/[\u0000-\u001f\u007f]/.test(value));
+const clientListParams = z.object({ limit: z.coerce.number().int().min(1).max(100).optional(), cursor: cursorText.optional(), q: searchText.optional(),
+  preparation: z.enum(clientPreparations).optional() }).strict();
+const codeListParams = z.object({ limit: z.coerce.number().int().min(1).max(100).optional(), cursor: cursorText.optional(), clientId: uuid.optional(),
+  state: z.enum(codeStates).optional() }).strict();
+const unattachedParams = z.object({ limit: z.coerce.number().int().min(1).max(50).optional(), q: searchText.optional() }).strict();
+// Zones de la fiche : `null` efface, une zone absente reste telle quelle. Mêmes bornes que l'API, qui les relit.
+const optionalText = (max: number) => z.string().trim().min(1).max(max).nullable().optional();
+const fiche = {
+  displayName: optionalText(150), contactName: optionalText(200), contactEmail: z.string().trim().max(254).transform(value => value.normalize('NFC').toLowerCase()).pipe(z.email()).nullable().optional(),
+  contactPhone: optionalText(32), billingStreet: optionalText(200), billingPostalCode: optionalText(20), billingCity: optionalText(100), billingCountry: optionalText(100),
+  internalNotes: optionalText(4000),
+};
+const ficheNames = Object.keys(fiche) as (keyof typeof fiche)[];
+/** 4 000 caractères de notes en UTF-8 (3 octets au plus) et les autres zones, avec la marge des échappements JSON. */
+const FICHE_BODY_LIMIT = 16_384;
+const createClientBody = z.object({ operationId: uuid, ...fiche, schoolId: uuid.optional() }).strict();
+const updateClientBody = z.object({ operationId: uuid, version: z.number().int().min(1).max(2_147_483_647), ...fiche }).strict()
+  .refine(body => ficheNames.some(name => body[name] !== undefined));
+const attachBody = z.object({ operationId: uuid, version: z.number().int().min(1).max(2_147_483_647), schoolId: uuid }).strict();
+const issueCodeBody = z.object({ operationId: uuid, clientId: uuid.optional(), displayName: z.string().trim().min(1).max(150).optional(),
+  validityDays: z.number().int().min(1).max(30).optional() }).strict().refine(body => !(body.clientId && body.displayName));
+const codeRevokeBody = z.object({ operationId: uuid }).strict();
+const searchOf = (parameters: Record<string, string | number | undefined>) => {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(parameters)) if (value !== undefined && value !== '') search.set(key, String(value));
+  const queryText = search.toString();
+  return queryText ? `?${queryText}` : '';
+};
 const digestOf = (data: unknown) => createHash('sha256').update(JSON.stringify(data)).digest('hex');
 /** Refus définitifs d'une acceptation : le code ne servira plus, l'état est abandonné. 403 et 429 laissent corriger puis reprendre. */
 const terminalJoinStatuses = new Set([404, 409, 410]);
 
 export function registerPlatformRoutes(app: FastifyInstance, deps: {
-  current: (req: FastifyRequest) => Session; protect: (req: FastifyRequest) => Session;
+  origin?: string; current: (req: FastifyRequest) => Session; protect: (req: FastifyRequest) => Session;
   call: (session: Session, command: PlatformRequest) => Promise<ApiResult>; send: (reply: FastifyReply, result: ApiResult) => unknown;
   error: (status: number, code: string) => Error;
 }) {
@@ -108,7 +192,7 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
   /** Un compte qui n'est plus opérateur perd sur-le-champ ce que le relais gardait pour lui. */
   const refused = (session: Session, result: ApiResult) => {
     const code = failureCode(result);
-    if (result.status === 403 && code.success && code.data.code === 'PLATFORM_OPERATOR_REQUIRED') delete session.platformInvite;
+    if (result.status === 403 && code.success && code.data.code === 'PLATFORM_OPERATOR_REQUIRED') { delete session.platformInvite; delete session.platformCode; }
   };
   const relay = async <S extends z.ZodType>(reply: FastifyReply, session: Session, command: PlatformRequest, schema: S): Promise<z.infer<S>> => {
     const result = await deps.call(session, command);
@@ -198,8 +282,98 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
     const result = await relay(reply, session, { method: 'POST', path: `/v1/platform/operators/${id.toLowerCase()}/revoke`,
       body: { operationId: body.operationId }, idempotencyKey: body.operationId, ifMatch: `"${body.version}"` }, operatorResult);
     // Un opérateur qui se retire perd aussi le code d'invitation que ce relais gardait pour lui.
-    if (result.data.self) delete session.platformInvite;
+    if (result.data.self) { delete session.platformInvite; delete session.platformCode; }
     return result;
+  });
+
+  // --- Écoles clientes et codes d'ouverture (R01-T02) ---
+  app.get('/app/bff/platform/clients', async (request, reply) => {
+    const query = clientListParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients${searchOf({ limit: query.limit, cursor: query.cursor, q: query.q, preparation: query.preparation })}` }, clientsResult);
+  });
+  app.get('/app/bff/platform/clients/:id', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients/${id.toLowerCase()}` }, clientResult);
+  });
+  app.get('/app/bff/platform/unattached-schools', async (request, reply) => {
+    const query = unattachedParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/unattached-schools${searchOf({ limit: query.limit, q: query.q })}` }, unattachedResult);
+  });
+  app.get('/app/bff/platform/school-codes', async (request, reply) => {
+    const query = codeListParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/school-codes${searchOf({ limit: query.limit, cursor: query.cursor, clientId: query.clientId?.toLowerCase(), state: query.state })}` }, codesResult);
+  });
+  // Les notes internes vont jusqu'à 4 000 caractères : la limite de 2 Kio du relais ne suffirait pas à les porter.
+  app.post('/app/bff/platform/clients', { bodyLimit: FICHE_BODY_LIMIT }, async (request, reply) => {
+    empty.parse(request.query);
+    const { operationId, schoolId, ...content } = createClientBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/clients', idempotencyKey: operationId,
+      body: { operationId, ...content, ...(schoolId ? { schoolId: schoolId.toLowerCase() } : {}) } }, clientResult);
+  });
+  // Le navigateur ne connaît que POST : la modification versionnée devient un PATCH ici, sous la version qu'il a lue.
+  app.post('/app/bff/platform/clients/:id/update', { bodyLimit: FICHE_BODY_LIMIT }, async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const { version, ...body } = updateClientBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'PATCH', path: `/v1/platform/clients/${id.toLowerCase()}`, idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body }, clientResult);
+  });
+  app.post('/app/bff/platform/clients/:id/attach-school', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const { version, ...body } = attachBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/attach-school`, idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body: { ...body, schoolId: body.schoolId.toLowerCase() } }, clientResult);
+  });
+
+  // « Créer un code » : le code est tiré ici, transmis à l'API qui n'en garde que l'empreinte à clé serveur, et rendu à l'opérateur qui l'a demandé.
+  // Une coupure garde le même code pour la même opération ; un refus définitif libère l'émission, un autre code sera tiré.
+  app.get('/app/bff/platform/school-codes/pending', async request => {
+    empty.parse(request.query);
+    const pending = deps.current(request).platformCode;
+    return { pending: pending ? { operationId: pending.operationId, ...(pending.clientId ? { clientId: pending.clientId } : {}),
+      ...(pending.displayName ? { displayName: pending.displayName } : {}), ...(pending.validityDays ? { validityDays: pending.validityDays } : {}) } : null };
+  });
+  app.post('/app/bff/platform/school-codes', async (request, reply) => {
+    empty.parse(request.query);
+    const body = issueCodeBody.parse(request.body);
+    const content = { ...(body.clientId ? { clientId: body.clientId.toLowerCase() } : {}), ...(body.displayName ? { displayName: body.displayName } : {}),
+      ...(body.validityDays !== undefined ? { validityDays: body.validityDays } : {}) };
+    const session = deps.protect(request);
+    const previous = session.platformCode;
+    if (previous && previous.operationId !== body.operationId) throw deps.error(409, 'PLATFORM_CODE_IN_PROGRESS');
+    if (previous && JSON.stringify({ clientId: previous.clientId, displayName: previous.displayName, validityDays: previous.validityDays })
+      !== JSON.stringify({ clientId: content.clientId, displayName: content.displayName, validityDays: content.validityDays })) throw deps.error(409, 'IDEMPOTENCY_MISMATCH');
+    if (previous?.busy) throw deps.error(409, 'PLATFORM_CODE_IN_PROGRESS');
+    const state: PlatformCodeState = previous ?? { operationId: body.operationId, ...content, code: openingCode() };
+    session.platformCode = state; state.busy = true;
+    try {
+      const result = await deps.call(session, { method: 'POST', path: '/v1/platform/school-codes', idempotencyKey: body.operationId,
+        body: { operationId: body.operationId, code: state.code, ...content } });
+      if (result.status >= 400) {
+        if (result.status < 500 && session.platformCode === state) delete session.platformCode;
+        refused(session, result);
+        return deps.send(reply, result);
+      }
+      const parsed = issuedCodeResult.safeParse(result.body);
+      if (!parsed.success) throw deps.error(503, 'INVALID_RESPONSE');
+      reply.status(result.status);
+      return { ...parsed.data, code: state.code, ...(deps.origin ? { link: `${deps.origin}/app/ouvrir#token=${state.code}` } : {}) };
+    } finally { delete state.busy; }
+  });
+  app.post('/app/bff/platform/school-codes/clear', async request => {
+    empty.parse(request.query); empty.parse(request.body);
+    const session = deps.protect(request);
+    if (session.platformCode?.busy) throw deps.error(409, 'PLATFORM_CODE_IN_PROGRESS');
+    delete session.platformCode;
+    return { ok: true };
+  });
+  app.post('/app/bff/platform/school-codes/:id/revoke', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const body = codeRevokeBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/school-codes/${id.toLowerCase()}/revoke`, idempotencyKey: body.operationId, body }, codeResult);
   });
 
   // --- Acceptation : le porteur d'un code voit ses droits, confirme, puis le serveur confirme à son tour. ---

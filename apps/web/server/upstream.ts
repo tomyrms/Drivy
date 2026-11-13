@@ -25,15 +25,16 @@ export function createOpeningGateway(baseURL:string):OpeningGateway {
   };
 }
 
-/** Console des opérateurs : mêmes règles que l'ouverture d'école (liste fermée, pas de redirection), plus la version attendue d'une révocation. */
+/** Console des opérateurs : mêmes règles que l'ouverture d'école (liste fermée, pas de redirection), plus la version attendue d'une modification ou d'une révocation. */
 export function createPlatformGateway(baseURL:string):PlatformGateway {
   return async (command,accessToken)=>{
     if(!allowedPlatformRequest(command))throw new Error('Route API non autorisée.');
+    const write=command.method!=='GET';
     const response=await fetch(baseURL+command.path,{method:command.method,redirect:'error',signal:AbortSignal.timeout(20_000),
       headers:{Authorization:`Bearer ${accessToken}`,Accept:'application/json, application/problem+json','Cache-Control':'no-store',
-        ...(command.method==='POST'?{'Content-Type':'application/json'}:{}),...(command.idempotencyKey?{'Idempotency-Key':command.idempotencyKey}:{}),
+        ...(write?{'Content-Type':'application/json'}:{}),...(command.idempotencyKey?{'Idempotency-Key':command.idempotencyKey}:{}),
         ...(command.ifMatch?{'If-Match':command.ifMatch}:{})},
-      ...(command.method==='POST'?{body:JSON.stringify(command.body)}:{})});
+      ...(write?{body:JSON.stringify(command.body)}:{})});
     return {status:response.status,body:await readJSON(response,1024*1024)};
   };
 }
