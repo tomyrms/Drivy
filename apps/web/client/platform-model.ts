@@ -43,6 +43,59 @@ export const platformPreviewResult = z.object({
 export const platformAcceptedResult = z.object({ data: z.object({ operator: platformOperatorSchema, ...rights }) });
 export const platformJoinStatus = z.object({ pending: z.boolean(), uncertain: z.boolean(), accepted: z.boolean() });
 
+// --- Écoles clientes et codes d'ouverture (R01-T02) ---
+// Mêmes formes que le relais : l'offre et les échéances sont des emplacements que les lots suivants rempliront, d'où leur souplesse.
+export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
+export const clientCodeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
+export const platformOpeningCodePattern = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
+const schoolSetupSchema = z.object({ step: z.string().max(80).nullable(), stepsDone: z.number().int().min(0).max(100), stepsTotal: z.number().int().min(0).max(100),
+  completedAt: iso.nullable(), savedAt: iso.nullable() });
+const schoolFactsSchema = z.object({ name: z.string().max(200), status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']), contactEmail: z.string().max(254),
+  contactPhone: z.string().max(32).nullable(), setup: schoolSetupSchema });
+export const platformClientCodeSchema = z.object({
+  id, state: z.enum(clientCodeStates), clientId: id.nullable(), clientName: z.string().max(150).nullable(), createdAt: iso, expiresAt: iso,
+  usedAt: iso.nullable(), revokedAt: iso.nullable(), issuedByName: z.string().max(200).nullable(), school: schoolFactsSchema.extend({ id }).nullable(),
+});
+export const platformClientSchema = z.object({
+  id, displayName: z.string().max(150).nullable(), preparation: z.enum(clientPreparations), schoolId: id.nullable(), school: schoolFactsSchema.nullable(),
+  contactName: z.string().max(200).nullable(), contactEmail: z.string().max(254).nullable(),
+  latestCode: z.object({ id, state: z.enum(clientCodeStates), expiresAt: iso, createdAt: iso }).nullable(),
+  commercial: z.object({ state: token, offer: z.unknown(), dueDates: z.array(z.unknown()).max(50) }),
+  version: z.number().int().positive(), createdAt: iso, updatedAt: iso,
+});
+export const platformClientDetailSchema = platformClientSchema.extend({
+  contactPhone: z.string().max(32).nullable(),
+  billing: z.object({ street: z.string().max(200).nullable(), postalCode: z.string().max(20).nullable(), city: z.string().max(100).nullable(), country: z.string().max(100).nullable() }),
+  internalNotes: z.string().max(4000).nullable(),
+  link: z.object({ source: z.enum(['OPENING_CODE', 'EXISTING_SCHOOL']), linkedAt: iso, issuedByName: z.string().max(200).nullable() }).nullable(),
+  codes: z.array(platformClientCodeSchema).max(50),
+});
+export const platformUnattachedSchema = z.object({ id, name: z.string().max(200), status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']), contactEmail: z.string().max(254),
+  contactPhone: z.string().max(32).nullable(), setup: schoolSetupSchema });
+const pageOf = <T extends z.ZodType>(item: T) => z.object({ data: z.object({ items: z.array(item).max(100), total: z.number().int().min(0).nullable(), nextCursor: z.string().max(6000).nullable() }) });
+export const platformClientsResult = pageOf(platformClientSchema);
+export const platformClientDetailResult = z.object({ data: platformClientDetailSchema });
+export const platformCodeResult = z.object({ data: platformClientCodeSchema });
+export const platformUnattachedResult = z.object({ data: z.object({ items: z.array(platformUnattachedSchema).max(50) }) });
+/** Le code n'existe que dans cette réponse, avec son lien ; les listes et les fiches n'en portent jamais. */
+export const platformIssuedCodeResult = z.object({
+  data: z.object({ codeId: id, client: platformClientDetailSchema }),
+  code: z.string().regex(platformOpeningCodePattern), link: z.string().max(400).optional(),
+});
+/** Un code créé mais pas encore confié : de quoi reprendre l'opération, jamais le code. */
+export const platformPendingCodeResult = z.object({
+  pending: z.object({ operationId: id, clientId: id.optional(), displayName: z.string().max(150).optional(), validityDays: z.number().int().min(1).max(30).optional() }).nullable(),
+});
+
+export type PlatformClient = z.infer<typeof platformClientSchema>;
+export type PlatformClientDetail = z.infer<typeof platformClientDetailSchema>;
+export type PlatformClientCode = z.infer<typeof platformClientCodeSchema>;
+export type PlatformUnattachedSchool = z.infer<typeof platformUnattachedSchema>;
+export type PlatformClientPreparation = (typeof clientPreparations)[number];
+export type PlatformClientCodeState = (typeof clientCodeStates)[number];
+export type PlatformPendingCode = NonNullable<z.infer<typeof platformPendingCodeResult>['pending']>;
+export type PlatformIssuedCode = z.infer<typeof platformIssuedCodeResult>;
+
 export type PlatformOperator = z.infer<typeof platformOperatorSchema>;
 export type PlatformInvitation = z.infer<typeof platformInvitationSchema>;
 export type PlatformJournalEntry = z.infer<typeof platformJournalSchema>;
@@ -83,6 +136,12 @@ const actionLabels: Record<string, string> = {
   REVOKE_PLATFORM_OPERATOR: 'Opérateur retiré',
   ACCEPT_PLATFORM_INVITATION: 'Invitation acceptée',
   BOOTSTRAP_PLATFORM_OPERATOR: 'Opérateur mis en service',
+  CREATE_PLATFORM_CLIENT: 'Fiche créée',
+  UPDATE_PLATFORM_CLIENT: 'Fiche modifiée',
+  ATTACH_EXISTING_SCHOOL: 'École existante rattachée',
+  CREATE_SCHOOL_OPENING_CODE: 'Code d’ouverture créé',
+  REVOKE_SCHOOL_OPENING_CODE: 'Code d’ouverture révoqué',
+  SCHOOL_OPENED_FROM_CODE: 'École ouverte avec un code',
 };
 export const actionLabel = (action: string) => actionLabels[action] ?? 'Action enregistrée';
 const reasonLabels: Record<string, string> = {
@@ -97,8 +156,60 @@ const reasonLabels: Record<string, string> = {
   PLATFORM_INVITATION_EMAIL_MISMATCH: 'Autre adresse',
   PLATFORM_ALREADY_MEMBER: 'Déjà dans l’équipe',
   VERSION_CONFLICT: 'Modifié entre-temps',
+  CLIENT_CODE_PENDING: 'Code déjà disponible',
+  CLIENT_SCHOOL_LINKED: 'École déjà ouverte',
+  CLIENT_SCHOOL_ALREADY_LINKED: 'École déjà rattachée',
+  OPENING_CODE_TAKEN: 'Code déjà pris',
+  OPENING_LINK_USED: 'Code déjà utilisé',
+  OPENING_LINK_REVOKED: 'Code déjà révoqué',
+  OPENING_LINK_EXPIRED: 'Code expiré',
 };
 export const reasonLabel = (code: string | null) => (code ? reasonLabels[code] ?? null : null);
+
+// --- Écoles clientes : libellés et fiche ---
+const preparationLabels: Record<PlatformClientPreparation, string> = { AWAITING_SCHOOL: 'En attente de l’école', IN_PREPARATION: 'En préparation', ACTIVE: 'Active', ARCHIVED: 'Archivée' };
+export const preparationLabel = (value: PlatformClientPreparation) => preparationLabels[value];
+const codeStateLabels: Record<PlatformClientCodeState, string> = { AVAILABLE: 'Disponible', USED: 'Utilisé', EXPIRED: 'Expiré', REVOKED: 'Révoqué' };
+export const codeStateLabel = (value: PlatformClientCodeState) => codeStateLabels[value];
+export const schoolStatusLabel = (status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED') => ({ DRAFT: 'Brouillon', ACTIVE: 'Active', ARCHIVED: 'Archivée' })[status];
+export const clientTitle =(client: Pick<PlatformClient, 'displayName' | 'school'>) => client.displayName ?? client.school?.name ?? 'École sans nom';
+export const linkSourceLabel = (source: 'OPENING_CODE' | 'EXISTING_SCHOOL') => (source === 'OPENING_CODE' ? 'Ouverte avec un code' : 'École existante rattachée');
+/** La progression de la préparation, telle que l'école l'a enregistrée : jamais inventée quand elle n'a rien enregistré. */
+export function setupProgress(setup: { stepsDone: number; stepsTotal: number; completedAt: string | null }): string {
+  if (setup.completedAt) return 'Préparation terminée';
+  if (setup.stepsTotal === 0) return 'Préparation non commencée';
+  return `${setup.stepsDone} sur ${setup.stepsTotal} étapes`;
+}
+
+export const ficheFields = ['displayName', 'contactName', 'contactEmail', 'contactPhone', 'billingStreet', 'billingPostalCode', 'billingCity', 'billingCountry', 'internalNotes'] as const;
+export type FicheField = (typeof ficheFields)[number];
+export type FicheDraft = Record<FicheField, string>;
+export type FicheChanges = Partial<Record<FicheField, string | null>>;
+export const ficheLimits: Record<FicheField, number> = { displayName: 150, contactName: 200, contactEmail: 254, contactPhone: 32, billingStreet: 200,
+  billingPostalCode: 20, billingCity: 100, billingCountry: 100, internalNotes: 4000 };
+export const ficheDraftOf = (client: PlatformClientDetail): FicheDraft => ({
+  displayName: client.displayName ?? '', contactName: client.contactName ?? '', contactEmail: client.contactEmail ?? '', contactPhone: client.contactPhone ?? '',
+  billingStreet: client.billing.street ?? '', billingPostalCode: client.billing.postalCode ?? '', billingCity: client.billing.city ?? '',
+  billingCountry: client.billing.country ?? '', internalNotes: client.internalNotes ?? '',
+});
+const normalizedFiche = (field: FicheField, value: string) => (field === 'contactEmail' ? value.trim().normalize('NFC').toLowerCase() : value.trim());
+/** Ce qui change, au format de la commande : une zone vidée devient `null`, une zone intacte est absente. Rien de plus ne part. */
+export function ficheChanges(client: PlatformClientDetail, draft: FicheDraft): FicheChanges {
+  const current = ficheDraftOf(client), changes: FicheChanges = {};
+  for (const field of ficheFields) {
+    const next = normalizedFiche(field, draft[field]);
+    if (next !== normalizedFiche(field, current[field])) changes[field] = next === '' ? null : next;
+  }
+  return changes;
+}
+/** La première zone refusée avant tout envoi ; l'API relit les mêmes bornes. */
+export function ficheProblem(draft: FicheDraft): { field: FicheField; message: string } | null {
+  const email = draft.contactEmail.trim();
+  if (email && !isInviteeEmail(email)) return { field: 'contactEmail', message: 'Saisissez une adresse e-mail valide.' };
+  for (const field of ficheFields) if (draft[field].trim().length > ficheLimits[field]) return { field, message: `Ce champ est limité à ${ficheLimits[field]} caractères.` };
+  return null;
+}
+export const openingCodeValidities = [1, 3, 7, 14, 30] as const;
 
 /** La modification utile d'une ligne du journal, en une phrase courte ; rien quand l'action se suffit à elle-même. */
 export function journalDetail(entry: PlatformJournalEntry, format: (iso: string) => string): string | null {
@@ -114,7 +225,16 @@ export function journalDetail(entry: PlatformJournalEntry, format: (iso: string)
 // --- Erreurs ---
 const failures: Record<string, string> = {
   PLATFORM_OPERATOR_REQUIRED: 'Cet espace est réservé aux opérateurs de la plateforme.',
-  VERSION_CONFLICT: 'Cette ligne a changé entre-temps. La liste est à jour : vérifiez, puis recommencez.',
+  VERSION_CONFLICT: 'Cet élément a changé entre-temps. L’écran est à jour : vérifiez, puis recommencez.',
+  CLIENT_CODE_PENDING: 'Un code est déjà disponible pour cette école. Révoquez-le avant d’en créer un autre ou de rattacher une école.',
+  CLIENT_SCHOOL_LINKED: 'Cette école est déjà ouverte : elle n’a plus besoin de code.',
+  CLIENT_SCHOOL_ALREADY_LINKED: 'Cette école est déjà rattachée à une autre fiche.',
+  OPENING_CODE_TAKEN: 'Le code tiré existe déjà. Recommencez.',
+  OPENING_LINK_USED: 'Ce code a déjà été utilisé : une école est ouverte.',
+  OPENING_LINK_REVOKED: 'Ce code est déjà révoqué.',
+  OPENING_LINK_EXPIRED: 'Ce code a expiré.',
+  PLATFORM_CODE_IN_PROGRESS: 'Un code est déjà en cours de création. Affichez-le ou fermez-le avant d’en créer un autre.',
+  NOT_FOUND: 'Cet élément n’existe plus. L’écran a été actualisé.',
   LAST_PLATFORM_OPERATOR: 'Le dernier opérateur actif ne peut pas être retiré.',
   PLATFORM_OPERATOR_REVOKED: 'Cet opérateur n’a déjà plus d’accès.',
   PLATFORM_OPERATOR_EXISTS: 'Cette adresse appartient déjà à un opérateur actif.',
