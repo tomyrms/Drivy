@@ -2,7 +2,7 @@
 
 [← Présentation du projet](../../README.md) · [Organisation du suivi](SETUP.md)
 
-Dernière mise à jour : **4 novembre 2026**.
+Dernière mise à jour : **11 novembre 2026**.
 
 **Conserver les idées aujourd'hui. Créer les issues lorsqu'elles sont prêtes.**
 
@@ -21,7 +21,7 @@ Une initiative n'est ni une fonctionnalité livrée, ni un cahier des charges va
 | R05 | [Site vitrine et commercialisation](initiatives/R05-site-vitrine.md) | Idée | À définir | Définir le public, les preuves et le parcours de demande de démonstration. |
 | R06 | [Revue finale de chaque page web](initiatives/R06-revue-finale-web.md) | Idée | Fin du périmètre fonctionnel web | Confirmer la stabilité suffisante, puis revoir chaque page avec Impeccable et Uncodixfy. |
 | R07 | [Revue finale de chaque écran Swift](initiatives/R07-revue-finale-swift.md) | Idée | Après R06 validée et stabilisation native | Retrouver le skill personnel « Swift native composant », puis l'utiliser avec Impeccable et Uncodixfy. |
-| R08 | [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md) | Idée | À définir | Déplacer la personnalisation des signalements des réglages de l’école vers le profil utilisateur. |
+| R08 | [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md) | Cadré | À planifier | Réaliser l’[epic #465](https://github.com/tomyrms/Drivy/issues/465) : visibilité imposée ou libre par école, ordre et classement intelligent par compte. |
 | R09 | [Bilan pédagogique IA à partir de l'audio de la leçon](initiatives/R09-bilan-pedagogique-ia-audio.md) | Idée | Très long terme | Cadrage produit et confidentialité, avant toute étude technique. |
 | R10 | [Gestion financière des cours et des leçons](initiatives/R10-gestion-financiere-cours-lecons.md) | Idée | À définir | Valider le périmètre avec les écoles : paiements, packs, remboursements. |
 | R11 | [Revue complète du modèle de données avant production](initiatives/R11-revue-modele-donnees.md) | Idée | Après stabilisation fonctionnelle, avant production durable | Auditer le schéma réel, les invariants, migrations, performances et risques de données. |
@@ -86,11 +86,13 @@ Utiliser **Impeccable + Uncodixfy + « Swift native composant »**, le skill per
 
 ## R08 — Préférences de signalements liées au profil
 
-La personnalisation de la page **Signalements** doit appartenir au profil utilisateur, pas aux réglages de l’auto-école. L’ordre, la visibilité et les préférences choisies suivent donc le même utilisateur d’une école à l’autre ; un autre compte possède sa propre configuration.
+**Cadrage validé le 11 novembre 2026 ; suivi dans l’[epic #465](https://github.com/tomyrms/Drivy/issues/465) et ses cinq tâches.**
 
-La page doit être déplacée vers les réglages du profil lors de la réalisation, avec migration propre de l’éventuel état existant et cohérence entre les clients concernés.
+Chaque moniteur et administrateur conserve avec son compte son ordre manuel, son activation du classement intelligent et son apprentissage, entre les écoles et les appareils. L’administrateur de chaque école choisit si la visibilité des signalements est imposée par l’école ou personnalisable par chacun. La visibilité personnelle reste mémorisée lorsqu’une école impose sa propre liste.
 
-**Fiche : [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md).** Aucune issue créée automatiquement depuis cette idée.
+Les réglages personnels sont accessibles dans Profil → Paramètres → Signalements sur iPhone/iPad et Mon compte → Préférences → Signalements sur le web. Le réglage scolaire distinct porte sur la politique et les valeurs de référence. Le premier usage reprend les références de l’école ; la réinitialisation de présentation et la remise à zéro de l’apprentissage sont des actions séparées.
+
+**Fiche : [Préférences de signalements liées au profil](initiatives/R08-preferences-signalements-profil.md).** Les tickets décrivent les droits, la migration, les transitions et les critères de qualification ; leur création ne signifie pas que la fonctionnalité est livrée.
 
 ## R09 — Bilan pédagogique IA à partir de l'audio de la leçon
 
