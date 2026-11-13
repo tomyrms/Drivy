@@ -80,9 +80,9 @@ export async function verifyPlatformTeam(options: {
       && (await first.context.request.get(`${origin}/app/bff/operator/school-opening-links`)).status() === 403,
       'Un compte vérifié qui n’a pas accepté de code ne lit ni l’équipe ni les liens d’ouverture');
 
-    // Les liens de la console sont des Button Base UI rendus en <a> : Base UI leur donne role="button", donc on les trouve par leur texte.
+    // Ce sont de vrais liens (<a> stylé comme un bouton), pas des boutons : on les cherche par leur rôle, ce qui prouve ce que les lecteurs d’écran annoncent.
     step('acceptation du code par un second compte · page de saisie');
-    await first.page.getByText('Saisir un code d’accès', { exact: true }).click();
+    await first.page.getByRole('link', { name: 'Saisir un code d’accès', exact: true }).click();
     await first.page.getByRole('heading', { name: 'Rejoindre la plateforme', level: 1, exact: true }).waitFor();
     step('acceptation du code par un second compte · lecture des droits');
     await first.page.getByLabel('Code d’accès', { exact: true }).fill(colleagueCode);
@@ -101,7 +101,7 @@ export async function verifyPlatformTeam(options: {
       && await count("SELECT count(*)::int AS n FROM drivy.platform_audit_event WHERE action='ACCEPT_PLATFORM_INVITATION' AND result='SUCCESS'") === 1,
       'L’acceptation crée un seul opérateur, ferme l’invitation et s’écrit au journal');
     step('acceptation du code par un second compte · ouverture de la console');
-    await first.page.getByText('Ouvrir la console', { exact: true }).click();
+    await first.page.getByRole('link', { name: 'Ouvrir la console', exact: true }).click();
     await first.page.getByRole('heading', { name: 'Plateforme', level: 1, exact: true }).waitFor();
     await first.page.getByRole('tab', { name: 'Équipe', exact: true }).click();
     await first.page.getByText('Vous', { exact: true }).first().waitFor();

@@ -7,7 +7,7 @@ import {
 } from '../../platform-model';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
 import { Badge } from '../../components/ui/badge';
-import { Button } from '../../components/ui/button';
+import { Button, buttonVariants } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
 import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/field';
@@ -46,7 +46,7 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
           <Button variant="outline" className="mt-3" disabled={busy} onClick={() => void (signedIn ? state.refresh() : state.boot())}>Actualiser</Button></Alert>}
       {state.loaded && signedIn && state.access === 'denied' && <Empty className="platform-denied" role="alert">
         <EmptyHeader><EmptyMedia variant="icon"><Users aria-hidden="true" /></EmptyMedia><EmptyTitle>Accès refusé</EmptyTitle></EmptyHeader>
-        <Button variant="outline" nativeButton={false} render={<a href={platform.join} />}>Saisir un code d’accès</Button></Empty>}
+        <a className={buttonVariants({ variant: 'outline' })} href={platform.join}>Saisir un code d’accès</a></Empty>}
       {state.access === 'allowed' && <Tabs value={tab} onValueChange={value => setTab(value as typeof tab)}>
         <TabsList variant="line" aria-label="Sections de la console">
           <TabsTrigger value="clients">Écoles</TabsTrigger><TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>

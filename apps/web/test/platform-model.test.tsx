@@ -4,12 +4,13 @@ import {
   actionLabel, clientTitle, codeStateLabel, ficheChanges, ficheDraftOf, ficheProblem, formatPlatformCode, invitationStatusLabel, isInviteeEmail, isPlatformCode,
   journalDetail, levelLabel, linkSourceLabel, notGrantedLabel, platformClientDetailResult, platformClientsResult, platformFailure, platformFailureKind,
   platformInvitationsResult, platformIssuedCodeResult, platformIssuedResult, platformJournalResult, platformMeResult, platformOperatorsResult,
-  platformPendingCodeResult, platformPreviewResult, platformUnattachedResult, preparationLabel, reasonLabel, rightLabel, schoolStatusLabel, setupProgress,
+  platformPendingCodeResult, platformPreviewResult, platformRoutes, platformUnattachedResult, preparationLabel, reasonLabel, rightLabel, schoolStatusLabel, setupProgress,
   type PlatformClient, type PlatformClientDetail, type PlatformJournalEntry,
 } from '../client/platform-model';
 import { RequestFailure } from '../client/protocol';
 import { PlatformConsolePage } from '../client/portal/platform/platform-page';
-import { PlatformJoinPage } from '../client/portal/platform/platform-join-page';
+import { Accepted, PlatformJoinPage, Review } from '../client/portal/platform/platform-join-page';
+import type { PlatformJoinState } from '../client/portal/platform/use-platform-join';
 import { ClientsSection } from '../client/portal/platform/clients-section';
 import type { PlatformConsoleState } from '../client/portal/platform/use-platform-console';
 
@@ -341,5 +342,28 @@ describe('écoles clientes : affichage', () => {
     const html = renderToStaticMarkup(<ClientsSection state={state({ selected: waiting })} />);
     expect(html).not.toContain('Créer un code');
     expect(html).toContain('Révoquer');
+  });
+});
+
+describe('liens de la console et de l’acceptation', () => {
+  // Un Button Base UI rendu en <a> reçoit role="button" : les lecteurs d’écran annonceraient un bouton. Ce sont de vrais liens, stylés comme les boutons du portail.
+  const link = (html: string, label: string) => html.match(new RegExp(`<a [^>]*>${label}</a>`))?.[0] ?? '';
+
+  it('« Ouvrir la console » après acceptation est un lien natif vers la console, sans rôle de bouton', () => {
+    const html = renderToStaticMarkup(<Accepted result={{ operator: { ...operator, self: true }, ...rights } as never} platform={platformRoutes} />);
+    const anchor = link(html, 'Ouvrir la console');
+    expect(anchor).toContain(`href="${platformRoutes.console}"`);
+    expect(anchor).toContain('ui-button');
+    expect(anchor).not.toContain('role=');
+    expect(html).not.toContain('<button');
+  });
+
+  it('« Ouvrir la console » d’un compte déjà dans l’équipe est un lien natif, sans rôle de bouton', () => {
+    const data = { status: 'AVAILABLE', maskedEmail: 'n***@example.test', expiresAt: when, matchesAccount: true, alreadyMember: true, ...rights };
+    const html = renderToStaticMarkup(<Review state={{ busy: false } as PlatformJoinState} preview={{ confirmation: 'c', data } as never} platform={platformRoutes} />);
+    const anchor = link(html, 'Ouvrir la console');
+    expect(anchor).toContain(`href="${platformRoutes.console}"`);
+    expect(anchor).toContain('ui-button-outline');
+    expect(anchor).not.toContain('role=');
   });
 });
