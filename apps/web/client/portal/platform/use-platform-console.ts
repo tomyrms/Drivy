@@ -156,6 +156,8 @@ export function usePlatformConsole() {
     await load();
   });
 
+  // Ouvrir ou fermer la confirmation repart d'un écran sans erreur : celle d'un retrait refusé reste dans la boîte, pas derrière elle.
+  const chooseRemoval = (operator: PlatformOperator | null) => { setError(null); setRemoving(operator); };
   const chooseFilter = (value: JournalFilter) => perform(async () => {
     const log = await request(journalPath(value), platformJournalResult);
     setFilter(value); setJournal(log.data);
@@ -173,7 +175,7 @@ export function usePlatformConsole() {
   }
 
   return { session, loaded, busy, access, me, operators, invitations, pending, journal, filter, issued, copied, error, conflict, uncertain,
-    removing, setRemoving, logoutUnconfirmed, boot, refresh, changeAccount, sendInvitation, resumeInvitation, closeCode,
+    removing, chooseRemoval, logoutUnconfirmed, boot, refresh, changeAccount, sendInvitation, resumeInvitation, closeCode,
     revokeInvitation, removeOperator, chooseFilter, moreJournal, copy };
 }
 export type PlatformConsoleState = ReturnType<typeof usePlatformConsole>;

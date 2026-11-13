@@ -41,7 +41,7 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
       {state.loaded && signedIn && <div className="platform-identity"><div><strong>{state.session?.user?.displayName}</strong><span>{state.session?.user?.email}</span></div>
         <Button variant="ghost" disabled={busy} onClick={() => void state.changeAccount()}>Changer de compte</Button></div>}
       {state.conflict ? <Alert><AlertTitle>Liste mise à jour</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>
-        : state.error && <Alert variant="destructive"><AlertTitle>Action impossible</AlertTitle><AlertDescription>{state.error}</AlertDescription>
+        : state.error && !state.removing && !state.uncertain && <Alert variant="destructive"><AlertTitle>Action impossible</AlertTitle><AlertDescription>{state.error}</AlertDescription>
           <Button variant="outline" className="mt-3" disabled={busy} onClick={() => void (signedIn ? state.refresh() : state.boot())}>Actualiser</Button></Alert>}
       {state.loaded && signedIn && state.access === 'denied' && <Empty className="platform-denied" role="alert">
         <EmptyHeader><EmptyMedia variant="icon"><Users aria-hidden="true" /></EmptyMedia><EmptyTitle>Accès refusé</EmptyTitle></EmptyHeader>
@@ -66,7 +66,7 @@ function TeamSection({ state }: { state: PlatformConsoleState }) {
     <ul className="platform-list">{active.map(operator => <li key={operator.id}>
       <div className="platform-summary"><strong>{operator.displayName}{operator.self && <Badge variant="secondary">Vous</Badge>}</strong>
         <span>{[operator.maskedEmail, `depuis le ${day(operator.joinedAt)}`].filter(Boolean).join(' · ')}</span></div>
-      <Button variant="ghost" disabled={state.busy} aria-label={operator.self ? 'Me retirer de l’équipe' : `Retirer ${operator.displayName}`} onClick={() => state.setRemoving(operator)}>
+      <Button variant="ghost" disabled={state.busy} aria-label={operator.self ? 'Me retirer de l’équipe' : `Retirer ${operator.displayName}`} onClick={() => state.chooseRemoval(operator)}>
         {operator.self ? 'Me retirer' : 'Retirer'}</Button>
     </li>)}</ul>
     {former.length > 0 && <>
@@ -165,12 +165,12 @@ function JournalRow({ entry }: { entry: PlatformJournalEntry }) {
 
 function RemovalDialog({ state }: { state: PlatformConsoleState }) {
   const target: PlatformOperator | null = state.removing;
-  return <Dialog open={target !== null} onOpenChange={(open, details) => { if (state.busy) details.cancel(); else if (!open) state.setRemoving(null); }}>
+  return <Dialog open={target !== null} onOpenChange={(open, details) => { if (state.busy) details.cancel(); else if (!open) state.chooseRemoval(null); }}>
     <DialogContent showCloseButton={!state.busy}>
       <DialogHeader><DialogTitle>{target?.self ? 'Vous retirer de l’équipe ?' : `Retirer ${target?.displayName ?? ''} ?`}</DialogTitle>
         <DialogDescription>{target?.self ? 'Vous perdrez l’accès à cette console dès la confirmation.' : 'Son accès à la console s’arrête dès la confirmation.'}</DialogDescription></DialogHeader>
       {state.error && <Alert variant="destructive"><AlertTitle>Retrait non confirmé</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert>}
-      <DialogFooter><Button variant="outline" disabled={state.busy} onClick={() => state.setRemoving(null)}>Garder l’accès</Button>
+      <DialogFooter><Button variant="outline" disabled={state.busy} onClick={() => state.chooseRemoval(null)}>Garder l’accès</Button>
         <Button variant="destructive" disabled={state.busy} onClick={() => void state.removeOperator()}>{state.busy ? 'Retrait…' : 'Retirer'}</Button></DialogFooter>
     </DialogContent>
   </Dialog>;
