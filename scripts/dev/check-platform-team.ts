@@ -79,23 +79,30 @@ export async function verifyPlatformTeam(options: {
       && (await first.context.request.get(`${origin}/app/bff/operator/school-opening-links`)).status() === 403,
       'Un compte vérifié qui n’a pas accepté de code ne lit ni l’équipe ni les liens d’ouverture');
 
-    step('acceptation du code par un second compte');
-    await first.page.getByRole('link', { name: 'Saisir un code d’accès', exact: true }).click();
+    // Les liens de la console sont des Button Base UI rendus en <a> : Base UI leur donne role="button", donc on les trouve par leur texte.
+    step('acceptation du code par un second compte · page de saisie');
+    await first.page.getByText('Saisir un code d’accès', { exact: true }).click();
+    await first.page.getByRole('heading', { name: 'Rejoindre la plateforme', level: 1, exact: true }).waitFor();
+    step('acceptation du code par un second compte · lecture des droits');
     await first.page.getByLabel('Code d’accès', { exact: true }).fill(colleagueCode);
     await first.page.getByRole('button', { name: 'Voir les droits', exact: true }).click();
     await first.page.getByText('Droits accordés', { exact: true }).waitFor();
     await first.page.getByText('Jamais accordé', { exact: true }).waitFor();
+    step('acceptation du code par un second compte · aucun accès avant confirmation');
     assert(await count("SELECT count(*)::int AS n FROM drivy.platform_operator WHERE status='ACTIVE'") === 1,
       'Lire les droits d’un code ne donne aucun accès avant l’acceptation');
+    step('acceptation du code par un second compte · confirmation');
     await first.page.getByRole('button', { name: 'Accepter et rejoindre', exact: true }).click();
     await first.page.getByText('Vous faites partie de l’équipe', { exact: true }).waitFor();
+    step('acceptation du code par un second compte · état en base');
     assert(await count("SELECT count(*)::int AS n FROM drivy.platform_operator WHERE status='ACTIVE' AND added_via='INVITATION' AND contact_email=$1", [colleague.email]) === 1
       && await count("SELECT count(*)::int AS n FROM drivy.platform_operator_invitation WHERE status='USED' AND invitee_email=$1", [colleague.email]) === 1
       && await count("SELECT count(*)::int AS n FROM drivy.platform_audit_event WHERE action='ACCEPT_PLATFORM_INVITATION' AND result='SUCCESS'") === 1,
       'L’acceptation crée un seul opérateur, ferme l’invitation et s’écrit au journal');
-    await first.page.getByRole('link', { name: 'Ouvrir la console', exact: true }).click();
+    step('acceptation du code par un second compte · ouverture de la console');
+    await first.page.getByText('Ouvrir la console', { exact: true }).click();
     await first.page.getByRole('heading', { name: 'Plateforme', level: 1, exact: true }).waitFor();
-    await first.page.getByText('Vous', { exact: true }).waitFor();
+    await first.page.getByText('Vous', { exact: true }).first().waitFor();
 
     step('invitation créée par le collègue');
     const orphanCode = await invite(first.page, invitee.email);
@@ -124,6 +131,7 @@ export async function verifyPlatformTeam(options: {
     assert(await count("SELECT count(*)::int AS n FROM drivy.platform_operator_invitation WHERE status='REVOKED' AND invitee_email=$1", [invitee.email]) === 1
       && await count("SELECT count(*)::int AS n FROM drivy.platform_audit_event WHERE action='REVOKE_PLATFORM_OPERATOR' AND result='SUCCESS' AND (changes->>'revokedInvitations')::int=1") === 1,
       'Le retrait révoque dans la même opération les invitations pendantes du collègue et en journalise le nombre');
+    step('code émis par un opérateur retiré');
     const second = await signedIn(invitee.email, invitee.password, '/app/plateforme/rejoindre');
     await second.page.getByLabel('Code d’accès', { exact: true }).fill(orphanCode);
     await second.page.getByRole('button', { name: 'Voir les droits', exact: true }).click();
