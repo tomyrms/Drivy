@@ -33,7 +33,7 @@ Déclencheurs :
 
 ## Niveau de droits unique
 
-Un seul niveau, `COMMERCIAL`. Droits accordés : `MANAGE_PLATFORM_TEAM`, `MANAGE_SCHOOL_OPENINGS`, `READ_COMMERCIAL_JOURNAL`. Droits jamais accordés, affichés comme tels avant l'acceptation : accès aux dossiers (`SCHOOL_RECORDS`), aux trajets (`TRIPS`), aux messages (`MESSAGES`) et aux rôles scolaires (`SCHOOL_ROLES`). Un lot qui ajoute une capacité l'ajoute à `platformRights` (`apps/api/src/platform-model.ts`) ; la console affiche un libellé de repli pour un droit qu'elle ne connaît pas encore.
+Un seul niveau, `COMMERCIAL`. Droits accordés : `MANAGE_PLATFORM_TEAM`, `MANAGE_SCHOOL_OPENINGS`, `MANAGE_OFFERS` (ajouté par R01-T03, #455 : offres, attributions et ajustements de modules), `READ_COMMERCIAL_JOURNAL`. Droits jamais accordés, affichés comme tels avant l'acceptation : accès aux dossiers (`SCHOOL_RECORDS`), aux trajets (`TRIPS`), aux messages (`MESSAGES`) et aux rôles scolaires (`SCHOOL_ROLES`). Un lot qui ajoute une capacité l'ajoute à `platformRights` (`apps/api/src/platform-model.ts`) ; la console affiche un libellé de repli pour un droit qu'elle ne connaît pas encore.
 
 ## Invitations
 

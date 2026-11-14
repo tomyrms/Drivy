@@ -97,3 +97,7 @@ Le parcours existe déjà et n'a pas été modifié (Swift non touché, rien ne 
 - Toute mutation passe par `platformCommand` avec `schoolId` quand l'école est connue ; les journaux existent déjà.
 - Une route d'API appelée par le web doit figurer dans la liste fermée de `apps/web/server/platform-routes.ts`, et dans le contrat par `generate-platform-contract.ts` (le test de contrat échoue sinon).
 - La fiche ne liste que les 50 derniers codes ; une nouvelle liste liée à la fiche reprend le même modèle de curseur que `GET /clients`.
+
+## Suite donnée par #455
+
+Offres, modules et droits par école sont livrés sur `tomyrms/r01-t03-offres-modules` (`docs/implementation/offres-modules-20261115.md`). Écart avec la première puce ci-dessus : le `CHECK` de `platform_client.commercial_state` n'a pas été élargi et la colonne n'est pas touchée ; l'état affiché (`NOT_CONFIGURED` ou `OFFER_ACTIVE`) est dérivé des attributions par `platform_client_entitlement_core`. `offer` est maintenant rempli (offre en vigueur, plus `scheduledOffer` et `entitlementVersion`) ; `dueDates` reste vide, réservé à #456. La préparation reste distincte des droits : une école en préparation n'est jamais restreinte par elle.

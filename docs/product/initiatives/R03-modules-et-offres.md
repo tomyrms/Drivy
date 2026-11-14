@@ -38,6 +38,10 @@ Il reste également à définir la granularité des modules, leur tarification �
 
 [R01](R01-administration-plateforme.md) administre les droits commerciaux ; [R04](R04-facturation-saas.md) gère les abonnements ; [R05](R05-site-vitrine.md) présente les offres une fois décidées.
 
+## Ce que le dépôt contient déjà
+
+Le lot R01-T03 (#455) de l'administration de la plateforme définit un catalogue de deux modules (messagerie, cours collectifs), des offres sans montant, leur attribution à une école avec date d'effet, des ajustements motivés et le refus côté serveur de tout nouvel usage non accordé ; une école sans offre garde tout. Décisions, matrice et transitions : `docs/implementation/offres-modules-20261115.md`. Cela ne fixe ni prix, ni essai, ni quota, ni délai de grâce, et ne change pas la maturité ni la décision de cette fiche.
+
 ## Avant de créer une epic
 
 Définir le socle et les modules retenus, puis les transitions d'offre et le devenir des données. Vérifier leur faisabilité sur l'architecture du moment avant de découper l'implémentation iOS, web et serveur.
