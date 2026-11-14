@@ -106,15 +106,17 @@ test('la porte : seul un opérateur actif relu en base entre, tout autre compte 
     expect((await pool.query(`SELECT 1 FROM drivy.${table}`)).rowCount, table).toBe(0);
   const me = await api(A, 'GET', '/v1/platform/me');
   expect(me.statusCode).toBe(200);
-  expect(me.json().data).toMatchObject({ level: 'COMMERCIAL', rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'READ_COMMERCIAL_JOURNAL'],
+  expect(me.json().data).toMatchObject({ level: 'COMMERCIAL', rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'MANAGE_OFFERS', 'READ_COMMERCIAL_JOURNAL'],
     notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'], operator: { displayName: 'Camille Exemple', self: true, maskedEmail: 'c***@example.invalid', status: 'ACTIVE' } });
 });
 
-test('les cinq tables de la plateforme sont sous RLS forcée, comme toute table du schéma', async () => {
-  // Les tests de capture ne rejouent que les migrations numérotées : ce contrôle couvre la migration datée de la plateforme.
+test('les neuf tables de la plateforme sont sous RLS forcée, comme toute table du schéma', async () => {
+  // Les tests de capture ne rejouent que les migrations numérotées : ce contrôle couvre les migrations datées de la plateforme
+  // (équipe, fiches des écoles, puis catalogue des modules, offres, attributions et ajustements de R01-T03).
   const rls = await pool.query<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }>(
     "SELECT c.relname::text AS relname,relrowsecurity,relforcerowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r' AND c.relname LIKE 'platform\\_%' ORDER BY 1");
-  expect(rls.rows.map(row => row.relname)).toEqual(['platform_audit_event', 'platform_client', 'platform_operation', 'platform_operator', 'platform_operator_invitation']);
+  expect(rls.rows.map(row => row.relname)).toEqual(['platform_audit_event', 'platform_client', 'platform_module', 'platform_module_adjustment', 'platform_offer',
+    'platform_offer_assignment', 'platform_operation', 'platform_operator', 'platform_operator_invitation']);
   for (const row of rls.rows) expect([row.relrowsecurity, row.relforcerowsecurity], row.relname).toEqual([true, true]);
   const unforced = await pool.query("SELECT c.relname::text AS relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='drivy' AND relkind='r' AND NOT (relrowsecurity AND relforcerowsecurity)");
   expect(unforced.rows).toEqual([]);
@@ -199,7 +201,7 @@ test('aperçu puis acceptation : aucun privilège avant l’acceptation confirm�
   const shown = await preview(asNewcomer, code);
   expect(shown.statusCode, shown.body).toBe(200);
   expect(shown.json().data).toMatchObject({ status: 'AVAILABLE', level: 'COMMERCIAL', maskedEmail: 'n***@example.invalid', matchesAccount: true, alreadyMember: false,
-    rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'READ_COMMERCIAL_JOURNAL'], notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] });
+    rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'MANAGE_OFFERS', 'READ_COMMERCIAL_JOURNAL'], notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] });
   expect(JSON.stringify(shown.json()).includes('newcomer@example.invalid')).toBe(false);
   expect((await preview('newcomer|autre@example.invalid', code)).json().data.matchesAccount).toBe(false);
   expect((await preview('newcomer', code)).json().data.matchesAccount).toBe(false);

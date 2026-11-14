@@ -12,7 +12,7 @@ const apps: Awaited<ReturnType<typeof buildWebApp>>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); vi.unstubAllGlobals(); });
 const secret = () => randomBytes(32).toString('base64url');
 const iso = (offsetDays = 0) => new Date(Date.now() + offsetDays * 86_400_000).toISOString();
-const rights = { level: 'COMMERCIAL', rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'READ_COMMERCIAL_JOURNAL'], notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] };
+const rights = { level: 'COMMERCIAL', rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'MANAGE_OFFERS', 'READ_COMMERCIAL_JOURNAL'], notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] };
 const operator = (extra: Record<string, unknown> = {}) => ({ id: randomUUID(), displayName: 'Opérateur synthétique', maskedEmail: 'o***@example.invalid', level: 'COMMERCIAL',
   status: 'ACTIVE', addedVia: 'BOOTSTRAP', joinedAt: iso(-3), revokedAt: null, version: 1, self: true, ...extra });
 const invitation = (extra: Record<string, unknown> = {}) => ({ id: randomUUID(), status: 'AVAILABLE', level: 'COMMERCIAL', maskedEmail: 'i***@example.invalid', createdAt: iso(), expiresAt: iso(7),

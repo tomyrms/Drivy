@@ -50,8 +50,8 @@ describe('code d’accès à la plateforme', () => {
 });
 
 describe('droits du niveau commercial', () => {
-  it('donne l’équipe, les ouvertures d’école et le journal ; jamais dossiers, trajets, messages ni rôle scolaire', () => {
-    expect(platformRights).toEqual(['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'READ_COMMERCIAL_JOURNAL']);
+  it('donne l’équipe, les ouvertures d’école, les offres et le journal ; jamais dossiers, trajets, messages ni rôle scolaire', () => {
+    expect(platformRights).toEqual(['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'MANAGE_OFFERS', 'READ_COMMERCIAL_JOURNAL']);
     expect(platformExcludedAccess).toEqual(['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES']);
     expect(platformRightsView()).toEqual({ level: 'COMMERCIAL', rights: [...platformRights], notGranted: [...platformExcludedAccess] });
     for (const right of platformRights) expect(platformExcludedAccess).not.toContain(right as never);
