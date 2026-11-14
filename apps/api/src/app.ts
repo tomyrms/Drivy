@@ -16,6 +16,8 @@ import { registerSchoolOnboarding } from './school-onboarding.js';
 import { registerSchoolOpening } from './school-opening.js';
 import { registerPlatform } from './platform.js';
 import { registerPlatformClients } from './platform-clients.js';
+import { registerPlatformOffers } from './platform-offers.js';
+import { registerEntitlements } from './entitlements.js';
 import type { SchoolOpeningConfig } from './school-opening-model.js';
 import { registerInvitations } from './invitations.js';
 import { registerAccounts } from './accounts.js';
@@ -231,6 +233,8 @@ export function buildApp(options: { metricsClock?: () => Date; gpsOnlyQualificat
   registerSchoolOpening(app,options);
   registerPlatform(app,options);
   registerPlatformClients(app,options);
+  registerPlatformOffers(app,options);
+  registerEntitlements(app,options);
   registerInvitations(app,options);
   registerAccounts(app,options);
   registerAccountRecovery(app,options);

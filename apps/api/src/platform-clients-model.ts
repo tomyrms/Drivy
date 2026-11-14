@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { openingToken } from './school-opening-model.js';
 import { platformEmail } from './platform-model.js';
+import { commercialView, type ClientCommercial } from './entitlements-model.js';
 
 /**
  * Écoles clientes de la plateforme (R01-T02, #454). Une fiche cliente est la relation commerciale avec une école : elle peut
@@ -12,8 +13,6 @@ export type ClientPreparation = (typeof clientPreparations)[number];
 export const codeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
 export type CodeState = (typeof codeStates)[number];
 export const setupStepCount = 6;
-/** Emplacement de l'état commercial : #455 (offres) et #456 (conditions) l'élargissent ; aucune offre ni condition n'est inventée ici. */
-export const commercialPlaceholder = () => ({ state: 'NOT_CONFIGURED' as const, offer: null, dueDates: [] as string[] });
 
 const operationId = z.uuid();
 const bounded = (max: number) => z.string().trim().min(1).max(max);
@@ -73,12 +72,13 @@ interface SchoolFacts {
   id?: string; name: string; status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED'; contact_email: string; contact_phone: string | null;
   setup_step: string | null; setup_done: number; setup_completed_at: string | null; setup_saved_at?: string | null;
 }
-export interface ClientItem {
+/** L'état commercial est dérivé des attributions d'offre (R01-T03) : NOT_CONFIGURED tant qu'aucune n'est en vigueur. */
+export interface ClientItem extends ClientCommercial {
   id: string; display_name: string | null; school_id: string | null; link_source: 'OPENING_CODE' | 'EXISTING_SCHOOL' | null;
   opened_via_link_id: string | null; school_linked_at: string | null; issued_by_name: string | null;
   contact_name: string | null; contact_email: string | null; contact_phone: string | null;
   billing_street: string | null; billing_postal_code: string | null; billing_city: string | null; billing_country: string | null;
-  internal_notes: string | null; commercial_state: 'NOT_CONFIGURED'; version: number; created_at: string; updated_at: string;
+  internal_notes: string | null; version: number; created_at: string; updated_at: string;
   preparation: ClientPreparation; latest_code: { id: string; status: CodeState; expires_at: string; created_at: string } | null;
   school: SchoolFacts | null;
 }
@@ -100,7 +100,7 @@ const codeView = (code: ClientItem['latest_code']) => code ? { id: code.id, stat
 
 export const clientSummary = (item: ClientItem) => ({
   id: item.id, displayName: item.display_name, preparation: item.preparation, schoolId: item.school_id, school: schoolView(item.school),
-  contactName: item.contact_name, contactEmail: item.contact_email, latestCode: codeView(item.latest_code), commercial: commercialPlaceholder(),
+  contactName: item.contact_name, contactEmail: item.contact_email, latestCode: codeView(item.latest_code), commercial: commercialView(item),
   version: item.version, createdAt: iso(item.created_at)!, updatedAt: iso(item.updated_at)!,
 });
 export const clientDetail = (item: ClientItem, codes: ReturnType<typeof codeProjection>[]) => ({

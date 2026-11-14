@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { clientPreparations, codeStates, setupStepCount } from './platform-clients-model.js';
+import { commercialStates, moduleCodes } from './entitlements-model.js';
 
 /**
  * Extension exécutable du dépôt (R01-T02, #454) : écoles clientes et codes d'ouverture. L'OpenAPI canonique 3.11.0 reste immuable.
@@ -20,8 +21,13 @@ export const schoolFactsSchema = z.object({
   name: z.string(), status: z.enum(['DRAFT', 'ACTIVE', 'ARCHIVED']), contactEmail: z.string(), contactPhone: nullableText, setup: schoolSetupSchema
 }).strict();
 export const clientCodeStateSchema = z.object({ id: z.uuid(), state: z.enum(codeStates), expiresAt: timestamp, createdAt: timestamp }).strict();
-/** Emplacement de l'état commercial : #455 (offres) et #456 (conditions) le remplissent ; rien n'est inventé ici. */
-export const commercialPlaceholderSchema = z.object({ state: z.literal('NOT_CONFIGURED'), offer: z.null(), dueDates: z.array(timestamp).max(0) }).strict();
+/** Offre attribuée à la fiche : nom et modules copiés à l'attribution, date d'effet. Ni montant ni condition (#456). */
+export const commercialOfferSchema = z.object({ offerId: z.uuid(), name: z.string().min(1).max(100), effectiveAt: timestamp, modules: z.array(z.enum(moduleCodes)) }).strict();
+/** État commercial dérivé des attributions (R01-T03) ; `dueDates` reste l'emplacement réservé aux échéances de #456. */
+export const commercialSchema = z.object({
+  state: z.enum(commercialStates), offer: commercialOfferSchema.nullable(), scheduledOffer: commercialOfferSchema.nullable(),
+  entitlementVersion: z.number().int().min(1), dueDates: z.array(timestamp).max(0)
+}).strict();
 
 export const platformCodeSchema = z.object({
   id: z.uuid(), state: z.enum(codeStates), clientId: z.uuid().nullable(), clientName: nullableText, createdAt: timestamp, expiresAt: timestamp,
@@ -31,7 +37,7 @@ export const platformCodeSchema = z.object({
 
 export const platformClientSummarySchema = z.object({
   id: z.uuid(), displayName: nullableText, preparation: z.enum(clientPreparations), schoolId: z.uuid().nullable(), school: schoolFactsSchema.nullable(),
-  contactName: nullableText, contactEmail: nullableText, latestCode: clientCodeStateSchema.nullable(), commercial: commercialPlaceholderSchema,
+  contactName: nullableText, contactEmail: nullableText, latestCode: clientCodeStateSchema.nullable(), commercial: commercialSchema,
   version, createdAt: timestamp, updatedAt: timestamp
 }).strict();
 export const platformClientSchema = platformClientSummarySchema.extend({

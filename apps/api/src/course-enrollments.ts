@@ -3,6 +3,7 @@ import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
 import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
+import {requireModule} from './entitlements.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
 import {canManageCourses,getSeries} from './courses.js';
@@ -43,6 +44,8 @@ const failures:Record<string,[number,string]>={
  COURSE_IN_PAST:[422,'Une séance serait dans le passé.'],
  INSTRUCTOR_NOT_ACTIVE:[422,'Choisissez un moniteur actif de l’école.']
 };
+/** Commandes qui créent un nouvel usage du module Cours collectifs ; les autres terminent ou défont un engagement existant. */
+export const newUseCommands:ReadonlySet<string>=new Set(['ENROLL_COURSE','STAFF_ENROLL_COURSE','JOIN_COURSE_WAITLIST','ACCEPT_COURSE_OFFER']);
 /** Traduit les refus SQL : P0001 (code métier), 23P01 (chevauchement d'agenda), 23514/22007 (horaires invalides). */
 export function courseFailure(error:unknown,conflictMessage='Un autre rendez-vous occupe déjà ce créneau.'):never{
  if(typeof error==='object'&&error!==null&&'code'in error){
@@ -107,6 +110,9 @@ export function registerCourseEnrollments(app:FastifyInstance,options:{pool:Pool
   work:(db:PoolClient,actor:CommandActor)=>Promise<CommandEffect<T>>,replay:(db:PoolClient,actor:CommandActor,previous:T)=>Promise<T>,conflict?:string)=>{
   empty.parse(r.query);checkIdempotency(r.headers['idempotency-key'],body.operationId);const {schoolId}=params(r),identity=await options.verifyToken(r.headers.authorization);
   try{return await schoolCommand<T>(options.pool,identity,schoolId,type,body,expected,async(db,actor)=>{
+   // Droit commercial (R01-T03) : s'inscrire, entrer en liste d'attente ou accepter une place sont de nouveaux usages ; annuler, quitter,
+   // refuser et replanifier (engagements déjà pris) restent permis. Relu au serveur, hors rejeu d'une opération déjà enregistrée.
+   if(newUseCommands.has(type))await requireModule(db,schoolId,'COLLECTIVE_COURSES');
    try{await db.query('SAVEPOINT course_command');const effect=await work(db,actor);await db.query('RELEASE SAVEPOINT course_command');return effect;}
    catch(error){await db.query('ROLLBACK TO SAVEPOINT course_command');throw error;}
   },roles,{replay});}

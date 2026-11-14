@@ -159,6 +159,15 @@ export function databaseRefusal(error: unknown): ApiError | undefined {
   if (code === '23505' && constraint === 'platform_client_school_id_key') return new ApiError(409, 'CLIENT_SCHOOL_ALREADY_LINKED', 'Cette école est déjà reliée à une autre fiche.');
   if (code === '23505' && constraint === 'school_opening_link_token_hash_key') return new ApiError(409, 'OPENING_CODE_TAKEN', 'Ce code est déjà attribué. Générez-en un autre.');
   if (code === '23503' && constraint === 'platform_client_school_id_fkey') return new ApiError(404, 'NOT_FOUND', 'Cette école n’existe pas.');
+  // Offres, attributions et ajustements de modules (R01-T03) : les déclencheurs et contraintes restent la dernière barrière.
+  if (code === '23505' && constraint === 'platform_offer_name') return new ApiError(409, 'OFFER_NAME_TAKEN', 'Une offre porte déjà ce nom.');
+  if (code === '23514' && message.includes('platform_offer_modules_invalid')) return new ApiError(400, 'INVALID_REQUEST', 'Les modules de l’offre ne sont pas valides.');
+  if (code === '23514' && message.includes('platform_offer_archived')) return new ApiError(409, 'OFFER_ARCHIVED', 'Cette offre est archivée.');
+  if (code === '23514' && message.includes('platform_assignment_backdated')) return new ApiError(409, 'EFFECTIVE_DATE_PAST', 'La date d’effet doit être à venir.');
+  if (code === '23514' && message.includes('platform_assignment_in_force')) return new ApiError(409, 'ASSIGNMENT_NOT_PENDING', 'Cette attribution a déjà pris effet.');
+  if (code === '23514' && message.includes('platform_adjustment_assignment_ended')) return new ApiError(409, 'ADJUSTMENT_REQUIRES_OFFER', 'Cette école n’a pas d’offre en vigueur à ajuster.');
+  if (code === '23505' && constraint === 'platform_adjustment_active') return new ApiError(409, 'ADJUSTMENT_ACTIVE', 'Un ajustement est déjà actif pour ce module.');
+  if (code === '23503' && constraint === 'platform_module_adjustment_module_code_fkey') return new ApiError(404, 'MODULE_UNKNOWN', 'Ce module n’existe pas.');
   return undefined;
 }
 

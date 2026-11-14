@@ -3,6 +3,7 @@ import type {Pool,PoolClient} from 'pg';
 import {z} from 'zod';
 import type {TokenVerifier} from './auth.js';
 import {withActor} from './database.js';
+import {requireModule} from './entitlements.js';
 import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandActor,type CommandEffect,type SchoolRow} from './commands.js';
 import {ApiError,forbidden,notFound} from './errors.js';
 import {overlapsClosure} from './instructor-closures.js';
@@ -119,7 +120,10 @@ export function registerCourses(app:FastifyInstance,options:{pool:Pool;verifyTok
  const staff=['ADMIN','INSTRUCTOR'];
  const command=async<T>(r:FastifyRequest,type:string,body:{operationId:string}&Record<string,unknown>,expected:number|null,work:(db:PoolClient,actor:CommandActor,school:SchoolRow)=>Promise<CommandEffect<T>>,replay:(db:PoolClient,previous:T)=>Promise<T>,conflict?:[string,string])=>{
   empty.parse(r.query);checkIdempotency(r.headers['idempotency-key'],body.operationId);const schoolId=schoolID(r),identity=await options.verifyToken(r.headers.authorization);
-  try{return await schoolCommand<T>(options.pool,identity,schoolId,type,body,expected,work,staff,{authorize:async db=>requireManage(db,schoolId),replay:async(db,_a,previous)=>replay(db,previous)});}
+  // Droit commercial (R01-T03) : toute gestion de cours est un nouvel usage du module ; relu au serveur, après le droit de gestion et hors rejeu
+  // (une opération déjà enregistrée rend sa réponse). Lire l'agenda et l'historique ne passe pas par ici.
+  const entitled=async(db:PoolClient,actor:CommandActor,school:SchoolRow)=>{await requireModule(db,schoolId,'COLLECTIVE_COURSES');return work(db,actor,school);};
+  try{return await schoolCommand<T>(options.pool,identity,schoolId,type,body,expected,entitled,staff,{authorize:async db=>requireManage(db,schoolId),replay:async(db,_a,previous)=>replay(db,previous)});}
   catch(error){return exclusion(error,conflict?.[0]??'COURSE_CONFLICT',conflict?.[1]??'Ce changement entre en conflit avec l’agenda.');}
  };
 

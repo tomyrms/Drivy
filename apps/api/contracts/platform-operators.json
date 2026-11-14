@@ -19,6 +19,7 @@
             "enum": [
               "MANAGE_PLATFORM_TEAM",
               "MANAGE_SCHOOL_OPENINGS",
+              "MANAGE_OFFERS",
               "READ_COMMERCIAL_JOURNAL"
             ]
           }
@@ -444,6 +445,7 @@
                 "enum": [
                   "MANAGE_PLATFORM_TEAM",
                   "MANAGE_SCHOOL_OPENINGS",
+                  "MANAGE_OFFERS",
                   "READ_COMMERCIAL_JOURNAL"
                 ]
               }
@@ -1167,6 +1169,7 @@
                 "enum": [
                   "MANAGE_PLATFORM_TEAM",
                   "MANAGE_SCHOOL_OPENINGS",
+                  "MANAGE_OFFERS",
                   "READ_COMMERCIAL_JOURNAL"
                 ]
               }
@@ -1326,7 +1329,17 @@
             "CLIENT_SCHOOL_ALREADY_LINKED",
             "OPENING_CODE_TAKEN",
             "OPENING_LINK_USED",
-            "OPENING_LINK_REVOKED"
+            "OPENING_LINK_REVOKED",
+            "OFFER_NAME_TAKEN",
+            "OFFER_ARCHIVED",
+            "OFFER_NOT_ARCHIVED",
+            "EFFECTIVE_DATE_PAST",
+            "ASSIGNMENT_NOT_PENDING",
+            "ADJUSTMENT_REQUIRES_OFFER",
+            "ADJUSTMENT_NO_EFFECT",
+            "ADJUSTMENT_ACTIVE",
+            "ADJUSTMENT_NOT_ACTIVE",
+            "MODULE_UNKNOWN"
           ]
         },
         "requestId": {

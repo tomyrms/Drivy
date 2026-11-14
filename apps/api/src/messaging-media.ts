@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { createHash } from 'node:crypto';
+import { requireModule } from './entitlements.js';
 import { ApiError, forbidden } from './errors.js';
 import { deviceIdPattern } from './messaging-keys.js';
 import { syncLinks } from './messaging-view.js';
@@ -56,7 +57,8 @@ export async function requireActiveDevice(db: PoolClient, actor: MessagingActor,
 
 /** Lecture de la conversation (404 hors périmètre), sources de droits verrouillées, puis verrou de conversation.
  *  Ordre de la fondation : droits → conversation → message → média. */
-async function lockConversationForWrite(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
+async function lockConversationForWrite(db: PoolClient, actor: MessagingActor, conversationId: string,
+  newUse = false): Promise<void> {
   const visible = await db.query<{ allowed: boolean }>(
     'SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
   if (visible.rows[0]?.allowed !== true) throw mediaNotFound();
@@ -67,6 +69,8 @@ async function lockConversationForWrite(db: PoolClient, actor: MessagingActor, c
   // d'éligibilité déjà commitée répond 403 (jamais un 404 de conversation), et le verrou `FOR UPDATE` ne peut
   // pas être filtré par la politique RLS UPDATE de `messaging_conversation`, qui exige `messaging_can_write`.
   if (!(await canWrite(db, actor, conversationId))) throw forbidden();
+  // Droit commercial (R01-T03) : un nouveau dépôt exige le module Messagerie ; annuler un dépôt en cours reste permis.
+  if (newUse) await requireModule(db, actor.schoolId, 'MESSAGING');
   const locked = await db.query('SELECT 1 FROM drivy.messaging_conversation WHERE school_id=$1 AND id=$2 FOR UPDATE',
     [actor.schoolId, conversationId]);
   if (!locked.rows[0]) throw mediaNotFound();
@@ -99,7 +103,7 @@ export async function uploadMedia(db: PoolClient, actor: MessagingActor, convers
   if (bytes.length < 1) throw invalidMedia();
   if (bytes.length > mediaMaxBytes) throw mediaPayloadTooLarge();
   const sha256 = ciphertextSha256(bytes);
-  await lockConversationForWrite(db, actor, conversationId);
+  await lockConversationForWrite(db, actor, conversationId, true);
   // Le verrou de ligne passe par une fonction SECURITY DEFINER : le rôle applicatif n'a aucun privilège UPDATE.
   const existing = await db.query<StoredMedia>(
     'SELECT sha256,byte_size,message_id,conversation_id,purged FROM drivy.messaging_lock_media($1,$2)',

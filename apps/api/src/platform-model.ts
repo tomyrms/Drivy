@@ -7,7 +7,7 @@ import { openingIdentity } from './school-opening-model.js';
  * avec les écoles ; il n'a aucun rôle scolaire et ne lit ni dossiers, ni trajets, ni messages.
  */
 export const platformLevel = 'COMMERCIAL' as const;
-export const platformRights = ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'READ_COMMERCIAL_JOURNAL'] as const;
+export const platformRights = ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'MANAGE_OFFERS', 'READ_COMMERCIAL_JOURNAL'] as const;
 /** Ce que le niveau ne donne jamais : affiché avant l'acceptation d'une invitation, et vérifié par les tests. */
 export const platformExcludedAccess = ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] as const;
 export type PlatformRight = (typeof platformRights)[number];

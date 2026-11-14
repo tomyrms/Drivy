@@ -1,5 +1,6 @@
 import type { PoolClient } from 'pg';
 import { createHash, randomUUID } from 'node:crypto';
+import { moduleNotEntitled, requireModule, schoolModuleEntitled } from './entitlements.js';
 import { ApiError, forbidden, notFound } from './errors.js';
 import { messageColumns, notHiddenForActor, syncLinks, toView, type MessageView } from './messaging-view.js';
 import { attachMedia, invalidMedia, mediaId, mediaSize, type MediaIntent } from './messaging-media.js';
@@ -39,10 +40,15 @@ export async function eligibleContacts(db: PoolClient, actor: MessagingActor, li
     [actor.schoolId, actor.personId, afterPersonId ?? null, limit + 1]);
   return { contacts: result.rows.slice(0, limit), nextCursor: result.rows.length > limit ? result.rows[limit - 1]!.personId : null };
 }
-/** Écriture : lien ouvert après synchronisation, sinon 403 (lecture seule). */
-export async function canWrite(db: PoolClient, actor: MessagingActor, conversationId: string): Promise<void> {
+/**
+ * Écriture : lien ouvert après synchronisation, sinon 403 (lecture seule). Le droit commercial (R01-T03) est relu ensuite : sans le
+ * module Messagerie dans l'offre de l'école, tout nouvel usage répond 403 MODULE_NOT_ENTITLED, un non-membre gardant son 403 habituel.
+ * `commercial: false` ne contrôle que le lien, pour retirer son propre contenu ou rouvrir une conversation existante en lecture.
+ */
+export async function canWrite(db: PoolClient, actor: MessagingActor, conversationId: string, commercial = true): Promise<void> {
   const check = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_can_write($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
   if (check.rows[0]?.allowed !== true) throw forbidden();
+  if (commercial) await requireModule(db, actor.schoolId, 'MESSAGING');
 }
 /** Annuaire du général : nom, version de photo si visible (#64), administrateur du groupe. */
 export async function generalMembers(db: PoolClient, actor: MessagingActor, limit = 50, afterPersonId?: string) {
@@ -74,31 +80,35 @@ export async function findOrCreatePrivate(db: PoolClient, actor: MessagingActor,
   const allowed = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_private_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, peerId]);
   if (allowed.rows[0]?.allowed !== true) throw forbidden();
   const [low, high] = [actor.personId.toLowerCase(), peerId.toLowerCase()].sort();
-  const result = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_conversation(id,school_id,kind,person_low,person_high)
+  // Sans le module, une conversation déjà ouverte se retrouve (lecture de l'historique) mais aucune n'est créée (R01-T03).
+  const entitled = await schoolModuleEntitled(db, actor.schoolId, 'MESSAGING');
+  const result = entitled ? await db.query<{ id: string }>(`INSERT INTO drivy.messaging_conversation(id,school_id,kind,person_low,person_high)
     VALUES($1,$2,'PRIVATE',$3,$4) ON CONFLICT (school_id,person_low,person_high) WHERE kind='PRIVATE'
-    DO NOTHING RETURNING id`, [randomUUID(), actor.schoolId, low, high]);
+    DO NOTHING RETURNING id`, [randomUUID(), actor.schoolId, low, high]) : { rows: [] as { id: string }[] };
   const created = result.rows[0]?.id;
   const existing = created ? undefined : await db.query<{ id: string }>(`SELECT id FROM drivy.messaging_conversation
     WHERE school_id=$1 AND kind='PRIVATE' AND person_low=$2 AND person_high=$3`, [actor.schoolId, low, high]);
   const conversationId = created ?? existing?.rows[0]?.id;
-  if (!conversationId) throw notFound();
+  if (!conversationId) throw entitled ? notFound() : moduleNotEntitled('MESSAGING');
   await syncLinks(db, actor.schoolId, conversationId);
   return conversationId;
 }
 export async function findOrCreateGeneral(db: PoolClient, actor: MessagingActor): Promise<string> {
   assertContext(actor);
   await db.query('SELECT drivy.messaging_lock_rights($1,$2,NULL::uuid)', [actor.schoolId, actor.personId]);
-  const result = await db.query<{ id: string }>(`INSERT INTO drivy.messaging_conversation(id,school_id,kind)
+  // Sans le module, le général déjà ouvert se retrouve (lecture de l'historique) mais n'est pas créé (R01-T03).
+  const entitled = await schoolModuleEntitled(db, actor.schoolId, 'MESSAGING');
+  const result = entitled ? await db.query<{ id: string }>(`INSERT INTO drivy.messaging_conversation(id,school_id,kind)
     VALUES($1,$2,'GENERAL') ON CONFLICT (school_id) WHERE kind='GENERAL'
-    DO NOTHING RETURNING id`, [randomUUID(), actor.schoolId]);
+    DO NOTHING RETURNING id`, [randomUUID(), actor.schoolId]) : { rows: [] as { id: string }[] };
   const created = result.rows[0]?.id;
   const existing = created ? undefined : await db.query<{ id: string }>(`SELECT id FROM drivy.messaging_conversation
     WHERE school_id=$1 AND kind='GENERAL'`, [actor.schoolId]);
   const conversationId = created ?? existing?.rows[0]?.id;
-  if (!conversationId) throw notFound();
+  if (!conversationId) throw entitled ? notFound() : moduleNotEntitled('MESSAGING');
   await syncLinks(db, actor.schoolId, conversationId);
   // Un membre retiré du général n'y entre pas par cette commande.
-  await canWrite(db, actor, conversationId);
+  await canWrite(db, actor, conversationId, false);
   return conversationId;
 }
 export async function listConversations(db: PoolClient, actor: MessagingActor, limit: number, before?: string) {
@@ -149,7 +159,9 @@ async function access(db: PoolClient, actor: MessagingActor, conversationId: str
     FROM drivy.messaging_conversation c WHERE c.school_id=$1 AND c.id=$3`, [actor.schoolId, actor.personId, conversationId]);
   const row = result.rows[0];
   if (!row) throw notFound();
-  return { canWrite: row.canWrite, isGroupAdmin: row.isGroupAdmin,
+  // Sans le module Messagerie, la conversation s'ouvre en lecture seule : le client n'est jamais l'autorité (R01-T03).
+  const entitled = row.canWrite && await schoolModuleEntitled(db, actor.schoolId, 'MESSAGING');
+  return { canWrite: entitled, isGroupAdmin: row.isGroupAdmin,
     readableUntilSequence: row.readableUntilSequence === null ? null : safeSequence(row.readableUntilSequence) };
 }
 export async function pageEnvelopes(db: PoolClient, actor: MessagingActor, conversationId: string, beforeSequence?: number, limit = 50) {
@@ -199,14 +211,14 @@ export async function lockRights(db: PoolClient, actor: MessagingActor, conversa
     [actor.schoolId, actor.personId, target.rows[0].peerPersonId, mentions]);
 }
 /** Droits verrouillés, liens synchronisés, puis lecture (404) et écriture (403) recontrôlées. */
-async function lockForWrite(db: PoolClient, actor: MessagingActor, conversationId: string, mentions: string[] = [], write = true) {
+async function lockForWrite(db: PoolClient, actor: MessagingActor, conversationId: string, mentions: string[] = [], write = true, commercial = true) {
   const visible = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
   if (visible.rows[0]?.allowed !== true) throw notFound();
   await lockRights(db, actor, conversationId, mentions);
   await syncLinks(db, actor.schoolId, conversationId);
   const check = await db.query<{ allowed: boolean }>('SELECT drivy.messaging_conversation_allowed($1,$2,$3) AS allowed', [actor.schoolId, actor.personId, conversationId]);
   if (check.rows[0]?.allowed !== true) throw notFound();
-  if (write) await canWrite(db, actor, conversationId);
+  if (write) await canWrite(db, actor, conversationId, commercial);
 }
 export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conversationId: string,
   intentId: string, envelope: OpaqueEnvelope, mentionPersonIds: string[] = [],
@@ -225,7 +237,8 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
   // Une seule pièce par message en v1, exclusive d'un sondage : aucune ambiguïté d'empreinte ni d'affichage.
   if (intent && poll) throw new ApiError(400, 'INVALID_REQUEST', 'Un message ne peut pas porter un sondage et une pièce jointe.');
   if (intent) { mediaId(intent.mediaId); mediaSize(intent.byteSize); }
-  await lockForWrite(db, actor, conversationId, mentionPersonIds);
+  // Le droit commercial est relu plus bas, après la reconnaissance d'un rejeu : un envoi déjà accepté garde son reçu.
+  await lockForWrite(db, actor, conversationId, mentionPersonIds, true, false);
   const canonical = JSON.stringify(envelope);
   // L'empreinte garde EXACTEMENT sa forme historique à quatre éléments pour tout message sans média : un rejeu
   // d'intention enregistrée avant l'ajout des médias retrouve le même reçu. Le couple média n'est ajouté que s'il existe.
@@ -239,7 +252,7 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
   if (!conversation.rows[0]) throw forbidden();
   // Revérifie après l'attente : une fin de lien pendant la contention n'autorise pas une écriture tardive.
   const membersEpoch = await syncLinks(db, actor.schoolId, conversationId);
-  await canWrite(db, actor, conversationId);
+  await canWrite(db, actor, conversationId, false);
   const prior = await db.query<{ id: string; fingerprint: string }>(`SELECT id,fingerprint FROM drivy.messaging_message
     WHERE school_id=$1 AND conversation_id=$2 AND sender_person_id=$3 AND intent_id=$4`,
     [actor.schoolId, conversationId, actor.personId, intentId]);
@@ -247,6 +260,8 @@ export async function sendEnvelope(db: PoolClient, actor: MessagingActor, conver
     if (prior.rows[0].fingerprint !== fingerprint) throw new ApiError(409, 'INTENT_CONFLICT', 'Cet envoi a déjà été utilisé avec un autre contenu.');
     return messageById(db, actor, conversationId, prior.rows[0].id);
   }
+  // Nouvel envoi seulement : sans le module Messagerie dans l'offre de l'école, rien n'est écrit (R01-T03).
+  await requireModule(db, actor.schoolId, 'MESSAGING');
   // Une réponse perdue déjà acceptée reste idempotente, même pour une archive sans époque.
   // Une intention nouvelle doit correspondre à la même liste de membres que son chiffrement.
   // Le verrou de conversation est conservé jusqu'au COMMIT : aucun départ ne peut s'intercaler.
@@ -309,7 +324,8 @@ export async function deleteMessage(db: PoolClient, actor: MessagingActor, conve
 
 export async function setReaction(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, emoji: string, active: boolean) {
   if (!(reactionPalette as readonly string[]).includes(emoji)) throw new ApiError(400, 'INVALID_REQUEST', 'Réaction invalide.');
-  await lockForWrite(db, actor, conversationId);
+  // Retirer sa propre réaction reste permis sans le module : seul un ajout est un nouvel usage.
+  await lockForWrite(db, actor, conversationId, [], true, active);
   const open = await db.query<{ open: boolean }>('SELECT drivy.messaging_message_open($1,$2,$3,$4) AS open',
     [actor.schoolId, actor.personId, conversationId, messageId]);
   if (open.rows[0]?.open !== true) throw notFound();
@@ -327,7 +343,8 @@ export async function setPinned(db: PoolClient, actor: MessagingActor, conversat
 export async function setPollVotes(db: PoolClient, actor: MessagingActor, conversationId: string, messageId: string, optionIndexes: number[]) {
   if (optionIndexes.length > 12 || optionIndexes.some(index => !Number.isSafeInteger(index) || index < 0 || index > 11)
     || new Set(optionIndexes).size !== optionIndexes.length) throw new ApiError(400, 'INVALID_REQUEST', 'Vote invalide.');
-  await lockForWrite(db, actor, conversationId);
+  // Retirer son vote (liste vide) reste permis sans le module ; voter est un nouvel usage.
+  await lockForWrite(db, actor, conversationId, [], true, optionIndexes.length > 0);
   await db.query('SELECT drivy.messaging_set_poll_votes($1,$2,$3,$4::integer[])', [actor.schoolId, conversationId, messageId, optionIndexes]);
   return { messageId, optionIndexes: [...optionIndexes].sort((a, b) => a - b) };
 }

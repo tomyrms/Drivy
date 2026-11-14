@@ -25,7 +25,7 @@ const school = { name: 'Auto-école des Lilas', status: 'DRAFT' as const, contac
   setup_step: 'ORGANISATION', setup_done: 1, setup_completed_at: null, setup_saved_at: at };
 const waiting: ClientItem = { id: randomUUID(), display_name: 'Les Lilas', school_id: null, link_source: null, opened_via_link_id: null, school_linked_at: null, issued_by_name: 'Camille Exemple',
   contact_name: null, contact_email: null, contact_phone: null, billing_street: null, billing_postal_code: null, billing_city: null, billing_country: null, internal_notes: null,
-  commercial_state: 'NOT_CONFIGURED', version: 1, created_at: at, updated_at: at, preparation: 'AWAITING_SCHOOL',
+  commercial_state: 'NOT_CONFIGURED', offer: null, scheduled_offer: null, entitlement_version: 1, version: 1, created_at: at, updated_at: at, preparation: 'AWAITING_SCHOOL',
   latest_code: { id: randomUUID(), status: 'AVAILABLE', expires_at: later, created_at: at }, school: null };
 const opened: ClientItem = { ...waiting, id: randomUUID(), school_id: randomUUID(), link_source: 'OPENING_CODE', opened_via_link_id: randomUUID(), school_linked_at: at,
   contact_name: 'Jeanne Exemple', contact_email: 'jeanne@example.invalid', contact_phone: '+41 79 000 00 00', billing_street: 'Rue du Lac 1', billing_postal_code: '1000',
@@ -87,9 +87,15 @@ it('les projections réellement servies respectent le contrat publié, vérifié
   for (const extra of ['code', 'codeHash', 'learners', 'lessons', 'messages', 'members'])
     expect(validator('ClientEnvelope')({ data: { ...leaking, [extra]: 'x' }, ...meta }), extra).toBe(false);
   expect(validator('UnattachedSchoolsEnvelope')({ data: { items: [{ ...unattachedProjection(unattached), members: [] }] }, ...meta })).toBe(false);
-  // L'emplacement commercial ne porte ni offre ni échéance inventées.
-  expect(validator('ClientEnvelope')({ data: { ...leaking, commercial: { state: 'NOT_CONFIGURED', offer: { price: 1 }, dueDates: [] } }, ...meta })).toBe(false);
-  expect(validator('ClientEnvelope')({ data: { ...leaking, commercial: { state: 'TRIAL', offer: null, dueDates: [] } }, ...meta })).toBe(false);
+  // L'emplacement commercial ne porte ni montant, ni essai, ni échéance inventés (#456) : seulement l'offre et ses modules.
+  const commercial = (value: Record<string, unknown>) => ({ data: { ...leaking, commercial: { state: 'NOT_CONFIGURED', offer: null, scheduledOffer: null, entitlementVersion: 1, dueDates: [], ...value } }, ...meta });
+  const offer = { offerId: randomUUID(), name: 'Essentiel', effectiveAt: at.replace('+00:00', 'Z'), modules: ['MESSAGING'] };
+  expect(validator('ClientEnvelope')(commercial({ state: 'OFFER_ACTIVE', offer, scheduledOffer: { ...offer, modules: ['MESSAGING', 'COLLECTIVE_COURSES'] }, entitlementVersion: 3 }))).toBe(true);
+  expect(validator('ClientEnvelope')(commercial({ offer: { ...offer, price: 1 } }))).toBe(false);
+  expect(validator('ClientEnvelope')(commercial({ offer: { ...offer, modules: ['PAYMENTS'] } }))).toBe(false);
+  expect(validator('ClientEnvelope')(commercial({ state: 'TRIAL' }))).toBe(false);
+  expect(validator('ClientEnvelope')(commercial({ dueDates: [at] }))).toBe(false);
+  expect(validator('ClientEnvelope')(commercial({ entitlementVersion: 0 }))).toBe(false);
 });
 
 it('les corps de requête refusent les mêmes cas que le service', async () => {
