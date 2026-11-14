@@ -462,6 +462,8 @@ final class MessagingReportTransportTests: XCTestCase {
             (429, "REPORT_RATE_LIMITED", .reportRateLimited),
             (409, "REPORT_STATUS_CONFLICT", .stateConflict),
             (403, "METRIC_SCOPE_FORBIDDEN", .accessChanged),
+            // Offre de l'école sans messagerie (#455) : un refus nommé, jamais pris pour un accès retiré.
+            (403, "MODULE_NOT_ENTITLED", .moduleNotEntitled),
             (429, "OTHER_LIMIT", .unavailable),
         ]
         for (status, code, expected) in cases {

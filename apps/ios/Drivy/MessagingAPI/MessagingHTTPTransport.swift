@@ -360,6 +360,9 @@ actor MessagingHTTPTransport: MessagingAPITransport {
                 throw MessagingFailure.reportRateLimited
             }
             if response.status == 404 { throw MessagingFailure.conversationUnavailable }
+            // Offre de l'école sans messagerie (#455) : un refus de l'usage nouveau, pas une perte d'accès. Le serveur
+            // seul en décide ; un 403 sans ce code garde son sens d'accès retiré.
+            if response.status == 403, failureCode == "MODULE_NOT_ENTITLED" { throw MessagingFailure.moduleNotEntitled }
             if response.status == 401 || response.status == 403 { throw MessagingFailure.accessChanged }
             guard (200...299).contains(response.status) else { throw MessagingFailure.unavailable }
             guard response.contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased() == "application/json" else { throw MessagingFailure.invalidResponse }

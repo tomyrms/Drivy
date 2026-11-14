@@ -51,7 +51,14 @@ final class SchoolWorkspace {
     private(set) var learnerError: String?
     private(set) var trainingsError: String?
 
+    /// Droits commerciaux de l’école courante aux modules (R01-T03, #455) ; `nil` tant qu’aucune lecture n’a abouti.
+    /// Jamais une autorité : le serveur refuse un usage nouveau d’un module non accordé, que l’app l’ait affiché ou non.
+    private(set) var entitlements: SchoolEntitlements?
+
     @ObservationIgnored private let api: any SchoolAPI
+    @ObservationIgnored private let entitlementsSource: (any SchoolEntitlementsReading)?
+    @ObservationIgnored private var entitlementsRequest = UUID()
+    @ObservationIgnored private var entitlementsReadAt: Date?
     @ObservationIgnored private var accountRequest = UUID()
     @ObservationIgnored private var accountRefresh = UUID()
     @ObservationIgnored private var schoolScope = UUID()
@@ -74,10 +81,14 @@ final class SchoolWorkspace {
     private var selfIntents = SchoolSelfProfileIntents()
     private(set) var selfProfileIntentError: String?
 
+    /// `entitlementsSource` : par défaut, le client lui-même quand il sait lire les droits (`DrivyAPIClient`) ; les
+    /// doublures de `SchoolAPI` n’en lisent aucun, et rien n’est alors masqué.
     init(api: any SchoolAPI, accountIntentBaseURL: URL? = nil,
-         selfIntentStore: (any SchoolSelfProfileIntentStore)? = nil) {
+         selfIntentStore: (any SchoolSelfProfileIntentStore)? = nil,
+         entitlementsSource: (any SchoolEntitlementsReading)? = nil) {
         self.api = api; self.accountIntentBaseURL = accountIntentBaseURL
         self.selfIntentStore = selfIntentStore ?? (accountIntentBaseURL == nil ? nil : EncryptedSchoolSelfProfileIntentStore())
+        self.entitlementsSource = entitlementsSource ?? (api as? any SchoolEntitlementsReading)
     }
 
     /// Projection de la personne connectée, sans inventer une version ni des droits.
@@ -118,6 +129,34 @@ final class SchoolWorkspace {
 
     var entryDestination: SchoolEntryDestination {
         .resolve(schoolStatus: school?.status, roles: membership?.roles)
+    }
+
+    /// Le module est-il accordé à l’école courante ? Sans lecture aboutie la réponse est oui : l’affichage ne décide de
+    /// rien, le serveur refuse de toute façon un usage nouveau d’un module non accordé (`MODULE_NOT_ENTITLED`).
+    /// Ne gouverne que les entrées d’un NOUVEL usage : l’historique reste lisible et un engagement en cours se termine.
+    func isEntitled(_ module: SchoolModuleCode) -> Bool {
+        entitlements?.isEntitled(module) ?? true
+    }
+
+    /// Relit les droits de l’école courante, sans effet sur le compte ni sur l’école : une panne, une API plus ancienne
+    /// (404) ou une réponse invalide gardent la projection précédente. Une lecture due est celle qui n’a jamais abouti,
+    /// qui date de plus de cinq minutes, ou dont le changement programmé est arrivé à échéance.
+    func refreshEntitlements(minimumInterval: TimeInterval = SchoolEntitlementsPolicy.minimumInterval, now: Date = Date()) async {
+        guard let source = entitlementsSource, let schoolID = membership?.schoolId, school?.status == "ACTIVE" else { return }
+        guard SchoolEntitlementsPolicy.isDue(readAt: entitlementsReadAt, projection: entitlements, now: now,
+                                             minimumInterval: minimumInterval) else { return }
+        let scope = schoolScope
+        entitlementsRequest = UUID()
+        let request = entitlementsRequest
+        do {
+            let result = try await source.entitlements(schoolID: schoolID)
+            // Une réponse tardive d’une autre école, d’un autre compte ou d’une lecture plus récente est écartée.
+            guard scope == schoolScope, request == entitlementsRequest, membership?.schoolId == schoolID else { return }
+            entitlements = result
+            entitlementsReadAt = now
+        } catch {
+            return
+        }
     }
 
     func reset() {
@@ -504,6 +543,7 @@ final class SchoolWorkspace {
             await refreshAccount()
             await refreshLearners()
             if entryDestination == .instructor { await refreshOwnLearner() }
+            await refreshEntitlements()
         }
     }
 
@@ -558,6 +598,7 @@ final class SchoolWorkspace {
                 await searchLearners("")
                 if scope == schoolScope, entryDestination == .instructor { await refreshOwnLearner(minimumInterval: 0) }
                 await refreshLearnersToComplete()
+                if scope == schoolScope { await refreshEntitlements(minimumInterval: 0) }
             } else {
                 confirmedOwnLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
             }
@@ -918,6 +959,8 @@ final class SchoolWorkspace {
         learnersReadAt = nil
         ownLearnerRequest = UUID(); confirmedOwnLearner = nil; ownLearnerError = nil; ownLearnerReadAt = nil
         learnersToComplete = nil
+        // Les droits appartiennent à l’école quittée : aucun ne se transporte dans la suivante.
+        entitlementsRequest = UUID(); entitlements = nil; entitlementsReadAt = nil
         beginSearch("")
     }
 

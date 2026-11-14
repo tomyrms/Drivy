@@ -91,7 +91,11 @@ struct SchoolAgendaView: View {
     }
     private var emptyPresentation: SchoolAgendaEmptyPresentation { SchoolAgendaEmptyPresentation(mayPlan: mayPlan) }
     private var schoolTimeZone: String { calendar.timeZone.identifier }
-    private var mayCreateCourse: Bool { mayPlan && courseCatalogue?.canManage == true }
+    /// Créer un cours est un usage NOUVEAU : fermé quand l’offre de l’école n’inclut plus les cours collectifs (#455).
+    /// Les cours existants restent lisibles et la planification des leçons ne change pas ; le serveur refuse de toute façon.
+    private var mayCreateCourse: Bool {
+        mayPlan && courseCatalogue?.canManage == true && workspace.isEntitled(.collectiveCourses)
+    }
     private var dailyEvents: [SchoolAgendaEvent] { events(on: selectedDate) }
     private var courseError: String? { courseRead.error(in: currentScope, timeZone: schoolTimeZone) }
     private func events(on day: Date) -> [SchoolAgendaEvent] {
@@ -595,6 +599,8 @@ struct SchoolAgendaView: View {
         async let coursesRead: Void = loadCourses()
         _ = await (lessonRead, coursesRead)
         await loadCourseCatalogue()
+        // Les droits aux modules se relisent avec l’agenda : une offre qui change se voit sans relancer l’app (#455).
+        await workspace.refreshEntitlements()
     }
     @MainActor private func loadCourses() async {
         let wanted = currentScope

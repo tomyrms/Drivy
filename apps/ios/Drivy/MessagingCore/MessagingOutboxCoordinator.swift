@@ -141,7 +141,9 @@ actor MessagingOutboxCoordinator {
             case .accepted: break
             case .waiting: held.insert(entry.conversationID)
             case .failed(let failure):
-                if failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached { return results }
+                // Une offre sans messagerie (#455) refuse tout envoi : inutile d'essayer les suivants, ils restent en file.
+                if failure == .accessChanged || failure == .contextChanged || failure == .protectionUnavailable || failure == .deviceLimitReached
+                    || failure == .moduleNotEntitled { return results }
                 if failure == .unavailable || failure == .invalidResponse { held.insert(entry.conversationID) }
             }
         }

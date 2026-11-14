@@ -547,7 +547,9 @@ struct SchoolCourseValidateBody: Encodable, Sendable, Equatable {
             "COURSE_PAYMENT_VOIDED": "Ce règlement est déjà annulé.",
             "COURSE_NO_REQUIRED_OCCURRENCE": "Ce cours n’a aucune séance obligatoire.",
             "COURSE_REQUIREMENTS_MISSING": "Des séances obligatoires manquent.",
-            "COURSE_COMPLETION_REVOKED": "Cette validation est déjà retirée."
+            "COURSE_COMPLETION_REVOKED": "Cette validation est déjà retirée.",
+            // Offre de l’école sans cours collectifs (#455) : un usage nouveau est refusé ; les cours existants restent lisibles.
+            "MODULE_NOT_ENTITLED": "Les cours collectifs ne sont pas inclus dans l’offre de cette école."
         ]
         if (400...499).contains(status), let code, let message = messages[code] { return .rejected(message) }
         return SchoolPlanningClient.failure(status, code, title: title)

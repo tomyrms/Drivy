@@ -1599,7 +1599,8 @@ struct MessagingInboxPreview: Equatable, Sendable {
                     // Refus explicite : contenu conservé dans la file protégée, les suivants peuvent partir.
                     sendStates[id] = .failed(failure)
                     sendQueues[conversationID]?.removeAll { $0.clientMessageID == id }
-                    if failure == .protectionUnavailable || failure == .deviceLimitReached { sendBlock = failure }
+                    // Une offre sans messagerie (#455) refuse tout envoi : le message est conservé, le refus se dit une fois.
+                    if failure == .protectionUnavailable || failure == .deviceLimitReached || failure == .moduleNotEntitled { sendBlock = failure }
                 }
             }
             if case .accepted? = sendStates[id] { continue }

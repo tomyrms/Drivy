@@ -79,6 +79,9 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
     case mutationReceiptUnavailable
     /// Signalement : aucun administrateur de l'école n'a d'appareil joignable, ou la cadence autorisée est atteinte (#77).
     case noReportRecipient, reportRateLimited
+    /// L'offre de l'école n'inclut plus la messagerie (#455) : un usage nouveau est refusé (`403 MODULE_NOT_ENTITLED`),
+    /// l'historique reste lisible et le message en attente reste conservé sur l'appareil.
+    case moduleNotEntitled
     var errorDescription: String? {
         switch self {
         case .protectionUnavailable: "La protection des messages est indisponible. Aucun envoi en clair n'a été effectué."
@@ -94,6 +97,7 @@ enum MessagingFailure: Error, LocalizedError, Sendable, Equatable {
         case .mutationReceiptUnavailable: "Le service doit être mis à jour pour confirmer ces modifications. Tes choix restent conservés."
         case .noReportRecipient: "Aucun administrateur de l'école n'est joignable pour recevoir ce signalement. Rien n'a été envoyé."
         case .reportRateLimited: "Trop de signalements envoyés récemment. Réessaie plus tard : le tien reste conservé sur cet appareil."
+        case .moduleNotEntitled: "La messagerie n'est pas incluse dans l'offre de cette école. Tes conversations restent lisibles."
         }
     }
 }

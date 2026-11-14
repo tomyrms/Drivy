@@ -176,6 +176,13 @@ import Testing
         #expect(SchoolCourseClient.failure(412, "VERSION_CONFLICT") == .conflict)
     }
 
+    /// Offre de l’école sans cours collectifs (#455) : un refus nommé, pas un accès retiré ; un autre 403 garde son sens.
+    @Test func aCommercialRefusalIsNamedAndOtherForbiddenAnswersKeepTheirMeaning() {
+        #expect(SchoolCourseClient.failure(403, "MODULE_NOT_ENTITLED") == .rejected("Les cours collectifs ne sont pas inclus dans l’offre de cette école."))
+        #expect(SchoolCourseClient.failure(403, "COURSE_ACCESS_REQUIRED") == .rejected("Tu n’as pas le droit de gérer les cours de cette école."))
+        #expect(SchoolCourseClient.failure(403, "OTHER_FORBIDDEN") == SchoolPlanningClient.failure(403, "OTHER_FORBIDDEN"))
+    }
+
     @Test func teachingLanguageIsShownOnlyWhenTheSchoolSetIt() {
         #expect(SchoolCourseLanguage.phrase(for: nil) == nil)
         #expect(SchoolCourseLanguage.phrase(for: "  ") == nil)

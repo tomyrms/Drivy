@@ -543,3 +543,14 @@ final class DrivyAPIClient: SchoolAPI {
         #endif
     }
 }
+
+/// Droits de l’école aux modules (R01-T03, #455). Dans une extension du même fichier pour réutiliser `read`, sans
+/// étendre `SchoolAPI` : ses doublures de test n’ont pas à connaître cette lecture.
+extension DrivyAPIClient: SchoolEntitlementsReading {
+    /// Une lecture, jamais une autorisation. Une API plus ancienne répond 404 (`notFound`) : l’appelant n’en déduit rien.
+    func entitlements(schoolID: UUID) async throws -> SchoolEntitlements {
+        let result: SchoolEntitlements = try await read(["v1", "schools", schoolID.uuidString, "entitlements"])
+        guard result.isWellFormed else { throw SchoolAPIError.invalidResponse }
+        return result
+    }
+}
