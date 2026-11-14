@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import {
-  actionLabel, clientTitle, codeStateLabel, ficheChanges, ficheDraftOf, ficheProblem, formatPlatformCode, invitationStatusLabel, isInviteeEmail, isPlatformCode,
-  journalDetail, levelLabel, linkSourceLabel, notGrantedLabel, platformClientDetailResult, platformClientsResult, platformFailure, platformFailureKind,
-  platformInvitationsResult, platformIssuedCodeResult, platformIssuedResult, platformJournalResult, platformMeResult, platformOperatorsResult,
-  platformPendingCodeResult, platformPreviewResult, platformRoutes, platformUnattachedResult, preparationLabel, reasonLabel, rightLabel, schoolStatusLabel, setupProgress,
+  actionLabel, adjustmentEffectLabel, adjustmentPhaseLabel, assignmentPhaseLabel, clientTitle, codeStateLabel, commercialStateLabel, consequenceLabel, effectiveInstant,
+  existingUsageLabel, ficheChanges, ficheDraftOf, ficheProblem, formatPlatformCode, invitationStatusLabel, isInviteeEmail, isPlatformCode,
+  journalDetail, levelLabel, linkSourceLabel, moduleLabel, modulesLabel, notGrantedLabel, offerProblem, offerStatusLabel, orderedModules,
+  platformAssignmentPreviewResult, platformClientDetailResult, platformClientsResult, platformEntitlementsResult, platformFailure, platformFailureKind,
+  platformInvitationsResult, platformIssuedCodeResult, platformIssuedResult, platformJournalResult, platformMeResult, platformModulesResult, platformOffersResult,
+  platformOperatorsResult, platformPendingCodeResult, platformPreviewResult, platformRoutes, platformUnattachedResult, preparationLabel, reasonLabel, reasonProblem,
+  rightLabel, sameModules, schoolStatusLabel, setupProgress,
   type PlatformClient, type PlatformClientDetail, type PlatformJournalEntry,
 } from '../client/platform-model';
 import { RequestFailure } from '../client/protocol';
@@ -12,6 +15,8 @@ import { PlatformConsolePage } from '../client/portal/platform/platform-page';
 import { Accepted, PlatformJoinPage, Review } from '../client/portal/platform/platform-join-page';
 import type { PlatformJoinState } from '../client/portal/platform/use-platform-join';
 import { ClientsSection } from '../client/portal/platform/clients-section';
+import { OffersSection } from '../client/portal/platform/offers-section';
+import { RightsPanel } from '../client/portal/platform/rights-section';
 import type { PlatformConsoleState } from '../client/portal/platform/use-platform-console';
 
 const id = '5b5f0b2e-7f55-4c52-9c43-3a2a6c0d8e11';
@@ -174,7 +179,7 @@ const facts = { name: 'Auto-école du Léman', status: 'DRAFT', contactEmail: 'e
   setup: { step: 'STEP_4', stepsDone: 3, stepsTotal: 6, completedAt: null, savedAt: when } };
 const client: PlatformClient = {
   id, displayName: 'Auto-école du Léman', preparation: 'IN_PREPARATION', schoolId: id, school: facts as PlatformClient['school'], contactName: 'Sophie Rochat', contactEmail: 'sophie@example.test',
-  latestCode: { id, state: 'USED', expiresAt: when, createdAt: when }, commercial: { state: 'NOT_CONFIGURED', offer: null, dueDates: [] }, version: 2, createdAt: when, updatedAt: when,
+  latestCode: { id, state: 'USED', expiresAt: when, createdAt: when }, commercial: { state: 'NOT_CONFIGURED', offer: null, scheduledOffer: null, entitlementVersion: 1, dueDates: [] }, version: 2, createdAt: when, updatedAt: when,
 };
 const detail: PlatformClientDetail = {
   ...client, contactPhone: null, billing: { street: 'Rue du Lac 12', postalCode: '1800', city: 'Vevey', country: null }, internalNotes: 'Reprise de l’ancien site.',
@@ -184,13 +189,24 @@ const detail: PlatformClientDetail = {
 };
 
 describe('écoles clientes : contrats du relais', () => {
-  it('accepte l’annuaire paginé et la fiche, avec l’offre et les échéances seulement réservées', () => {
+  it('accepte l’annuaire paginé et la fiche, avec l’offre en vigueur, l’offre programmée et les échéances seulement réservées', () => {
     expect(platformClientsResult.safeParse({ data: { items: [client], total: 140, nextCursor: 'abc' } }).success).toBe(true);
     expect(platformClientsResult.safeParse({ data: { items: [], total: 0, nextCursor: null } }).success).toBe(true);
     expect(platformClientDetailResult.safeParse({ data: detail }).success).toBe(true);
-    // Un lot suivant renseignera l'offre et les échéances : l'écran les tolère sans les interpréter.
-    const later = { ...client, commercial: { state: 'CONFIGURED', offer: { code: 'FUTURE' }, dueDates: [{ on: when }] } };
+    const brief = { offerId: id, name: 'Offre complète', effectiveAt: when, modules: ['MESSAGING', 'COLLECTIVE_COURSES'] };
+    const inForce = { ...client, commercial: { state: 'OFFER_ACTIVE', offer: brief, scheduledOffer: { ...brief, name: 'Offre à venir' }, entitlementVersion: 3, dueDates: [] } };
+    expect(platformClientsResult.safeParse({ data: { items: [inForce], total: 1, nextCursor: null } }).success).toBe(true);
+    // Les échéances restent un emplacement réservé : l'écran les tolère sans les interpréter (conditions commerciales, #456).
+    const later = { ...client, commercial: { ...client.commercial, dueDates: [{ on: when }] } };
     expect(platformClientsResult.safeParse({ data: { items: [later], total: 1, nextCursor: null } }).success).toBe(true);
+  });
+
+  it('refuse un emplacement commercial incomplet ou à la forme inattendue', () => {
+    const without = (key: string) => { const copy: Record<string, unknown> = { ...client.commercial }; delete copy[key]; return copy; };
+    for (const key of ['offer', 'scheduledOffer', 'entitlementVersion', 'dueDates'])
+      expect(platformClientsResult.safeParse({ data: { items: [{ ...client, commercial: without(key) }], total: 1, nextCursor: null } }).success, key).toBe(false);
+    expect(platformClientsResult.safeParse({ data: { items: [{ ...client, commercial: { ...client.commercial, entitlementVersion: 0 } }], total: 1, nextCursor: null } }).success).toBe(false);
+    expect(platformClientsResult.safeParse({ data: { items: [{ ...client, commercial: { ...client.commercial, offer: { code: 'FUTURE' } } }], total: 1, nextCursor: null } }).success).toBe(false);
   });
 
   it('refuse une réponse qui sort du contrat plutôt que de l’afficher', () => {
@@ -365,5 +381,191 @@ describe('liens de la console et de l’acceptation', () => {
     expect(anchor).toContain(`href="${platformRoutes.console}"`);
     expect(anchor).toContain('ui-button-outline');
     expect(anchor).not.toContain('role=');
+  });
+});
+
+// --- Offres et droits aux modules (R01-T03) : synthétiques, aucun montant ni état commercial détaillé (#456) ---
+const moduleCodes = ['MESSAGING', 'COLLECTIVE_COURSES'];
+const catalogue = [{ code: 'COLLECTIVE_COURSES', sortOrder: 2 }, { code: 'MESSAGING', sortOrder: 1 }];
+const offerBrief = { offerId: id, name: 'Offre complète', effectiveAt: when, modules: moduleCodes };
+const offer = { id, name: 'Offre complète', modules: moduleCodes, status: 'ACTIVE', version: 1, createdAt: when, updatedAt: when, archivedAt: null, schoolsInForce: 2 };
+const revoked = { id, effect: 'REVOKE', reason: 'Demande de l’école', createdAt: when, createdByName: 'Camille Aubry' };
+const entitlements = {
+  state: 'OFFER_ACTIVE', offer: offerBrief, scheduledOffer: null,
+  modules: [{ code: 'MESSAGING', inOffer: true, entitled: true, adjustment: null }, { code: 'COLLECTIVE_COURSES', inOffer: true, entitled: false, adjustment: revoked }],
+  assignments: [{ id, offerId: id, offerName: 'Offre complète', modules: moduleCodes, effectiveAt: when, phase: 'IN_FORCE', createdAt: when, createdByName: 'Camille Aubry', cancelledAt: null }],
+  adjustments: [{ id, moduleCode: 'COLLECTIVE_COURSES', effect: 'REVOKE', reason: 'Demande de l’école', createdAt: when, createdByName: 'Camille Aubry', phase: 'ACTIVE',
+    liftedAt: null, liftedByName: null, liftReason: null }],
+  version: 3, nextChangeAt: null,
+};
+const preview = {
+  offer: { id, name: 'Messagerie seule', modules: ['MESSAGING'] }, effectiveAt: null, immediate: true, replacesScheduled: null, endingAdjustments: [],
+  modules: [{ code: 'MESSAGING', before: true, after: true, kind: 'KEEPS', existing: null },
+    { code: 'COLLECTIVE_COURSES', before: true, after: false, kind: 'LOSES', existing: { publishedSeries: 2, activeEnrollments: 1, upcomingSessions: 0 } }],
+  version: 3,
+};
+
+describe('offres et droits : contrats du relais', () => {
+  it('accepte le catalogue de modules, les offres et les droits d’une école', () => {
+    expect(platformModulesResult.safeParse({ data: { items: catalogue } }).success).toBe(true);
+    expect(platformOffersResult.safeParse({ data: { items: [offer, { ...offer, status: 'ARCHIVED', archivedAt: when, schoolsInForce: 0 }] } }).success).toBe(true);
+    expect(platformEntitlementsResult.safeParse({ data: entitlements }).success).toBe(true);
+    expect(platformEntitlementsResult.safeParse({ data: { ...entitlements, state: 'NOT_CONFIGURED', offer: null, assignments: [], adjustments: [],
+      modules: entitlements.modules.map(item => ({ ...item, entitled: true, adjustment: null })) } }).success).toBe(true);
+  });
+
+  it('refuse ce qui sort du contrat : statut, phase, version, nombre négatif, module hors jeton', () => {
+    expect(platformModulesResult.safeParse({ data: { items: [{ code: 'MESSAGING', sortOrder: 0 }] } }).success).toBe(false);
+    expect(platformModulesResult.safeParse({ data: { items: [{ code: 'messagerie', sortOrder: 1 }] } }).success).toBe(false);
+    expect(platformOffersResult.safeParse({ data: { items: [{ ...offer, status: 'DELETED' }] } }).success).toBe(false);
+    expect(platformOffersResult.safeParse({ data: { items: [{ ...offer, schoolsInForce: -1 }] } }).success).toBe(false);
+    expect(platformOffersResult.safeParse({ data: { items: [{ ...offer, version: 0 }] } }).success).toBe(false);
+    expect(platformEntitlementsResult.safeParse({ data: { ...entitlements, version: 0 } }).success).toBe(false);
+    expect(platformEntitlementsResult.safeParse({ data: { ...entitlements, assignments: [{ ...entitlements.assignments[0], phase: 'DELETED' }] } }).success).toBe(false);
+    expect(platformEntitlementsResult.safeParse({ data: { ...entitlements, adjustments: [{ ...entitlements.adjustments[0], effect: 'DELETE' }] } }).success).toBe(false);
+    expect(platformEntitlementsResult.safeParse({ data: { ...entitlements, offer: { ...offerBrief, offerId: 'pas-un-identifiant' } } }).success).toBe(false);
+  });
+
+  it('l’aperçu des conséquences ne porte que des volumes, jamais un contenu', () => {
+    expect(platformAssignmentPreviewResult.safeParse({ data: preview }).success).toBe(true);
+    expect(platformAssignmentPreviewResult.safeParse({ data: { ...preview, version: 0 } }).success).toBe(false);
+    expect(platformAssignmentPreviewResult.safeParse({ data: { ...preview, modules: [{ ...preview.modules[0], kind: 'DELETES' }] } }).success).toBe(false);
+    expect(platformAssignmentPreviewResult.safeParse({ data: { ...preview, modules: [{ ...preview.modules[1], existing: { publishedSeries: 'beaucoup' } }] } }).success).toBe(false);
+    expect(platformAssignmentPreviewResult.safeParse({ data: { ...preview, modules: [{ ...preview.modules[1], existing: { publishedSeries: -1 } }] } }).success).toBe(false);
+  });
+});
+
+describe('offres et droits : saisie et libellés', () => {
+  it('nomme les modules, les états et les phases en français', () => {
+    expect(moduleLabel('MESSAGING')).toBe('Messagerie');
+    expect(moduleLabel('COLLECTIVE_COURSES')).toBe('Cours collectifs');
+    expect(moduleLabel('QUELQUE_CHOSE_DE_NOUVEAU')).toBe('Module');
+    expect(modulesLabel(moduleCodes)).toBe('Messagerie, Cours collectifs');
+    expect(modulesLabel([])).toBe('Aucun module');
+    expect(commercialStateLabel('NOT_CONFIGURED')).toBe('Non configurée');
+    expect(commercialStateLabel('OFFER_ACTIVE')).toBe('Offre en vigueur');
+    expect(commercialStateLabel('ETAT_FUTUR')).toBe('État commercial');
+    expect(offerStatusLabel('ARCHIVED')).toBe('Archivée');
+    expect(consequenceLabel('LOSES')).toBe('Retiré');
+    expect(adjustmentEffectLabel('GRANT')).toBe('Accordé en plus');
+    expect(assignmentPhaseLabel('SCHEDULED')).toBe('Prévue');
+    expect(adjustmentPhaseLabel('LIFTED')).toBe('Levé');
+  });
+
+  it('couvre les droits, les actions et les motifs des offres au journal', () => {
+    expect(rightLabel('MANAGE_OFFERS')).not.toBe('Droit commercial');
+    for (const action of ['CREATE_OFFER', 'UPDATE_OFFER', 'ARCHIVE_OFFER', 'RESTORE_OFFER', 'ASSIGN_OFFER', 'CANCEL_OFFER_ASSIGNMENT', 'ADJUST_SCHOOL_MODULE', 'LIFT_MODULE_ADJUSTMENT'])
+      expect(actionLabel(action), action).not.toBe('Action enregistrée');
+    for (const reason of ['OFFER_ARCHIVED', 'MODULE_NOT_ENTITLED']) expect(reasonLabel(reason), reason).not.toBeNull();
+  });
+
+  it('explique chaque refus métier des offres en français, sans afficher de code technique', () => {
+    for (const code of ['OFFER_ARCHIVED', 'OFFER_NOT_ARCHIVED', 'EFFECTIVE_DATE_PAST', 'ASSIGNMENT_NOT_PENDING', 'ADJUSTMENT_REQUIRES_OFFER', 'ADJUSTMENT_ACTIVE',
+      'ADJUSTMENT_NO_EFFECT', 'ADJUSTMENT_NOT_ACTIVE', 'MODULE_UNKNOWN']) {
+      const message = platformFailure(new RequestFailure(code, 409));
+      expect(message, code).toMatch(/[.]$/);
+      expect(message, code).not.toContain(code);
+    }
+    expect(platformFailureKind(new RequestFailure('VERSION_CONFLICT', 412))).toBe('conflict');
+    expect(platformFailureKind(new RequestFailure('OFFER_ARCHIVED', 409))).toBe('refused');
+  });
+
+  it('refuse une offre sans nom, trop longue ou avec un module en double', () => {
+    expect(offerProblem('', moduleCodes)).not.toBeNull();
+    expect(offerProblem('   ', moduleCodes)).not.toBeNull();
+    expect(offerProblem('x'.repeat(101), moduleCodes)).not.toBeNull();
+    expect(offerProblem('Offre', ['MESSAGING', 'MESSAGING'])).not.toBeNull();
+    expect(offerProblem('x'.repeat(100), moduleCodes)).toBeNull();
+    expect(offerProblem('  Offre complète  ', moduleCodes)).toBeNull();
+  });
+
+  it('exige un motif lisible pour ajuster un module, avec les mêmes bornes que l’API', () => {
+    expect(reasonProblem('')).not.toBeNull();
+    expect(reasonProblem('  ab  ')).not.toBeNull();
+    expect(reasonProblem('abc')).toBeNull();
+    expect(reasonProblem('x'.repeat(500))).toBeNull();
+    expect(reasonProblem('x'.repeat(501))).not.toBeNull();
+  });
+
+  it('ne transmet une date d’effet que si elle est à venir et lisible, sinon l’attribution est immédiate ou à corriger', () => {
+    const now = new Date('2026-11-14T10:00:00.000Z');
+    expect(effectiveInstant('', now)).toBeNull();
+    expect(effectiveInstant('   ', now)).toBeNull();
+    expect(effectiveInstant('pas une date', now)).toBeUndefined();
+    expect(effectiveInstant('2026-11-01T10:00', now)).toBeUndefined();
+    const future = effectiveInstant('2026-12-01T10:00', now);
+    expect(future).toBe(new Date('2026-12-01T10:00').toISOString());
+    expect(future).toMatch(/Z$/);
+  });
+
+  it('range les modules d’une offre dans l’ordre du catalogue, sans doublon ni module inconnu', () => {
+    expect(orderedModules(['COLLECTIVE_COURSES', 'MESSAGING', 'MESSAGING', 'INCONNU'], catalogue)).toEqual(['MESSAGING', 'COLLECTIVE_COURSES']);
+    expect(orderedModules([], catalogue)).toEqual([]);
+    expect(sameModules(['MESSAGING', 'COLLECTIVE_COURSES'], ['COLLECTIVE_COURSES', 'MESSAGING'])).toBe(true);
+    expect(sameModules(['MESSAGING'], ['MESSAGING', 'COLLECTIVE_COURSES'])).toBe(false);
+    expect(sameModules(['MESSAGING'], ['COLLECTIVE_COURSES'])).toBe(false);
+  });
+
+  it('résume ce qu’un retrait laisse en place, en volumes seulement', () => {
+    expect(existingUsageLabel(null)).toBe('');
+    expect(existingUsageLabel({ conversations: 0 })).toBe('');
+    expect(existingUsageLabel({ inconnu: 5 })).toBe('');
+    expect(existingUsageLabel({ conversations: 1 })).toBe('1 conversation');
+    expect(existingUsageLabel({ conversations: 3, publishedSeries: 2 })).toBe('3 conversations · 2 séries publiées');
+    expect(existingUsageLabel({ publishedSeries: 1, activeEnrollments: 1, upcomingSessions: 4 })).toBe('1 série publiée · 1 inscription active · 4 séances à venir');
+  });
+});
+
+describe('offres et droits : affichage', () => {
+  const offersState = (items: unknown[]) => ({ busy: false, error: null, offers: { offers: items, modules: catalogue, editor: null, startOffer: () => {}, stopOffer: () => {},
+    archiveOffer: async () => {}, restoreOffer: async () => {}, saveOffer: async () => {} } }) as unknown as PlatformConsoleState;
+  const rightsState = (data: unknown) => ({ busy: false, error: null, rights: { rights: data, dialog: null, preview: null, stop: () => {}, startAssign: () => {}, startAdjust: () => {},
+    startLift: () => {}, startCancel: () => {} } }) as unknown as PlatformConsoleState;
+
+  it('les offres actives sont listées avec leurs modules, et seulement ce qui est possible : modifier ou archiver', () => {
+    const html = renderToStaticMarkup(<OffersSection state={offersState([offer, { ...offer, id: '6c6f1c3f-8a66-4d63-8d54-4b3b7d1e9f22', name: 'Ancienne offre', status: 'ARCHIVED', archivedAt: when, schoolsInForce: 0 }])} />);
+    for (const expected of ['Créer une offre', 'Offre complète', 'Messagerie, Cours collectifs', '2 écoles', 'Modifier', 'Archiver', 'Actives', 'Archivées'])
+      expect(html).toContain(expected);
+    expect(html).not.toContain('Ancienne offre');
+    expect(html).not.toContain('Rétablir');
+    expect(html).not.toMatch(/CHF|€|prix|tarif|essai|échéance/i);
+  });
+
+  it('sans offre active, l’écran le dit simplement', () => {
+    expect(renderToStaticMarkup(<OffersSection state={offersState([])} />)).toContain('Aucune offre active');
+  });
+
+  it('la fiche montre l’offre en vigueur, chaque module avec son ajustement, et propose de lever ou de retirer', () => {
+    const html = renderToStaticMarkup(<RightsPanel state={rightsState(entitlements)} client={detail} />);
+    for (const expected of ['Offre et modules', 'Attribuer une offre', 'Offre complète', 'Messagerie', 'Cours collectifs', 'Accordé', 'Non accordé', 'Retiré', 'Demande de l’école', 'Lever', 'Retirer', 'Historique'])
+      expect(html).toContain(expected);
+    // Aucun contenu pédagogique, aucun montant : l'écran ne montre que des droits.
+    expect(html).not.toMatch(/élève|trajet|message[^r]|dossier|CHF|€|prix|tarif|essai/i);
+  });
+
+  it('une école sans offre garde tous les modules et ne propose aucun ajustement', () => {
+    const open = { ...entitlements, state: 'NOT_CONFIGURED', offer: null, assignments: [], adjustments: [], modules: entitlements.modules.map(item => ({ ...item, entitled: true, adjustment: null })) };
+    const html = renderToStaticMarkup(<RightsPanel state={rightsState(open)} client={detail} />);
+    expect(html).toContain('Non configurée');
+    expect(html).toContain('Attribuer une offre');
+    expect(html).not.toContain('Retirer');
+    expect(html).not.toContain('Accorder');
+    expect(html).not.toContain('Lever');
+    expect(html).not.toContain('Historique');
+  });
+
+  it('une offre programmée se voit et s’annule, sans remplacer l’offre en vigueur', () => {
+    const scheduledOffer = { ...offerBrief, name: 'Offre à venir', effectiveAt: '2027-01-15T08:00:00.000Z' };
+    const withSchedule = { ...entitlements, scheduledOffer, assignments: [{ ...entitlements.assignments[0], id: '6c6f1c3f-8a66-4d63-8d54-4b3b7d1e9f22', offerName: 'Offre à venir',
+      effectiveAt: scheduledOffer.effectiveAt, phase: 'SCHEDULED' }, ...entitlements.assignments] };
+    const html = renderToStaticMarkup(<RightsPanel state={rightsState(withSchedule)} client={detail} />);
+    expect(html).toContain('Offre programmée');
+    expect(html).toContain('Offre à venir');
+    expect(html).toContain('Annuler l’attribution prévue de Offre à venir');
+    expect(html).toContain('Offre complète');
+  });
+
+  it('tant que les droits ne sont pas lus, la fiche n’invente rien', () => {
+    expect(renderToStaticMarkup(<RightsPanel state={rightsState(null)} client={detail} />)).toBe('');
   });
 });

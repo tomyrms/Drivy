@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CourseSeries, SeriesForm, SessionForm } from '../../console/course-model';
-import { coursesManageable } from './course-catalogue';
+import { moduleEntitled } from '../../school-api';
+import { COLLECTIVE_COURSES_MODULE, coursesManageable } from './course-catalogue';
 import { changedSessions, civilDayLabel, formSignature, isSessionRefusal, languageLabel, seriesStateLabel, seriesSummary, sessionMinutes } from './course-presentation';
 
 const session = (key: string, patch: Partial<SessionForm> = {}): SessionForm => ({ key, date: '2026-11-04', start: '18:00', end: '20:00', instructor: 'marie', attendanceRequired: true, ...patch });
@@ -56,5 +57,17 @@ describe('collective course presentation', () => {
     expect(coursesManageable(false, { canManage: true })).toBe(false);
     expect(coursesManageable(true, { canManage: false })).toBe(false);
     expect(coursesManageable(true, undefined)).toBe(false);
+  });
+
+  it('offers courses only where the commercial rights grant the module; an unread right hides nothing, the server stays the guard', () => {
+    expect(coursesManageable(true, { canManage: true }, true)).toBe(true);
+    expect(coursesManageable(true, { canManage: true }, false)).toBe(false);
+    expect(coursesManageable(false, { canManage: true }, true)).toBe(false);
+    expect(coursesManageable(true, { canManage: false }, true)).toBe(false);
+    // `moduleEntitled` renvoie vrai tant que les droits ne sont pas lus : l'écran n'est jamais l'autorité.
+    expect(moduleEntitled(undefined, COLLECTIVE_COURSES_MODULE)).toBe(true);
+    expect(moduleEntitled({ modules: [{ code: 'COLLECTIVE_COURSES', entitled: true }] }, COLLECTIVE_COURSES_MODULE)).toBe(true);
+    expect(moduleEntitled({ modules: [{ code: 'COLLECTIVE_COURSES', entitled: false }] }, COLLECTIVE_COURSES_MODULE)).toBe(false);
+    expect(moduleEntitled({ modules: [{ code: 'MESSAGING', entitled: true }] }, COLLECTIVE_COURSES_MODULE)).toBe(false);
   });
 });

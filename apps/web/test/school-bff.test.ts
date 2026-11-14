@@ -144,6 +144,15 @@ describe('Liste blanche des routes de gestion', () => {
       expect(match?.route.bodyLimit, `${method} ${path}`).toBe(limit);
     }
     expect(matchSchoolRoute('GET', `/schools/${school}/course-catalogue`, '')?.path).toBe(`/v1/schools/${school}/course-catalogue`);
+    // Droits aux modules (R01-T03) : une lecture sans paramètre ; l'école ne modifie jamais ses propres droits, le relais ne porte aucune écriture.
+    expect(matchSchoolRoute('GET', `/schools/${school}/entitlements`, '')?.path).toBe(`/v1/schools/${school}/entitlements`);
+    expect(matchSchoolRoute('GET', `/schools/${school}/entitlements`, '?module=MESSAGING')).toBeUndefined();
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) expect(matchSchoolRoute(method, `/schools/${school}/entitlements`, ''), method).toBeUndefined();
+    for (const method of ['POST', 'PUT', 'PATCH']) {
+      expect(matchSchoolRoute(method, `/schools/${school}/offers`, ''), method).toBeUndefined();
+      expect(matchSchoolRoute(method, `/schools/${school}/entitlements/adjustments`, ''), method).toBeUndefined();
+      expect(matchSchoolRoute(method, `/schools/${school}/assignments`, ''), method).toBeUndefined();
+    }
     expect(matchSchoolRoute('GET', `/schools/${school}/course-series`, '?from=2026-09-28T00:00:00Z&to=2026-10-05T00:00:00Z&status=DRAFT')).toBeDefined();
     expect(matchSchoolRoute('GET', `/schools/${school}/course-series`, '?status=OPEN')).toBeUndefined();
     expect(matchSchoolRoute('DELETE', `/schools/${school}/course-series/${series}`, '')).toBeUndefined();

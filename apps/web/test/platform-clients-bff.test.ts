@@ -18,7 +18,7 @@ const key = randomUUID();
 
 const setup = { step: 'IDENTITY', stepsDone: 2, stepsTotal: 6, completedAt: null, savedAt: null };
 const facts = (extra: Record<string, unknown> = {}) => ({ name: 'École synthétique', status: 'DRAFT', contactEmail: 'contact@example.invalid', contactPhone: null, setup, ...extra });
-const commercial = { state: 'NOT_CONFIGURED', offer: null, dueDates: [] };
+const commercial = { state: 'NOT_CONFIGURED', offer: null, scheduledOffer: null, entitlementVersion: 1, dueDates: [] };
 const summary = (extra: Record<string, unknown> = {}) => ({ id: randomUUID(), displayName: 'Auto-école synthétique', preparation: 'AWAITING_SCHOOL', schoolId: null, school: null,
   contactName: null, contactEmail: null, latestCode: null, commercial, version: 1, createdAt: iso(), updatedAt: iso(), ...extra });
 const detail = (extra: Record<string, unknown> = {}) => ({ ...summary(), contactPhone: null, billing: { street: null, postalCode: null, city: null, country: null },
