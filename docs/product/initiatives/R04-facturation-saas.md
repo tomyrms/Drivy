@@ -4,13 +4,21 @@
 
 | Maturité | Horizon | Décision de développement |
 | --- | --- | --- |
-| Idée | À définir | Non prise |
+| Cadré | Volet V1 dans R01 | [Epic #452](https://github.com/tomyrms/Drivy/issues/452) |
+
+## Volet retenu le 11 novembre 2026
+
+Le porteur a choisi une première version avec **confirmation manuelle des règlements**, intégrée à [l’epic R01 #452](https://github.com/tomyrms/Drivy/issues/452) : montant initial unique puis abonnement mensuel par école, tarifs/remises particuliers, essais configurables, factures PDF avec QR suisse et consultation des documents par l’école.
+
+L’école peut demander un changement ou une résiliation. L’opérateur confirme la résiliation et sa date d’effet. Relances et alertes précèdent une suspension configurable ; l’epic propose deux mois calendaires depuis l’échéance du plus ancien solde impayé. Les prix, l’émetteur, la fiscalité, le compte bancaire et les délais se configurent à la mise en service.
+
+Les lots [#456](https://github.com/tomyrms/Drivy/issues/456) à [#461](https://github.com/tomyrms/Drivy/issues/461) portent ce volet. L’encaissement automatique et les formules annuelles restent des extensions à cadrer ; les tableaux de réflexion ci-dessous ne rouvrent pas les choix déjà retenus. Les tickets n’émettent aucune facture ou prélèvement réel.
 
 ## L'idée
 
 Gérer ce que les auto-écoles paient à Drivy : offre souscrite, abonnement, factures, règlements, renouvellement et changement de plan. Le panneau administrateur pourrait s'appuyer sur ces informations pour suivre les comptes clients.
 
-**Ce chantier est distinct des paiements que les élèves versent à leur auto-école.** La gestion financière des cours, packs et régularisations reste le sujet existant [#45](https://github.com/tomyrms/Drivy/issues/45), sans être lancée par cette initiative.
+**Ce chantier est distinct des paiements que les élèves versent à leur auto-école.** La gestion financière des cours, packs et régularisations reste [R10](R10-gestion-financiere-cours-lecons.md), issue de l’ancienne #45, sans être lancée par cette initiative.
 
 ## Périmètre à examiner
 
@@ -18,7 +26,7 @@ Abonnements mensuels ou annuels, essai éventuel, factures et avoirs, renouvelle
 
 Le suivi doit distinguer une facture émise, un paiement en attente et un règlement réellement confirmé. Un retour de page de paiement ne suffit pas comme preuve d'encaissement.
 
-## Décisions ouvertes
+## Paramètres et extensions à préciser
 
 | Sujet | À définir |
 | --- | --- |
@@ -30,7 +38,7 @@ Le suivi doit distinguer une facture émise, un paiement en attente et un règle
 | Incidents | Relance, délai de grâce, litige et conséquences d'un impayé. |
 | Essai | Durée, accompagnement, passage vers une offre payante et fin d'essai. |
 
-Aucune valeur chiffrée ni aucun prestataire ne sont sélectionnés à ce stade.
+Aucun tarif chiffré ni prestataire d’encaissement n’est sélectionné. Pour le volet de #452, les règlements sont saisis manuellement ; les options de paiement automatisé restent différées.
 
 ## Points de vigilance
 

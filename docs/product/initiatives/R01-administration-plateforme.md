@@ -2,42 +2,46 @@
 
 [← Roadmap produit](../ROADMAP.md)
 
-| Maturité | Horizon | Décision de développement |
+| Maturité | Horizon | Suivi |
 | --- | --- | --- |
-| Idée | À définir | Non prise |
+| Cadré | À planifier | [Epic #452](https://github.com/tomyrms/Drivy/issues/452) et 11 sous-tâches ouvertes |
 
-## L'idée
+## Décision du 11 novembre 2026
 
-Un espace privé pour l'exploitant de Drivy, distinct du portail utilisé par les auto-écoles. L'objectif est de gérer les établissements clients et leur relation avec Drivy sans devoir intervenir manuellement dans la base de données.
+Le porteur a précisé son besoin et autorisé la création de l’epic et de ses sous-tâches. Le suivi est désormais [#452](https://github.com/tomyrms/Drivy/issues/452). Le cadrage couvre R01 et les parties de [R03](R03-modules-et-offres.md) et [R04](R04-facturation-saas.md) nécessaires à une gestion commerciale utilisable.
 
-## Ce que cet espace pourrait permettre
+## Périmètre retenu
 
-- Retrouver les auto-écoles clientes et leurs interlocuteurs autorisés.
-- Consulter leur offre, les modules disponibles et l'état de leur abonnement.
-- Savoir quelles factures Drivy sont réglées, en attente ou en incident de paiement.
-- Gérer les opérations nécessaires à une école pilote, active ou archivée.
-- Consulter des indicateurs utiles dont la finalité et la source auront été définies.
+- Deux opérateurs au démarrage, mêmes droits commerciaux complets, puis invitation/révocation d’autres opérateurs.
+- Génération et **copie d’un code** transmis manuellement, notamment par WhatsApp. Le responsable installe l’app, saisit ce code, s’authentifie et crée lui-même son école.
+- Réutilisation de l’ouverture et de la préparation existantes : création iPhone/iPad, continuité explicite et reprenable vers la préparation web.
+- Portefeuille d’écoles, fiches clientes, contacts/responsables, suivi de préparation et historique commercial.
+- Offres/modules attribués par école, avec droits contrôlés côté serveur et cohérents entre clients.
+- Montant initial unique puis abonnement mensuel ; tarifs particuliers et remises par école.
+- Essais de durée configurable, prolongeables ou terminables par l’opérateur.
+- Factures PDF avec QR suisse, envoi et consultation par l’école ; confirmation **manuelle** des règlements, paiements partiels et corrections traçables.
+- Espace école : offre, modules, échéances, documents et demandes de changement/résiliation. La résiliation requiert une confirmation opérateur et une date d’effet visible.
+- Alertes, relances et suspension pour impayé selon une règle configurable, puis reprise après régularisation.
+- Tableau de bord et actions à traiter : facturé, encaissé, dû et revenu mensuel contractuel distincts.
 
-Ce sont des pistes de cadrage, pas une liste de fonctionnalités promises.
+## Paramètres et précisions
 
-## Les distinctions à conserver
+Portail prévu en français, responsive et en CHF. Montants, durées d’essai, remises, échéances, rappels et coordonnées de facturation restent configurables ; aucun tarif réel ni IBAN n’est fixé dans ces documents.
 
-**Administrer un client n'est pas consulter ses élèves.** L'accès aux dossiers, aux trajets, aux notes ou aux messages ne découle pas du droit de gérer un abonnement. L'assistance dans le contexte d'une école est un chantier distinct : [R02](R02-assistance-autorisee.md).
+L’epic propose deux mois calendaires depuis l’échéance de la plus ancienne somme encore due avant suspension, avec réglage et exceptions par école. Un essai expiré ne crée pas automatiquement un abonnement payant ou une dette. Les changements de conditions sont proposés à la prochaine période mensuelle, sans prorata automatique ; les exceptions sont explicites.
 
-**Le revenu de Drivy n'est pas le chiffre d'affaires des auto-écoles.** Le panneau peut être conçu autour de ce que les écoles paient à Drivy. Les revenus propres d'une école ne sont ni présumés disponibles ni autorisés à la consultation par cette idée.
+Les conditions et factures émises sont historisées. La facturation pendant suspension est un choix explicite avant activation des traitements. Les écoles pilotes existantes ne reçoivent aucune dette, facture rétroactive ou restriction par défaut.
 
-## Questions à trancher
+## Limites conservées
 
-Quels rôles auront les membres de l'équipe Drivy ? Quelles opérations seront possibles en lecture seule ? Lesquelles nécessiteront une confirmation renforcée ? Quelles métadonnées sont réellement nécessaires et comment tracer les actions de l'opérateur ? Comment traiter une fermeture d'école, un litige ou un compte pilote ?
+L’administration commerciale ne donne pas accès aux élèves, trajets, notes ou messages. L’assistance reste [R02](R02-assistance-autorisee.md). Les paiements des élèves restent [R10](R10-gestion-financiere-cours-lecons.md) ; ils ne constituent pas le revenu de Drivy.
 
-Le périmètre minimal avant facturation automatisée reste à définir. Les concepts d'école et d'opérateur déjà présents devront être examinés avant de créer une seconde administration.
+Désactivation, fin d’essai et suspension ne suppriment pas l’historique et préservent la finalisation sûre d’une leçon engagée. L’accès aux factures et au contact Drivy reste disponible selon une autorisation commerciale adaptée.
 
-## Relations avec les autres initiatives
+Le paiement automatique, le site vitrine et les extensions d’offres non retenues restent distincts.
 
-[R03 — Modules et offres](R03-modules-et-offres.md) définit ce qui est accessible commercialement. [R04 — Facturation SaaS](R04-facturation-saas.md) fournit les états de facturation. Un panneau minimal peut précéder leur version complète.
+## Suivi et preuve
 
-## Avant de créer une epic
+Les 11 lots, dépendances et critères de clôture sont dans [l’epic #452](https://github.com/tomyrms/Drivy/issues/452) ; ne pas dupliquer son index ici.
 
-Définir les opérations indispensables, les données visibles par rôle et leurs limites. Vérifier ensuite l'existant et les dépendances, puis faire valider le périmètre par le porteur.
-
-**Aucun accès supplémentaire, développement ou déploiement n'est autorisé par cette fiche.**
+L’existant a été examiné en lecture statique sur master ff79607a, avec contrôle des issues, PR et branches. Les tickets ne valent pas réalisation : aucun nouvel opérateur, facture, règlement, relance, suspension ou déploiement n’a été activé. L’avancement et les preuves seront consignés dans les issues, PR et [STATUS.md](../../implementation/STATUS.md).

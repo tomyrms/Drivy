@@ -4,7 +4,15 @@
 
 | Maturité | Horizon | Décision de développement |
 | --- | --- | --- |
-| Idée | À définir | Non prise |
+| Cadré | Volet V1 dans R01 | [Epic #452](https://github.com/tomyrms/Drivy/issues/452) |
+
+## Volet retenu le 11 novembre 2026
+
+Le porteur demande la gestion des modules par école dès la première version de son administration. Le suivi est intégré à [l’epic R01 #452](https://github.com/tomyrms/Drivy/issues/452), avec [#455](https://github.com/tomyrms/Drivy/issues/455) pour les offres/droits et [#456](https://github.com/tomyrms/Drivy/issues/456) pour les conditions personnalisées.
+
+Les droits seront contrôlés côté serveur et cohérents entre web et iOS. Messagerie et cours collectifs sont les premiers candidats de catalogue ; les attributions restent configurables et les acquis leçons/GPS sont préservés. Le modèle retenu est un montant initial unique puis une mensualité, avec remises par école. Les prix exacts et extensions de gamme restent à configurer ou préciser.
+
+Le texte de réflexion ci-dessous conserve le contexte des extensions ; ne pas créer une seconde epic pour le volet déjà suivi. Aucun module n’est déclaré livré ou désactivé par cette décision documentaire.
 
 ## L'idée
 
@@ -38,7 +46,7 @@ Il reste également à définir la granularité des modules, leur tarification �
 
 [R01](R01-administration-plateforme.md) administre les droits commerciaux ; [R04](R04-facturation-saas.md) gère les abonnements ; [R05](R05-site-vitrine.md) présente les offres une fois décidées.
 
-## Avant de créer une epic
+## Extensions à cadrer
 
 Définir le socle et les modules retenus, puis les transitions d'offre et le devenir des données. Vérifier leur faisabilité sur l'architecture du moment avant de découper l'implémentation iOS, web et serveur.
 
