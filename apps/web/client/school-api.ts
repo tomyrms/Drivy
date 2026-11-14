@@ -238,6 +238,20 @@ export async function readAll<T extends z.ZodTypeAny>(schoolId: string, path: st
   return { items, truncated: true };
 }
 
+/**
+ * Droits commerciaux de l'école aux modules (R01-T03) : l'état et les modules accordés, rien d'autre. C'est une indication d'affichage :
+ * le serveur relit le droit à chaque usage nouveau et refuse (403 MODULE_NOT_ENTITLED) même si cet écran était resté ouvert.
+ */
+export const schoolEntitlementsSchema = z.object({
+  state: z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/), version: z.number().int().min(1), nextChangeAt: timestamp.nullable(), computedAt: timestamp,
+  modules: z.array(z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/), entitled: z.boolean() })).max(20),
+});
+export type SchoolEntitlements = z.infer<typeof schoolEntitlementsSchema>;
+export const readSchoolEntitlements = (schoolId: string): Promise<SchoolEntitlements> => readSchool(schoolId, 'entitlements', schoolEntitlementsSchema);
+/** Un droit inconnu (pas encore lu, lecture impossible) ne masque rien : l'écran ne devient jamais l'autorité, le serveur reste le garde. */
+export const moduleEntitled = (entitlements: Pick<SchoolEntitlements, 'modules'> | undefined, code: string): boolean =>
+  entitlements === undefined || entitlements.modules.find(module => module.code === code)?.entitled === true;
+
 /** Lecture des signalements de l'école ; une réponse qui n'est pas celle de cette école est refusée. */
 export async function readObservationThemes(schoolId: string): Promise<ObservationThemes> {
   const result = await readSchool(schoolId, 'observation-themes', observationThemesSchema);

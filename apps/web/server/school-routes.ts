@@ -38,6 +38,8 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['setup-draft', 'complete'], ifMatch: true, bodyLimit: 4_096 },
   { method: 'PATCH', segments: ['setup'], ifMatch: true, bodyLimit: 2_048 },
   { method: 'GET', segments: ['readiness'] },
+  // Droits commerciaux aux modules (R01-T03) : lecture seule, jamais l'offre, le motif ni l'auteur.
+  { method: 'GET', segments: ['entitlements'] },
   { method: 'GET', segments: ['data-policy'], query: ['noticeVersionId'] },
   { method: 'GET', segments: ['data-policy', 'impact'] },
   { method: 'GET', segments: ['text-proposals'] },

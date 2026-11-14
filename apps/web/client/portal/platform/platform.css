@@ -58,6 +58,15 @@
 .platform-issued-dialog { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .platform-copied { min-height: 1.25rem; color: var(--muted-foreground); font-size: .875rem; }
 .platform-dialog-list { max-height: 50vh; overflow-y: auto; }
+/* Offres et droits aux modules (R01-T03). */
+.platform-modules { display: flex; flex-direction: column; gap: 12px; border: 0; margin: 0; padding: 0; min-width: 0; }
+.platform-modules > legend { font-size: .875rem; font-weight: 500; margin-bottom: 8px; }
+.platform-rights-panel > .platform-fiche-head { align-items: center; }
+.platform-history { display: flex; flex-direction: column; gap: 8px; }
+.platform-history > summary { cursor: pointer; font-size: .875rem; color: var(--muted-foreground); }
+.platform-history > summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.platform-consequences { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--border); border-radius: 12px; padding: 16px; min-width: 0; }
+.platform-consequences p { font-size: .875rem; color: var(--muted-foreground); }
 @media (max-width: 640px) {
   .platform-identity { flex-direction: column; align-items: flex-start; }
   .platform-identity > button { margin-left: -12px; }

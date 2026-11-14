@@ -1,7 +1,7 @@
 import { useState, type ChangeEvent, type ComponentProps } from 'react';
 import { ArrowLeft, ChevronRight, Copy, Link2, Plus, School, Search } from 'lucide-react';
 import {
-  clientTitle, codeStateLabel, ficheChanges, ficheDraftOf, ficheProblem, linkSourceLabel, openingCodeValidities, preparationLabel, schoolStatusLabel, setupProgress,
+  clientTitle, codeStateLabel, commercialStateLabel, ficheChanges, ficheDraftOf, ficheProblem, linkSourceLabel, openingCodeValidities, preparationLabel, schoolStatusLabel, setupProgress,
   type FicheDraft, type FicheField, type PlatformClient, type PlatformClientCode, type PlatformClientDetail,
 } from '../../platform-model';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
@@ -13,6 +13,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/f
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { PortalSelect } from '../components/portal-select';
+import { RightsPanel } from './rights-section';
 import type { ClientFilter } from './use-platform-clients';
 import type { PlatformConsoleState } from './use-platform-console';
 
@@ -107,6 +108,7 @@ function ClientFiche({ state, client }: { state: PlatformConsoleState; client: P
       </div>}
     </header>
     <ClientFacts client={client} />
+    <RightsPanel state={state} client={client} />
     <FicheForm key={`${client.id}:${client.version}`} state={state} client={client} />
     {client.codes.length > 0 && <div className="platform-group">
       <h4 className="platform-subtitle">Codes d’ouverture</h4>
@@ -126,8 +128,8 @@ function ClientFacts({ client }: { client: PlatformClientDetail }) {
     rows.push(['Préparation', `${setupProgress(school.setup)}${school.setup.savedAt ? ` · enregistrée le ${day(school.setup.savedAt)}` : ''}`]);
   }
   if (client.link) rows.push(['Ouverture', `${linkSourceLabel(client.link.source)} le ${day(client.link.linkedAt)}${client.link.issuedByName ? ` · code de ${client.link.issuedByName}` : ''}`]);
-  // Emplacements réservés aux offres et aux échéances : rien n'y est inventé tant qu'aucun lot ne les renseigne.
-  rows.push(['Offre', client.commercial.offer == null ? 'Non configurée' : 'Configurée']);
+  // L'offre vient des droits attribués (R01-T03) ; l'emplacement des échéances reste réservé : rien n'y est inventé tant qu'aucun lot ne le renseigne.
+  rows.push(['Offre', client.commercial.offer ? client.commercial.offer.name : commercialStateLabel(client.commercial.state)]);
   rows.push(['Échéances', client.commercial.dueDates.length === 0 ? 'Aucune' : String(client.commercial.dueDates.length)]);
   return <dl className="platform-facts">{rows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>;
 }

@@ -81,6 +81,9 @@ export function installPreviewTransport() {
       if (path === 'course-catalogue') return reply(200, envelope(courseCatalogue));
       if (path === 'lessons/availability') return reply(200, envelope({ available: scenario !== 'conflict', reasonCode: scenario === 'conflict' ? 'SLOT_CONFLICT' : null }));
       if (path === 'recording-choices') return reply(200, envelope({ items: [] }));
+      // Aperçu : l'école a tous les modules du catalogue (aucune offre attribuée), comme avant l'arrivée des offres.
+      if (path === 'entitlements') return reply(200, envelope({ state: 'NOT_CONFIGURED', modules: [{ code: 'MESSAGING', entitled: true }, { code: 'COLLECTIVE_COURSES', entitled: true }],
+        version: 1, nextChangeAt: null, computedAt: stamp }));
       if (path === 'readiness') return reply(200, envelope({ schoolId: ids.school, configurationVersion: 1, computedAt: stamp, activationReady: true, activationBlockers: [], capabilities: ['CAN_USE_WORKSPACE', 'CAN_PLAN_LESSON'].map(capability => ({ capability, ready: true, blockers: [] })) }));
       if (learner && action === 'action-readiness') return reply(200, envelope({ learnerId: learner.id, action: 'PLAN_LESSON', ready: learner.profileReadiness === 'READY', blockers: learner.profileReadiness === 'READY' ? [] : [{ code: 'PROFILE_ACTION_REQUIRED', field: 'birthDate', message: 'Date de naissance requise.' }] }));
       if (learner && action === 'administrative-profile') return reply(200, envelope(db.profiles!.find(item => item.learnerId === learner.id)));

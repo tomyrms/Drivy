@@ -19,6 +19,8 @@ import { EntryFrame } from '../entry/entry-frame';
 import { entryRoutes, type EntryRoutes } from '../entry/entry-model';
 import { PortalSelect } from '../components/portal-select';
 import { AttachDialog, ClientsSection, CodeDialog } from './clients-section';
+import { OfferDialog, OffersSection } from './offers-section';
+import { RightsDialog } from './rights-section';
 import { usePlatformConsole, type PlatformConsoleState } from './use-platform-console';
 import './platform.css';
 
@@ -29,7 +31,7 @@ const validities = [{ value: '1', label: '1 jour' }, { value: '3', label: '3 jou
 /** Console privée des opérateurs de la plateforme : écoles clientes, équipe, invitations, journal. Hors de toute école. */
 export function PlatformConsolePage({ routes = entryRoutes, platform = platformRoutes }: { routes?: EntryRoutes; platform?: PlatformRoutes }) {
   const state = usePlatformConsole();
-  const [tab, setTab] = useState<'clients' | 'team' | 'invitations' | 'journal'>('clients');
+  const [tab, setTab] = useState<'clients' | 'offers' | 'team' | 'invitations' | 'journal'>('clients');
   useEffect(() => { document.title = 'Plateforme · Drivy'; }, []);
   const busy = !state.loaded || state.busy;
   const signedIn = state.session?.authenticated === true;
@@ -49,9 +51,10 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
         <a className={buttonVariants({ variant: 'outline' })} href={platform.join}>Saisir un code d’accès</a></Empty>}
       {state.access === 'allowed' && <Tabs value={tab} onValueChange={value => setTab(value as typeof tab)}>
         <TabsList variant="line" aria-label="Sections de la console">
-          <TabsTrigger value="clients">Écoles</TabsTrigger><TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>
+          <TabsTrigger value="clients">Écoles</TabsTrigger><TabsTrigger value="offers">Offres</TabsTrigger><TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>
         </TabsList>
         <TabsContent value="clients"><ClientsSection state={state} /></TabsContent>
+        <TabsContent value="offers"><OffersSection state={state} /></TabsContent>
         <TabsContent value="team"><TeamSection state={state} /></TabsContent>
         <TabsContent value="invitations"><InvitationsSection state={state} /></TabsContent>
         <TabsContent value="journal"><JournalSection state={state} /></TabsContent>
@@ -60,6 +63,8 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
     <RemovalDialog state={state} />
     <CodeDialog state={state} />
     <AttachDialog state={state} />
+    <OfferDialog state={state} />
+    <RightsDialog state={state} />
   </EntryFrame>;
 }
 

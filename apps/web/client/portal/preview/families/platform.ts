@@ -3,11 +3,12 @@ import type { platformInvitationSchema, platformJournalSchema, platformOperatorS
 import { previewId, stamp } from '../fixtures';
 import type { PreviewFamily } from '../family';
 import { clientsRead, clientsWrite } from './platform-clients';
+import { offersRead, offersWrite } from './platform-offers';
 
 type Operator = z.infer<typeof platformOperatorSchema>;
 type Invitation = z.infer<typeof platformInvitationSchema>;
 type Entry = z.infer<typeof platformJournalSchema>;
-const rights = { level: 'COMMERCIAL', rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'READ_COMMERCIAL_JOURNAL'], notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] };
+const rights = { level: 'COMMERCIAL', rights: ['MANAGE_PLATFORM_TEAM', 'MANAGE_SCHOOL_OPENINGS', 'MANAGE_OFFERS', 'READ_COMMERCIAL_JOURNAL'], notGranted: ['SCHOOL_RECORDS', 'TRIPS', 'MESSAGES', 'SCHOOL_ROLES'] };
 const day = 86_400_000;
 const ago = (days: number) => new Date(Date.now() - days * day).toISOString();
 const operators: Operator[] = [
@@ -59,17 +60,19 @@ export const platformFamily: PreviewFamily = {
         return tools.reply(200, { data: { items: structuredClone(refusedOnly ? journal.filter(item => item.result === 'REFUSED') : journal), nextCursor: null } });
       }
       if (path === 'join') return tools.reply(200, { pending: !join.accepted && join.submitted, uncertain: !join.accepted && join.submitted, accepted: join.accepted });
-      return clientsRead(request, path, tools) ?? tools.reply(404, { code: 'NOT_FOUND' });
+      return offersRead(request, path, tools) ?? clientsRead(request, path, tools) ?? tools.reply(404, { code: 'NOT_FOUND' });
     }
     if (request.method !== 'POST') return tools.reply(405, { code: 'METHOD_NOT_ALLOWED' });
     await new Promise(resolve => setTimeout(resolve, request.scenario === 'slow' ? 2500 : 150));
     if (request.scenario === 'refused') return tools.reply(403, { code: joining ? 'EMAIL_VERIFICATION_REQUIRED' : 'PLATFORM_OPERATOR_REQUIRED' });
-    if (request.scenario === 'conflict' && /\/(revoke|update|attach-school)$/.test(path)) {
+    if (request.scenario === 'conflict' && /\/(revoke|update|attach-school|archive|restore|cancel|lift)$|\/(assignments|adjustments)$/.test(path)) {
       // Un autre opérateur a déjà modifié la ligne : la version attendue ne correspond plus.
       return tools.reply(412, { code: 'VERSION_CONFLICT' });
     }
     const clientWrite = clientsWrite(request, path, tools, (action, extra) => record(action, extra ?? {}));
     if (clientWrite) return clientWrite;
+    const offerWrite = offersWrite(request, path, tools, (action, extra) => record(action, extra ?? {}));
+    if (offerWrite) return offerWrite;
 
     if (path === 'invitations/clear') { issuing = null; return tools.reply(200, { ok: true }); }
     if (path === 'invitations') {

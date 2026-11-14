@@ -14,15 +14,25 @@ export type PlatformGateway = (command: PlatformRequest, accessToken: string) =>
 
 const uuidPath = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
-const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations']);
+const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations', '/v1/platform/modules']);
 const operationPath = new RegExp(`^/v1/platform/operations/${uuidPath}$`);
 const revokePath = new RegExp(`^/v1/platform/(?:invitations|operators)/${uuidPath}/revoke$`);
 const clientPath = new RegExp(`^/v1/platform/clients/${uuidPath}$`);
 const attachPath = new RegExp(`^/v1/platform/clients/${uuidPath}/attach-school$`);
 const codeRevokePath = new RegExp(`^/v1/platform/school-codes/${uuidPath}/revoke$`);
+// Offres et droits aux modules (R01-T03) : une offre, ses deux changements d'état, puis les droits d'une fiche cliente.
+const offerPath = new RegExp(`^/v1/platform/offers/${uuidPath}$`);
+const offerStatusPath = new RegExp(`^/v1/platform/offers/${uuidPath}/(?:archive|restore)$`);
+const entitlementsPath = new RegExp(`^/v1/platform/clients/${uuidPath}/entitlements$`);
+const previewPath = new RegExp(`^/v1/platform/clients/${uuidPath}/assignment-preview$`);
+const assignmentsPath = new RegExp(`^/v1/platform/clients/${uuidPath}/assignments$`);
+const assignmentCancelPath = new RegExp(`^/v1/platform/clients/${uuidPath}/assignments/${uuidPath}/cancel$`);
+const adjustmentsPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustments$`);
+const adjustmentLiftPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustments/${uuidPath}/lift$`);
 
 export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
 export const codeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
+export const offerStatuses = ['ACTIVE', 'ARCHIVED'] as const;
 
 type QueryRule = (value: string) => boolean;
 const limitUpTo = (max: number): QueryRule => value => /^[1-9][0-9]{0,2}$/.test(value) && Number(value) <= max;
@@ -46,6 +56,10 @@ const journalRules: Record<string, QueryRule> = { limit: limitUpTo(100), cursor:
 const clientListRules: Record<string, QueryRule> = { limit: limitUpTo(100), cursor: cursorRule, q: searchRule, preparation: oneOf(clientPreparations) };
 const codeListRules: Record<string, QueryRule> = { limit: limitUpTo(100), cursor: cursorRule, clientId: uuidRule, state: oneOf(codeStates) };
 const unattachedRules: Record<string, QueryRule> = { limit: limitUpTo(50), q: searchRule };
+const offerListRules: Record<string, QueryRule> = { status: oneOf(offerStatuses) };
+// L'API relit la date (ISO, UTC) ; ici seule la forme est vérifiée, sous une borne de longueur.
+const instantRule: QueryRule = value => value.length <= 40 && z.iso.datetime().safeParse(value).success;
+const previewRules: Record<string, QueryRule> = { offerId: uuidRule, effectiveAt: instantRule };
 
 /** Liste fermée des appels que le relais peut émettre vers l'API de la plateforme : toute autre route reste inaccessible. */
 export function allowedPlatformRequest(request: PlatformRequest): boolean {
@@ -58,17 +72,21 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
     if (path === '/v1/platform/clients') return validQuery(query, clientListRules);
     if (path === '/v1/platform/school-codes') return validQuery(query, codeListRules);
     if (path === '/v1/platform/unattached-schools') return validQuery(query, unattachedRules);
-    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path));
+    if (path === '/v1/platform/offers') return validQuery(query, offerListRules);
+    // L'aperçu des conséquences porte toujours l'offre visée : sans elle il n'y a rien à prévoir.
+    if (previewPath.test(path)) return new URLSearchParams(query).has('offerId') && validQuery(query, previewRules);
+    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path));
   }
   if ((request.method !== 'POST' && request.method !== 'PATCH') || query !== '') return false;
   const keyed = typeof request.idempotencyKey === 'string' && z.uuid().safeParse(request.idempotencyKey).success;
   const versioned = typeof request.ifMatch === 'string' && strongVersion.test(request.ifMatch);
-  if (request.method === 'PATCH') return clientPath.test(path) && keyed && versioned;
+  if (request.method === 'PATCH') return (clientPath.test(path) || offerPath.test(path)) && keyed && versioned;
   if (path === '/v1/platform/invitations/preview') return request.idempotencyKey === undefined && request.ifMatch === undefined;
   if (path === '/v1/platform/invitations' || path === '/v1/platform/invitations/accept') return keyed && request.ifMatch === undefined;
   if (revokePath.test(path)) return keyed && versioned;
-  if (path === '/v1/platform/clients' || path === '/v1/platform/school-codes' || codeRevokePath.test(path)) return keyed && request.ifMatch === undefined;
-  if (attachPath.test(path)) return keyed && versioned;
+  if (path === '/v1/platform/clients' || path === '/v1/platform/school-codes' || path === '/v1/platform/offers' || codeRevokePath.test(path)) return keyed && request.ifMatch === undefined;
+  if (attachPath.test(path) || offerStatusPath.test(path) || assignmentsPath.test(path) || assignmentCancelPath.test(path) || adjustmentsPath.test(path)
+    || adjustmentLiftPath.test(path)) return keyed && versioned;
   return false;
 }
 
@@ -104,8 +122,39 @@ const setupSchema = z.object({ step: text(80).nullable(), stepsDone: z.number().
 const schoolFacts = z.object({ name: text(200), status: schoolStatus, contactEmail: text(254), contactPhone: text(32).nullable(), setup: setupSchema });
 const codeStateSchema = z.enum(codeStates);
 const latestCodeSchema = z.object({ id: z.uuid(), state: codeStateSchema, expiresAt: iso, createdAt: iso });
-/** L'emplacement commercial est tolérant : les lots d'offres et de conditions y ajoutent leurs valeurs sans changer cette forme. */
-const commercialSchema = z.object({ state: token, offer: z.unknown(), dueDates: z.array(z.unknown()).max(50) });
+// --- Offres et droits aux modules (R01-T03) : codes de modules et états tolérants (le catalogue évolue côté API), petits vocabulaires fermés stricts. ---
+const moduleToken = token;
+const offerBriefSchema = z.object({ offerId: z.uuid(), name: text(100), effectiveAt: iso, modules: z.array(moduleToken).max(20) });
+/** L'emplacement commercial reste tolérant sur `dueDates` : le lot des conditions (#456) y ajoute ses échéances sans changer cette forme. */
+const commercialSchema = z.object({ state: token, offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
+  entitlementVersion: z.number().int().min(1), dueDates: z.array(z.unknown()).max(50) });
+const offerSchema = z.object({ id: z.uuid(), name: text(100), modules: z.array(moduleToken).max(20), status: z.enum(offerStatuses), version: z.number().int().min(1),
+  createdAt: iso, updatedAt: iso, archivedAt: iso.nullable(), schoolsInForce: z.number().int().min(0) });
+const moduleCatalogueSchema = z.object({ code: moduleToken, sortOrder: z.number().int().min(1) });
+const adjustmentDetailSchema = z.object({ id: z.uuid(), effect: z.enum(['GRANT', 'REVOKE']), reason: text(500), createdAt: iso, createdByName: text(200).nullable() });
+const entitlementsSchema = z.object({
+  state: token, offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
+  modules: z.array(z.object({ code: moduleToken, inOffer: z.boolean(), entitled: z.boolean(), adjustment: adjustmentDetailSchema.nullable() })).max(20),
+  assignments: z.array(z.object({ id: z.uuid(), offerId: z.uuid(), offerName: text(100), modules: z.array(moduleToken).max(20), effectiveAt: iso,
+    phase: z.enum(['IN_FORCE', 'SCHEDULED', 'SUPERSEDED', 'CANCELLED']), createdAt: iso, createdByName: text(200).nullable(), cancelledAt: iso.nullable() })).max(500),
+  adjustments: z.array(z.object({ id: z.uuid(), moduleCode: moduleToken, effect: z.enum(['GRANT', 'REVOKE']), reason: text(500), createdAt: iso,
+    createdByName: text(200).nullable(), phase: z.enum(['ACTIVE', 'ENDED', 'LIFTED']), liftedAt: iso.nullable(), liftedByName: text(200).nullable(),
+    liftReason: text(500).nullable() })).max(500),
+  version: z.number().int().min(1), nextChangeAt: iso.nullable(),
+});
+const assignmentPreviewSchema = z.object({
+  offer: z.object({ id: z.uuid(), name: text(100), modules: z.array(moduleToken).max(20) }), effectiveAt: iso.nullable(), immediate: z.boolean(),
+  replacesScheduled: offerBriefSchema.nullable(),
+  endingAdjustments: z.array(z.object({ id: z.uuid(), moduleCode: moduleToken, effect: z.enum(['GRANT', 'REVOKE']) })).max(50),
+  modules: z.array(z.object({ code: moduleToken, before: z.boolean(), after: z.boolean(), kind: z.enum(['GAINS', 'LOSES', 'KEEPS', 'STAYS_OFF']),
+    existing: z.record(z.string().max(80), z.number().int().min(0)).nullable() })).max(20),
+  version: z.number().int().min(1),
+});
+const modulesResult = z.object({ data: z.object({ items: z.array(moduleCatalogueSchema).max(20) }) });
+const offersResult = z.object({ data: z.object({ items: z.array(offerSchema).max(200) }) });
+const offerResult = z.object({ data: offerSchema });
+const entitlementsResult = z.object({ data: entitlementsSchema });
+const previewConsequencesResult = z.object({ data: assignmentPreviewSchema });
 const clientSummarySchema = z.object({ id: z.uuid(), displayName: text(150).nullable(), preparation: z.enum(clientPreparations), schoolId: z.uuid().nullable(),
   school: schoolFacts.nullable(), contactName: text(200).nullable(), contactEmail: text(254).nullable(), latestCode: latestCodeSchema.nullable(),
   commercial: commercialSchema, version: z.number().int().positive(), createdAt: iso, updatedAt: iso });
@@ -173,6 +222,20 @@ const attachBody = z.object({ operationId: uuid, version: z.number().int().min(1
 const issueCodeBody = z.object({ operationId: uuid, clientId: uuid.optional(), displayName: z.string().trim().min(1).max(150).optional(),
   validityDays: z.number().int().min(1).max(30).optional() }).strict().refine(body => !(body.clientId && body.displayName));
 const codeRevokeBody = z.object({ operationId: uuid }).strict();
+// Offres et droits aux modules : mêmes bornes que l'API, qui relit chacune. Les codes de module restent des jetons : le catalogue vit côté API.
+const versionField = z.number().int().min(1).max(2_147_483_647);
+const moduleCode = z.string().regex(/^[A-Z][A-Z0-9_]{2,63}$/);
+const offerName = z.string().trim().min(1).max(100);
+const offerModules = z.array(moduleCode).max(20).refine(list => new Set(list).size === list.length);
+const reasonText = z.string().trim().min(3).max(500);
+const createOfferBody = z.object({ operationId: uuid, name: offerName, modules: offerModules }).strict();
+const updateOfferBody = z.object({ operationId: uuid, version: versionField, name: offerName.optional(), modules: offerModules.optional() }).strict()
+  .refine(body => body.name !== undefined || body.modules !== undefined);
+const offerListParams = z.object({ status: z.enum(offerStatuses).optional() }).strict();
+const previewParams = z.object({ offerId: uuid, effectiveAt: z.iso.datetime().max(40).optional() }).strict();
+const assignBody = z.object({ operationId: uuid, version: versionField, offerId: uuid, effectiveAt: z.iso.datetime().max(40).nullable().optional() }).strict();
+const adjustBody = z.object({ operationId: uuid, version: versionField, moduleCode, effect: z.enum(['GRANT', 'REVOKE']), reason: reasonText }).strict();
+const liftBody = z.object({ operationId: uuid, version: versionField, reason: reasonText }).strict();
 const searchOf = (parameters: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(parameters)) if (value !== undefined && value !== '') search.set(key, String(value));
@@ -325,6 +388,72 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
     const { version, ...body } = attachBody.parse(request.body);
     return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/attach-school`, idempotencyKey: body.operationId,
       ifMatch: `"${version}"`, body: { ...body, schoolId: body.schoolId.toLowerCase() } }, clientResult);
+  });
+
+  // --- Offres et droits aux modules (R01-T03) : le relais borne les formes, l'API relit chaque droit et chaque version. ---
+  app.get('/app/bff/platform/modules', read('/v1/platform/modules', modulesResult));
+  app.get('/app/bff/platform/offers', async (request, reply) => {
+    const query = offerListParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/offers${searchOf({ status: query.status })}` }, offersResult);
+  });
+  app.post('/app/bff/platform/offers', async (request, reply) => {
+    empty.parse(request.query);
+    const body = createOfferBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/offers', idempotencyKey: body.operationId, body }, offerResult);
+  });
+  app.post('/app/bff/platform/offers/:id/update', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const { version, ...body } = updateOfferBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'PATCH', path: `/v1/platform/offers/${id.toLowerCase()}`, idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body }, offerResult);
+  });
+  for (const change of ['archive', 'restore'] as const) {
+    app.post(`/app/bff/platform/offers/:id/${change}`, async (request, reply) => {
+      empty.parse(request.query);
+      const { id } = z.object({ id: uuid }).parse(request.params);
+      const body = revokeBody.parse(request.body);
+      return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/offers/${id.toLowerCase()}/${change}`,
+        body: { operationId: body.operationId }, idempotencyKey: body.operationId, ifMatch: `"${body.version}"` }, offerResult);
+    });
+  }
+  app.get('/app/bff/platform/clients/:id/entitlements', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients/${id.toLowerCase()}/entitlements` }, entitlementsResult);
+  });
+  app.get('/app/bff/platform/clients/:id/assignment-preview', async (request, reply) => {
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const query = previewParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients/${id.toLowerCase()}/assignment-preview${searchOf({ offerId: query.offerId.toLowerCase(), effectiveAt: query.effectiveAt })}` }, previewConsequencesResult);
+  });
+  app.post('/app/bff/platform/clients/:id/assignments', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const { version, ...body } = assignBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/assignments`, idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body: { ...body, offerId: body.offerId.toLowerCase() } }, entitlementsResult);
+  });
+  app.post('/app/bff/platform/clients/:id/assignments/:assignmentId/cancel', async (request, reply) => {
+    empty.parse(request.query);
+    const { id, assignmentId } = z.object({ id: uuid, assignmentId: uuid }).parse(request.params);
+    const body = revokeBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/assignments/${assignmentId.toLowerCase()}/cancel`,
+      body: { operationId: body.operationId }, idempotencyKey: body.operationId, ifMatch: `"${body.version}"` }, entitlementsResult);
+  });
+  app.post('/app/bff/platform/clients/:id/adjustments', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    const { version, ...body } = adjustBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/adjustments`, idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body }, entitlementsResult);
+  });
+  app.post('/app/bff/platform/clients/:id/adjustments/:adjustmentId/lift', async (request, reply) => {
+    empty.parse(request.query);
+    const { id, adjustmentId } = z.object({ id: uuid, adjustmentId: uuid }).parse(request.params);
+    const { version, ...body } = liftBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/adjustments/${adjustmentId.toLowerCase()}/lift`,
+      idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, entitlementsResult);
   });
 
   // « Créer un code » : le code est tiré ici, transmis à l'API qui n'en garde que l'empreinte à clé serveur, et rendu à l'opérateur qui l'a demandé.

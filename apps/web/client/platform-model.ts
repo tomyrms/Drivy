@@ -56,11 +56,52 @@ export const platformClientCodeSchema = z.object({
   id, state: z.enum(clientCodeStates), clientId: id.nullable(), clientName: z.string().max(150).nullable(), createdAt: iso, expiresAt: iso,
   usedAt: iso.nullable(), revokedAt: iso.nullable(), issuedByName: z.string().max(200).nullable(), school: schoolFactsSchema.extend({ id }).nullable(),
 });
+// --- Offres et droits aux modules (R01-T03) : codes de modules en jetons (le catalogue vit côté API), petits vocabulaires fermés stricts. ---
+export const adjustmentEffects = ['GRANT', 'REVOKE'] as const;
+export const consequenceKinds = ['GAINS', 'LOSES', 'KEEPS', 'STAYS_OFF'] as const;
+export const platformOfferStatuses = ['ACTIVE', 'ARCHIVED'] as const;
+const moduleToken = token;
+export const platformOfferBriefSchema = z.object({ offerId: id, name: z.string().max(100), effectiveAt: iso, modules: z.array(moduleToken).max(20) });
+/** L'emplacement commercial : état dérivé, offre en vigueur, offre programmée. `dueDates` reste l'emplacement réservé aux échéances (#456). */
+export const platformCommercialSchema = z.object({
+  state: token, offer: platformOfferBriefSchema.nullable(), scheduledOffer: platformOfferBriefSchema.nullable(),
+  entitlementVersion: z.number().int().min(1), dueDates: z.array(z.unknown()).max(50),
+});
+export const platformOfferSchema = z.object({
+  id, name: z.string().max(100), modules: z.array(moduleToken).max(20), status: z.enum(platformOfferStatuses), version: z.number().int().min(1),
+  createdAt: iso, updatedAt: iso, archivedAt: iso.nullable(), schoolsInForce: z.number().int().min(0),
+});
+export const platformModuleSchema = z.object({ code: moduleToken, sortOrder: z.number().int().min(1) });
+const adjustmentDetailSchema = z.object({ id, effect: z.enum(adjustmentEffects), reason: z.string().max(500), createdAt: iso, createdByName: z.string().max(200).nullable() });
+export const platformEntitlementsSchema = z.object({
+  state: token, offer: platformOfferBriefSchema.nullable(), scheduledOffer: platformOfferBriefSchema.nullable(),
+  modules: z.array(z.object({ code: moduleToken, inOffer: z.boolean(), entitled: z.boolean(), adjustment: adjustmentDetailSchema.nullable() })).max(20),
+  assignments: z.array(z.object({ id, offerId: id, offerName: z.string().max(100), modules: z.array(moduleToken).max(20), effectiveAt: iso,
+    phase: z.enum(['IN_FORCE', 'SCHEDULED', 'SUPERSEDED', 'CANCELLED']), createdAt: iso, createdByName: z.string().max(200).nullable(), cancelledAt: iso.nullable() })).max(500),
+  adjustments: z.array(z.object({ id, moduleCode: moduleToken, effect: z.enum(adjustmentEffects), reason: z.string().max(500), createdAt: iso,
+    createdByName: z.string().max(200).nullable(), phase: z.enum(['ACTIVE', 'ENDED', 'LIFTED']), liftedAt: iso.nullable(), liftedByName: z.string().max(200).nullable(),
+    liftReason: z.string().max(500).nullable() })).max(500),
+  version: z.number().int().min(1), nextChangeAt: iso.nullable(),
+});
+export const platformAssignmentPreviewSchema = z.object({
+  offer: z.object({ id, name: z.string().max(100), modules: z.array(moduleToken).max(20) }), effectiveAt: iso.nullable(), immediate: z.boolean(),
+  replacesScheduled: platformOfferBriefSchema.nullable(),
+  endingAdjustments: z.array(z.object({ id, moduleCode: moduleToken, effect: z.enum(adjustmentEffects) })).max(50),
+  modules: z.array(z.object({ code: moduleToken, before: z.boolean(), after: z.boolean(), kind: z.enum(consequenceKinds),
+    existing: z.record(z.string().max(80), z.number().int().min(0)).nullable() })).max(20),
+  version: z.number().int().min(1),
+});
+export const platformModulesResult = z.object({ data: z.object({ items: z.array(platformModuleSchema).max(20) }) });
+export const platformOffersResult = z.object({ data: z.object({ items: z.array(platformOfferSchema).max(200) }) });
+export const platformOfferResult = z.object({ data: platformOfferSchema });
+export const platformEntitlementsResult = z.object({ data: platformEntitlementsSchema });
+export const platformAssignmentPreviewResult = z.object({ data: platformAssignmentPreviewSchema });
+
 export const platformClientSchema = z.object({
   id, displayName: z.string().max(150).nullable(), preparation: z.enum(clientPreparations), schoolId: id.nullable(), school: schoolFactsSchema.nullable(),
   contactName: z.string().max(200).nullable(), contactEmail: z.string().max(254).nullable(),
   latestCode: z.object({ id, state: z.enum(clientCodeStates), expiresAt: iso, createdAt: iso }).nullable(),
-  commercial: z.object({ state: token, offer: z.unknown(), dueDates: z.array(z.unknown()).max(50) }),
+  commercial: platformCommercialSchema,
   version: z.number().int().positive(), createdAt: iso, updatedAt: iso,
 });
 export const platformClientDetailSchema = platformClientSchema.extend({
@@ -87,6 +128,12 @@ export const platformPendingCodeResult = z.object({
   pending: z.object({ operationId: id, clientId: id.optional(), displayName: z.string().max(150).optional(), validityDays: z.number().int().min(1).max(30).optional() }).nullable(),
 });
 
+export type PlatformOffer = z.infer<typeof platformOfferSchema>;
+export type PlatformOfferStatus = (typeof platformOfferStatuses)[number];
+export type PlatformModule = z.infer<typeof platformModuleSchema>;
+export type PlatformEntitlements = z.infer<typeof platformEntitlementsSchema>;
+export type PlatformAssignmentPreview = z.infer<typeof platformAssignmentPreviewSchema>;
+export type PlatformCommercial = z.infer<typeof platformCommercialSchema>;
 export type PlatformClient = z.infer<typeof platformClientSchema>;
 export type PlatformClientDetail = z.infer<typeof platformClientDetailSchema>;
 export type PlatformClientCode = z.infer<typeof platformClientCodeSchema>;
@@ -121,6 +168,7 @@ export const levelLabel = (level: string) => ({ COMMERCIAL: 'Commercial' } as Re
 const rightLabels: Record<string, string> = {
   MANAGE_PLATFORM_TEAM: 'Gérer l’équipe de la plateforme',
   MANAGE_SCHOOL_OPENINGS: 'Ouvrir des écoles',
+  MANAGE_OFFERS: 'Gérer les offres et les droits aux modules',
   READ_COMMERCIAL_JOURNAL: 'Lire le journal commercial',
 };
 const deniedLabels: Record<string, string> = {
@@ -142,6 +190,14 @@ const actionLabels: Record<string, string> = {
   CREATE_SCHOOL_OPENING_CODE: 'Code d’ouverture créé',
   REVOKE_SCHOOL_OPENING_CODE: 'Code d’ouverture révoqué',
   SCHOOL_OPENED_FROM_CODE: 'École ouverte avec un code',
+  CREATE_OFFER: 'Offre créée',
+  UPDATE_OFFER: 'Offre modifiée',
+  ARCHIVE_OFFER: 'Offre archivée',
+  RESTORE_OFFER: 'Offre rétablie',
+  ASSIGN_OFFER: 'Offre attribuée',
+  CANCEL_OFFER_ASSIGNMENT: 'Attribution annulée',
+  ADJUST_SCHOOL_MODULE: 'Module ajusté',
+  LIFT_MODULE_ADJUSTMENT: 'Ajustement levé',
 };
 export const actionLabel = (action: string) => actionLabels[action] ?? 'Action enregistrée';
 const reasonLabels: Record<string, string> = {
@@ -163,6 +219,8 @@ const reasonLabels: Record<string, string> = {
   OPENING_LINK_USED: 'Code déjà utilisé',
   OPENING_LINK_REVOKED: 'Code déjà révoqué',
   OPENING_LINK_EXPIRED: 'Code expiré',
+  OFFER_ARCHIVED: 'Offre archivée',
+  MODULE_NOT_ENTITLED: 'Module non accordé',
 };
 export const reasonLabel = (code: string | null) => (code ? reasonLabels[code] ?? null : null);
 
@@ -174,6 +232,64 @@ export const codeStateLabel = (value: PlatformClientCodeState) => codeStateLabel
 export const schoolStatusLabel = (status: 'DRAFT' | 'ACTIVE' | 'ARCHIVED') => ({ DRAFT: 'Brouillon', ACTIVE: 'Active', ARCHIVED: 'Archivée' })[status];
 export const clientTitle =(client: Pick<PlatformClient, 'displayName' | 'school'>) => client.displayName ?? client.school?.name ?? 'École sans nom';
 export const linkSourceLabel = (source: 'OPENING_CODE' | 'EXISTING_SCHOOL') => (source === 'OPENING_CODE' ? 'Ouverte avec un code' : 'École existante rattachée');
+
+// --- Offres et droits : libellés, saisie et lecture des conséquences ---
+const moduleLabels: Record<string, string> = { MESSAGING: 'Messagerie', COLLECTIVE_COURSES: 'Cours collectifs' };
+export const moduleLabel = (code: string) => moduleLabels[code] ?? 'Module';
+export const modulesLabel = (codes: readonly string[]) => (codes.length ? codes.map(moduleLabel).join(', ') : 'Aucun module');
+export const commercialStateLabel = (state: string) => ({ NOT_CONFIGURED: 'Non configurée', OFFER_ACTIVE: 'Offre en vigueur' } as Record<string, string>)[state] ?? 'État commercial';
+export const offerStatusLabel = (status: PlatformOfferStatus) => ({ ACTIVE: 'Active', ARCHIVED: 'Archivée' })[status];
+export const consequenceLabel = (kind: (typeof consequenceKinds)[number]) =>
+  ({ GAINS: 'Accordé', LOSES: 'Retiré', KEEPS: 'Conservé', STAYS_OFF: 'Non accordé' })[kind];
+export const adjustmentEffectLabel = (effect: (typeof adjustmentEffects)[number]) => ({ GRANT: 'Accordé en plus', REVOKE: 'Retiré' })[effect];
+export const assignmentPhaseLabel = (phase: PlatformEntitlements['assignments'][number]['phase']) =>
+  ({ IN_FORCE: 'En vigueur', SCHEDULED: 'Prévue', SUPERSEDED: 'Remplacée', CANCELLED: 'Annulée' })[phase];
+export const adjustmentPhaseLabel = (phase: PlatformEntitlements['adjustments'][number]['phase']) =>
+  ({ ACTIVE: 'Actif', ENDED: 'Terminé avec l’offre', LIFTED: 'Levé' })[phase];
+const usageLabels: Record<string, [string, string]> = {
+  conversations: ['conversation', 'conversations'], publishedSeries: ['série publiée', 'séries publiées'],
+  activeEnrollments: ['inscription active', 'inscriptions actives'], upcomingSessions: ['séance à venir', 'séances à venir'],
+};
+/** Ce qu'un retrait laisse en place, en volumes seulement (jamais un contenu) ; vide quand il n'y a rien. */
+export function existingUsageLabel(existing: Record<string, number> | null): string {
+  if (!existing) return '';
+  return Object.entries(existing).filter(([key, count]) => count > 0 && key in usageLabels)
+    .map(([key, count]) => `${count} ${usageLabels[key]![count > 1 ? 1 : 0]}`).join(' · ');
+}
+export const offerNameLimit = 100;
+export const reasonLimit = { min: 3, max: 500 } as const;
+/** La première raison de ne pas enregistrer une offre ; l'API relit les mêmes bornes. */
+export function offerProblem(name: string, modules: readonly string[]): string | null {
+  const trimmed = name.trim();
+  if (!trimmed) return 'Donnez un nom à l’offre.';
+  if (trimmed.length > offerNameLimit) return `Le nom est limité à ${offerNameLimit} caractères.`;
+  if (new Set(modules).size !== modules.length) return 'Un module ne peut figurer qu’une fois.';
+  return null;
+}
+/** Un motif d'ajustement lisible par l'équipe ; la même borne que l'API. */
+export const reasonProblem = (reason: string): string | null => {
+  const trimmed = reason.trim();
+  if (trimmed.length < reasonLimit.min) return 'Indiquez le motif en quelques mots.';
+  if (trimmed.length > reasonLimit.max) return `Le motif est limité à ${reasonLimit.max} caractères.`;
+  return null;
+};
+/**
+ * Date d'effet saisie (heure locale du navigateur) → instant ISO UTC attendu par l'API ; `null` = immédiatement.
+ * Une date vide, passée ou illisible n'est jamais envoyée : `undefined` signale la saisie à corriger.
+ */
+export function effectiveInstant(local: string, now: Date = new Date()): string | null | undefined {
+  if (local.trim() === '') return null;
+  const parsed = new Date(local);
+  if (Number.isNaN(parsed.getTime()) || parsed.getTime() <= now.getTime()) return undefined;
+  return parsed.toISOString();
+}
+/** La suite des modules d'une offre, dans l'ordre du catalogue, sans doublon : ce qui part est toujours une liste canonique. */
+export function orderedModules(selected: readonly string[], catalogue: readonly Pick<PlatformModule, 'code' | 'sortOrder'>[]): string[] {
+  const chosen = new Set(selected);
+  return [...catalogue].sort((a, b) => a.sortOrder - b.sortOrder).map(module => module.code).filter(code => chosen.has(code));
+}
+export const sameModules = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every(code => b.includes(code));
+
 /** La progression de la préparation, telle que l'école l'a enregistrée : jamais inventée quand elle n'a rien enregistré. */
 export function setupProgress(setup: { stepsDone: number; stepsTotal: number; completedAt: string | null }): string {
   if (setup.completedAt) return 'Préparation terminée';
@@ -235,6 +351,15 @@ const failures: Record<string, string> = {
   OPENING_LINK_USED: 'Ce code a déjà été utilisé : une école est ouverte.',
   OPENING_LINK_REVOKED: 'Ce code est déjà révoqué.',
   OPENING_LINK_EXPIRED: 'Ce code a expiré.',
+  OFFER_ARCHIVED: 'Cette offre est archivée : rétablissez-la avant de la modifier ou de l’attribuer.',
+  OFFER_NOT_ARCHIVED: 'Cette offre n’est pas archivée.',
+  EFFECTIVE_DATE_PAST: 'La date d’effet doit être à venir. L’aperçu a été actualisé.',
+  ASSIGNMENT_NOT_PENDING: 'Cette attribution a déjà pris effet ou a été annulée. L’écran est à jour.',
+  ADJUSTMENT_REQUIRES_OFFER: 'Cette école n’a pas d’offre en vigueur : attribuez-en une avant d’ajuster un module.',
+  ADJUSTMENT_ACTIVE: 'Un ajustement est déjà actif pour ce module. Levez-le d’abord.',
+  ADJUSTMENT_NO_EFFECT: 'Cet ajustement ne changerait rien aux droits de l’école.',
+  ADJUSTMENT_NOT_ACTIVE: 'Cet ajustement n’est plus actif. L’écran est à jour.',
+  MODULE_UNKNOWN: 'Ce module n’existe pas dans le catalogue.',
   PLATFORM_CODE_IN_PROGRESS: 'Un code est déjà en cours de création. Affichez-le ou fermez-le avant d’en créer un autre.',
   NOT_FOUND: 'Cet élément n’existe plus. L’écran a été actualisé.',
   LAST_PLATFORM_OPERATOR: 'Le dernier opérateur actif ne peut pas être retiré.',

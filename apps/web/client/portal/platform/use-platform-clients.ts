@@ -1,20 +1,22 @@
 import { useRef, useState } from 'react';
 import { okSchema, request, RequestFailure, type Session } from '../../protocol';
 import {
-  ficheChanges, platformClientDetailResult, platformClientsResult, platformCodeResult, platformFailureKind, platformIssuedCodeResult, platformPendingCodeResult,
-  platformUnattachedResult,
-  type FicheDraft, type PlatformClient, type PlatformClientCode, type PlatformClientDetail, type PlatformClientPreparation, type PlatformIssuedCode,
-  type PlatformPendingCode, type PlatformUnattachedSchool,
+  ficheChanges, platformClientDetailResult, platformClientsResult, platformCodeResult, platformEntitlementsResult, platformFailureKind, platformIssuedCodeResult,
+  platformPendingCodeResult, platformUnattachedResult,
+  type FicheDraft, type PlatformClient, type PlatformClientCode, type PlatformClientDetail, type PlatformClientPreparation, type PlatformEntitlements,
+  type PlatformIssuedCode, type PlatformPendingCode, type PlatformUnattachedSchool,
 } from '../../platform-model';
 
 export type ClientFilter = 'ALL' | PlatformClientPreparation;
 export type ClientPage = { items: PlatformClient[]; total: number | null; nextCursor: string | null };
+/** Les droits aux modules de la fiche ouverte, avec la fiche qu'ils décrivent : jamais montrés pour une autre. */
+export type ClientRights = { clientId: string; data: PlatformEntitlements };
 /** « Créer un code » : pour une fiche existante, ou pour une école cliente nouvelle dont seul le nom est saisi. */
 export type CodeTarget = { clientId: string | null; clientName: string | null };
 /** « Rattacher une école » : à une fiche existante, ou en créant la fiche avec l'école. */
 export type AttachTarget = { client: PlatformClientDetail | null };
 export type CopyKind = 'code' | 'link';
-export type ClientSnapshot = { page: ClientPage; pending: PlatformPendingCode | null; selected: PlatformClientDetail | null };
+export type ClientSnapshot = { page: ClientPage; pending: PlatformPendingCode | null; selected: PlatformClientDetail | null; rights: ClientRights | null };
 type Kernel = {
   session: Session | null; perform: (action: () => Promise<void>) => Promise<void>;
   /** Relecture à l'intérieur d'une commande en cours, et relecture qui prend sa propre place. */
@@ -44,6 +46,7 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
   const [codeTarget, setCodeTarget] = useState<CodeTarget | null>(null), [issued, setIssued] = useState<PlatformIssuedCode | null>(null);
   const [copied, setCopied] = useState<CopyKind | null>(null), [copyFailed, setCopyFailed] = useState(false), [uncertain, setUncertain] = useState(false);
   const [attach, setAttach] = useState<AttachTarget | null>(null), [unattached, setUnattached] = useState<PlatformUnattachedSchool[]>([]);
+  const [rights, setRights] = useState<ClientRights | null>(null);
   const filters = useRef({ search: '', preparation: 'ALL' as ClientFilter }), selectedId = useRef<string | null>(null);
   const operations = useRef(new Map<string, string>());
   const codeOperation = useRef<{ signature: string; operationId: string } | null>(null);
@@ -58,26 +61,26 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
 
   function reset() {
     setPage(emptyPage); setSearch(''); setPreparation('ALL'); setSelected(null); setPending(null); setCodeTarget(null); setIssued(null); setCopied(null);
-    setCopyFailed(false); setUncertain(false); setAttach(null); setUnattached([]);
+    setCopyFailed(false); setUncertain(false); setAttach(null); setUnattached([]); setRights(null);
     filters.current = { search: '', preparation: 'ALL' }; selectedId.current = null; operations.current.clear(); codeOperation.current = null;
   }
 
   /** Lecture groupée pour le chargement de la console : l'annuaire sous les filtres courants, le code en attente, la fiche ouverte. */
+  // Une fiche qui n'existe plus se referme sans bruit ; tout autre échec reste un échec.
+  const absent = (reason: unknown) => { if (reason instanceof RequestFailure && reason.status === 404) return null; throw reason; };
+  const readRights = (id: string) => request(`platform/clients/${id}/entitlements`, platformEntitlementsResult).then(result => ({ clientId: id, data: result.data }));
   async function snapshot(): Promise<ClientSnapshot> {
     const open = selectedId.current;
-    const [list, waiting, detail] = await Promise.all([
+    const [list, waiting, detail, current] = await Promise.all([
       request(clientsPath(filters.current.search, filters.current.preparation), platformClientsResult),
       request('platform/school-codes/pending', platformPendingCodeResult),
-      open ? request(`platform/clients/${open}`, platformClientDetailResult).then(result => result.data).catch(reason => {
-        // Une fiche qui n'existe plus se referme sans bruit ; tout autre échec reste un échec.
-        if (reason instanceof RequestFailure && reason.status === 404) return null;
-        throw reason;
-      }) : Promise.resolve(null),
+      open ? request(`platform/clients/${open}`, platformClientDetailResult).then(result => result.data).catch(absent) : Promise.resolve(null),
+      open ? readRights(open).catch(absent) : Promise.resolve(null),
     ]);
-    return { page: list.data, pending: waiting.pending, selected: detail };
+    return { page: list.data, pending: waiting.pending, selected: detail, rights: detail ? current : null };
   }
   function apply(next: ClientSnapshot) {
-    setPage(next.page); setPending(next.pending); setSelected(next.selected);
+    setPage(next.page); setPending(next.pending); setSelected(next.selected); setRights(next.rights);
     if (!next.selected) selectedId.current = null;
   }
 
@@ -98,10 +101,10 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
 
   // --- Fiche ---
   const openClient = (id: string) => perform(async () => {
-    const result = await request(`platform/clients/${id}`, platformClientDetailResult);
-    selectedId.current = result.data.id; setSelected(result.data);
+    const [result, current] = await Promise.all([request(`platform/clients/${id}`, platformClientDetailResult), readRights(id)]);
+    selectedId.current = result.data.id; setSelected(result.data); setRights(current);
   });
-  const closeClient = () => { selectedId.current = null; setSelected(null); };
+  const closeClient = () => { selectedId.current = null; setSelected(null); setRights(null); };
   const saveFiche = (client: PlatformClientDetail, draft: FicheDraft) => perform(async () => {
     if (!session) return;
     const changes = ficheChanges(client, draft);
@@ -192,7 +195,7 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
     await reload();
   });
 
-  return { page, search, preparation, selected, pending, codeTarget, issued, copied, copyFailed, uncertain, attach, unattached,
+  return { page, search, preparation, selected, rights, setRights, pending, codeTarget, issued, copied, copyFailed, uncertain, attach, unattached,
     reset, snapshot, apply, searchClients, moreClients, openClient, closeClient, saveFiche,
     startCode, stopCode, issueCode, resumeCode, closeCode, revokeCode, copy, startAttach, stopAttach, searchUnattached, attachSchool };
 }

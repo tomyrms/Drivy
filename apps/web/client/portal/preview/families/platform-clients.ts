@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { platformClientCodeSchema, platformClientDetailSchema, platformUnattachedSchema } from '../../../platform-model';
 import { previewId } from '../fixtures';
 import type { PreviewBffRequest, PreviewTools } from '../family';
+import { commercialOf } from './platform-offers';
 
 type Client = z.infer<typeof platformClientDetailSchema>;
 type Code = z.infer<typeof platformClientCodeSchema>;
@@ -30,7 +31,7 @@ const schoolId = () => previewId(1800 + schoolCount++);
 
 const blank = (n: number, displayName: string | null, days: number): Client => ({
   id: previewId(1000 + n), displayName, preparation: 'AWAITING_SCHOOL', schoolId: null, school: null, contactName: null, contactEmail: null, contactPhone: null,
-  latestCode: null, commercial: { state: 'NOT_CONFIGURED', offer: null, dueDates: [] }, version: 1, createdAt: ago(days), updatedAt: ago(days),
+  latestCode: null, commercial: { state: 'NOT_CONFIGURED', offer: null, scheduledOffer: null, entitlementVersion: 1, dueDates: [] }, version: 1, createdAt: ago(days), updatedAt: ago(days),
   billing: { street: null, postalCode: null, city: null, country: null }, internalNotes: null, link: null, codes: [],
 });
 const addCode = (client: Client, state: Code['state'], issued: number, validity: number, school: Facts | null = null): Code => {
@@ -101,6 +102,8 @@ function view(client: Client): Client {
   const latest = copy.codes[0];
   copy.latestCode = latest ? { id: latest.id, state: latest.state, expiresAt: latest.expiresAt, createdAt: latest.createdAt } : null;
   copy.preparation = prepare(copy);
+  // L'offre vient du registre des droits (R01-T03), jamais d'une copie dans la fiche.
+  copy.commercial = commercialOf(copy.id);
   return copy;
 }
 function summary(client: Client) {
