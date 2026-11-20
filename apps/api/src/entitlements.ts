@@ -5,7 +5,8 @@ import type { TokenVerifier } from './auth.js';
 import { withActor } from './database.js';
 import { ApiError, notFound } from './errors.js';
 import {
-  moduleActionAllowed, schoolEntitlementsView, type ActionClass, type EntitlementDetailRow, type ModuleCode, type ModuleUsage, type SchoolEntitlementRow,
+  moduleActionAllowed, schoolEntitlementsView, type ActionClass, type EntitlementDetailRow, type ModuleAccess, type ModuleCode, type ModuleUsage,
+  type SchoolEntitlementRow,
 } from './entitlements-model.js';
 
 /**
@@ -16,14 +17,27 @@ const messages: Record<ModuleCode, string> = {
   MESSAGING: 'La messagerie n’est pas incluse dans l’offre de cette école.',
   COLLECTIVE_COURSES: 'Les cours collectifs ne sont pas inclus dans l’offre de cette école.',
 };
-export const moduleNotEntitled = (module: ModuleCode) => new ApiError(403, 'MODULE_NOT_ENTITLED', messages[module]);
+/**
+ * Même code pour tout refus d'usage nouveau (les clients existants le reconnaissent déjà) ; le texte dit la marche à suivre quand la cause
+ * est le cycle commercial (R01-T04) : essai terminé ou contrat résilié. L'historique et les engagements en cours restent accessibles.
+ */
+const restrictedMessages: Record<Exclude<ModuleAccess, 'ENTITLED' | 'NOT_ENTITLED'>, string> = {
+  TRIAL_EXPIRED: 'L’essai de cette école est terminé. Contactez Drivy pour le prolonger ou passer à l’abonnement.',
+  TERMINATED: 'Le contrat de cette école est résilié. L’historique reste consultable.',
+};
+export const moduleNotEntitled = (module: ModuleCode, access: ModuleAccess = 'NOT_ENTITLED') =>
+  new ApiError(403, 'MODULE_NOT_ENTITLED', access === 'TRIAL_EXPIRED' || access === 'TERMINATED' ? restrictedMessages[access] : messages[module]);
 
 type Queryable = Pick<PoolClient, 'query'>;
 
 /** Lit le droit commercial de l'école courante sur un module ; faux pour un appelant qui n'est pas membre de l'école (échec fermé). */
 export async function schoolModuleEntitled(db: Queryable, schoolId: string, module: ModuleCode): Promise<boolean> {
-  const row = (await db.query<{ entitled: boolean }>('SELECT drivy.school_module_entitled($1::uuid,$2::text) AS entitled', [schoolId, module])).rows[0];
-  return row?.entitled === true;
+  return (await schoolModuleAccess(db, schoolId, module)) === 'ENTITLED';
+}
+/** Accès d'un usage nouveau et sa raison ; NOT_ENTITLED pour un appelant hors de l'école ou une réponse inattendue (échec fermé). */
+export async function schoolModuleAccess(db: Queryable, schoolId: string, module: ModuleCode): Promise<ModuleAccess> {
+  const row = (await db.query<{ access: string }>('SELECT drivy.school_module_access($1::uuid,$2::text) AS access', [schoolId, module])).rows[0];
+  return row?.access === 'ENTITLED' || row?.access === 'TRIAL_EXPIRED' || row?.access === 'TERMINATED' ? row.access : 'NOT_ENTITLED';
 }
 
 /**
@@ -32,7 +46,8 @@ export async function schoolModuleEntitled(db: Queryable, schoolId: string, modu
  */
 export async function requireModule(db: Queryable, schoolId: string, module: ModuleCode, action: ActionClass = 'WRITE_NEW'): Promise<void> {
   if (moduleActionAllowed(false, action)) return;
-  if (!(await schoolModuleEntitled(db, schoolId, module))) throw moduleNotEntitled(module);
+  const access = await schoolModuleAccess(db, schoolId, module);
+  if (access !== 'ENTITLED') throw moduleNotEntitled(module, access);
 }
 
 export async function readSchoolEntitlements(db: Queryable, schoolId: string, at: Date = new Date()) {

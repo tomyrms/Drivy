@@ -18,6 +18,7 @@ import { registerPlatform } from './platform.js';
 import { registerPlatformClients } from './platform-clients.js';
 import { registerPlatformOffers } from './platform-offers.js';
 import { registerEntitlements } from './entitlements.js';
+import { registerPlatformCommercial } from './platform-commercial.js';
 import type { SchoolOpeningConfig } from './school-opening-model.js';
 import { registerInvitations } from './invitations.js';
 import { registerAccounts } from './accounts.js';
@@ -235,6 +236,7 @@ export function buildApp(options: { metricsClock?: () => Date; gpsOnlyQualificat
   registerPlatformClients(app,options);
   registerPlatformOffers(app,options);
   registerEntitlements(app,options);
+  registerPlatformCommercial(app,options);
   registerInvitations(app,options);
   registerAccounts(app,options);
   registerAccountRecovery(app,options);

@@ -1,5 +1,7 @@
 import { z } from 'zod';
-import { adjustmentPhases, assignmentPhases, commercialStates, consequenceKinds, entitlementEffects, moduleCodes } from './entitlements-model.js';
+import {
+  actionClasses, adjustmentPhases, assignmentPhases, commercialLifecycles, commercialStates, consequenceKinds, entitlementEffects, moduleCodes, restrictionReasons,
+} from './entitlements-model.js';
 import { commercialOfferSchema } from './platform-clients-contract.js';
 import { offerStatuses } from './platform-offers-model.js';
 
@@ -55,9 +57,15 @@ export const platformOfferEnvelope = envelope(offerSchema);
 export const clientEntitlementsEnvelope = envelope(clientEntitlementsSchema);
 export const assignmentPreviewEnvelope = envelope(assignmentPreviewSchema);
 
-/** Côté école (iPhone, web) : l'état et les modules accordés, rien d'autre. Jamais l'offre, le motif, l'auteur ni l'historique. */
+/**
+ * Côté école (iPhone, web) : l'état, le cycle commercial et les modules accordés. Jamais l'offre, un montant, le motif, l'auteur ni l'historique.
+ * `restriction` (essai terminé, contrat résilié) ferme l'usage nouveau ; la consultation et la fin des engagements pris restent ouvertes.
+ */
 export const schoolEntitlementsSchema = z.object({
-  state: z.enum(commercialStates), modules: z.array(z.object({ code: moduleCode, entitled: z.boolean() }).strict()), version: z.number().int().min(1),
+  state: z.enum(commercialStates), lifecycle: z.enum(commercialLifecycles),
+  restriction: z.object({ reason: z.enum(restrictionReasons), closes: z.array(z.enum(actionClasses)) }).strict().nullable(),
+  trialEndsAt: timestamp.nullable(), paidStartsOn: z.iso.date().nullable(), terminationOn: z.iso.date().nullable(),
+  modules: z.array(z.object({ code: moduleCode, entitled: z.boolean() }).strict()), version: z.number().int().min(1),
   nextChangeAt: timestamp.nullable(), computedAt: timestamp
 }).strict();
 export const schoolEntitlementsEnvelope = envelope(schoolEntitlementsSchema);

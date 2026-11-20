@@ -19,6 +19,19 @@ export const commercialStates = ['NOT_CONFIGURED', 'OFFER_ACTIVE'] as const;
 export type CommercialState = (typeof commercialStates)[number];
 
 /**
+ * Cycle commercial (R01-T04, #456), distinct de `state` qui garde son sens de R01-T03 (offre en vigueur ou non). NONE = école pilote ou
+ * sans essai ni début payant : aucune restriction. TRIAL_EXPIRED et TERMINATED ferment l'usage nouveau de tous les modules (`restriction`) ;
+ * la consultation de l'historique et la fin des engagements déjà pris restent possibles. Précédence : TERMINATED > PAID > TRIAL > TRIAL_EXPIRED.
+ */
+export const commercialLifecycles = ['NONE', 'TRIAL', 'TRIAL_EXPIRED', 'PAID', 'TERMINATED'] as const;
+export type CommercialLifecycle = (typeof commercialLifecycles)[number];
+export const restrictionReasons = ['TRIAL_EXPIRED', 'TERMINATED'] as const;
+export interface CommercialRestriction { reason: (typeof restrictionReasons)[number]; closes: ActionClass[] }
+/** Raison rendue par `drivy.school_module_access` pour un usage nouveau. */
+export const moduleAccesses = ['ENTITLED', 'NOT_ENTITLED', 'TRIAL_EXPIRED', 'TERMINATED'] as const;
+export type ModuleAccess = (typeof moduleAccesses)[number];
+
+/**
  * Classes d'action d'un module. Un retrait commercial ne bloque que l'usage NOUVEAU ; l'historique reste consultable selon les règles
  * existantes de chaque module et les engagements en cours peuvent se terminer (le justificatif, le trajet, la séance déjà acceptée).
  */
@@ -39,16 +52,26 @@ export type ConsequenceKind = (typeof consequenceKinds)[number];
 export interface AssignmentRow { id: string; offerId: string; offerName: string; effectiveAt: string; modules: string[] }
 export interface AdjustmentDetail { id: string; effect: EntitlementEffect; reason: string; createdAt: string; createdByName: string | null }
 export interface EntitlementModuleRow { code: string; inOffer: boolean; entitled: boolean; adjustment: AdjustmentDetail | null }
+/** Ligne rendue par `drivy.platform_client_entitlement_core` : droits en vigueur et cycle commercial. */
+export interface EntitlementCoreRow {
+  state: CommercialState; lifecycle: CommercialLifecycle; restriction: CommercialRestriction | null;
+  trial: { startsAt: string; endsAt: string } | null; paidStartsOn: string | null; terminationOn: string | null;
+  assignment: AssignmentRow | null; scheduled: AssignmentRow | null; modules: EntitlementModuleRow[]; version: number; nextChangeAt: string | null;
+}
 /** Ligne rendue par `drivy.platform_client_entitlements` (équipe) : droits en vigueur et historique. */
 export interface EntitlementDetailRow {
   state: CommercialState; assignment: AssignmentRow | null; scheduled: AssignmentRow | null; modules: EntitlementModuleRow[];
-  version: number; nextChangeAt: string | null;
+  version: number; nextChangeAt: string | null; lifecycle?: CommercialLifecycle;
   assignments: Array<AssignmentRow & { status: 'ACTIVE' | 'CANCELLED'; createdAt: string; createdByName: string | null; cancelledAt: string | null }>;
   adjustments: Array<{ id: string; assignmentId: string; moduleCode: string; effect: EntitlementEffect; reason: string; createdAt: string;
     createdByName: string | null; liftedAt: string | null; liftedByName: string | null; liftReason: string | null }>;
 }
 /** Ligne rendue par `drivy.school_entitlements` (école) : ni offre, ni motif, ni auteur. */
-export interface SchoolEntitlementRow { state: CommercialState; modules: Array<{ code: string; entitled: boolean }>; version: number; nextChangeAt: string | null }
+export interface SchoolEntitlementRow {
+  state: CommercialState; modules: Array<{ code: string; entitled: boolean }>; version: number; nextChangeAt: string | null;
+  /** Cycle commercial (R01-T04) ; absent d'une base qui n'a pas encore la migration : NONE, sans restriction. */
+  lifecycle?: CommercialLifecycle; restriction?: CommercialRestriction | null; trialEndsAt?: string | null; paidStartsOn?: string | null; terminationOn?: string | null;
+}
 export type ModuleUsage = Record<string, Record<string, number>>;
 
 /** Horodatage de la base (`+00:00`, microsecondes) ramené au format ISO du contrat. */
@@ -56,15 +79,45 @@ export const iso = (value: string | Date | null | undefined) => value ? new Date
 
 export const assignmentView = (row: AssignmentRow | null) => row ? { offerId: row.offerId, name: row.offerName, effectiveAt: iso(row.effectiveAt)!, modules: [...row.modules] } : null;
 
-/** Projection commerciale d'une fiche (liste et détail) : état dérivé, offre en vigueur, offre programmée. `dueDates` est réservé à #456. */
-export interface ClientCommercial { commercial_state: CommercialState; offer: AssignmentRow | null; scheduled_offer: AssignmentRow | null; entitlement_version: number }
-export const commercialView = (item: ClientCommercial) => ({
-  state: item.commercial_state, offer: assignmentView(item.offer), scheduledOffer: assignmentView(item.scheduled_offer),
-  entitlementVersion: item.entitlement_version, dueDates: [] as string[],
+/**
+ * Projection commerciale d'une fiche (liste et détail) : état dérivé, offre en vigueur, offre programmée, cycle et jalons (R01-T04).
+ * `dueDates` annonce les échéances commerciales datées à venir (fin d'essai, début payant, prochaine période facturable si les conditions
+ * sont complètes, résiliation), en instants (minuit à Zurich pour un jour). Prévisionnel : aucune facture n'est émise ici (#457).
+ */
+export interface ClientCommercial {
+  commercial_state: CommercialState; offer: AssignmentRow | null; scheduled_offer: AssignmentRow | null; entitlement_version: number;
+  lifecycle?: CommercialLifecycle | null; trial_ends_at?: string | null; paid_starts_on?: string | null; termination_on?: string | null; billing_ready?: boolean | null;
+}
+/** Minuit à Zurich du jour donné, en instant UTC (le décalage d'heure d'été est relu pour ce jour). */
+export function zurichMidnight(day: string): Date {
+  const guess = new Date(`${day}T00:00:00Z`);
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Zurich', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(guess);
+  const hour = Number(parts.find(part => part.type === 'hour')?.value ?? 0); const minute = Number(parts.find(part => part.type === 'minute')?.value ?? 0);
+  return new Date(guess.getTime() - (hour * 60 + minute) * 60_000);
+}
+export function commercialDueDates(item: ClientCommercial, nextPeriodOn: string | null, now: Date): string[] {
+  const dates = [
+    item.lifecycle === 'TRIAL' ? iso(item.trial_ends_at) : null,
+    item.paid_starts_on ? zurichMidnight(item.paid_starts_on).toISOString() : null,
+    nextPeriodOn ? zurichMidnight(nextPeriodOn).toISOString() : null,
+    item.termination_on ? zurichMidnight(item.termination_on).toISOString() : null,
+  ].filter((value): value is string => value !== null && new Date(value) > now);
+  return [...new Set(dates)].sort();
+}
+/** `nextPeriodOn` : prochain début de période calculé par l'appelant ; ignoré tant que les conditions ne sont pas complètes. */
+export const commercialView = (item: ClientCommercial, nextPeriodOn: string | null = null, now: Date = new Date()) => ({
+  state: item.commercial_state, lifecycle: (item.lifecycle ?? 'NONE') as CommercialLifecycle,
+  offer: assignmentView(item.offer), scheduledOffer: assignmentView(item.scheduled_offer),
+  trialEndsAt: iso(item.trial_ends_at), paidStartsOn: item.paid_starts_on ?? null, terminationOn: item.termination_on ?? null,
+  billingReady: item.billing_ready === true, entitlementVersion: item.entitlement_version,
+  dueDates: commercialDueDates(item, item.billing_ready === true ? nextPeriodOn : null, now),
 });
 
 export const schoolEntitlementsView = (row: SchoolEntitlementRow, computedAt: Date) => ({
-  state: row.state, modules: row.modules.map(module => ({ code: module.code, entitled: module.entitled })), version: row.version,
+  state: row.state, lifecycle: row.lifecycle ?? 'NONE',
+  restriction: row.restriction ? { reason: row.restriction.reason, closes: [...row.restriction.closes] } : null,
+  trialEndsAt: iso(row.trialEndsAt), paidStartsOn: row.paidStartsOn ?? null, terminationOn: row.terminationOn ?? null,
+  modules: row.modules.map(module => ({ code: module.code, entitled: module.entitled })), version: row.version,
   nextChangeAt: iso(row.nextChangeAt), computedAt: computedAt.toISOString(),
 });
 

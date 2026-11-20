@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { openingToken } from './school-opening-model.js';
 import { platformEmail } from './platform-model.js';
 import { commercialView, type ClientCommercial } from './entitlements-model.js';
+import { nextPeriodStart, zurichDay } from './platform-commercial-model.js';
 
 /**
  * Écoles clientes de la plateforme (R01-T02, #454). Une fiche cliente est la relation commerciale avec une école : elle peut
@@ -100,7 +101,8 @@ const codeView = (code: ClientItem['latest_code']) => code ? { id: code.id, stat
 
 export const clientSummary = (item: ClientItem) => ({
   id: item.id, displayName: item.display_name, preparation: item.preparation, schoolId: item.school_id, school: schoolView(item.school),
-  contactName: item.contact_name, contactEmail: item.contact_email, latestCode: codeView(item.latest_code), commercial: commercialView(item),
+  contactName: item.contact_name, contactEmail: item.contact_email, latestCode: codeView(item.latest_code),
+  commercial: commercialView(item, item.paid_starts_on ? nextPeriodStart(item.paid_starts_on, zurichDay(new Date())) : null),
   version: item.version, createdAt: iso(item.created_at)!, updatedAt: iso(item.updated_at)!,
 });
 export const clientDetail = (item: ClientItem, codes: ReturnType<typeof codeProjection>[]) => ({

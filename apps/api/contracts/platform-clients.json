@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:platform-clients:1",
   "title": "Écoles clientes et codes d’ouverture (R01-T02, #454)",
-  "description": "GET et POST /v1/platform/clients, GET et PATCH /v1/platform/clients/{id}, POST /v1/platform/clients/{id}/attach-school, GET /v1/platform/unattached-schools, GET et POST /v1/platform/school-codes, POST /v1/platform/school-codes/{id}/revoke. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Mêmes règles d’accès que le contrat des opérateurs : équipe relue en base à chaque requête, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId, If-Match \"N\" sur la modification et le rattachement (428 sans version, 412 VERSION_CONFLICT si elle a changé). Une fiche cliente est la relation commerciale avec une école : elle peut précéder l’école (code distribué), aucune zone n’est obligatoire. L’école et son premier ADMIN ne sont reliés qu’une fois, à l’utilisation du code ou par un rattachement explicite d’une école déjà ouverte ; le destinataire ne choisit ni offre ni privilège. L’état de préparation (AWAITING_SCHOOL, IN_PREPARATION, ACTIVE, ARCHIVED) est dérivé des faits de l’école et reste distinct de l’état commercial (NOT_CONFIGURED ou OFFER_ACTIVE, R01-T03 ; les montants, essais et échéances relèvent de #456, dueDates reste vide). Le code d’ouverture est tiré par la passerelle et ne figure dans aucune réponse du service : seule son empreinte à clé serveur est conservée. Les projections d’école se limitent à son nom, son contact, son état et la progression de sa mise en place : jamais un dossier, un trajet ni un message.",
+  "description": "GET et POST /v1/platform/clients, GET et PATCH /v1/platform/clients/{id}, POST /v1/platform/clients/{id}/attach-school, GET /v1/platform/unattached-schools, GET et POST /v1/platform/school-codes, POST /v1/platform/school-codes/{id}/revoke. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Mêmes règles d’accès que le contrat des opérateurs : équipe relue en base à chaque requête, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId, If-Match \"N\" sur la modification et le rattachement (428 sans version, 412 VERSION_CONFLICT si elle a changé). Une fiche cliente est la relation commerciale avec une école : elle peut précéder l’école (code distribué), aucune zone n’est obligatoire. L’école et son premier ADMIN ne sont reliés qu’une fois, à l’utilisation du code ou par un rattachement explicite d’une école déjà ouverte ; le destinataire ne choisit ni offre ni privilège. L’état de préparation (AWAITING_SCHOOL, IN_PREPARATION, ACTIVE, ARCHIVED) est dérivé des faits de l’école et reste distinct de l’état commercial (NOT_CONFIGURED ou OFFER_ACTIVE, R01-T03) et du cycle commercial (lifecycle : NONE, TRIAL, TRIAL_EXPIRED, PAID, TERMINATED, R01-T04). dueDates liste au plus quatre échéances datées à venir (fin d’essai, début payant, prochaine période si les conditions sont complètes, résiliation), jamais un montant. Le code d’ouverture est tiré par la passerelle et ne figure dans aucune réponse du service : seule son empreinte à clé serveur est conservée. Les projections d’école se limitent à son nom, son contact, son état et la progression de sa mise en place : jamais un dossier, un trajet ni un message.",
   "$defs": {
     "PlatformClientSummary": {
       "type": "object",
@@ -196,6 +196,16 @@
                 "OFFER_ACTIVE"
               ]
             },
+            "lifecycle": {
+              "type": "string",
+              "enum": [
+                "NONE",
+                "TRIAL",
+                "TRIAL_EXPIRED",
+                "PAID",
+                "TERMINATED"
+              ]
+            },
             "offer": {
               "anyOf": [
                 {
@@ -284,13 +294,52 @@
                 }
               ]
             },
+            "trialEndsAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "paidStartsOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "terminationOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "billingReady": {
+              "type": "boolean"
+            },
             "entitlementVersion": {
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991
             },
             "dueDates": {
-              "maxItems": 0,
+              "maxItems": 4,
               "type": "array",
               "items": {
                 "type": "string",
@@ -301,8 +350,13 @@
           },
           "required": [
             "state",
+            "lifecycle",
             "offer",
             "scheduledOffer",
+            "trialEndsAt",
+            "paidStartsOn",
+            "terminationOn",
+            "billingReady",
             "entitlementVersion",
             "dueDates"
           ],
@@ -532,6 +586,16 @@
                 "OFFER_ACTIVE"
               ]
             },
+            "lifecycle": {
+              "type": "string",
+              "enum": [
+                "NONE",
+                "TRIAL",
+                "TRIAL_EXPIRED",
+                "PAID",
+                "TERMINATED"
+              ]
+            },
             "offer": {
               "anyOf": [
                 {
@@ -620,13 +684,52 @@
                 }
               ]
             },
+            "trialEndsAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "paidStartsOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "terminationOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "billingReady": {
+              "type": "boolean"
+            },
             "entitlementVersion": {
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991
             },
             "dueDates": {
-              "maxItems": 0,
+              "maxItems": 4,
               "type": "array",
               "items": {
                 "type": "string",
@@ -637,8 +740,13 @@
           },
           "required": [
             "state",
+            "lifecycle",
             "offer",
             "scheduledOffer",
+            "trialEndsAt",
+            "paidStartsOn",
+            "terminationOn",
+            "billingReady",
             "entitlementVersion",
             "dueDates"
           ],
@@ -1435,6 +1543,16 @@
                     "OFFER_ACTIVE"
                   ]
                 },
+                "lifecycle": {
+                  "type": "string",
+                  "enum": [
+                    "NONE",
+                    "TRIAL",
+                    "TRIAL_EXPIRED",
+                    "PAID",
+                    "TERMINATED"
+                  ]
+                },
                 "offer": {
                   "anyOf": [
                     {
@@ -1523,13 +1641,52 @@
                     }
                   ]
                 },
+                "trialEndsAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "paidStartsOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "terminationOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "billingReady": {
+                  "type": "boolean"
+                },
                 "entitlementVersion": {
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 9007199254740991
                 },
                 "dueDates": {
-                  "maxItems": 0,
+                  "maxItems": 4,
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1540,8 +1697,13 @@
               },
               "required": [
                 "state",
+                "lifecycle",
                 "offer",
                 "scheduledOffer",
+                "trialEndsAt",
+                "paidStartsOn",
+                "terminationOn",
+                "billingReady",
                 "entitlementVersion",
                 "dueDates"
               ],
@@ -2458,6 +2620,16 @@
                           "OFFER_ACTIVE"
                         ]
                       },
+                      "lifecycle": {
+                        "type": "string",
+                        "enum": [
+                          "NONE",
+                          "TRIAL",
+                          "TRIAL_EXPIRED",
+                          "PAID",
+                          "TERMINATED"
+                        ]
+                      },
                       "offer": {
                         "anyOf": [
                           {
@@ -2546,13 +2718,52 @@
                           }
                         ]
                       },
+                      "trialEndsAt": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "paidStartsOn": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "terminationOn": {
+                        "anyOf": [
+                          {
+                            "type": "string",
+                            "format": "date",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "billingReady": {
+                        "type": "boolean"
+                      },
                       "entitlementVersion": {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 9007199254740991
                       },
                       "dueDates": {
-                        "maxItems": 0,
+                        "maxItems": 4,
                         "type": "array",
                         "items": {
                           "type": "string",
@@ -2563,8 +2774,13 @@
                     },
                     "required": [
                       "state",
+                      "lifecycle",
                       "offer",
                       "scheduledOffer",
+                      "trialEndsAt",
+                      "paidStartsOn",
+                      "terminationOn",
+                      "billingReady",
                       "entitlementVersion",
                       "dueDates"
                     ],
@@ -2842,6 +3058,16 @@
                     "OFFER_ACTIVE"
                   ]
                 },
+                "lifecycle": {
+                  "type": "string",
+                  "enum": [
+                    "NONE",
+                    "TRIAL",
+                    "TRIAL_EXPIRED",
+                    "PAID",
+                    "TERMINATED"
+                  ]
+                },
                 "offer": {
                   "anyOf": [
                     {
@@ -2930,13 +3156,52 @@
                     }
                   ]
                 },
+                "trialEndsAt": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "paidStartsOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "terminationOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "billingReady": {
+                  "type": "boolean"
+                },
                 "entitlementVersion": {
                   "type": "integer",
                   "minimum": 1,
                   "maximum": 9007199254740991
                 },
                 "dueDates": {
-                  "maxItems": 0,
+                  "maxItems": 4,
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -2947,8 +3212,13 @@
               },
               "required": [
                 "state",
+                "lifecycle",
                 "offer",
                 "scheduledOffer",
+                "trialEndsAt",
+                "paidStartsOn",
+                "terminationOn",
+                "billingReady",
                 "entitlementVersion",
                 "dueDates"
               ],
@@ -4061,6 +4331,16 @@
                         "OFFER_ACTIVE"
                       ]
                     },
+                    "lifecycle": {
+                      "type": "string",
+                      "enum": [
+                        "NONE",
+                        "TRIAL",
+                        "TRIAL_EXPIRED",
+                        "PAID",
+                        "TERMINATED"
+                      ]
+                    },
                     "offer": {
                       "anyOf": [
                         {
@@ -4149,13 +4429,52 @@
                         }
                       ]
                     },
+                    "trialEndsAt": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "paidStartsOn": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "terminationOn": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "billingReady": {
+                      "type": "boolean"
+                    },
                     "entitlementVersion": {
                       "type": "integer",
                       "minimum": 1,
                       "maximum": 9007199254740991
                     },
                     "dueDates": {
-                      "maxItems": 0,
+                      "maxItems": 4,
                       "type": "array",
                       "items": {
                         "type": "string",
@@ -4166,8 +4485,13 @@
                   },
                   "required": [
                     "state",
+                    "lifecycle",
                     "offer",
                     "scheduledOffer",
+                    "trialEndsAt",
+                    "paidStartsOn",
+                    "terminationOn",
+                    "billingReady",
                     "entitlementVersion",
                     "dueDates"
                   ],

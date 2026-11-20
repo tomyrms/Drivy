@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:school-entitlements:1",
   "title": "Droits commerciaux aux modules, côté école (R01-T03, #455)",
-  "description": "GET /v1/schools/{schoolId}/entitlements. Réservé aux membres actifs de l’école, tous rôles confondus. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. La réponse dit seulement l’état commercial et les modules accordés (version, prochain changement, heure de calcul) : ni offre, ni motif, ni auteur, ni historique. La web et l’iPhone relisent cette projection à l’ouverture et au retour en avant-plan ; un client ancien ou hors ligne n’est jamais l’autorité, car chaque écriture concernée est de toute façon refusée au serveur par 403 MODULE_NOT_ENTITLED. L’ETag porte la version des droits ; la réponse n’est jamais mise en cache (Cache-Control: no-store).",
+  "description": "GET /v1/schools/{schoolId}/entitlements. Réservé aux membres actifs de l’école, tous rôles confondus. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. La réponse dit seulement l’état commercial, le cycle commercial (lifecycle, restriction, fin d’essai, début payant, résiliation) et les modules accordés (version, prochain changement, heure de calcul) : ni offre, ni montant, ni motif, ni auteur, ni historique. Un essai terminé ou un contrat résilié ferme tout usage nouveau (restriction.closes = WRITE_NEW) avec le même 403 MODULE_NOT_ENTITLED, dont le titre dit la marche à suivre ; la consultation et la fin des engagements déjà pris restent permises. Une école pilote sans essai ni début payant reste NONE, sans restriction. La web et l’iPhone relisent cette projection à l’ouverture et au retour en avant-plan ; un client ancien ou hors ligne n’est jamais l’autorité, car chaque écriture concernée est de toute façon refusée au serveur par 403 MODULE_NOT_ENTITLED. L’ETag porte la version des droits ; la réponse n’est jamais mise en cache (Cache-Control: no-store).",
   "$defs": {
     "SchoolEntitlements": {
       "type": "object",
@@ -12,6 +12,87 @@
           "enum": [
             "NOT_CONFIGURED",
             "OFFER_ACTIVE"
+          ]
+        },
+        "lifecycle": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "TRIAL",
+            "TRIAL_EXPIRED",
+            "PAID",
+            "TERMINATED"
+          ]
+        },
+        "restriction": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "TRIAL_EXPIRED",
+                    "TERMINATED"
+                  ]
+                },
+                "closes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "READ_HISTORY",
+                      "COMPLETE_COMMITMENT",
+                      "WRITE_NEW"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "reason",
+                "closes"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trialEndsAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paidStartsOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "terminationOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "modules": {
@@ -62,6 +143,11 @@
       },
       "required": [
         "state",
+        "lifecycle",
+        "restriction",
+        "trialEndsAt",
+        "paidStartsOn",
+        "terminationOn",
         "modules",
         "version",
         "nextChangeAt",
@@ -80,6 +166,87 @@
               "enum": [
                 "NOT_CONFIGURED",
                 "OFFER_ACTIVE"
+              ]
+            },
+            "lifecycle": {
+              "type": "string",
+              "enum": [
+                "NONE",
+                "TRIAL",
+                "TRIAL_EXPIRED",
+                "PAID",
+                "TERMINATED"
+              ]
+            },
+            "restriction": {
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "TRIAL_EXPIRED",
+                        "TERMINATED"
+                      ]
+                    },
+                    "closes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "READ_HISTORY",
+                          "COMPLETE_COMMITMENT",
+                          "WRITE_NEW"
+                        ]
+                      }
+                    }
+                  },
+                  "required": [
+                    "reason",
+                    "closes"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "trialEndsAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "paidStartsOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "terminationOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "modules": {
@@ -130,6 +297,11 @@
           },
           "required": [
             "state",
+            "lifecycle",
+            "restriction",
+            "trialEndsAt",
+            "paidStartsOn",
+            "terminationOn",
             "modules",
             "version",
             "nextChangeAt",

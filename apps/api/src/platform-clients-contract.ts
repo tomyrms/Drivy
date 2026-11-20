@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { clientPreparations, codeStates, setupStepCount } from './platform-clients-model.js';
-import { commercialStates, moduleCodes } from './entitlements-model.js';
+import { commercialLifecycles, commercialStates, moduleCodes } from './entitlements-model.js';
 
 /**
  * Extension exécutable du dépôt (R01-T02, #454) : écoles clientes et codes d'ouverture. L'OpenAPI canonique 3.11.0 reste immuable.
@@ -23,10 +23,14 @@ export const schoolFactsSchema = z.object({
 export const clientCodeStateSchema = z.object({ id: z.uuid(), state: z.enum(codeStates), expiresAt: timestamp, createdAt: timestamp }).strict();
 /** Offre attribuée à la fiche : nom et modules copiés à l'attribution, date d'effet. Ni montant ni condition (#456). */
 export const commercialOfferSchema = z.object({ offerId: z.uuid(), name: z.string().min(1).max(100), effectiveAt: timestamp, modules: z.array(z.enum(moduleCodes)) }).strict();
-/** État commercial dérivé des attributions (R01-T03) ; `dueDates` reste l'emplacement réservé aux échéances de #456. */
+/**
+ * État commercial dérivé des attributions (R01-T03) et cycle commercial (R01-T04) : essai, début payant, résiliation. `dueDates` liste les
+ * échéances datées à venir (instants) ; `billingReady` = début payant confirmé et conditions complètes. Jamais un montant dans la liste.
+ */
 export const commercialSchema = z.object({
-  state: z.enum(commercialStates), offer: commercialOfferSchema.nullable(), scheduledOffer: commercialOfferSchema.nullable(),
-  entitlementVersion: z.number().int().min(1), dueDates: z.array(timestamp).max(0)
+  state: z.enum(commercialStates), lifecycle: z.enum(commercialLifecycles), offer: commercialOfferSchema.nullable(), scheduledOffer: commercialOfferSchema.nullable(),
+  trialEndsAt: timestamp.nullable(), paidStartsOn: z.iso.date().nullable(), terminationOn: z.iso.date().nullable(), billingReady: z.boolean(),
+  entitlementVersion: z.number().int().min(1), dueDates: z.array(timestamp).max(4)
 }).strict();
 
 export const platformCodeSchema = z.object({

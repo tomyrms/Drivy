@@ -168,6 +168,22 @@ export function databaseRefusal(error: unknown): ApiError | undefined {
   if (code === '23514' && message.includes('platform_adjustment_assignment_ended')) return new ApiError(409, 'ADJUSTMENT_REQUIRES_OFFER', 'Cette école n’a pas d’offre en vigueur à ajuster.');
   if (code === '23505' && constraint === 'platform_adjustment_active') return new ApiError(409, 'ADJUSTMENT_ACTIVE', 'Un ajustement est déjà actif pour ce module.');
   if (code === '23503' && constraint === 'platform_module_adjustment_module_code_fkey') return new ApiError(404, 'MODULE_UNKNOWN', 'Ce module n’existe pas.');
+  // Conditions commerciales, essai, début payant et demandes (R01-T04).
+  if (code === '23514' && (message.includes('platform_terms_backdated') || message.includes('platform_paid_start_backdated') || message.includes('platform_request_backdated'))) {
+    return new ApiError(409, 'EFFECTIVE_DATE_PAST', 'La date doit être aujourd’hui ou plus tard.');
+  }
+  if (code === '23514' && message.includes('platform_terms_exception_reason')) return new ApiError(409, 'TERMS_EXCEPTION_REASON_REQUIRED', 'Cette date n’est pas un début de période. Indiquez le motif de l’exception.');
+  if (code === '23514' && message.includes('platform_terms_incomplete')) return new ApiError(409, 'TERMS_INCOMPLETE', 'Les conditions applicables à cette date sont à compléter.');
+  if (code === '23514' && message.includes('platform_trial_closed')) return new ApiError(409, 'TRIAL_CLOSED', 'L’essai n’est plus possible pour cette école.');
+  if (code === '23514' && /platform_trial_(start|extend|end)/.test(message)) return new ApiError(409, 'TRIAL_CHANGE_INVALID', 'Ce changement d’essai n’est pas possible. Rechargez la fiche.');
+  if (code === '23514' && message.includes('platform_paid_start_started')) return new ApiError(409, 'PAID_START_STARTED', 'Le payant a déjà commencé. Passez par une résiliation.');
+  if (code === '23514' && message.includes('platform_client_terminated')) return new ApiError(409, 'CLIENT_TERMINATED', 'La résiliation de cette école est confirmée.');
+  if (code === '23514' && message.includes('platform_request_transition')) return new ApiError(409, 'REQUEST_CLOSED', 'Cette demande a déjà reçu une décision.');
+  if (code === '23505' && constraint === 'platform_paid_start_active') return new ApiError(409, 'PAID_START_EXISTS', 'Un début payant est déjà confirmé.');
+  if (code === '23505' && constraint === 'platform_termination_accepted') return new ApiError(409, 'CLIENT_TERMINATED', 'La résiliation de cette école est confirmée.');
+  if (code === '23505' && (constraint === 'platform_commercial_terms_client_id_sequence_key' || constraint === 'platform_trial_change_client_id_sequence_key')) {
+    return new ApiError(412, 'VERSION_CONFLICT', 'Le dossier commercial de cette école a changé. Rechargez-le avant de confirmer.');
+  }
   return undefined;
 }
 

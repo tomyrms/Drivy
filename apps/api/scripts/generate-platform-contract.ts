@@ -21,6 +21,12 @@ import {
 import {
   adjustModuleBody, assignOfferBody, assignmentPreviewQuery, createOfferBody, liftAdjustmentBody, offerCommandBody, offerListQuery, updateOfferBody
 } from '../src/platform-offers-model.js';
+import {
+  commercialDetailEnvelope, commercialDetailSchema, commercialRequestSchema, commercialRestrictionSchema, termsVersionSchema, trialChangeSchema
+} from '../src/platform-commercial-contract.js';
+import {
+  decisionBody, paidStartBody, paidStartCancelBody, requestBody, termsBody, trialEndBody, trialExtendBody, trialStartBody
+} from '../src/platform-commercial-model.js';
 
 // Extension d'implémentation ; le contrat OpenAPI canonique 3.11.0 reste inchangé.
 const project = (schema: z.ZodType) => { const { $schema: _ignored, ...definition } = z.toJSONSchema(schema, { io: 'input' }); return definition; };
@@ -72,7 +78,8 @@ await writeFile(new URL('../contracts/platform-clients.json', import.meta.url), 
     + 'Une fiche cliente est la relation commerciale avec une école : elle peut précéder l’école (code distribué), aucune zone n’est obligatoire. '
     + 'L’école et son premier ADMIN ne sont reliés qu’une fois, à l’utilisation du code ou par un rattachement explicite d’une école déjà ouverte ; '
     + 'le destinataire ne choisit ni offre ni privilège. L’état de préparation (AWAITING_SCHOOL, IN_PREPARATION, ACTIVE, ARCHIVED) est dérivé des faits de l’école '
-    + 'et reste distinct de l’état commercial (NOT_CONFIGURED ou OFFER_ACTIVE, R01-T03 ; les montants, essais et échéances relèvent de #456, dueDates reste vide). '
+    + 'et reste distinct de l’état commercial (NOT_CONFIGURED ou OFFER_ACTIVE, R01-T03) et du cycle commercial (lifecycle : NONE, TRIAL, TRIAL_EXPIRED, PAID, TERMINATED, R01-T04). '
+    + 'dueDates liste au plus quatre échéances datées à venir (fin d’essai, début payant, prochaine période si les conditions sont complètes, résiliation), jamais un montant. '
     + 'Le code d’ouverture est tiré par la passerelle et ne figure dans aucune réponse du service : seule son empreinte à clé serveur est conservée. '
     + 'Les projections d’école se limitent à son nom, son contact, son état et la progression de sa mise en place : jamais un dossier, un trajet ni un message.',
   $defs: {
@@ -148,7 +155,10 @@ await writeFile(new URL('../contracts/school-entitlements.json', import.meta.url
   title: 'Droits commerciaux aux modules, côté école (R01-T03, #455)',
   description: 'GET /v1/schools/{schoolId}/entitlements. Réservé aux membres actifs de l’école, tous rôles confondus. '
     + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
-    + 'La réponse dit seulement l’état commercial et les modules accordés (version, prochain changement, heure de calcul) : ni offre, ni motif, ni auteur, ni historique. '
+    + 'La réponse dit seulement l’état commercial, le cycle commercial (lifecycle, restriction, fin d’essai, début payant, résiliation) et les modules accordés '
+    + '(version, prochain changement, heure de calcul) : ni offre, ni montant, ni motif, ni auteur, ni historique. '
+    + 'Un essai terminé ou un contrat résilié ferme tout usage nouveau (restriction.closes = WRITE_NEW) avec le même 403 MODULE_NOT_ENTITLED, dont le titre dit la marche à suivre ; '
+    + 'la consultation et la fin des engagements déjà pris restent permises. Une école pilote sans essai ni début payant reste NONE, sans restriction. '
     + 'La web et l’iPhone relisent cette projection à l’ouverture et au retour en avant-plan ; un client ancien ou hors ligne n’est jamais l’autorité, '
     + 'car chaque écriture concernée est de toute façon refusée au serveur par 403 MODULE_NOT_ENTITLED. '
     + 'L’ETag porte la version des droits ; la réponse n’est jamais mise en cache (Cache-Control: no-store).',
@@ -156,5 +166,41 @@ await writeFile(new URL('../contracts/school-entitlements.json', import.meta.url
     SchoolEntitlements: project(schoolEntitlementsSchema),
     SchoolEntitlementsEnvelope: project(schoolEntitlementsEnvelope),
     ModuleNotEntitled: project(moduleNotEntitledSchema)
+  }
+}, null, 2) + '\n');
+
+await writeFile(new URL('../contracts/platform-commercial.json', import.meta.url), JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:platform-commercial:1',
+  title: 'Conditions commerciales, essai, début payant et demandes (R01-T04, #456)',
+  description: 'GET /v1/platform/clients/{id}/commercial, POST /v1/platform/clients/{id}/commercial/terms, /trial/start, /trial/extend, /trial/end, '
+    + '/paid-start, /paid-start/cancel, /requests et /requests/{requestId}/decision. '
+    + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
+    + 'Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). '
+    + 'If-Match "N" porte la version du dossier commercial (428 sans version, 412 VERSION_CONFLICT si elle a changé) ; chaque commande rend le dossier relu après écriture. '
+    + 'Montants entiers en centimes de CHF ; jours commerciaux en Europe/Zurich. Une version de conditions redonne toutes ses valeurs (null = à compléter) ; '
+    + 'aucune n’est jamais modifiée ni supprimée. Après le début payant, une nouvelle version prend effet au prochain début de période ; '
+    + 'une autre date exige un motif (409 TERMS_EXCEPTION_REASON_REQUIRED). Aucun prorata. Les périodes gardent le jour du mois du début payant, '
+    + 'ramené au dernier jour des mois plus courts. Le début payant exige confirm=true, une date explicite et des conditions complètes à cette date (409 TERMS_INCOMPLETE). '
+    + 'Un essai expiré ne crée aucun montant ; il ferme l’usage nouveau (lifecycle TRIAL_EXPIRED) sans retirer la consultation. '
+    + 'Une résiliation acceptée est définitive et ferme l’usage nouveau à sa date. Les demandes (changement d’offre, résiliation) passent par '
+    + 'RECEIVED, IN_PROGRESS puis ACCEPTED, REFUSED ou WITHDRAWN ; une décision est définitive. '
+    + 'schedule est prévisionnel : aucune facture n’est émise (#457). billable n’est vrai qu’avec un début payant confirmé, des conditions complètes et sans résiliation effective. '
+    + 'Le journal commercial reçoit l’action et les montants, jamais un motif ni une réponse en texte libre.',
+  $defs: {
+    CommercialRestriction: project(commercialRestrictionSchema),
+    TermsVersion: project(termsVersionSchema),
+    TrialChange: project(trialChangeSchema),
+    CommercialRequest: project(commercialRequestSchema),
+    CommercialDetail: project(commercialDetailSchema),
+    TermsBody: project(termsBody),
+    TrialStartBody: project(trialStartBody),
+    TrialExtendBody: project(trialExtendBody),
+    TrialEndBody: project(trialEndBody),
+    PaidStartBody: project(paidStartBody),
+    PaidStartCancelBody: project(paidStartCancelBody),
+    RequestBody: project(requestBody),
+    DecisionBody: project(decisionBody),
+    CommercialDetailEnvelope: project(commercialDetailEnvelope),
+    PlatformError: project(platformErrorSchema)
   }
 }, null, 2) + '\n');
