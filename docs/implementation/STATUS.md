@@ -1,3 +1,49 @@
+## 20 novembre 2026 — R01-T04 : conditions commerciales, essai et début payant (#456)
+
+- Branche `tomyrms/r01-t04-conditions-commerciales`, issue de la tête de `tomyrms/r01-t03-offres-modules`. Aucune PR, rien de fusionné ni de déployé, rien de poussé. La note `docs/implementation/conditions-commerciales-20261116.md` détaille les décisions, le cycle, les règles des commandes, les limites et ce que #457 doit reprendre.
+- API :
+  - Migration `20261116_platform_commercial_terms.sql` :
+    - conditions versionnées en centimes de CHF, avec remises et durée ;
+    - délai de paiement et sort d'une suspension ;
+    - changements d'essai, débuts payants confirmés ou annulés, demandes de changement d'offre ou de résiliation ;
+    - RLS forcée, aucune suppression ;
+    - cycle `NONE` / `TRIAL` / `TRIAL_EXPIRED` / `PAID` / `TERMINATED` dérivé dans la base ;
+    - jours Europe/Zurich, période mensuelle à ancre stable, échéancier prévisionnel sans facture.
+  - Routes `GET` et `POST /v1/platform/clients/:id/commercial/...` : huit commandes versionnées et idempotentes.
+  - Un essai terminé ou une résiliation ferme l'usage nouveau de tous les modules : même `403 MODULE_NOT_ENTITLED`, titre adapté.
+  - Résumé du cycle sur la fiche, l'annuaire et la lecture école.
+  - Contrats `platform-commercial.json` (nouveau), `platform-clients.json` et `school-entitlements.json` étendus. L'OpenAPI canonique 3.11.0 n'est pas modifié.
+- Web :
+  - relais BFF à liste fermée ;
+  - rubrique « Contrat » de la fiche d'une école : cycle, essai, conditions, début payant, demandes, échéancier prévisionnel, historique, et une boîte de dialogue par commande ;
+  - badge d'annuaire pour un essai terminé ou une résiliation ;
+  - lignes « Cycle » et « Prochaine échéance » sur la fiche ;
+  - lecture des nouveaux champs par l'espace école, sans changement de comportement.
+- iPhone et iPad : `SchoolEntitlements` décode les nouveaux champs (optionnels, avec défaut). Écrit SANS compilateur Swift : jamais compilé ni exécuté.
+- Règle du porteur du 13 novembre : aucun test exécuté, aucun workflow CI lancé.
+- Exécuté (seuls contrôles permis), Node 26.8.1 :
+  - typecheck API sans erreur ;
+  - typecheck web (`tsc --noEmit` et `tsconfig.check.json`) sans erreur ;
+  - build web réussi (`tsc -p tsconfig.server.json` puis `vite build`) ;
+  - régénération des contrats (`scripts/generate-platform-contract.ts`).
+- ÉCRIT, JAMAIS EXÉCUTÉ :
+  - tests API `platform-commercial-model.test.ts` (19) ;
+  - `platform-commercial.integration.test.ts` (17, PostgreSQL réel : versions, essai, début payant, demandes, résiliation, restriction des modules, rejeu et version périmée, deux cas de concurrence, journal sans texte libre, RLS forcée) ;
+  - `platform-clients-model.test.ts` aligné sur le résumé du cycle.
+  - Aucun test web ni Swift n'a été ajouté pour ce lot.
+- Limites :
+  - aucune facture, aucun courriel à l'école ;
+  - suspension seulement enregistrée (#461) ;
+  - pas de prorata ;
+  - le droit `MANAGE_OFFERS` n'est vérifié par aucune route, ici comme pour R01-T03 : tout opérateur actif peut écrire ;
+  - aucune étape de recette navigateur.
+- Reste à qualifier à la fin de l'épic R01 :
+  - toutes les suites sur la tête finale ;
+  - la migration `20261116_platform_commercial_terms.sql` sur une copie de la base du homelab, après sauvegarde ;
+  - un parcours de bout en bout : conditions, essai, échéance de l'essai et refus, début payant, résiliation ;
+  - des tests BFF et UI de la rubrique « Contrat » ;
+  - l'essai sur iPhone et iPad.
+
 ## 14 novembre 2026 — R01-T03 : offres, modules et droits par école (#455)
 
 - Livré sur la branche `tomyrms/r01-t03-offres-modules` (poussée, aucune PR ouverte, rien fusionné ni déployé). Elle part de la tête de `tomyrms/r01-t02-ecoles-codes`. Décisions, matrice module × action × état commercial, transitions, limites et point d'entrée de #456 : `docs/implementation/offres-modules-20261115.md`.
