@@ -62,10 +62,11 @@ export const consequenceKinds = ['GAINS', 'LOSES', 'KEEPS', 'STAYS_OFF'] as cons
 export const platformOfferStatuses = ['ACTIVE', 'ARCHIVED'] as const;
 const moduleToken = token;
 export const platformOfferBriefSchema = z.object({ offerId: id, name: z.string().max(100), effectiveAt: iso, modules: z.array(moduleToken).max(20) });
-/** L'emplacement commercial : état dérivé, offre en vigueur, offre programmée. `dueDates` reste l'emplacement réservé aux échéances (#456). */
+/** L'emplacement commercial de la fiche : état des droits, offre, cycle commercial (R01-T04) et échéances datées, jamais un montant. */
 export const platformCommercialSchema = z.object({
-  state: token, offer: platformOfferBriefSchema.nullable(), scheduledOffer: platformOfferBriefSchema.nullable(),
-  entitlementVersion: z.number().int().min(1), dueDates: z.array(z.unknown()).max(50),
+  state: token, lifecycle: token.optional(), offer: platformOfferBriefSchema.nullable(), scheduledOffer: platformOfferBriefSchema.nullable(),
+  trialEndsAt: iso.nullable().optional(), paidStartsOn: z.string().date().nullable().optional(), terminationOn: z.string().date().nullable().optional(),
+  billingReady: z.boolean().optional(), entitlementVersion: z.number().int().min(1), dueDates: z.array(iso).max(50),
 });
 export const platformOfferSchema = z.object({
   id, name: z.string().max(100), modules: z.array(moduleToken).max(20), status: z.enum(platformOfferStatuses), version: z.number().int().min(1),
@@ -91,6 +92,47 @@ export const platformAssignmentPreviewSchema = z.object({
     existing: z.record(z.string().max(80), z.number().int().min(0)).nullable() })).max(20),
   version: z.number().int().min(1),
 });
+// --- Dossier commercial (R01-T04) : montants en centimes de CHF, jours civils en Europe/Zurich. ---
+const isoDay = z.string().date();
+const cents = z.number().int().min(0);
+export const platformTermsVersionSchema = z.object({
+  id, sequence: z.number().int().min(1), currency: z.literal('CHF'), initialAmount: cents.nullable(), initialDiscount: cents, initialDueOn: isoDay.nullable(),
+  monthlyAmount: cents.nullable(), recurringDiscount: cents, recurringDiscountMonths: z.number().int().min(1).nullable(), paymentTermDays: z.number().int().min(0).nullable(),
+  suspensionBilling: token.nullable(), effectiveFrom: isoDay, exceptionReason: z.string().max(500).nullable(), createdAt: iso, createdByName: z.string().max(200).nullable(),
+  phase: token,
+});
+export const platformCommercialRequestSchema = z.object({
+  id, kind: token, status: token, requestedOn: isoDay, requestedOfferId: id.nullable(), requestedOfferName: z.string().max(100).nullable(), desiredOn: isoDay.nullable(),
+  details: z.string().max(1000).nullable(), response: z.string().max(1000).nullable(), effectiveOn: isoDay.nullable(), assignmentId: id.nullable(),
+  decidedAt: iso.nullable(), decidedByName: z.string().max(200).nullable(), version: z.number().int().min(1), createdAt: iso, createdByName: z.string().max(200).nullable(),
+  updatedAt: iso,
+});
+export const platformCommercialDetailSchema = z.object({
+  state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5) }).nullable(),
+  offer: platformOfferBriefSchema.nullable(), scheduledOffer: platformOfferBriefSchema.nullable(),
+  milestones: z.object({ codeIssuedAt: iso.nullable(), schoolCreatedAt: iso.nullable(), schoolLinkedAt: iso.nullable(), activatedAt: iso.nullable(),
+    trialStartsAt: iso.nullable(), paidStartsOn: isoDay.nullable() }),
+  proposedTrialStart: iso.nullable(),
+  trial: z.object({ startsAt: iso, endsAt: iso, phase: token }).nullable(),
+  trialChanges: z.array(z.object({ id, sequence: z.number().int().min(1), kind: token, startsAt: iso, endsAt: iso, reason: z.string().max(500).nullable(), createdAt: iso,
+    createdByName: z.string().max(200).nullable() })).max(500),
+  terms: z.object({ status: token, missing: z.array(token).max(10), currency: z.literal('CHF'), inForce: platformTermsVersionSchema.nullable(),
+    scheduled: platformTermsVersionSchema.nullable(), versions: z.array(platformTermsVersionSchema).max(500) }),
+  paidStart: z.object({ id, startsOn: isoDay, started: z.boolean(), termsSequence: z.number().int().min(1).nullable(), confirmedAt: iso,
+    confirmedByName: z.string().max(200).nullable() }).nullable(),
+  paidStarts: z.array(z.object({ id, startsOn: isoDay, status: token, confirmedAt: iso, confirmedByName: z.string().max(200).nullable(), cancelledAt: iso.nullable(),
+    cancelledByName: z.string().max(200).nullable(), cancelReason: z.string().max(500).nullable() })).max(500),
+  termination: z.object({ requestId: id, effectiveOn: isoDay, decidedAt: iso }).nullable(),
+  requests: z.array(platformCommercialRequestSchema).max(100),
+  billable: z.boolean(), nextPeriodStart: isoDay.nullable(),
+  schedule: z.object({
+    initial: z.object({ dueOn: isoDay, amount: cents, discount: cents, net: cents, termsSequence: z.number().int().min(1) }).nullable(),
+    periods: z.array(z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay, amount: cents.nullable(), discount: cents, net: cents.nullable(),
+      termsSequence: z.number().int().min(1).nullable() })).max(12),
+  }),
+  today: isoDay, entitlementVersion: z.number().int().min(1), nextChangeAt: iso.nullable(), version: z.number().int().min(1),
+});
+export const platformCommercialResult = z.object({ data: platformCommercialDetailSchema });
 export const platformModulesResult = z.object({ data: z.object({ items: z.array(platformModuleSchema).max(20) }) });
 export const platformOffersResult = z.object({ data: z.object({ items: z.array(platformOfferSchema).max(200) }) });
 export const platformOfferResult = z.object({ data: platformOfferSchema });
@@ -134,6 +176,9 @@ export type PlatformModule = z.infer<typeof platformModuleSchema>;
 export type PlatformEntitlements = z.infer<typeof platformEntitlementsSchema>;
 export type PlatformAssignmentPreview = z.infer<typeof platformAssignmentPreviewSchema>;
 export type PlatformCommercial = z.infer<typeof platformCommercialSchema>;
+export type PlatformCommercialDetail = z.infer<typeof platformCommercialDetailSchema>;
+export type PlatformTermsVersion = z.infer<typeof platformTermsVersionSchema>;
+export type PlatformCommercialRequest = z.infer<typeof platformCommercialRequestSchema>;
 export type PlatformClient = z.infer<typeof platformClientSchema>;
 export type PlatformClientDetail = z.infer<typeof platformClientDetailSchema>;
 export type PlatformClientCode = z.infer<typeof platformClientCodeSchema>;
@@ -198,6 +243,14 @@ const actionLabels: Record<string, string> = {
   CANCEL_OFFER_ASSIGNMENT: 'Attribution annulée',
   ADJUST_SCHOOL_MODULE: 'Module ajusté',
   LIFT_MODULE_ADJUSTMENT: 'Ajustement levé',
+  SET_COMMERCIAL_TERMS: 'Conditions enregistrées',
+  START_TRIAL: 'Essai accordé',
+  EXTEND_TRIAL: 'Essai prolongé',
+  END_TRIAL_EARLY: 'Essai terminé',
+  CONFIRM_PAID_START: 'Début payant confirmé',
+  CANCEL_PAID_START: 'Début payant annulé',
+  RECORD_COMMERCIAL_REQUEST: 'Demande enregistrée',
+  DECIDE_COMMERCIAL_REQUEST: 'Demande traitée',
 };
 export const actionLabel = (action: string) => actionLabels[action] ?? 'Action enregistrée';
 const reasonLabels: Record<string, string> = {
@@ -221,8 +274,64 @@ const reasonLabels: Record<string, string> = {
   OPENING_LINK_EXPIRED: 'Code expiré',
   OFFER_ARCHIVED: 'Offre archivée',
   MODULE_NOT_ENTITLED: 'Module non accordé',
+  TERMS_INCOMPLETE: 'Conditions à compléter',
+  TERMS_EXCEPTION_REASON_REQUIRED: 'Motif d’exception manquant',
+  EFFECTIVE_DATE_PAST: 'Date passée',
+  TRIAL_EXISTS: 'Essai déjà accordé',
+  TRIAL_CLOSED: 'Essai fermé',
+  PAID_START_EXISTS: 'Début payant déjà confirmé',
+  PAID_START_STARTED: 'Payant déjà commencé',
+  CLIENT_TERMINATED: 'École résiliée',
+  REQUEST_CLOSED: 'Demande déjà traitée',
 };
 export const reasonLabel = (code: string | null) => (code ? reasonLabels[code] ?? null : null);
+
+// --- Dossier commercial : libellés, montants et saisie ---
+const lifecycleLabels: Record<string, string> = { NONE: 'Sans contrat', TRIAL: 'Essai', TRIAL_EXPIRED: 'Essai terminé', PAID: 'Payant', TERMINATED: 'Résiliée' };
+export const lifecycleLabel = (value: string) => lifecycleLabels[value] ?? 'Cycle commercial';
+/** Seuls les cycles qui ferment l'usage nouveau méritent un badge d'alerte. */
+export const lifecycleRestricted = (value: string | undefined) => value === 'TRIAL_EXPIRED' || value === 'TERMINATED';
+const missingLabels: Record<string, string> = { OFFER: 'offre', TERMS: 'conditions', INITIAL_AMOUNT: 'montant initial', MONTHLY_AMOUNT: 'mensualité',
+  PAYMENT_TERM: 'délai de paiement', SUSPENSION_BILLING: 'facturation en suspension' };
+export const missingLabel = (codes: readonly string[]) => codes.map(code => missingLabels[code] ?? 'information').join(', ');
+export const termsPhaseLabel = (phase: string) => ({ IN_FORCE: 'En vigueur', SCHEDULED: 'Prévue', ENDED: 'Terminée', SUPERSEDED: 'Remplacée' } as Record<string, string>)[phase] ?? 'Version';
+export const suspensionLabel = (value: string | null) => (value === 'CONTINUE' ? 'Facturée' : value === 'PAUSE' ? 'Non facturée' : 'À compléter');
+export const trialKindLabel = (kind: string) => ({ START: 'Essai accordé', EXTEND: 'Prolongé', END_EARLY: 'Terminé plus tôt' } as Record<string, string>)[kind] ?? 'Essai';
+export const requestKindLabel = (kind: string) => ({ OFFER_CHANGE: 'Changement d’offre', TERMINATION: 'Résiliation' } as Record<string, string>)[kind] ?? 'Demande';
+export const requestStatusLabel = (status: string) =>
+  ({ RECEIVED: 'Reçue', IN_PROGRESS: 'En cours', ACCEPTED: 'Acceptée', REFUSED: 'Refusée', WITHDRAWN: 'Retirée' } as Record<string, string>)[status] ?? 'Demande';
+export const requestOpen = (status: string) => status === 'RECEIVED' || status === 'IN_PROGRESS';
+const chfFormat = new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' });
+/** Centimes → « CHF 1 234.50 » ; `null` reste à compléter. */
+export const chf = (cents: number | null) => (cents === null ? 'À compléter' : chfFormat.format(cents / 100));
+/**
+ * Saisie d'un montant en francs → centimes. Vide = `null` (à compléter) ; virgule ou point acceptés, deux décimales au plus.
+ * `undefined` signale une saisie à corriger : rien n'est envoyé.
+ */
+export function centsOf(input: string, max: number): number | null | undefined {
+  const text = input.trim().replace(/['’\s]/g, '').replace(',', '.');
+  if (text === '') return null;
+  if (!/^\d{1,9}(\.\d{1,2})?$/.test(text)) return undefined;
+  const [whole, fraction = ''] = text.split('.');
+  const value = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return value <= max ? value : undefined;
+}
+export const francsOf = (cents: number | null) => (cents === null ? '' : (cents / 100).toFixed(2));
+/** Nombre entier optionnel (jours, mois) ; `undefined` = à corriger. */
+export function wholeOf(input: string, min: number, max: number): number | null | undefined {
+  const text = input.trim();
+  if (text === '') return null;
+  if (!/^\d{1,4}$/.test(text)) return undefined;
+  const value = Number(text);
+  return value >= min && value <= max ? value : undefined;
+}
+/** Date et heure saisies (heure locale du navigateur) → instant ISO ; vide ou illisible = `undefined`, rien n'est envoyé. */
+export function instantOf(local: string): string | undefined {
+  const parsed = new Date(local);
+  return local.trim() === '' || Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
+}
+/** Le jour civil d'aujourd'hui à Zurich, pour proposer une date par défaut. */
+export const zurichToday = (now: Date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich' }).format(now);
 
 // --- Écoles clientes : libellés et fiche ---
 const preparationLabels: Record<PlatformClientPreparation, string> = { AWAITING_SCHOOL: 'En attente de l’école', IN_PREPARATION: 'En préparation', ACTIVE: 'Active', ARCHIVED: 'Archivée' };
@@ -360,6 +469,22 @@ const failures: Record<string, string> = {
   ADJUSTMENT_NO_EFFECT: 'Cet ajustement ne changerait rien aux droits de l’école.',
   ADJUSTMENT_NOT_ACTIVE: 'Cet ajustement n’est plus actif. L’écran est à jour.',
   MODULE_UNKNOWN: 'Ce module n’existe pas dans le catalogue.',
+  TERMS_INCOMPLETE: 'Les conditions applicables à cette date sont incomplètes. Complétez-les d’abord.',
+  TERMS_EXCEPTION_REASON_REQUIRED: 'Cette date n’est pas un début de période : indiquez le motif de l’exception.',
+  TRIAL_EXISTS: 'Un essai a déjà été accordé à cette école.',
+  TRIAL_CLOSED: 'L’essai n’est plus possible pour cette école.',
+  TRIAL_MISSING: 'Aucun essai n’a été accordé à cette école.',
+  TRIAL_NOT_RUNNING: 'Aucun essai n’est en cours.',
+  TRIAL_END_PAST: 'La fin de l’essai doit être à venir.',
+  TRIAL_EXTEND_INVALID: 'La nouvelle fin doit suivre la fin actuelle.',
+  TRIAL_END_INVALID: 'La fin anticipée doit précéder la fin prévue.',
+  TRIAL_CHANGE_INVALID: 'Ce changement d’essai n’est pas possible. L’écran est à jour.',
+  PAID_START_EXISTS: 'Un début payant est déjà confirmé.',
+  PAID_START_MISSING: 'Aucun début payant n’est confirmé.',
+  PAID_START_STARTED: 'Le payant a déjà commencé : passez par une résiliation.',
+  CLIENT_TERMINATED: 'La résiliation de cette école est confirmée.',
+  REQUEST_CLOSED: 'Cette demande a déjà reçu une décision.',
+  REQUEST_DATE_FUTURE: 'La date de la demande ne peut pas être à venir.',
   PLATFORM_CODE_IN_PROGRESS: 'Un code est déjà en cours de création. Affichez-le ou fermez-le avant d’en créer un autre.',
   NOT_FOUND: 'Cet élément n’existe plus. L’écran a été actualisé.',
   LAST_PLATFORM_OPERATOR: 'Le dernier opérateur actif ne peut pas être retiré.',

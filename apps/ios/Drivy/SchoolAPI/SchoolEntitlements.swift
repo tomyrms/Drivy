@@ -21,6 +21,13 @@ struct SchoolEntitlements: Decodable, Sendable, Equatable {
         let entitled: Bool
     }
 
+    /// Fermeture commerciale (R01-T04, #456) : essai terminé ou contrat résilié. Les modules sont alors déjà rendus non accordés ;
+    /// la raison sert seulement à dire pourquoi. La consultation et la fin des engagements pris restent permises.
+    struct Restriction: Decodable, Sendable, Equatable {
+        let reason: String
+        let closes: [String]
+    }
+
     /// `NOT_CONFIGURED` (aucune offre : le périmètre d’avant ce lot, rien n’est restreint) ou `OFFER_ACTIVE`. Les états
     /// commerciaux à venir (#456) restent lisibles : ils ne changent pas ce que disent les modules.
     let state: String
@@ -30,6 +37,14 @@ struct SchoolEntitlements: Decodable, Sendable, Equatable {
     /// Prochain changement programmé (une attribution qui prend effet) : au-delà, la lecture est périmée.
     let nextChangeAt: String?
     let computedAt: String
+    /// Cycle commercial (R01-T04) : `NONE`, `TRIAL`, `TRIAL_EXPIRED`, `PAID` ou `TERMINATED`. Absent d’une API antérieure.
+    /// En `var` avec défaut : décodés s’ils sont présents, et l’initialiseur par membres reste celui d’avant.
+    var lifecycle: String? = nil
+    var restriction: Restriction? = nil
+    var trialEndsAt: String? = nil
+    /// Jours civils (Europe/Zurich), au format `AAAA-MM-JJ`.
+    var paidStartsOn: String? = nil
+    var terminationOn: String? = nil
 
     /// Un module que la lecture ne mentionne pas n’est pas fermé par l’app : seul le serveur refuse un usage nouveau.
     func isEntitled(_ module: SchoolModuleCode) -> Bool {

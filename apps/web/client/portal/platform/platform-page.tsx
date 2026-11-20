@@ -20,6 +20,7 @@ import { entryRoutes, type EntryRoutes } from '../entry/entry-model';
 import { PortalSelect } from '../components/portal-select';
 import { AttachDialog, ClientsSection, CodeDialog } from './clients-section';
 import { OfferDialog, OffersSection } from './offers-section';
+import { CommercialDialog } from './commercial-section';
 import { RightsDialog } from './rights-section';
 import { usePlatformConsole, type PlatformConsoleState } from './use-platform-console';
 import './platform.css';
@@ -65,6 +66,7 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
     <AttachDialog state={state} />
     <OfferDialog state={state} />
     <RightsDialog state={state} />
+    <CommercialDialog state={state} />
   </EntryFrame>;
 }
 

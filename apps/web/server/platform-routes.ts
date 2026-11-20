@@ -6,7 +6,7 @@ import { openingCode } from './opening-routes.js';
 import type { ApiResult } from './upstream.js';
 
 /**
- * Console des opérateurs de la plateforme (R01-T01, R01-T02). Le navigateur ne parle qu'à ce relais : il ne connaît ni l'API, ni
+ * Console des opérateurs de la plateforme (R01-T01 à R01-T04). Le navigateur ne parle qu'à ce relais : il ne connaît ni l'API, ni
  * un jeton, ni l'empreinte d'un code. Les droits sont relus par l'API à chaque appel ; ce relais ne décide de rien.
  */
 export type PlatformRequest = { method: 'GET' | 'POST' | 'PATCH'; path: string; body?: unknown; idempotencyKey?: string; ifMatch?: string };
@@ -29,6 +29,9 @@ const assignmentsPath = new RegExp(`^/v1/platform/clients/${uuidPath}/assignment
 const assignmentCancelPath = new RegExp(`^/v1/platform/clients/${uuidPath}/assignments/${uuidPath}/cancel$`);
 const adjustmentsPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustments$`);
 const adjustmentLiftPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustments/${uuidPath}/lift$`);
+// Conditions commerciales, essai, début payant et demandes (R01-T04) : le dossier d'une fiche, puis ses commandes versionnées.
+const commercialPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial$`);
+const commercialCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial/(?:terms|trial/(?:start|extend|end)|paid-start(?:/cancel)?|requests|requests/${uuidPath}/decision)$`);
 
 export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
 export const codeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
@@ -75,7 +78,7 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
     if (path === '/v1/platform/offers') return validQuery(query, offerListRules);
     // L'aperçu des conséquences porte toujours l'offre visée : sans elle il n'y a rien à prévoir.
     if (previewPath.test(path)) return new URLSearchParams(query).has('offerId') && validQuery(query, previewRules);
-    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path));
+    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path) || commercialPath.test(path));
   }
   if ((request.method !== 'POST' && request.method !== 'PATCH') || query !== '') return false;
   const keyed = typeof request.idempotencyKey === 'string' && z.uuid().safeParse(request.idempotencyKey).success;
@@ -86,7 +89,7 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
   if (revokePath.test(path)) return keyed && versioned;
   if (path === '/v1/platform/clients' || path === '/v1/platform/school-codes' || path === '/v1/platform/offers' || codeRevokePath.test(path)) return keyed && request.ifMatch === undefined;
   if (attachPath.test(path) || offerStatusPath.test(path) || assignmentsPath.test(path) || assignmentCancelPath.test(path) || adjustmentsPath.test(path)
-    || adjustmentLiftPath.test(path)) return keyed && versioned;
+    || adjustmentLiftPath.test(path) || commercialCommandPath.test(path)) return keyed && versioned;
   return false;
 }
 
@@ -125,9 +128,13 @@ const latestCodeSchema = z.object({ id: z.uuid(), state: codeStateSchema, expire
 // --- Offres et droits aux modules (R01-T03) : codes de modules et états tolérants (le catalogue évolue côté API), petits vocabulaires fermés stricts. ---
 const moduleToken = token;
 const offerBriefSchema = z.object({ offerId: z.uuid(), name: text(100), effectiveAt: iso, modules: z.array(moduleToken).max(20) });
-/** L'emplacement commercial reste tolérant sur `dueDates` : le lot des conditions (#456) y ajoute ses échéances sans changer cette forme. */
-const commercialSchema = z.object({ state: token, offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
-  entitlementVersion: z.number().int().min(1), dueDates: z.array(z.unknown()).max(50) });
+/**
+ * L'emplacement commercial de la fiche : état des droits (R01-T03) et cycle commercial (R01-T04). Le cycle est optionnel pour qu'une API
+ * antérieure reste lisible ; `dueDates` ne porte que des instants, jamais un montant.
+ */
+const commercialSchema = z.object({ state: token, lifecycle: token.optional(), offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
+  trialEndsAt: iso.nullable().optional(), paidStartsOn: z.iso.date().nullable().optional(), terminationOn: z.iso.date().nullable().optional(),
+  billingReady: z.boolean().optional(), entitlementVersion: z.number().int().min(1), dueDates: z.array(iso).max(50) });
 const offerSchema = z.object({ id: z.uuid(), name: text(100), modules: z.array(moduleToken).max(20), status: z.enum(offerStatuses), version: z.number().int().min(1),
   createdAt: iso, updatedAt: iso, archivedAt: iso.nullable(), schoolsInForce: z.number().int().min(0) });
 const moduleCatalogueSchema = z.object({ code: moduleToken, sortOrder: z.number().int().min(1) });
@@ -174,6 +181,44 @@ const codesResult = page(codeSchema);
 const codeResult = z.object({ data: codeSchema });
 const unattachedResult = z.object({ data: z.object({ items: z.array(z.object({ id: z.uuid(), name: text(200), status: schoolStatus, contactEmail: text(254), contactPhone: text(32).nullable(), setup: setupSchema })).max(50) }) });
 const issuedCodeResult = z.object({ data: z.object({ codeId: z.uuid(), client: clientDetailSchema }) });
+
+// --- Dossier commercial (R01-T04) : montants en centimes de CHF, jours en Europe/Zurich. Vocabulaires en jetons : l'API les relit. ---
+const isoDay = z.iso.date();
+const cents = z.number().int().min(0).max(100_000_000);
+const termsVersionSchema = z.object({ id: z.uuid(), sequence: z.number().int().min(1), currency: z.literal('CHF'), initialAmount: cents.nullable(),
+  initialDiscount: cents, initialDueOn: isoDay.nullable(), monthlyAmount: cents.nullable(), recurringDiscount: cents,
+  recurringDiscountMonths: z.number().int().min(1).max(120).nullable(), paymentTermDays: z.number().int().min(0).max(120).nullable(),
+  suspensionBilling: token.nullable(), effectiveFrom: isoDay, exceptionReason: text(500).nullable(), createdAt: iso, createdByName: text(200).nullable(), phase: token });
+const commercialRequestSchema = z.object({ id: z.uuid(), kind: token, status: token, requestedOn: isoDay, requestedOfferId: z.uuid().nullable(),
+  requestedOfferName: text(100).nullable(), desiredOn: isoDay.nullable(), details: text(1000).nullable(), response: text(1000).nullable(),
+  effectiveOn: isoDay.nullable(), assignmentId: z.uuid().nullable(), decidedAt: iso.nullable(), decidedByName: text(200).nullable(),
+  version: z.number().int().min(1), createdAt: iso, createdByName: text(200).nullable(), updatedAt: iso });
+const commercialDetailSchema = z.object({
+  state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5) }).nullable(),
+  offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
+  milestones: z.object({ codeIssuedAt: iso.nullable(), schoolCreatedAt: iso.nullable(), schoolLinkedAt: iso.nullable(), activatedAt: iso.nullable(),
+    trialStartsAt: iso.nullable(), paidStartsOn: isoDay.nullable() }),
+  proposedTrialStart: iso.nullable(),
+  trial: z.object({ startsAt: iso, endsAt: iso, phase: token }).nullable(),
+  trialChanges: z.array(z.object({ id: z.uuid(), sequence: z.number().int().min(1), kind: token, startsAt: iso, endsAt: iso, reason: text(500).nullable(),
+    createdAt: iso, createdByName: text(200).nullable() })).max(500),
+  terms: z.object({ status: token, missing: z.array(token).max(10), currency: z.literal('CHF'), inForce: termsVersionSchema.nullable(),
+    scheduled: termsVersionSchema.nullable(), versions: z.array(termsVersionSchema).max(500) }),
+  paidStart: z.object({ id: z.uuid(), startsOn: isoDay, started: z.boolean(), termsSequence: z.number().int().min(1).nullable(), confirmedAt: iso,
+    confirmedByName: text(200).nullable() }).nullable(),
+  paidStarts: z.array(z.object({ id: z.uuid(), startsOn: isoDay, status: token, confirmedAt: iso, confirmedByName: text(200).nullable(), cancelledAt: iso.nullable(),
+    cancelledByName: text(200).nullable(), cancelReason: text(500).nullable() })).max(500),
+  termination: z.object({ requestId: z.uuid(), effectiveOn: isoDay, decidedAt: iso }).nullable(),
+  requests: z.array(commercialRequestSchema).max(100),
+  billable: z.boolean(), nextPeriodStart: isoDay.nullable(),
+  schedule: z.object({
+    initial: z.object({ dueOn: isoDay, amount: cents, discount: cents, net: cents, termsSequence: z.number().int().min(1) }).nullable(),
+    periods: z.array(z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay, amount: cents.nullable(), discount: cents, net: cents.nullable(),
+      termsSequence: z.number().int().min(1).nullable() })).max(12),
+  }),
+  today: isoDay, entitlementVersion: z.number().int().min(1), nextChangeAt: iso.nullable(), version: z.number().int().min(1),
+});
+const commercialResult = z.object({ data: commercialDetailSchema });
 
 // --- État de session : un code émis et une acceptation en cours appartiennent au compte qui les a lancés. ---
 export type PlatformInviteState = { operationId: string; email: string; validityDays?: number; code: string; busy?: boolean };
@@ -236,6 +281,25 @@ const previewParams = z.object({ offerId: uuid, effectiveAt: z.iso.datetime().ma
 const assignBody = z.object({ operationId: uuid, version: versionField, offerId: uuid, effectiveAt: z.iso.datetime().max(40).nullable().optional() }).strict();
 const adjustBody = z.object({ operationId: uuid, version: versionField, moduleCode, effect: z.enum(['GRANT', 'REVOKE']), reason: reasonText }).strict();
 const liftBody = z.object({ operationId: uuid, version: versionField, reason: reasonText }).strict();
+// Commandes commerciales : mêmes bornes que l'API, qui relit chaque règle (dates, complétude, période, résiliation).
+const day = z.iso.date();
+const commercialReason = z.string().trim().min(3).max(500);
+const longText = z.string().trim().min(3).max(1000);
+const amount = (max: number) => z.number().int().min(0).max(max);
+const termsCommand = z.object({ operationId: uuid, version: versionField,
+  initialAmount: amount(100_000_000).nullable(), initialDiscount: amount(100_000_000).optional(), initialDueOn: day.nullable().optional(),
+  monthlyAmount: amount(10_000_000).nullable(), recurringDiscount: amount(10_000_000).optional(), recurringDiscountMonths: z.number().int().min(1).max(120).nullable().optional(),
+  paymentTermDays: z.number().int().min(0).max(120).nullable(), suspensionBilling: z.enum(['CONTINUE', 'PAUSE']).nullable(),
+  effectiveFrom: day.optional(), exceptionReason: commercialReason.optional() }).strict();
+const trialStartCommand = z.object({ operationId: uuid, version: versionField, startsAt: z.iso.datetime().max(40).optional(), endsAt: z.iso.datetime().max(40) }).strict();
+const trialExtendCommand = z.object({ operationId: uuid, version: versionField, endsAt: z.iso.datetime().max(40), reason: commercialReason }).strict();
+const trialEndCommand = z.object({ operationId: uuid, version: versionField, endsAt: z.iso.datetime().max(40).optional(), reason: commercialReason }).strict();
+const paidStartCommand = z.object({ operationId: uuid, version: versionField, startsOn: day, confirm: z.literal(true) }).strict();
+const paidStartCancelCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason }).strict();
+const requestCommand = z.object({ operationId: uuid, version: versionField, kind: z.enum(['OFFER_CHANGE', 'TERMINATION']), requestedOn: day,
+  requestedOfferId: uuid.optional(), desiredOn: day.optional(), details: longText.optional() }).strict();
+const decisionCommand = z.object({ operationId: uuid, version: versionField, status: z.enum(['IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN']),
+  response: longText.optional(), effectiveOn: day.optional(), offerId: uuid.optional() }).strict();
 const searchOf = (parameters: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(parameters)) if (value !== undefined && value !== '') search.set(key, String(value));
@@ -454,6 +518,35 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
     const { version, ...body } = liftBody.parse(request.body);
     return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/adjustments/${adjustmentId.toLowerCase()}/lift`,
       idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, entitlementsResult);
+  });
+
+  // --- Dossier commercial (R01-T04) : lecture, puis commandes sous la version du dossier. Les identifiants partent en minuscules. ---
+  app.get('/app/bff/platform/clients/:id/commercial', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients/${id.toLowerCase()}/commercial` }, commercialResult);
+  });
+  const lowerIds = (body: Record<string, unknown>) => Object.fromEntries(Object.entries(body).map(([key, value]) =>
+    [key, (key === 'requestedOfferId' || key === 'offerId') && typeof value === 'string' ? value.toLowerCase() : value]));
+  const commercialCommands: Array<[string, z.ZodType<{ operationId: string; version: number }>]> = [
+    ['terms', termsCommand], ['trial/start', trialStartCommand], ['trial/extend', trialExtendCommand], ['trial/end', trialEndCommand],
+    ['paid-start', paidStartCommand], ['paid-start/cancel', paidStartCancelCommand], ['requests', requestCommand],
+  ];
+  for (const [path, schema] of commercialCommands) {
+    app.post(`/app/bff/platform/clients/:id/commercial/${path}`, async (request, reply) => {
+      empty.parse(request.query);
+      const { id } = z.object({ id: uuid }).parse(request.params);
+      const { version, ...body } = schema.parse(request.body);
+      return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/commercial/${path}`,
+        idempotencyKey: body.operationId, ifMatch: `"${version}"`, body: lowerIds(body) }, commercialResult);
+    });
+  }
+  app.post('/app/bff/platform/clients/:id/commercial/requests/:requestId/decision', async (request, reply) => {
+    empty.parse(request.query);
+    const { id, requestId } = z.object({ id: uuid, requestId: uuid }).parse(request.params);
+    const { version, ...body } = decisionCommand.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/commercial/requests/${requestId.toLowerCase()}/decision`,
+      idempotencyKey: body.operationId, ifMatch: `"${version}"`, body: lowerIds(body) }, commercialResult);
   });
 
   // « Créer un code » : le code est tiré ici, transmis à l'API qui n'en garde que l'empreinte à clé serveur, et rendu à l'opérateur qui l'a demandé.
