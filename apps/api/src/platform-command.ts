@@ -184,6 +184,50 @@ export function databaseRefusal(error: unknown): ApiError | undefined {
   if (code === '23505' && (constraint === 'platform_commercial_terms_client_id_sequence_key' || constraint === 'platform_trial_change_client_id_sequence_key')) {
     return new ApiError(412, 'VERSION_CONFLICT', 'Le dossier commercial de cette école a changé. Rechargez-le avant de confirmer.');
   }
+  return billingRefusal(code, message, constraint);
+}
+
+/** Factures, avoirs, émetteur et activation (R01-T05) : les fonctions et déclencheurs de la base décident ; ces refus les nomment. */
+const billingMessages: [string, number, string, string][] = [
+  ['platform_invoice_unknown', 404, 'NOT_FOUND', 'Cette facture n’existe pas.'],
+  ['platform_invoice_not_billable', 409, 'BILLING_NOT_READY', 'Confirmez d’abord un début payant sur des conditions complètes.'],
+  ['platform_billing_not_billable', 409, 'BILLING_NOT_READY', 'Confirmez d’abord un début payant sur des conditions complètes.'],
+  ['platform_invoice_nothing_due', 409, 'INVOICE_NOTHING_DUE', 'Aucun montant n’est dû pour ce document.'],
+  ['platform_invoice_period_invalid', 409, 'INVOICE_PERIOD_INVALID', 'Cette date n’est pas un début de période.'],
+  ['platform_invoice_period_terminated', 409, 'INVOICE_PERIOD_TERMINATED', 'Cette période commence après la résiliation.'],
+  ['platform_invoice_period_future', 409, 'INVOICE_PERIOD_FUTURE', 'Cette période n’a pas encore commencé.'],
+  ['platform_invoice_exists', 409, 'INVOICE_EXISTS', 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.'],
+  ['platform_invoice_terms_changed', 409, 'INVOICE_TERMS_CHANGED', 'Les conditions ont changé depuis la préparation. Annulez ce brouillon et préparez-le à nouveau.'],
+  ['platform_billing_issuer_missing', 409, 'BILLING_ISSUER_MISSING', 'Renseignez d’abord les paramètres de l’émetteur.'],
+  ['platform_invoice_recipient_incomplete', 409, 'INVOICE_RECIPIENT_INCOMPLETE', 'Complétez le nom et l’adresse de facturation de l’école.'],
+  ['platform_invoice_not_draft', 409, 'INVOICE_NOT_DRAFT', 'Ce document n’est plus un brouillon.'],
+  ['platform_invoice_not_creditable', 409, 'INVOICE_NOT_CREDITABLE', 'Seule une facture émise peut recevoir un avoir.'],
+  ['platform_invoice_credited', 409, 'INVOICE_CREDITED', 'Un avoir a déjà été émis pour cette facture.'],
+  ['platform_invoice_not_issued', 409, 'INVOICE_NOT_ISSUED', 'Ce document n’est pas émis.'],
+  ['platform_invoice_already_sent', 409, 'INVOICE_ALREADY_SENT', 'L’envoi de ce document est déjà enregistré.'],
+  ['platform_invoice_sent_date', 409, 'INVOICE_SENT_DATE', 'La date d’envoi doit être entre l’émission et aujourd’hui.'],
+  ['platform_invoice_issued_fixed', 409, 'INVOICE_FIXED', 'Un document émis ne se modifie pas.'],
+  ['platform_invoice_fixed', 409, 'INVOICE_FIXED', 'Un document émis ne se modifie pas.'],
+  ['platform_paid_start_invoiced', 409, 'PAID_START_INVOICED', 'Ce début payant est déjà facturé. Annulez le brouillon ou émettez un avoir d’abord.'],
+  ['platform_activation_backdated', 409, 'EFFECTIVE_DATE_PAST', 'La date doit être aujourd’hui ou plus tard.'],
+  ['platform_issuer_sequence', 412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.'],
+];
+const billingConstraints: Record<string, [number, string, string]> = {
+  platform_billing_activation_active: [409, 'BILLING_ACTIVE', 'La facturation planifiée est déjà active pour cette école.'],
+  platform_invoice_initial_once: [409, 'INVOICE_EXISTS', 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.'],
+  platform_invoice_period_once: [409, 'INVOICE_EXISTS', 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.'],
+  platform_invoice_credit_once: [409, 'INVOICE_CREDITED', 'Un avoir a déjà été émis pour cette facture.'],
+  platform_billing_issuer_sequence_key: [412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.'],
+};
+function billingRefusal(code: unknown, message: string, constraint: string): ApiError | undefined {
+  if (code === '23514') {
+    const match = billingMessages.find(([marker]) => message.includes(marker));
+    if (match) return new ApiError(match[1], match[2], match[3]);
+  }
+  if (code === '23505' && billingConstraints[constraint]) {
+    const [status, refusal, title] = billingConstraints[constraint]!;
+    return new ApiError(status, refusal, title);
+  }
   return undefined;
 }
 

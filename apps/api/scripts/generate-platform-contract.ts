@@ -27,6 +27,13 @@ import {
 import {
   decisionBody, paidStartBody, paidStartCancelBody, requestBody, termsBody, trialEndBody, trialExtendBody, trialStartBody
 } from '../src/platform-commercial-model.js';
+import {
+  activationSchema, billingEnvelope, billingRunEnvelope, billingSchema, invoiceEnvelope, invoicePageEnvelope, invoiceSchema, issuerSchema, issuerSettingsEnvelope,
+  issuerSettingsSchema
+} from '../src/platform-billing-contract.js';
+import {
+  activationBody, activationStopBody, cancelBody, creditBody, invoiceListQuery, issueBody, issuerBody, prepareBody, runBody, sentBody
+} from '../src/platform-billing-model.js';
 
 // Extension d'implémentation ; le contrat OpenAPI canonique 3.11.0 reste inchangé.
 const project = (schema: z.ZodType) => { const { $schema: _ignored, ...definition } = z.toJSONSchema(schema, { io: 'input' }); return definition; };
@@ -201,6 +208,49 @@ await writeFile(new URL('../contracts/platform-commercial.json', import.meta.url
     RequestBody: project(requestBody),
     DecisionBody: project(decisionBody),
     CommercialDetailEnvelope: project(commercialDetailEnvelope),
+    PlatformError: project(platformErrorSchema)
+  }
+}, null, 2) + '\n');
+
+await writeFile(new URL('../contracts/platform-billing.json', import.meta.url), JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:platform-billing:1',
+  title: 'Factures initiales et mensuelles, avoirs et préparation planifiée (R01-T05, #457)',
+  description: 'GET et POST /v1/platform/billing/issuer, GET /v1/platform/invoices, GET /v1/platform/invoices/{id}, POST /v1/platform/billing/run, '
+    + 'GET /v1/platform/clients/{id}/billing, POST /v1/platform/clients/{id}/billing/activation, /billing/activation/stop, /invoices, '
+    + '/invoices/{invoiceId}/issue, /invoices/{invoiceId}/cancel, /invoices/{invoiceId}/credit et /invoices/{invoiceId}/sent. '
+    + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
+    + 'Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). '
+    + 'If-Match "N" porte la version de facturation de la fiche (ou la version des paramètres de l’émetteur) ; 412 VERSION_CONFLICT si elle a changé, 428 sans version. '
+    + 'Montants entiers en centimes de CHF, jours en Europe/Zurich. Seule une fiche facturable (début payant confirmé, conditions complètes, aucune résiliation effective) '
+    + 'peut être activée ; l’activation part d’aujourd’hui ou d’une date future. Une facture est d’abord un brouillon calculé dans la base à partir des conditions '
+    + 'en vigueur ; l’émission fige numéro (F-AAAA-NNNNN, sans trou par année), émetteur, destinataire, taxe, total et échéance. Une facture émise ne change plus, '
+    + 'sauf l’enregistrement de son envoi ; elle se corrige par un avoir total (AV-AAAA-NNNNN), puis une nouvelle génération pour la même période. '
+    + 'Une période ou un montant initial n’a qu’une facture vivante par génération ; aucune facture n’est jamais supprimée. '
+    + 'Le passage planifié (rôle drivy_billing_worker, une fois par heure) prépare puis émet ce qui est dû ; il ne fait rien sans activation et ne rattrape '
+    + 'jamais plus de 24 documents par école et par passage. Taxe : NONE ou TVA au taux en points de base, prix TTC ou HT, arrondi au centime le plus proche. '
+    + 'Les règlements (#458), le PDF et la référence QR (#459) et la lecture par l’école (#460) ne sont pas couverts. '
+    + 'Le journal commercial reçoit l’action, le numéro et les montants, jamais un motif, un IBAN ni une adresse électronique.',
+  $defs: {
+    Issuer: project(issuerSchema),
+    IssuerSettings: project(issuerSettingsSchema),
+    Invoice: project(invoiceSchema),
+    Activation: project(activationSchema),
+    Billing: project(billingSchema),
+    IssuerBody: project(issuerBody),
+    ActivationBody: project(activationBody),
+    ActivationStopBody: project(activationStopBody),
+    PrepareBody: project(prepareBody),
+    IssueBody: project(issueBody),
+    CancelBody: project(cancelBody),
+    CreditBody: project(creditBody),
+    SentBody: project(sentBody),
+    RunBody: project(runBody),
+    InvoiceListQuery: project(invoiceListQuery),
+    IssuerSettingsEnvelope: project(issuerSettingsEnvelope),
+    InvoiceEnvelope: project(invoiceEnvelope),
+    InvoicePageEnvelope: project(invoicePageEnvelope),
+    BillingEnvelope: project(billingEnvelope),
+    BillingRunEnvelope: project(billingRunEnvelope),
     PlatformError: project(platformErrorSchema)
   }
 }, null, 2) + '\n');

@@ -32,10 +32,17 @@ const adjustmentLiftPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustm
 // Conditions commerciales, essai, début payant et demandes (R01-T04) : le dossier d'une fiche, puis ses commandes versionnées.
 const commercialPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial$`);
 const commercialCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial/(?:terms|trial/(?:start|extend|end)|paid-start(?:/cancel)?|requests|requests/${uuidPath}/decision)$`);
+// Factures, avoirs, émetteur et activation (R01-T05) : la facturation d'une fiche, ses commandes versionnées, la liste et l'émetteur.
+const billingPath = new RegExp(`^/v1/platform/clients/${uuidPath}/billing$`);
+const billingCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/(?:billing/activation(?:/stop)?|invoices|invoices/${uuidPath}/(?:issue|cancel|credit|sent))$`);
+const invoicePath = new RegExp(`^/v1/platform/invoices/${uuidPath}$`);
 
 export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
 export const codeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
 export const offerStatuses = ['ACTIVE', 'ARCHIVED'] as const;
+export const invoiceStatuses = ['DRAFT', 'ISSUED', 'CANCELLED'] as const;
+export const invoiceKinds = ['INITIAL', 'PERIOD', 'CREDIT_NOTE'] as const;
+export const sendStatuses = ['NOT_SENT', 'SENT'] as const;
 
 type QueryRule = (value: string) => boolean;
 const limitUpTo = (max: number): QueryRule => value => /^[1-9][0-9]{0,2}$/.test(value) && Number(value) <= max;
@@ -63,6 +70,9 @@ const offerListRules: Record<string, QueryRule> = { status: oneOf(offerStatuses)
 // L'API relit la date (ISO, UTC) ; ici seule la forme est vérifiée, sous une borne de longueur.
 const instantRule: QueryRule = value => value.length <= 40 && z.iso.datetime().safeParse(value).success;
 const previewRules: Record<string, QueryRule> = { offerId: uuidRule, effectiveAt: instantRule };
+const dayRule: QueryRule = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && z.iso.date().safeParse(value).success;
+const invoiceListRules: Record<string, QueryRule> = { clientId: uuidRule, status: oneOf(invoiceStatuses), kind: oneOf(invoiceKinds), sendStatus: oneOf(sendStatuses),
+  from: dayRule, to: dayRule, dueBefore: dayRule, overdue: oneOf(['true']), limit: limitUpTo(100), offset: value => /^(0|[1-9][0-9]{0,5})$/.test(value) && Number(value) <= 100_000 };
 
 /** Liste fermée des appels que le relais peut émettre vers l'API de la plateforme : toute autre route reste inaccessible. */
 export function allowedPlatformRequest(request: PlatformRequest): boolean {
@@ -78,7 +88,9 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
     if (path === '/v1/platform/offers') return validQuery(query, offerListRules);
     // L'aperçu des conséquences porte toujours l'offre visée : sans elle il n'y a rien à prévoir.
     if (previewPath.test(path)) return new URLSearchParams(query).has('offerId') && validQuery(query, previewRules);
-    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path) || commercialPath.test(path));
+    if (path === '/v1/platform/invoices') return validQuery(query, invoiceListRules);
+    return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path) || commercialPath.test(path)
+      || path === '/v1/platform/billing/issuer' || billingPath.test(path) || invoicePath.test(path));
   }
   if ((request.method !== 'POST' && request.method !== 'PATCH') || query !== '') return false;
   const keyed = typeof request.idempotencyKey === 'string' && z.uuid().safeParse(request.idempotencyKey).success;
@@ -90,6 +102,9 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
   if (path === '/v1/platform/clients' || path === '/v1/platform/school-codes' || path === '/v1/platform/offers' || codeRevokePath.test(path)) return keyed && request.ifMatch === undefined;
   if (attachPath.test(path) || offerStatusPath.test(path) || assignmentsPath.test(path) || assignmentCancelPath.test(path) || adjustmentsPath.test(path)
     || adjustmentLiftPath.test(path) || commercialCommandPath.test(path)) return keyed && versioned;
+  // L'émetteur et la facturation d'une fiche partent sous leur version ; le passage manuel est idempotent par nature, sans version.
+  if (path === '/v1/platform/billing/issuer' || billingCommandPath.test(path)) return keyed && versioned;
+  if (path === '/v1/platform/billing/run') return keyed && request.ifMatch === undefined;
   return false;
 }
 
@@ -220,6 +235,53 @@ const commercialDetailSchema = z.object({
 });
 const commercialResult = z.object({ data: commercialDetailSchema });
 
+// --- Facturation (R01-T05) : la projection fixe de `contracts/platform-billing.json`. Montants en centimes de CHF, jours en Europe/Zurich. ---
+const nullableText = (max: number) => text(max).nullable();
+const issuerSchema = z.object({ id: z.uuid(), sequence: z.number().int().min(1), legalName: text(150), street: text(200), postalCode: text(20), city: text(100),
+  country: z.string().regex(/^[A-Z]{2}$/), email: nullableText(254), iban: nullableText(42), taxMode: z.enum(['NONE', 'VAT']), vatNumber: nullableText(40),
+  taxRateBp: z.number().int().min(1).max(5000).nullable(), pricesIncludeTax: z.boolean().nullable(), taxNote: nullableText(200), createdAt: iso,
+  createdByName: nullableText(200) });
+const issuerSettingsResult = z.object({ data: z.object({ current: issuerSchema.nullable(), versions: z.array(issuerSchema).max(50), version: z.number().int().min(1) }) });
+const invoiceLineSchema = z.object({ code: token, label: text(200), periodStart: isoDay.nullable(), periodEnd: isoDay.nullable(), amount: cents, discount: cents,
+  net: cents, termsSequence: z.number().int().min(1).nullable() });
+const invoiceSchema = z.object({
+  id: z.uuid(), clientId: z.uuid(), clientName: nullableText(150), schoolId: z.uuid().nullable(), kind: z.enum(invoiceKinds), generation: z.number().int().min(1),
+  status: z.enum(invoiceStatuses), origin: z.enum(['MANUAL', 'SCHEDULED']), number: nullableText(40), currency: z.literal('CHF'),
+  period: z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay }).nullable(), termsSequence: z.number().int().min(1).nullable(),
+  lines: z.array(invoiceLineSchema).min(1).max(10), subtotal: cents, discountTotal: cents, netTotal: cents,
+  tax: z.object({ mode: z.enum(['NONE', 'VAT']), rateBp: z.number().int().nullable(), pricesIncludeTax: z.boolean().nullable(), amount: cents }).nullable(),
+  total: cents.nullable(), issuedOn: isoDay.nullable(), dueOn: isoDay.nullable(), paymentTermDays: z.number().int().min(0).nullable(), issuedAt: iso.nullable(),
+  issuedByName: nullableText(200),
+  issuer: z.object({ legalName: text(150), street: text(200), postalCode: text(20), city: text(100), country: text(2), email: nullableText(254), iban: nullableText(42),
+    vatNumber: nullableText(40), taxNote: nullableText(200) }).nullable(),
+  recipient: z.object({ name: text(150), contactName: nullableText(200), street: text(200), postalCode: text(20), city: text(100), country: text(100) }).nullable(),
+  sendStatus: z.enum(sendStatuses), sentOn: isoDay.nullable(), sentRecordedAt: iso.nullable(), sentRecordedByName: nullableText(200),
+  balance: cents.nullable(), overdue: z.boolean(),
+  creditNote: z.object({ id: z.uuid(), number: text(40), total: cents, issuedOn: isoDay }).nullable(),
+  creditsInvoice: z.object({ id: z.uuid(), number: nullableText(40) }).nullable(),
+  reason: nullableText(500), preparedAt: iso, preparedByName: nullableText(200), cancelledAt: iso.nullable(), cancelledByName: nullableText(200),
+  version: z.number().int().min(1),
+});
+const activationSchema = z.object({ id: z.uuid(), startsOn: isoDay, status: z.enum(['ACTIVE', 'STOPPED']), activatedAt: iso, activatedByName: nullableText(200),
+  stoppedAt: iso.nullable(), stoppedByName: nullableText(200), stopReason: nullableText(500) });
+const documentState = { state: z.enum(['NOT_DUE', 'DUE', 'DRAFT', 'ISSUED', 'CREDITED']), invoiceId: z.uuid().nullable(), number: nullableText(40),
+  total: cents.nullable(), balance: cents.nullable() };
+const billingSchema = z.object({
+  today: isoDay, billable: z.boolean(), issuerReady: z.boolean(), activation: activationSchema.nullable(), activations: z.array(activationSchema).max(20),
+  paidStartsOn: isoDay.nullable(), terminationOn: isoDay.nullable(),
+  initial: z.object({ dueOn: isoDay, amount: cents, discount: cents, net: cents, termsSequence: z.number().int().min(1), ...documentState }).nullable(),
+  periods: z.array(z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay, amount: cents.nullable(), discount: cents, net: cents.nullable(),
+    termsSequence: z.number().int().min(1).nullable(), ...documentState })).max(36),
+  invoices: z.array(invoiceSchema).max(200), outstanding: z.number().int().min(0), overdue: z.number().int().min(0), version: z.number().int().min(1),
+});
+const billingResult = z.object({ data: billingSchema });
+const invoiceResult = z.object({ data: invoiceSchema });
+const invoicePageResult = z.object({ data: z.object({ items: z.array(invoiceSchema).max(100), total: z.number().int().min(0), limit: z.number().int().min(1),
+  offset: z.number().int().min(0), today: isoDay }) });
+const billingRunResult = z.object({ data: z.union([z.object({ skipped: z.literal(true) }),
+  z.object({ skipped: z.literal(false), today: isoDay, clients: z.number().int().min(0), prepared: z.number().int().min(0), issued: z.number().int().min(0),
+    waiting: z.number().int().min(0), failed: z.number().int().min(0) })]) });
+
 // --- État de session : un code émis et une acceptation en cours appartiennent au compte qui les a lancés. ---
 export type PlatformInviteState = { operationId: string; email: string; validityDays?: number; code: string; busy?: boolean };
 export type PlatformJoinState = { identity: string; operationId: string; code?: string; confirmation?: { id: string; digest: string };
@@ -300,6 +362,26 @@ const requestCommand = z.object({ operationId: uuid, version: versionField, kind
   requestedOfferId: uuid.optional(), desiredOn: day.optional(), details: longText.optional() }).strict();
 const decisionCommand = z.object({ operationId: uuid, version: versionField, status: z.enum(['IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN']),
   response: longText.optional(), effectiveOn: day.optional(), offerId: uuid.optional() }).strict();
+// Facturation : mêmes bornes que l'API, qui relit l'IBAN (clé de contrôle), la TVA, les dates et chaque état de document.
+const issuerCommand = z.object({ operationId: uuid, version: versionField,
+  legalName: z.string().trim().min(1).max(150), street: z.string().trim().min(1).max(200), postalCode: z.string().trim().min(1).max(20),
+  city: z.string().trim().min(1).max(100), country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/),
+  email: z.string().trim().max(254).transform(value => value.toLowerCase()).pipe(z.email()).nullable(),
+  iban: z.string().max(42).transform(value => value.replace(/\s+/g, '').toUpperCase()).pipe(z.string().regex(/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/)).nullable(),
+  taxMode: z.enum(['NONE', 'VAT']), vatNumber: z.string().trim().max(40).nullable(), taxRateBp: z.number().int().min(1).max(5000).nullable(),
+  pricesIncludeTax: z.boolean().nullable(), taxNote: z.string().trim().min(3).max(200).nullable() }).strict();
+const activationCommand = z.object({ operationId: uuid, version: versionField, startsOn: day, confirm: z.literal(true) }).strict();
+const activationStopCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason }).strict();
+const prepareCommand = z.object({ operationId: uuid, version: versionField, kind: z.enum(['INITIAL', 'PERIOD']), periodStart: day.optional() }).strict()
+  .refine(body => (body.kind === 'PERIOD') === (body.periodStart !== undefined));
+const issueCommand = z.object({ operationId: uuid, version: versionField, confirm: z.literal(true) }).strict();
+const cancelDraftCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason }).strict();
+const creditCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason, confirm: z.literal(true) }).strict();
+const sentCommand = z.object({ operationId: uuid, version: versionField, sentOn: day }).strict();
+const optionalDay = z.preprocess(value => (value === '' ? undefined : value), day.optional());
+const invoiceListParams = z.object({ clientId: uuid.optional(), status: z.enum(invoiceStatuses).optional(), kind: z.enum(invoiceKinds).optional(),
+  sendStatus: z.enum(sendStatuses).optional(), from: optionalDay, to: optionalDay, dueBefore: optionalDay, overdue: z.enum(['true']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(), offset: z.coerce.number().int().min(0).max(100_000).optional() }).strict();
 const searchOf = (parameters: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(parameters)) if (value !== undefined && value !== '') search.set(key, String(value));
@@ -548,6 +630,59 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
     return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/commercial/requests/${requestId.toLowerCase()}/decision`,
       idempotencyKey: body.operationId, ifMatch: `"${version}"`, body: lowerIds(body) }, commercialResult);
   });
+
+  // --- Facturation (R01-T05) : l'émetteur, la liste de toutes les factures, le passage manuel, puis la facturation d'une fiche. ---
+  app.get('/app/bff/platform/billing/issuer', read('/v1/platform/billing/issuer', issuerSettingsResult));
+  app.post('/app/bff/platform/billing/issuer', async (request, reply) => {
+    empty.parse(request.query);
+    const { version, ...body } = issuerCommand.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/billing/issuer', idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body }, issuerSettingsResult);
+  });
+  app.get('/app/bff/platform/invoices', async (request, reply) => {
+    const query = invoiceListParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/invoices${searchOf({ ...query, clientId: query.clientId?.toLowerCase() })}` },
+      invoicePageResult);
+  });
+  app.get('/app/bff/platform/invoices/:invoiceId', async (request, reply) => {
+    empty.parse(request.query);
+    const { invoiceId } = z.object({ invoiceId: uuid }).parse(request.params);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/invoices/${invoiceId.toLowerCase()}` }, invoiceResult);
+  });
+  app.post('/app/bff/platform/billing/run', async (request, reply) => {
+    empty.parse(request.query);
+    const body = codeRevokeBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/billing/run', idempotencyKey: body.operationId, body }, billingRunResult);
+  });
+  app.get('/app/bff/platform/clients/:id/billing', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients/${id.toLowerCase()}/billing` }, billingResult);
+  });
+  const billingCommands: Array<[string, z.ZodType<{ operationId: string; version: number }>]> = [
+    ['billing/activation', activationCommand], ['billing/activation/stop', activationStopCommand], ['invoices', prepareCommand],
+  ];
+  for (const [path, schema] of billingCommands) {
+    app.post(`/app/bff/platform/clients/:id/${path}`, async (request, reply) => {
+      empty.parse(request.query);
+      const { id } = z.object({ id: uuid }).parse(request.params);
+      const { version, ...body } = schema.parse(request.body);
+      return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/${path}`,
+        idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, billingResult);
+    });
+  }
+  const invoiceCommands: Array<[string, z.ZodType<{ operationId: string; version: number }>]> = [
+    ['issue', issueCommand], ['cancel', cancelDraftCommand], ['credit', creditCommand], ['sent', sentCommand],
+  ];
+  for (const [path, schema] of invoiceCommands) {
+    app.post(`/app/bff/platform/clients/:id/invoices/:invoiceId/${path}`, async (request, reply) => {
+      empty.parse(request.query);
+      const { id, invoiceId } = z.object({ id: uuid, invoiceId: uuid }).parse(request.params);
+      const { version, ...body } = schema.parse(request.body);
+      return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/invoices/${invoiceId.toLowerCase()}/${path}`,
+        idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, billingResult);
+    });
+  }
 
   // « Créer un code » : le code est tiré ici, transmis à l'API qui n'en garde que l'empreinte à clé serveur, et rendu à l'opérateur qui l'a demandé.
   // Une coupure garde le même code pour la même opération ; un refus définitif libère l'émission, un autre code sera tiré.

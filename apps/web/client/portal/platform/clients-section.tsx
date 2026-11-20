@@ -14,6 +14,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/f
 import { Input } from '../../components/ui/input';
 import { Textarea } from '../../components/ui/textarea';
 import { PortalSelect } from '../components/portal-select';
+import { BillingPanel } from './billing-section';
 import { CommercialPanel } from './commercial-section';
 import { RightsPanel } from './rights-section';
 import type { ClientFilter } from './use-platform-clients';
@@ -114,6 +115,7 @@ function ClientFiche({ state, client }: { state: PlatformConsoleState; client: P
     <ClientFacts client={client} />
     <RightsPanel state={state} client={client} />
     <CommercialPanel state={state} client={client} />
+    <BillingPanel state={state} client={client} />
     <FicheForm key={`${client.id}:${client.version}`} state={state} client={client} />
     {client.codes.length > 0 && <div className="platform-group">
       <h4 className="platform-subtitle">Codes d’ouverture</h4>

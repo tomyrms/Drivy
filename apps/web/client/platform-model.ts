@@ -133,6 +133,59 @@ export const platformCommercialDetailSchema = z.object({
   today: isoDay, entitlementVersion: z.number().int().min(1), nextChangeAt: iso.nullable(), version: z.number().int().min(1),
 });
 export const platformCommercialResult = z.object({ data: platformCommercialDetailSchema });
+
+// --- Facturation (R01-T05) : factures, avoirs et échéancier relus par l'API ; l'écran ne calcule aucun montant. ---
+export const invoiceStatuses = ['DRAFT', 'ISSUED', 'CANCELLED'] as const;
+export const invoiceKinds = ['INITIAL', 'PERIOD', 'CREDIT_NOTE'] as const;
+export const sendStatuses = ['NOT_SENT', 'SENT'] as const;
+const label = (max: number) => z.string().max(max);
+const optionalLabel = (max: number) => z.string().max(max).nullable();
+export const platformIssuerSchema = z.object({
+  id, sequence: z.number().int().min(1), legalName: label(150), street: label(200), postalCode: label(20), city: label(100), country: z.string().regex(/^[A-Z]{2}$/),
+  email: optionalLabel(254), iban: optionalLabel(42), taxMode: z.enum(['NONE', 'VAT']), vatNumber: optionalLabel(40), taxRateBp: z.number().int().min(1).max(5000).nullable(),
+  pricesIncludeTax: z.boolean().nullable(), taxNote: optionalLabel(200), createdAt: iso, createdByName: optionalLabel(200),
+});
+export const platformInvoiceSchema = z.object({
+  id, clientId: id, clientName: optionalLabel(150), schoolId: id.nullable(), kind: z.enum(invoiceKinds), generation: z.number().int().min(1),
+  status: z.enum(invoiceStatuses), origin: z.enum(['MANUAL', 'SCHEDULED']), number: optionalLabel(40), currency: z.literal('CHF'),
+  period: z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay }).nullable(), termsSequence: z.number().int().min(1).nullable(),
+  lines: z.array(z.object({ code: token, label: label(200), periodStart: isoDay.nullable(), periodEnd: isoDay.nullable(), amount: cents, discount: cents, net: cents,
+    termsSequence: z.number().int().min(1).nullable() })).min(1).max(10),
+  subtotal: cents, discountTotal: cents, netTotal: cents,
+  tax: z.object({ mode: z.enum(['NONE', 'VAT']), rateBp: z.number().int().nullable(), pricesIncludeTax: z.boolean().nullable(), amount: cents }).nullable(),
+  total: cents.nullable(), issuedOn: isoDay.nullable(), dueOn: isoDay.nullable(), paymentTermDays: z.number().int().min(0).nullable(), issuedAt: iso.nullable(),
+  issuedByName: optionalLabel(200),
+  issuer: z.object({ legalName: label(150), street: label(200), postalCode: label(20), city: label(100), country: label(2), email: optionalLabel(254),
+    iban: optionalLabel(42), vatNumber: optionalLabel(40), taxNote: optionalLabel(200) }).nullable(),
+  recipient: z.object({ name: label(150), contactName: optionalLabel(200), street: label(200), postalCode: label(20), city: label(100), country: label(100) }).nullable(),
+  sendStatus: z.enum(sendStatuses), sentOn: isoDay.nullable(), sentRecordedAt: iso.nullable(), sentRecordedByName: optionalLabel(200),
+  balance: cents.nullable(), overdue: z.boolean(),
+  creditNote: z.object({ id, number: label(40), total: cents, issuedOn: isoDay }).nullable(),
+  creditsInvoice: z.object({ id, number: optionalLabel(40) }).nullable(),
+  reason: optionalLabel(500), preparedAt: iso, preparedByName: optionalLabel(200), cancelledAt: iso.nullable(), cancelledByName: optionalLabel(200),
+  version: z.number().int().min(1),
+});
+const billingActivationSchema = z.object({ id, startsOn: isoDay, status: z.enum(['ACTIVE', 'STOPPED']), activatedAt: iso, activatedByName: optionalLabel(200),
+  stoppedAt: iso.nullable(), stoppedByName: optionalLabel(200), stopReason: optionalLabel(500) });
+const documentStates = ['NOT_DUE', 'DUE', 'DRAFT', 'ISSUED', 'CREDITED'] as const;
+const documentState = { state: z.enum(documentStates), invoiceId: id.nullable(), number: optionalLabel(40), total: cents.nullable(), balance: cents.nullable() };
+export const platformBillingSchema = z.object({
+  today: isoDay, billable: z.boolean(), issuerReady: z.boolean(), activation: billingActivationSchema.nullable(), activations: z.array(billingActivationSchema).max(20),
+  paidStartsOn: isoDay.nullable(), terminationOn: isoDay.nullable(),
+  initial: z.object({ dueOn: isoDay, amount: cents, discount: cents, net: cents, termsSequence: z.number().int().min(1), ...documentState }).nullable(),
+  periods: z.array(z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay, amount: cents.nullable(), discount: cents, net: cents.nullable(),
+    termsSequence: z.number().int().min(1).nullable(), ...documentState })).max(36),
+  invoices: z.array(platformInvoiceSchema).max(200), outstanding: z.number().int().min(0), overdue: z.number().int().min(0), version: z.number().int().min(1),
+});
+export const platformBillingResult = z.object({ data: platformBillingSchema });
+export const platformInvoiceResult = z.object({ data: platformInvoiceSchema });
+export const platformInvoicePageResult = z.object({ data: z.object({ items: z.array(platformInvoiceSchema).max(100), total: z.number().int().min(0),
+  limit: z.number().int().min(1), offset: z.number().int().min(0), today: isoDay }) });
+export const platformIssuerResult = z.object({ data: z.object({ current: platformIssuerSchema.nullable(), versions: z.array(platformIssuerSchema).max(50),
+  version: z.number().int().min(1) }) });
+export const platformBillingRunResult = z.object({ data: z.union([z.object({ skipped: z.literal(true) }),
+  z.object({ skipped: z.literal(false), today: isoDay, clients: z.number().int().min(0), prepared: z.number().int().min(0), issued: z.number().int().min(0),
+    waiting: z.number().int().min(0), failed: z.number().int().min(0) })]) });
 export const platformModulesResult = z.object({ data: z.object({ items: z.array(platformModuleSchema).max(20) }) });
 export const platformOffersResult = z.object({ data: z.object({ items: z.array(platformOfferSchema).max(200) }) });
 export const platformOfferResult = z.object({ data: platformOfferSchema });
@@ -179,6 +232,16 @@ export type PlatformCommercial = z.infer<typeof platformCommercialSchema>;
 export type PlatformCommercialDetail = z.infer<typeof platformCommercialDetailSchema>;
 export type PlatformTermsVersion = z.infer<typeof platformTermsVersionSchema>;
 export type PlatformCommercialRequest = z.infer<typeof platformCommercialRequestSchema>;
+export type PlatformBilling = z.infer<typeof platformBillingSchema>;
+export type PlatformBillingPeriod = PlatformBilling['periods'][number];
+export type PlatformInvoice = z.infer<typeof platformInvoiceSchema>;
+export type PlatformInvoicePage = z.infer<typeof platformInvoicePageResult>['data'];
+export type PlatformIssuer = z.infer<typeof platformIssuerSchema>;
+export type PlatformIssuerSettings = z.infer<typeof platformIssuerResult>['data'];
+export type PlatformBillingRun = z.infer<typeof platformBillingRunResult>['data'];
+export type PlatformInvoiceStatus = (typeof invoiceStatuses)[number];
+export type PlatformInvoiceKind = (typeof invoiceKinds)[number];
+export type PlatformSendStatus = (typeof sendStatuses)[number];
 export type PlatformClient = z.infer<typeof platformClientSchema>;
 export type PlatformClientDetail = z.infer<typeof platformClientDetailSchema>;
 export type PlatformClientCode = z.infer<typeof platformClientCodeSchema>;
@@ -251,6 +314,15 @@ const actionLabels: Record<string, string> = {
   CANCEL_PAID_START: 'Début payant annulé',
   RECORD_COMMERCIAL_REQUEST: 'Demande enregistrée',
   DECIDE_COMMERCIAL_REQUEST: 'Demande traitée',
+  SET_BILLING_ISSUER: 'Émetteur enregistré',
+  RUN_BILLING: 'Facturation planifiée exécutée',
+  ACTIVATE_BILLING: 'Facturation planifiée activée',
+  STOP_BILLING: 'Facturation planifiée arrêtée',
+  PREPARE_INVOICE: 'Facture préparée',
+  ISSUE_INVOICE: 'Facture émise',
+  CANCEL_INVOICE_DRAFT: 'Brouillon annulé',
+  ISSUE_CREDIT_NOTE: 'Avoir émis',
+  MARK_INVOICE_SENT: 'Envoi enregistré',
 };
 export const actionLabel = (action: string) => actionLabels[action] ?? 'Action enregistrée';
 const reasonLabels: Record<string, string> = {
@@ -283,6 +355,25 @@ const reasonLabels: Record<string, string> = {
   PAID_START_STARTED: 'Payant déjà commencé',
   CLIENT_TERMINATED: 'École résiliée',
   REQUEST_CLOSED: 'Demande déjà traitée',
+  BILLING_ACTIVE: 'Déjà active',
+  BILLING_NOT_READY: 'Facturation non prête',
+  BILLING_NOT_ACTIVE: 'Facturation arrêtée',
+  BILLING_ISSUER_MISSING: 'Émetteur à compléter',
+  INVOICE_NOTHING_DUE: 'Rien à facturer',
+  INVOICE_PERIOD_INVALID: 'Période non valide',
+  INVOICE_PERIOD_TERMINATED: 'Après la résiliation',
+  INVOICE_PERIOD_FUTURE: 'Période à venir',
+  INVOICE_EXISTS: 'Déjà facturé',
+  INVOICE_TERMS_CHANGED: 'Conditions modifiées',
+  INVOICE_RECIPIENT_INCOMPLETE: 'Adresse de facturation incomplète',
+  INVOICE_NOT_DRAFT: 'Plus un brouillon',
+  INVOICE_NOT_CREDITABLE: 'Avoir impossible',
+  INVOICE_CREDITED: 'Avoir déjà émis',
+  INVOICE_NOT_ISSUED: 'Non émise',
+  INVOICE_ALREADY_SENT: 'Envoi déjà enregistré',
+  INVOICE_SENT_DATE: 'Date d’envoi non valide',
+  INVOICE_FIXED: 'Document émis',
+  PAID_START_INVOICED: 'Début payant facturé',
 };
 export const reasonLabel = (code: string | null) => (code ? reasonLabels[code] ?? null : null);
 
@@ -332,6 +423,36 @@ export function instantOf(local: string): string | undefined {
 }
 /** Le jour civil d'aujourd'hui à Zurich, pour proposer une date par défaut. */
 export const zurichToday = (now: Date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Zurich' }).format(now);
+
+// --- Facturation : libellés ---
+const invoiceKindLabels: Record<PlatformInvoiceKind, string> = { INITIAL: 'Montant initial', PERIOD: 'Mensualité', CREDIT_NOTE: 'Avoir' };
+export const invoiceKindLabel = (kind: PlatformInvoiceKind) => invoiceKindLabels[kind];
+const invoiceStatusLabels: Record<PlatformInvoiceStatus, string> = { DRAFT: 'Brouillon', ISSUED: 'Émise', CANCELLED: 'Annulée' };
+export const invoiceStatusLabel = (status: PlatformInvoiceStatus) => invoiceStatusLabels[status];
+export const sendStatusLabel = (status: PlatformSendStatus) => (status === 'SENT' ? 'Envoyée' : 'Non envoyée');
+const documentStateLabels: Record<(typeof documentStates)[number], string> = { NOT_DUE: 'À venir', DUE: 'À facturer', DRAFT: 'Brouillon', ISSUED: 'Émise', CREDITED: 'Créditée' };
+export const documentStateLabel = (state: (typeof documentStates)[number]) => documentStateLabels[state];
+/** Taux en points de base → « 8,1 % ». */
+export const taxRateLabel = (rateBp: number | null) => (rateBp === null ? 'À compléter' : `${new Intl.NumberFormat('fr-CH', { maximumFractionDigits: 2 }).format(rateBp / 100)} %`);
+/** Saisie d'un taux en pour cent (« 8.1 » ou « 8,1 ») → points de base ; vide = `null`, illisible = `undefined`. */
+export function rateOf(input: string): number | null | undefined {
+  const text = input.trim().replace(',', '.').replace(/\s*%$/, '');
+  if (text === '') return null;
+  if (!/^\d{1,2}(\.\d{1,2})?$/.test(text)) return undefined;
+  const value = Math.round(Number(text) * 100);
+  return value >= 1 && value <= 5000 ? value : undefined;
+}
+/** IBAN par groupes de quatre, pour la lecture seulement. */
+export const ibanLabel = (iban: string | null) => (iban ? iban.replace(/(.{4})/g, '$1 ').trim() : 'À compléter');
+/** Forme et clé de contrôle (ISO 13616, modulo 97), relues aussi par l'API. */
+export function ibanValid(input: string): boolean {
+  const iban = input.replace(/\s+/g, '').toUpperCase();
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
+  const digits = `${iban.slice(4)}${iban.slice(0, 4)}`.replace(/[A-Z]/g, letter => String(letter.charCodeAt(0) - 55));
+  let rest = 0;
+  for (const digit of digits) rest = (rest * 10 + Number(digit)) % 97;
+  return rest === 1;
+}
 
 // --- Écoles clientes : libellés et fiche ---
 const preparationLabels: Record<PlatformClientPreparation, string> = { AWAITING_SCHOOL: 'En attente de l’école', IN_PREPARATION: 'En préparation', ACTIVE: 'Active', ARCHIVED: 'Archivée' };
@@ -485,6 +606,25 @@ const failures: Record<string, string> = {
   CLIENT_TERMINATED: 'La résiliation de cette école est confirmée.',
   REQUEST_CLOSED: 'Cette demande a déjà reçu une décision.',
   REQUEST_DATE_FUTURE: 'La date de la demande ne peut pas être à venir.',
+  BILLING_ACTIVE: 'La facturation planifiée est déjà active pour cette école.',
+  BILLING_NOT_READY: 'Confirmez d’abord un début payant sur des conditions complètes.',
+  BILLING_NOT_ACTIVE: 'La facturation planifiée n’est pas active pour cette école.',
+  BILLING_ISSUER_MISSING: 'Renseignez d’abord l’émetteur dans l’onglet Factures.',
+  INVOICE_NOTHING_DUE: 'Aucun montant n’est dû pour ce document.',
+  INVOICE_PERIOD_INVALID: 'Cette date n’est pas un début de période.',
+  INVOICE_PERIOD_TERMINATED: 'Cette période commence après la résiliation.',
+  INVOICE_PERIOD_FUTURE: 'Cette période n’a pas encore commencé.',
+  INVOICE_EXISTS: 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.',
+  INVOICE_TERMS_CHANGED: 'Les conditions ont changé depuis la préparation. Annulez ce brouillon et préparez-le à nouveau.',
+  INVOICE_RECIPIENT_INCOMPLETE: 'Complétez le nom et l’adresse de facturation de l’école dans sa fiche.',
+  INVOICE_NOT_DRAFT: 'Ce document n’est plus un brouillon. L’écran est à jour.',
+  INVOICE_NOT_CREDITABLE: 'Seule une facture émise peut recevoir un avoir.',
+  INVOICE_CREDITED: 'Un avoir a déjà été émis pour cette facture.',
+  INVOICE_NOT_ISSUED: 'Ce document n’est pas émis.',
+  INVOICE_ALREADY_SENT: 'L’envoi de ce document est déjà enregistré.',
+  INVOICE_SENT_DATE: 'La date d’envoi doit être entre l’émission et aujourd’hui.',
+  INVOICE_FIXED: 'Un document émis ne se modifie pas.',
+  PAID_START_INVOICED: 'Ce début payant est déjà facturé. Annulez le brouillon ou émettez un avoir d’abord.',
   PLATFORM_CODE_IN_PROGRESS: 'Un code est déjà en cours de création. Affichez-le ou fermez-le avant d’en créer un autre.',
   NOT_FOUND: 'Cet élément n’existe plus. L’écran a été actualisé.',
   LAST_PLATFORM_OPERATOR: 'Le dernier opérateur actif ne peut pas être retiré.',

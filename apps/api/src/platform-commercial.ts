@@ -25,7 +25,7 @@ const dateTooFar = () => new ApiError(400, 'INVALID_REQUEST', 'La date est trop 
 const terminated = () => new ApiError(409, 'CLIENT_TERMINATED', 'La résiliation de cette école est confirmée.');
 
 /** Même verrou que les autres commandes de la fiche (R01-T02, R01-T03) : conditions, essai, attributions et rattachement ne s'entrecroisent pas. */
-async function lockedClient(db: PoolClient, clientId: string): Promise<string | null> {
+export async function lockedClient(db: PoolClient, clientId: string): Promise<string | null> {
   await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`platform-client:${clientId}`]);
   const row = (await db.query<{ school_id: string | null }>('SELECT school_id FROM drivy.platform_client WHERE id=$1', [clientId])).rows[0];
   if (!row) throw notFound();
@@ -36,7 +36,7 @@ async function readCommercialRow(db: PoolClient, clientId: string): Promise<Comm
   if (!row) throw notFound();
   return row;
 }
-const commercialView = async (db: PoolClient, clientId: string) => commercialDetailView(await readCommercialRow(db, clientId), new Date());
+export const commercialView = async (db: PoolClient, clientId: string) => commercialDetailView(await readCommercialRow(db, clientId), new Date());
 /** Dossier relu dans la transaction de la commande : la version affichée par l'opérateur doit être celle d'à présent. */
 async function currentCommercial(db: PoolClient, clientId: string, expected: number): Promise<CommercialDetail> {
   const detail = await commercialView(db, clientId);

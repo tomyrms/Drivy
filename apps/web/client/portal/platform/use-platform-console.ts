@@ -9,6 +9,7 @@ import {
 import { endSession, okSchema, request, sessionSchema, type Session } from '../../protocol';
 import { usePlatformClients } from './use-platform-clients';
 import { usePlatformOffers } from './use-platform-offers';
+import { usePlatformBilling } from './use-platform-billing';
 import { usePlatformCommercial } from './use-platform-commercial';
 import { usePlatformRights } from './use-platform-rights';
 
@@ -48,7 +49,7 @@ export function usePlatformConsole() {
   function purge() {
     setMe(null); setOperators([]); setInvitations([]); setPending(null); setJournal(emptyJournal); setFilter('ALL'); setIssued(null);
     setRemoving(null); setCopied(false); setUncertain(false); setConflict(false);
-    invite.current = null; revocations.current.clear(); operatorId.current = null; clients.reset(); offers.reset(); rights.reset(); commercial.reset();
+    invite.current = null; revocations.current.clear(); operatorId.current = null; clients.reset(); offers.reset(); rights.reset(); commercial.reset(); billing.reset();
   }
   /** Retourne le genre d'erreur : un refus « plus opérateur » vide tout, un conflit demande une relecture. */
   function fail(reason: unknown) {
@@ -62,15 +63,15 @@ export function usePlatformConsole() {
   async function load(value: JournalFilter = filter) {
     const current = generation.current;
     const mine = await request('platform/me', platformMeResult);
-    const [team, listing, log, directory, catalogue] = await Promise.all([
+    const [team, listing, log, directory, catalogue, invoicing] = await Promise.all([
       request('platform/operators', platformOperatorsResult), request('platform/invitations', platformInvitationsResult),
-      request(journalPath(value), platformJournalResult), clients.snapshot(), offers.snapshot(),
+      request(journalPath(value), platformJournalResult), clients.snapshot(), offers.snapshot(), billing.snapshot(),
     ]);
     // Un autre compte ou un refus est arrivé pendant la lecture : ces réponses ne sont plus celles de l'écran.
     if (current !== generation.current) return;
     operatorId.current = mine.data.operator.id;
     setMe(mine.data); setOperators(team.data.items); setInvitations(listing.data.items); setPending(listing.pending ?? null);
-    setJournal(log.data); setFilter(value); clients.apply(directory); offers.apply(catalogue); setAccess('allowed');
+    setJournal(log.data); setFilter(value); clients.apply(directory); offers.apply(catalogue); billing.apply(invoicing); setAccess('allowed');
   }
   async function boot() {
     generation.current += 1;
@@ -111,7 +112,7 @@ export function usePlatformConsole() {
     catch (reason) {
       if (fail(reason) === 'conflict') {
         // Une autre personne a modifié la ligne : on relit avant de laisser recommencer.
-        setRemoving(null); clients.stopAttach(); offers.stopOffer(); rights.stop(); commercial.stop();
+        setRemoving(null); clients.stopAttach(); offers.stopOffer(); rights.stop(); commercial.stop(); billing.stop();
         try { await load(); } catch (next) { fail(next); }
       }
     } finally { running.current = false; setBusy(false); }
@@ -123,6 +124,8 @@ export function usePlatformConsole() {
   const rights = usePlatformRights({ session, perform, reload: () => load(), clientId: clients.selected?.id ?? null, rights: clients.rights, setRights: clients.setRights });
   const commercial = usePlatformCommercial({ session, perform, reload: () => load(), clientId: clients.selected?.id ?? null, commercial: clients.commercial,
     setCommercial: clients.setCommercial });
+  const billing = usePlatformBilling({ session, perform, reload: () => load(), clientId: clients.selected?.id ?? null, billing: clients.billing,
+    setBilling: clients.setBilling });
   const changeAccount = () => perform(async () => { noteSessionClosure(await endSession()); setLogoutUnconfirmed(readLogoutNotice()); await boot(); });
 
   const sendInvitation = (email: string, validityDays: number) => perform(async () => {
@@ -195,9 +198,10 @@ export function usePlatformConsole() {
   }
 
   // Une boîte de dialogue ouverte porte ses propres erreurs : l'alerte de la page se tait derrière elle.
-  const dialogOpen = removing !== null || clients.codeTarget !== null || clients.attach !== null || offers.editor !== null || rights.dialog !== null || commercial.dialog !== null;
+  const dialogOpen = removing !== null || clients.codeTarget !== null || clients.attach !== null || offers.editor !== null || rights.dialog !== null || commercial.dialog !== null
+    || billing.dialog !== null;
   return { session, loaded, busy, access, me, operators, invitations, pending, journal, filter, issued, copied, error, conflict, uncertain,
-    clients, offers, rights, commercial, dialogOpen, removing, chooseRemoval, logoutUnconfirmed, boot, refresh, changeAccount, sendInvitation, resumeInvitation, closeCode,
+    clients, offers, rights, commercial, billing, dialogOpen, removing, chooseRemoval, logoutUnconfirmed, boot, refresh, changeAccount, sendInvitation, resumeInvitation, closeCode,
     revokeInvitation, removeOperator, chooseFilter, moreJournal, copy };
 }
 export type PlatformConsoleState = ReturnType<typeof usePlatformConsole>;

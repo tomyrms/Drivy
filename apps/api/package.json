@@ -17,7 +17,8 @@
     "seed": "tsx scripts/seed.ts",
     "mail:worker": "node dist/invitation-mail-worker.js",
     "mail:worker:dev": "tsx src/invitation-mail-worker.ts",
-    "course:worker": "node dist/course-worker.js"
+    "course:worker": "node dist/course-worker.js",
+    "billing:worker": "node dist/billing-worker.js"
   },
   "dependencies": {
     "fastify": "5.12.6",

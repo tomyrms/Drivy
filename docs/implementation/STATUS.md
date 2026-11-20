@@ -1,3 +1,47 @@
+## 20 novembre 2026 — R01-T05 : factures initiales et mensuelles, avoirs et facturation planifiée (#457)
+
+- Branche `tomyrms/r01-t05-factures`, issue de la tête de `tomyrms/r01-t04-conditions-commerciales`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/factures-20261117.md` détaille le modèle, les règles des commandes, le passage planifié et les limites.
+- API :
+  - Migration `20261117_platform_invoices.sql` :
+    - émetteur versionné ;
+    - activation explicite de la facturation planifiée, jamais rétroactive ;
+    - factures et avoirs en centimes de CHF, numérotés sans trou par série et par année (`F-2026-00001`, `AV-…`) ;
+    - TVA arrondie au centime ;
+    - document figé à l'émission, avoir total, génération suivante d'une période créditée ;
+    - RLS forcée, aucune suppression, écritures par fonctions `SECURITY DEFINER` seulement.
+  - Routes `GET`/`POST /v1/platform/clients/:id/billing…` et `…/invoices…` (préparer, émettre, annuler un brouillon, avoir, envoi enregistré, activer, arrêter), versionnées et idempotentes ; `GET /v1/platform/invoices`, émetteur, passage manuel `POST /v1/platform/billing/run`.
+  - Service `billing-worker.ts` (`npm run billing:worker`) : passage horaire sous le rôle `drivy_billing_worker`, journaux réduits à des compteurs.
+  - Contrat `platform-billing.json` (nouveau). L'OpenAPI canonique 3.11.0 n'est pas modifié.
+- Web :
+  - relais BFF à liste fermée ;
+  - rubrique « Facturation » de la fiche d'une école ;
+  - onglet « Factures » : émetteur, passage manuel, filtres, liste paginée ;
+  - une boîte de dialogue par commande, détail d'une facture en lecture.
+- Règle du porteur du 13 novembre : aucun test exécuté, aucun workflow CI lancé.
+- Exécuté (seuls contrôles permis), Node 26.8.1 :
+  - typecheck API sans erreur ;
+  - typecheck web (`tsc --noEmit` et `tsconfig.check.json`) sans erreur ;
+  - build web réussi (`tsc -p tsconfig.server.json` puis `vite build`) ;
+  - régénération des contrats (`scripts/generate-platform-contract.ts`).
+- ÉCRIT, JAMAIS EXÉCUTÉ :
+  - `platform-billing-model.test.ts` (17) ;
+  - `platform-billing.integration.test.ts` (23, PostgreSQL réel : émetteur, calcul et figement, TVA, périodes refusées, annulation, avoir et génération 2, envoi, filtres, activation, passage et rattrapage, trois cas de concurrence, rejeu, immuabilité, RLS forcée).
+  - Aucun test web ni Swift n'a été ajouté pour ce lot.
+- Limites :
+  - service planifié non provisionné sur le homelab (rôle, `pg_hba`, unité) : seul le passage manuel fonctionne ;
+  - avoir total seulement ;
+  - suspension en pause ignorée (#461) ;
+  - aucun courriel, PDF, QR (#459) ni règlement (#458) ; l'envoi est déclaré à la main ;
+  - `MANAGE_OFFERS` n'est vérifié par aucune route ;
+  - IBAN contrôlé par mod 97 côté TypeScript seulement ;
+  - aucune étape de recette navigateur.
+- Reste à qualifier à la fin de l'épic R01 :
+  - toutes les suites sur la tête finale ;
+  - la migration `20261117_platform_invoices.sql` sur une copie de la base du homelab, après sauvegarde ;
+  - le provisionnement du service de facturation ;
+  - un parcours de bout en bout : émetteur, début payant, préparation, émission, avoir, refacturation, passage planifié ;
+  - des tests BFF et UI de la facturation.
+
 ## 20 novembre 2026 — R01-T04 : conditions commerciales, essai et début payant (#456)
 
 - Branche `tomyrms/r01-t04-conditions-commerciales`, issue de la tête de `tomyrms/r01-t03-offres-modules`. Aucune PR, rien de fusionné ni de déployé, rien de poussé. La note `docs/implementation/conditions-commerciales-20261116.md` détaille les décisions, le cycle, les règles des commandes, les limites et ce que #457 doit reprendre.
