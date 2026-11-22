@@ -211,6 +211,28 @@ const billingMessages: [string, number, string, string][] = [
   ['platform_paid_start_invoiced', 409, 'PAID_START_INVOICED', 'Ce début payant est déjà facturé. Annulez le brouillon ou émettez un avoir d’abord.'],
   ['platform_activation_backdated', 409, 'EFFECTIVE_DATE_PAST', 'La date doit être aujourd’hui ou plus tard.'],
   ['platform_issuer_sequence', 412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.'],
+  // Règlements (R01-T06, #458).
+  ['platform_payment_unknown', 404, 'NOT_FOUND', 'Ce règlement n’existe pas.'],
+  ['platform_payment_currency', 409, 'PAYMENT_CURRENCY', 'Seuls les règlements en CHF sont pris en compte. Aucune conversion n’est faite.'],
+  ['platform_payment_future', 409, 'PAYMENT_DATE_FUTURE', 'La date de réception ne peut pas être après aujourd’hui.'],
+  ['platform_payment_possible_duplicate', 409, 'PAYMENT_POSSIBLE_DUPLICATE', 'Un règlement du même montant existe déjà pour cette école à une date ou une référence proche.'],
+  ['platform_payment_allocation_mode', 409, 'PAYMENT_ALLOCATION_MODE', 'Choisissez une répartition automatique ou des affectations, pas les deux.'],
+  ['platform_payment_allocated', 409, 'PAYMENT_ALLOCATED', 'Libérez d’abord les affectations de ce règlement.'],
+  ['platform_payment_voided', 409, 'PAYMENT_VOIDED', 'Ce règlement est annulé.'],
+  ['platform_payment_other_client', 409, 'PAYMENT_OTHER_CLIENT', 'Cette facture appartient à une autre école.'],
+  ['platform_payment_invoice_invalid', 409, 'PAYMENT_INVOICE_INVALID', 'Seule une facture émise peut recevoir un règlement.'],
+  ['platform_payment_exceeds_available', 409, 'PAYMENT_EXCEEDS_AVAILABLE', 'Le montant dépasse le reste disponible du règlement.'],
+  ['platform_payment_exceeds_balance', 409, 'PAYMENT_EXCEEDS_BALANCE', 'Le montant dépasse le solde de la facture.'],
+  ['platform_payment_regularized', 409, 'PAYMENT_REGULARIZED', 'Annulez d’abord les régularisations de ce règlement.'],
+  ['platform_payment_unchanged', 409, 'PAYMENT_UNCHANGED', 'La correction ne change rien au règlement.'],
+  ['platform_payment_fixed', 409, 'PAYMENT_FIXED', 'Un règlement enregistré ne se modifie pas. Corrigez-le ou annulez-le.'],
+  ['platform_allocation_unknown', 404, 'NOT_FOUND', 'Cette affectation n’existe pas.'],
+  ['platform_allocation_released', 409, 'ALLOCATION_RELEASED', 'Cette affectation est déjà libérée.'],
+  ['platform_allocation_fixed', 409, 'ALLOCATION_FIXED', 'Une affectation ne se modifie pas. Libérez-la puis affectez à nouveau.'],
+  ['platform_regularization_unknown', 404, 'NOT_FOUND', 'Cette régularisation n’existe pas.'],
+  ['platform_regularization_cancelled', 409, 'REGULARIZATION_CANCELLED', 'Cette régularisation est déjà annulée.'],
+  ['platform_regularization_fixed', 409, 'REGULARIZATION_FIXED', 'Une régularisation ne se modifie pas.'],
+  ['platform_invoice_paid', 409, 'INVOICE_PAID', 'Libérez d’abord les règlements affectés à cette facture.'],
 ];
 const billingConstraints: Record<string, [number, string, string]> = {
   platform_billing_activation_active: [409, 'BILLING_ACTIVE', 'La facturation planifiée est déjà active pour cette école.'],
@@ -218,6 +240,7 @@ const billingConstraints: Record<string, [number, string, string]> = {
   platform_invoice_period_once: [409, 'INVOICE_EXISTS', 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.'],
   platform_invoice_credit_once: [409, 'INVOICE_CREDITED', 'Un avoir a déjà été émis pour cette facture.'],
   platform_billing_issuer_sequence_key: [412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.'],
+  platform_payment_corrected_once: [409, 'PAYMENT_VOIDED', 'Ce règlement a déjà été corrigé.'],
 };
 function billingRefusal(code: unknown, message: string, constraint: string): ApiError | undefined {
   if (code === '23514') {

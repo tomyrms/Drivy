@@ -1,6 +1,10 @@
 import { z } from 'zod';
 import { iso } from './entitlements-model.js';
 import { billingSchedule, periodIndexOf, type CommercialDetail } from './platform-commercial-model.js';
+import {
+  debtView, invoiceAllocationView, paymentView, settlementStates, settlementView,
+  type DebtRow, type InvoiceAllocationRow, type PaymentRow, type SettlementRow,
+} from './platform-payments-model.js';
 
 /**
  * Factures initiales et mensuelles, avoirs et échéancier (R01-T05, #457). Modèle pur : bornes des saisies, contrôle d'IBAN, calcul de la taxe
@@ -101,7 +105,7 @@ const queryText = (schema: z.ZodType) => z.preprocess(value => (value === '' ? u
 export const invoiceListQuery = z.object({
   clientId: queryText(z.uuid()), status: queryText(z.enum(invoiceStatuses)), kind: queryText(z.enum(invoiceKinds)),
   sendStatus: queryText(z.enum(sendStatuses)), from: queryText(day), to: queryText(day), dueBefore: queryText(day),
-  overdue: queryText(z.enum(['true'])),
+  overdue: queryText(z.enum(['true'])), settlement: queryText(z.enum(settlementStates)),
   limit: z.coerce.number().int().min(1).max(invoicePageMax).default(50), offset: z.coerce.number().int().min(0).max(100_000).default(0),
 }).strict();
 export type InvoiceListQuery = z.infer<typeof invoiceListQuery>;
@@ -124,6 +128,8 @@ export interface InvoiceRow {
   client_name: string | null; school_id: string | null; prepared_by_name: string | null; issued_by_name: string | null; cancelled_by_name: string | null;
   sent_recorded_by_name: string | null; credit_note: { id: string; number: string; total: number; issued_on: string } | null;
   credited_number: string | null;
+  /** Calcul de la base (`platform_invoice_settlement`) : null pour un brouillon, une annulation ou un avoir. */
+  settlement: SettlementRow | null; allocations: InvoiceAllocationRow[];
 }
 export interface IssuerRow {
   id: string; sequence: number; legal_name: string; street: string; postal_code: string; city: string; country: string; email: string | null;
@@ -138,17 +144,16 @@ export interface ActivationRow {
 // --- Vues -------------------------------------------------------------------------------------------------------------------
 
 /**
- * Solde d'un document : total moins l'avoir émis (les règlements arrivent avec #458). Un brouillon, une annulation ou un avoir n'ont pas de solde.
- * Échue : émise, solde positif, échéance passée.
+ * Solde d'un document, relu du calcul de la base (total moins affectations actives, nul si un avoir l'annule). Un brouillon, une annulation ou
+ * un avoir n'ont pas de solde. Échue : émise, solde positif, échéance passée au jour de Zurich.
  */
-export function invoiceBalance(row: Pick<InvoiceRow, 'kind' | 'status' | 'total' | 'credit_note' | 'due_on'>, today: string) {
-  if (row.kind === 'CREDIT_NOTE' || row.status !== 'ISSUED' || row.total === null) return { balance: null, overdue: false };
-  const balance = Math.max(0, row.total - (row.credit_note?.total ?? 0));
-  return { balance, overdue: balance > 0 && row.due_on !== null && row.due_on < today };
+export function invoiceBalance(row: Pick<InvoiceRow, 'kind' | 'status' | 'settlement'>) {
+  if (row.kind === 'CREDIT_NOTE' || row.status !== 'ISSUED' || !row.settlement) return { balance: null, overdue: false };
+  return { balance: row.settlement.balance, overdue: row.settlement.overdue };
 }
 
-export function invoiceView(row: InvoiceRow, today: string) {
-  const { balance, overdue } = invoiceBalance(row, today);
+export function invoiceView(row: InvoiceRow) {
+  const { balance, overdue } = invoiceBalance(row);
   return {
     id: row.id, clientId: row.client_id, clientName: row.client_name, schoolId: row.school_id, kind: row.kind, generation: row.generation,
     status: row.status, origin: row.origin, number: row.number, currency: row.currency,
@@ -172,7 +177,8 @@ export function invoiceView(row: InvoiceRow, today: string) {
       postalCode: row.recipient.postalCode ?? '', city: row.recipient.city ?? '', country: row.recipient.country ?? '',
     } : null,
     sendStatus: row.send_status, sentOn: row.sent_on, sentRecordedAt: iso(row.sent_recorded_at), sentRecordedByName: row.sent_recorded_by_name,
-    balance, overdue,
+    balance, overdue, settlement: invoiceBalance(row).balance === null ? null : settlementView(row.settlement),
+    allocations: row.allocations.map(invoiceAllocationView),
     creditNote: row.credit_note ? { id: row.credit_note.id, number: row.credit_note.number, total: row.credit_note.total, issuedOn: row.credit_note.issued_on } : null,
     creditsInvoice: row.credits_invoice_id ? { id: row.credits_invoice_id, number: row.credited_number } : null,
     reason: row.reason, preparedAt: iso(row.prepared_at)!, preparedByName: row.prepared_by_name, cancelledAt: iso(row.cancelled_at),
@@ -203,16 +209,16 @@ export function documentState(invoices: readonly InvoiceView[], kind: 'INITIAL' 
 }
 
 /**
- * Facturation d'une fiche vue par l'équipe : activation, échéancier depuis la première période (période en cours + `billingLookahead`),
+ * Facturation d'une fiche vue par l'équipe (solde, retards et reste non affecté relus de `platform_client_debt`) : activation, échéancier depuis la première période (période en cours + `billingLookahead`),
  * chaque période annotée de sa facture, puis les factures. L'échéancier reprend `billingSchedule` (R01-T04) : mêmes montants que la base.
  * Une période est « due » si elle a commencé ; une facture créditée redevient due tant qu'aucune nouvelle génération n'est émise.
  */
 export function billingView(args: {
   commercial: CommercialDetail; activation: ActivationRow | null; activations: readonly ActivationRow[]; invoices: readonly InvoiceRow[];
-  issuerReady: boolean; version: number;
+  issuerReady: boolean; version: number; payments: readonly PaymentRow[]; debt: DebtRow;
 }) {
   const { commercial, activation } = args; const today = commercial.today;
-  const invoices = args.invoices.map(row => invoiceView(row, today));
+  const invoices = args.invoices.map(row => invoiceView(row));
   const anchor = commercial.paidStart?.startsOn ?? null;
   const current = anchor ? Math.max(0, periodIndexOf(anchor, today)) : 0;
   const schedule = billingSchedule({
@@ -223,13 +229,14 @@ export function billingView(args: {
   const initial = schedule.initial && schedule.initial.net > 0 && anchor
     ? { ...schedule.initial, ...documentState(invoices, 'INITIAL', null, anchor <= today) } : null;
   const periods = schedule.periods.map(period => ({ ...period, ...documentState(invoices, 'PERIOD', period.startsOn, period.startsOn <= today) }));
-  const outstanding = invoices.reduce((sum, item) => sum + (item.balance ?? 0), 0);
+  const debt = debtView(args.debt);
   return {
     today, billable: commercial.billable, issuerReady: args.issuerReady,
     activation: activation ? activationView(activation) : null, activations: args.activations.map(activationView),
     paidStartsOn: anchor, terminationOn: commercial.termination?.effectiveOn ?? null,
     initial, periods,
-    invoices, outstanding, overdue: invoices.filter(item => item.overdue).length,
+    invoices, outstanding: debt.outstanding, overdue: debt.overdueCount, debt,
+    payments: args.payments.map(paymentView),
     version: args.version,
   };
 }

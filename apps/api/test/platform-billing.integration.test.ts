@@ -23,7 +23,8 @@ const verifyToken = async (header: string | undefined): Promise<Identity> => {
   return { issuer, subject: header.slice(7) };
 };
 
-const billingTables = 'drivy.platform_billing_issuer, drivy.platform_billing_activation, drivy.platform_invoice, drivy.platform_invoice_counter';
+const billingTables = 'drivy.platform_billing_issuer, drivy.platform_billing_activation, drivy.platform_invoice, drivy.platform_invoice_counter, '
+  + 'drivy.platform_payment, drivy.platform_payment_allocation, drivy.platform_payment_regularization';
 beforeAll(async () => {
   pool = await freshDatabase();
   app = buildApp({ pool, verifyToken, cursorSecret: 'platform-billing-synthetic-secret-32-characters' });
@@ -68,8 +69,9 @@ const issuerFields = {
   iban: 'CH93 0076 2011 6238 5295 7', taxMode: 'NONE', vatNumber: null, taxRateBp: null, pricesIncludeTax: null, taxNote: 'TVA non applicable',
 };
 
-async function schoolClient(withAddress = true) {
-  const created = await call(A, 'POST', '/v1/platform/clients', { body: { operationId: randomUUID(), ...fiche, ...(withAddress ? address : {}), schoolId: id.schoolA } });
+/** Une fiche par école (`school_id` unique) : une seconde fiche dans le même test prend l'école B. */
+async function schoolClient(withAddress = true, schoolId: string = id.schoolA) {
+  const created = await call(A, 'POST', '/v1/platform/clients', { body: { operationId: randomUUID(), ...fiche, ...(withAddress ? address : {}), schoolId } });
   expect(created.statusCode, created.body).toBe(201);
   return created.json().data.id as string;
 }
@@ -80,8 +82,9 @@ async function commercial(clientId: string, path: string, body: Record<string, u
   return response.json().data;
 }
 /** Fiche facturable : offre en vigueur, conditions complètes, début payant confirmé (aujourd'hui par défaut). */
-async function billableClient({ startsOn = today(), terms = complete, withAddress = true }: { startsOn?: string; terms?: Record<string, unknown>; withAddress?: boolean } = {}) {
-  const clientId = await schoolClient(withAddress);
+async function billableClient({ startsOn = today(), terms = complete, withAddress = true, schoolId = id.schoolA }:
+  { startsOn?: string; terms?: Record<string, unknown>; withAddress?: boolean; schoolId?: string } = {}) {
+  const clientId = await schoolClient(withAddress, schoolId);
   const offer = await call(A, 'POST', '/v1/platform/offers', { body: { operationId: randomUUID(), name: `Complète ${randomUUID().slice(0, 8)}`, modules: ['MESSAGING'] } });
   expect(offer.statusCode, offer.body).toBe(201);
   const rights = (await call(A, 'GET', `/v1/platform/clients/${clientId}/entitlements`)).json().data;
@@ -106,16 +109,23 @@ async function bill(clientId: string, path: string, body: Record<string, unknown
   const expected = version ?? (await billing(clientId, as)).version;
   return call(as, 'POST', `/v1/platform/clients/${clientId}${path}`, { body: { operationId: randomUUID(), ...body }, version: expected });
 }
+// Une commande de facturation rend la facturation relue de la fiche (`billingEnvelope`), jamais le seul document : on l'y retrouve.
+const invoiceIn = (response: Reply, pick: (invoice: any) => boolean) => {
+  expect(billingEnvelope.safeParse(response.json()).success, response.body).toBe(true);
+  const found = (response.json().data.invoices as any[]).find(pick);
+  expect(found, response.body).toBeDefined();
+  return found;
+};
 async function prepared(clientId: string, body: Record<string, unknown>) {
   const response = await bill(clientId, '/invoices', body);
   expect(response.statusCode, response.body).toBe(201);
-  expect(invoiceEnvelope.safeParse(response.json()).success, response.body).toBe(true);
-  return response.json().data;
+  return invoiceIn(response, invoice => invoice.status === 'DRAFT' && invoice.kind === body.kind
+    && (body.periodStart ? invoice.period?.startsOn === body.periodStart : true));
 }
 async function issued(clientId: string, invoiceId: string) {
   const response = await bill(clientId, `/invoices/${invoiceId}/issue`, { confirm: true });
   expect(response.statusCode, response.body).toBe(200);
-  return response.json().data;
+  return invoiceIn(response, invoice => invoice.id === invoiceId);
 }
 const invoices = async (clientId: string) => (await pool.query(`SELECT kind, status, number, generation, period_start::text AS period_start, net_total, total, origin
   FROM drivy.platform_invoice WHERE client_id=$1 ORDER BY number NULLS LAST, prepared_at`, [clientId])).rows;
@@ -231,7 +241,7 @@ describe('brouillon, émission et numérotation', () => {
     expect((await bill(clientId, `/invoices/${draft.id}/cancel`, { reason: 'x' })).statusCode).toBe(400);
     const cancelled = await bill(clientId, `/invoices/${draft.id}/cancel`, { reason: 'Saisie à reprendre' });
     expect(cancelled.statusCode, cancelled.body).toBe(200);
-    expect(cancelled.json().data).toMatchObject({ status: 'CANCELLED', reason: 'Saisie à reprendre', cancelledByName: 'Camille Exemple' });
+    expect(invoiceIn(cancelled, invoice => invoice.id === draft.id)).toMatchObject({ status: 'CANCELLED', reason: 'Saisie à reprendre', cancelledByName: 'Camille Exemple' });
     const again = await issued(clientId, (await prepared(clientId, { kind: 'INITIAL' })).id);
     expect(again.number).toBe(`F-${year()}-00001`);
     expectProblem(await bill(clientId, `/invoices/${again.id}/cancel`, { reason: 'Trop tard' }), 409, 'INVOICE_NOT_DRAFT');
@@ -242,7 +252,7 @@ describe('brouillon, émission et numérotation', () => {
     await setIssuer();
     const clientId = await billableClient();
     const draft = await prepared(clientId, { kind: 'INITIAL' });
-    const other = await schoolClient();
+    const other = await schoolClient(true, id.schoolB);
     expectProblem(await bill(other, `/invoices/${draft.id}/issue`, { confirm: true }), 404, 'NOT_FOUND');
   });
 
@@ -271,13 +281,16 @@ describe('avoir et nouvelle génération', () => {
     expect((await bill(clientId, `/invoices/${invoice.id}/credit`, { reason: 'Montant erroné' })).statusCode).toBe(400);
     const credit = await bill(clientId, `/invoices/${invoice.id}/credit`, { reason: 'Montant erroné', confirm: true });
     expect(credit.statusCode, credit.body).toBe(201);
-    expect(credit.json().data).toMatchObject({
+    const note = invoiceIn(credit, item => item.kind === 'CREDIT_NOTE' && item.creditsInvoice?.id === invoice.id);
+    expect(note).toMatchObject({
       kind: 'CREDIT_NOTE', status: 'ISSUED', number: `AV-${year()}-00001`, total: 9_900, balance: null,
       creditsInvoice: { id: invoice.id, number: invoice.number }, lines: [expect.objectContaining({ code: 'CREDIT' })],
     });
     expectProblem(await bill(clientId, `/invoices/${invoice.id}/credit`, { reason: 'Encore', confirm: true }), 409, 'INVOICE_CREDITED');
-    expectProblem(await bill(clientId, `/invoices/${credit.json().data.id}/credit`, { reason: 'Avoir d’avoir', confirm: true }), 409, 'INVOICE_NOT_CREDITABLE');
-    const original = (await call(A, 'GET', `/v1/platform/invoices/${invoice.id}`)).json().data;
+    expectProblem(await bill(clientId, `/invoices/${note.id}/credit`, { reason: 'Avoir d’avoir', confirm: true }), 409, 'INVOICE_NOT_CREDITABLE');
+    const read = await call(A, 'GET', `/v1/platform/invoices/${invoice.id}`);
+    expect(invoiceEnvelope.safeParse(read.json()).success, read.body).toBe(true);
+    const original = read.json().data;
     expect(original).toMatchObject({ balance: 0, overdue: false, creditNote: { number: `AV-${year()}-00001`, total: 9_900 } });
     expect((await billing(clientId)).periods[0].state).toBe('DUE');
     const second = await issued(clientId, (await prepared(clientId, { kind: 'PERIOD', periodStart: today() })).id);
@@ -297,7 +310,7 @@ describe('envoi', () => {
     expectProblem(await bill(clientId, `/invoices/${draft.id}/sent`, { sentOn: addDays(today(), 1) }), 409, 'INVOICE_SENT_DATE');
     const sent = await bill(clientId, `/invoices/${draft.id}/sent`, { sentOn: today() });
     expect(sent.statusCode, sent.body).toBe(200);
-    expect(sent.json().data).toMatchObject({ sendStatus: 'SENT', sentOn: today(), sentRecordedByName: 'Camille Exemple' });
+    expect(invoiceIn(sent, invoice => invoice.id === draft.id)).toMatchObject({ sendStatus: 'SENT', sentOn: today(), sentRecordedByName: 'Camille Exemple' });
     expectProblem(await bill(clientId, `/invoices/${draft.id}/sent`, { sentOn: today() }), 409, 'INVOICE_ALREADY_SENT');
   });
 });
@@ -325,7 +338,7 @@ describe('liste des factures', () => {
 
 describe('activation et préparation planifiée', () => {
   it('seule une fiche facturable s’active, aujourd’hui ou plus tard, une fois ; l’arrêt exige un motif', async () => {
-    const pilot = await schoolClient();
+    const pilot = await schoolClient(true, id.schoolB);
     expectProblem(await bill(pilot, '/billing/activation', { startsOn: today(), confirm: true }), 409, 'BILLING_NOT_READY');
     const clientId = await billableClient();
     expectProblem(await bill(clientId, '/billing/activation', { startsOn: addDays(today(), -1), confirm: true }), 409, 'EFFECTIVE_DATE_PAST');
@@ -457,7 +470,7 @@ describe('concurrence', () => {
     expect(first.statusCode, first.body).toBe(201);
     const replay = await call(A, 'POST', `/v1/platform/clients/${clientId}/invoices`, { body, version });
     expect(replay.statusCode).toBe(201);
-    expect(replay.json().data.id).toBe(first.json().data.id);
+    expect(replay.json().data.invoices.map((item: { id: string }) => item.id)).toEqual(first.json().data.invoices.map((item: { id: string }) => item.id));
     expectProblem(await call(A, 'POST', `/v1/platform/clients/${clientId}/invoices`, { body: { ...body, kind: 'PERIOD', periodStart: today() }, version }), 409, 'IDEMPOTENCY_MISMATCH');
     expect(await count('platform_invoice')).toBe(1);
   });
@@ -492,6 +505,240 @@ describe('garde-fous de la base', () => {
       await db.query('BEGIN'); await db.query('SET LOCAL ROLE drivy_billing_worker');
       expect((await db.query('SELECT drivy.platform_billing_run() AS result')).rows[0].result).toMatchObject({ skipped: false, clients: 0 });
       await expect(db.query('SELECT count(*) FROM drivy.platform_invoice')).rejects.toThrow(/permission denied/);
+      await db.query('ROLLBACK');
+    } finally { db.release(); }
+  });
+});
+
+// --- Règlements (R01-T06, #458). Écrit sans être exécuté. Références et notes synthétiques. ---------------------------------------
+const paymentInput = (patch: Record<string, unknown> = {}) => ({
+  amount: 10_000, currency: 'CHF', receivedOn: today(), method: 'BANK_TRANSFER', reference: null, note: null, allocations: [], spread: false, confirmDuplicate: false, ...patch,
+});
+async function paid(clientId: string, patch: Record<string, unknown> = {}, as = A) {
+  const response = await bill(clientId, '/payments', paymentInput(patch), undefined, as);
+  expect(response.statusCode, response.body).toBe(201);
+  expect(billingEnvelope.safeParse(response.json()).success, response.body).toBe(true);
+  return response.json().data;
+}
+const settledAt = async (invoiceId: string, day = today()) =>
+  (await pool.query('SELECT drivy.platform_invoice_settlement($1,$2::date) AS s', [invoiceId, day])).rows[0].s;
+const debtAt = async (clientId: string, day = today()) =>
+  (await pool.query('SELECT drivy.platform_client_debt($1,$2::date) AS d', [clientId, day])).rows[0].d;
+const invoiceOf = (view: any, invoiceId: string) => view.invoices.find((item: { id: string }) => item.id === invoiceId);
+const paymentOf = (view: any, paymentId: string) => view.payments.find((item: { id: string }) => item.id === paymentId);
+const paymentBy = (view: any, amount: number) => view.payments.find((item: { amount: number; status: string }) => item.amount === amount && item.status === 'RECORDED');
+const correction = (patch: Record<string, unknown> = {}) => ({
+  amount: 45_000, currency: 'CHF', receivedOn: today(), method: 'BANK_TRANSFER', reference: null, note: null, reason: 'Montant mal lu', ...patch,
+});
+/** Deux factures émises : montant initial (40 000) puis première période (9 900), à 30 jours. `setIssuer()` est appelé une fois avant. */
+async function invoicedClient(schoolId: string = id.schoolA) {
+  const clientId = await billableClient({ schoolId });
+  const initial = await issued(clientId, (await prepared(clientId, { kind: 'INITIAL' })).id);
+  const period = await issued(clientId, (await prepared(clientId, { kind: 'PERIOD', periodStart: today() })).id);
+  return { clientId, initial, period };
+}
+
+describe('règlements : soldes', () => {
+  it('partiel, total puis trop-perçu : soldes exacts, plus aucun retard, filtre de la liste sur le même calcul', async () => {
+    await setIssuer();
+    const { clientId, initial, period } = await invoicedClient();
+    const first = await paid(clientId, { amount: 10_000, allocations: [{ invoiceId: initial.id, amount: 10_000 }] });
+    expect(invoiceOf(first, initial.id).settlement).toMatchObject({ allocated: 10_000, balance: 30_000, state: 'PARTIAL', overdue: false });
+    expect(first.debt).toMatchObject({ outstanding: 39_900, overdueAmount: 0, overdueCount: 0, unallocated: 0 });
+    const second = await paid(clientId, { amount: 40_000, spread: true });
+    expect(paymentBy(second, 40_000)).toMatchObject({ allocated: 39_900, available: 100 });
+    expect(invoiceOf(second, initial.id).settlement).toMatchObject({ balance: 0, state: 'PAID' });
+    expect(invoiceOf(second, period.id).settlement).toMatchObject({ balance: 0, state: 'PAID' });
+    expect(second.debt).toMatchObject({ outstanding: 0, overdueAmount: 0, overdueCount: 0, oldestOverdueDueOn: null, unallocated: 100 });
+    expect(await debtAt(clientId, addDays(today(), 60))).toMatchObject({ outstanding: 0, overdueCount: 0 });
+    expect((await settledAt(period.id, addDays(today(), 60))).overdue).toBe(false);
+    const list = await call(A, 'GET', `/v1/platform/invoices?settlement=PAID&clientId=${clientId}`);
+    expect(invoicePageEnvelope.safeParse(list.json()).success, list.body).toBe(true);
+    expect(list.json().data.total).toBe(2);
+    expect((await call(A, 'GET', `/v1/platform/invoices?settlement=UNPAID&clientId=${clientId}`)).json().data.total).toBe(0);
+  });
+
+  it('le retard porte sur le seul reste dû, à partir du lendemain de l’échéance', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    await paid(clientId, { amount: 15_000, allocations: [{ invoiceId: initial.id, amount: 15_000 }] });
+    expect((await settledAt(initial.id, addDays(today(), 30))).overdue).toBe(false);
+    expect(await debtAt(clientId, addDays(today(), 30))).toMatchObject({ overdueAmount: 0, overdueCount: 0 });
+    expect(await settledAt(initial.id, addDays(today(), 31))).toMatchObject({ balance: 25_000, state: 'PARTIAL', overdue: true });
+    expect(await debtAt(clientId, addDays(today(), 31))).toMatchObject({
+      outstanding: 34_900, overdueAmount: 34_900, overdueCount: 2, oldestOverdueDueOn: addDays(today(), 30),
+    });
+  });
+
+  it('un envoi enregistré ne règle jamais une facture', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const sent = await bill(clientId, `/invoices/${initial.id}/sent`, { sentOn: today() });
+    expect(sent.statusCode, sent.body).toBe(200);
+    expect(invoiceOf(sent.json().data, initial.id)).toMatchObject({ sendStatus: 'SENT', balance: 40_000, settlement: { state: 'UNPAID', allocated: 0 }, allocations: [] });
+    expect(await count('platform_payment')).toBe(0);
+    expect(await count('platform_payment_allocation')).toBe(0);
+  });
+});
+
+describe('règlements : affectations refusées', () => {
+  it('ni une autre école, ni au-delà du reste ou du solde, ni un brouillon ; un refus n’écrit rien', async () => {
+    await setIssuer();
+    const { clientId, initial, period } = await invoicedClient();
+    const other = await invoicedClient(id.schoolB);
+    expectProblem(await bill(clientId, '/payments', paymentInput({ amount: 1_000, allocations: [{ invoiceId: other.initial.id, amount: 1_000 }] })), 409, 'PAYMENT_OTHER_CLIENT');
+    expect(await count('platform_payment')).toBe(0);
+    const small = paymentBy(await paid(clientId, { amount: 5_000 }), 5_000);
+    const allocate = (paymentId: string, invoiceId: string, amount: number) => bill(clientId, `/payments/${paymentId}/allocations`, { invoiceId, amount });
+    expectProblem(await allocate(small.id, other.initial.id, 1_000), 409, 'PAYMENT_OTHER_CLIENT');
+    expectProblem(await allocate(small.id, initial.id, 5_001), 409, 'PAYMENT_EXCEEDS_AVAILABLE');
+    const large = paymentBy(await paid(clientId, { amount: 20_000 }), 20_000);
+    expectProblem(await allocate(large.id, period.id, 9_901), 409, 'PAYMENT_EXCEEDS_BALANCE');
+    const draft = await prepared(clientId, { kind: 'PERIOD', periodStart: periodStart(today(), 1) });
+    expectProblem(await allocate(large.id, draft.id, 1_000), 409, 'PAYMENT_INVOICE_INVALID');
+    expect(await count('platform_payment_allocation')).toBe(0);
+    const foreign = paymentBy(await paid(other.clientId, { amount: 3_000 }), 3_000);
+    expectProblem(await allocate(foreign.id, initial.id, 1_000), 404, 'NOT_FOUND');
+    expectProblem(await bill(clientId, '/payments', paymentInput({ currency: 'EUR' })), 409, 'PAYMENT_CURRENCY');
+    expectProblem(await bill(clientId, '/payments', paymentInput({ receivedOn: addDays(today(), 1) })), 409, 'PAYMENT_DATE_FUTURE');
+  });
+});
+
+describe('règlements : doublons et concurrence', () => {
+  it('rejeu sans doublon ; deux opérateurs : un seul passe ; doublon probable confirmé explicitement', async () => {
+    await setIssuer();
+    const { clientId } = await invoicedClient();
+    const url = `/v1/platform/clients/${clientId}/payments`;
+    const body = { operationId: randomUUID(), ...paymentInput({ amount: 12_000, reference: 'VIR-778899' }) };
+    const version = (await billing(clientId)).version;
+    const first = await call(A, 'POST', url, { body, version });
+    const replay = await call(A, 'POST', url, { body, version });
+    expect([first.statusCode, replay.statusCode]).toEqual([201, 201]);
+    expect(replay.json().data.payments.map((item: { id: string }) => item.id)).toEqual(first.json().data.payments.map((item: { id: string }) => item.id));
+    expect(await count('platform_payment')).toBe(1);
+
+    const current = (await billing(clientId)).version;
+    const raced = await Promise.all([A, B].map(as => call(as, 'POST', url, { body: { operationId: randomUUID(), ...paymentInput({ amount: 7_000 }) }, version: current })));
+    expect(raced.map(item => item.statusCode).sort()).toEqual([201, 412]);
+    expect(await count('platform_payment', 'amount=7000')).toBe(1);
+
+    expectProblem(await bill(clientId, '/payments', paymentInput({ amount: 12_000, receivedOn: addDays(today(), -10), reference: 'vir-778899' })), 409, 'PAYMENT_POSSIBLE_DUPLICATE');
+    expectProblem(await bill(clientId, '/payments', paymentInput({ amount: 12_000, receivedOn: addDays(today(), -3) })), 409, 'PAYMENT_POSSIBLE_DUPLICATE');
+    expect(await count('platform_payment', 'amount=12000')).toBe(1);
+    await paid(clientId, { amount: 12_000, receivedOn: addDays(today(), -3), confirmDuplicate: true });
+    expect(await count('platform_payment', 'amount=12000')).toBe(2);
+    expect((await journal('RECORD_PAYMENT')).some(entry => entry.changes?.duplicateConfirmed === true)).toBe(true);
+    await paid(clientId, { amount: 12_000, receivedOn: addDays(today(), -10), reference: 'VIR-AUTRE' });
+    expect(await count('platform_payment', 'amount=12000')).toBe(3);
+  });
+});
+
+describe('règlements : correction, libération, annulation, régularisation', () => {
+  it('une correction recalcule solde et retard sans effacer l’auteur ni l’original', async () => {
+    await setIssuer();
+    const { clientId } = await invoicedClient();
+    const original = paymentBy(await paid(clientId, { amount: 49_900, spread: true }), 49_900);
+    expect(original.allocated).toBe(49_900);
+    const corrected = await bill(clientId, `/payments/${original.id}/correct`, correction(), undefined, B);
+    expect(corrected.statusCode, corrected.body).toBe(201);
+    expect(billingEnvelope.safeParse(corrected.json()).success, corrected.body).toBe(true);
+    const after = corrected.json().data;
+    const kept = paymentOf(after, original.id);
+    const replacement = after.payments.find((item: { correctsPaymentId: string | null }) => item.correctsPaymentId === original.id);
+    expect(kept).toMatchObject({
+      status: 'VOIDED', voidCause: 'CORRECTED', voidReason: 'Montant mal lu', amount: 49_900, allocated: 0, available: 0,
+      recordedByName: 'Camille Exemple', voidedByName: 'Jean Exemple', correctedByPaymentId: replacement.id,
+    });
+    expect(kept.allocations).toHaveLength(2);
+    expect(kept.allocations.every((item: any) => item.status === 'RELEASED' && item.releaseCause === 'PAYMENT_CORRECTED' && item.createdByName === 'Camille Exemple')).toBe(true);
+    expect(replacement).toMatchObject({ status: 'RECORDED', amount: 45_000, allocated: 45_000, available: 0, recordedByName: 'Jean Exemple' });
+    expect(after.debt).toMatchObject({ outstanding: 4_900, overdueAmount: 0, unallocated: 0 });
+    // L'ordre de reprise entre deux affectations du même instant n'est pas garanti : seul le reste dû est vérifié.
+    expect(await debtAt(clientId, addDays(today(), 31))).toMatchObject({ outstanding: 4_900, overdueAmount: 4_900, overdueCount: 1 });
+    expectProblem(await bill(clientId, `/payments/${original.id}/correct`, correction({ amount: 44_000 })), 409, 'PAYMENT_VOIDED');
+    expectProblem(await bill(clientId, `/payments/${replacement.id}/correct`, correction()), 409, 'PAYMENT_UNCHANGED');
+    const entries = await journal('CORRECT_PAYMENT');
+    expect(entries.find(entry => entry.changes?.after)?.changes).toMatchObject({ before: { amount: 49_900 }, after: { amount: 45_000 } });
+    expect(JSON.stringify(entries)).not.toMatch(/Montant mal lu/);
+  });
+
+  it('libérer puis créditer ; un avoir ne crée ni remboursement ni régularisation ; annuler laisse le règlement lisible', async () => {
+    await setIssuer();
+    const { clientId, period } = await invoicedClient();
+    const view = await paid(clientId, { amount: 9_900, allocations: [{ invoiceId: period.id, amount: 9_900 }] });
+    const payment = paymentBy(view, 9_900), allocation = payment.allocations[0];
+    expect(invoiceOf(view, period.id).settlement.state).toBe('PAID');
+    expectProblem(await bill(clientId, `/invoices/${period.id}/credit`, { reason: 'Période erronée', confirm: true }), 409, 'INVOICE_PAID');
+    const releaseUrl = `/payments/${payment.id}/allocations/${allocation.id}/release`;
+    expect((await bill(clientId, releaseUrl, { reason: 'x' })).statusCode).toBe(400);
+    const released = await bill(clientId, releaseUrl, { reason: 'Mauvaise facture' });
+    expect(released.statusCode, released.body).toBe(200);
+    expect(invoiceOf(released.json().data, period.id).settlement).toMatchObject({ state: 'UNPAID', balance: 9_900 });
+    expect(paymentOf(released.json().data, payment.id).allocations[0]).toMatchObject({ status: 'RELEASED', releaseCause: 'MANUAL', releaseReason: 'Mauvaise facture' });
+    expectProblem(await bill(clientId, releaseUrl, { reason: 'Mauvaise facture' }), 409, 'ALLOCATION_RELEASED');
+    const credited = await bill(clientId, `/invoices/${period.id}/credit`, { reason: 'Période erronée', confirm: true });
+    expect(credited.statusCode, credited.body).toBe(201);
+    expect(invoiceOf(credited.json().data, period.id).settlement).toMatchObject({ state: 'CREDITED', balance: 0 });
+    expectProblem(await bill(clientId, `/payments/${payment.id}/allocations`, { invoiceId: period.id, amount: 100 }), 409, 'INVOICE_CREDITED');
+    expect(paymentOf(credited.json().data, payment.id)).toMatchObject({ available: 9_900, regularized: 0, regularizations: [] });
+    expect(await count('platform_payment_regularization')).toBe(0);
+    expect((await bill(clientId, `/payments/${payment.id}/void`, { reason: 'Saisie en double' })).statusCode).toBe(400);
+    const voided = await bill(clientId, `/payments/${payment.id}/void`, { reason: 'Saisie en double', confirm: true });
+    expect(voided.statusCode, voided.body).toBe(200);
+    expect(paymentOf(voided.json().data, payment.id)).toMatchObject({ status: 'VOIDED', voidCause: 'VOIDED', available: 0, recordedByName: 'Camille Exemple' });
+    expect(voided.json().data.debt.unallocated).toBe(0);
+  });
+
+  it('une régularisation est explicite, bornée au reste, et s’annule sans rien effacer', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const view = await paid(clientId, { amount: 45_000, allocations: [{ invoiceId: initial.id, amount: 40_000 }] });
+    const payment = paymentBy(view, 45_000);
+    expect(view.debt.unallocated).toBe(5_000);
+    const url = `/payments/${payment.id}/regularizations`;
+    expectProblem(await bill(clientId, url, { amount: 5_001, kind: 'REFUND_RECORDED', reason: 'Virement retour effectué' }), 409, 'PAYMENT_EXCEEDS_AVAILABLE');
+    const done = await bill(clientId, url, { amount: 5_000, kind: 'REFUND_RECORDED', reason: 'Virement retour effectué' });
+    expect(done.statusCode, done.body).toBe(201);
+    const regularized = paymentOf(done.json().data, payment.id);
+    expect(regularized).toMatchObject({ available: 0, regularized: 5_000 });
+    expect(done.json().data.debt.unallocated).toBe(0);
+    expectProblem(await bill(clientId, `/payments/${payment.id}/void`, { reason: 'Saisie en double', confirm: true }), 409, 'PAYMENT_REGULARIZED');
+    const cancelUrl = `${url}/${regularized.regularizations[0].id}/cancel`;
+    const cancelled = await bill(clientId, cancelUrl, { reason: 'Virement rejeté' });
+    expect(cancelled.statusCode, cancelled.body).toBe(200);
+    expect(paymentOf(cancelled.json().data, payment.id)).toMatchObject({ available: 5_000, regularized: 0 });
+    expect(paymentOf(cancelled.json().data, payment.id).regularizations[0]).toMatchObject({ status: 'CANCELLED', reason: 'Virement retour effectué', cancelReason: 'Virement rejeté' });
+    expectProblem(await bill(clientId, cancelUrl, { reason: 'Virement rejeté' }), 409, 'REGULARIZATION_CANCELLED');
+    expect(JSON.stringify([...await journal('REGULARIZE_PAYMENT'), ...await journal('CANCEL_REGULARIZATION')])).not.toMatch(/Virement/);
+  });
+});
+
+describe('règlements : journal et garde-fous', () => {
+  it('le journal ne reçoit ni référence ni note ; rien ne se réécrit ni ne s’efface ; RLS forcée', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const view = await paid(clientId, { amount: 6_000, reference: 'VIR-778899', note: 'Reçu au guichet', allocations: [{ invoiceId: initial.id, amount: 5_000 }] });
+    const payment = paymentBy(view, 6_000);
+    expect(payment).toMatchObject({ reference: 'VIR-778899', note: 'Reçu au guichet' });
+    expect(JSON.stringify(await journal('RECORD_PAYMENT'))).not.toMatch(/778899|guichet/);
+    const done = await bill(clientId, `/payments/${payment.id}/regularizations`, { amount: 1_000, kind: 'OTHER', reason: 'Écart de caisse' });
+    expect(done.statusCode, done.body).toBe(201);
+    expect((await ownerError('UPDATE drivy.platform_payment SET amount=1 WHERE id=$1', [payment.id]))?.message).toMatch(/platform_payment_fixed/);
+    expect((await ownerError('DELETE FROM drivy.platform_payment WHERE id=$1', [payment.id]))?.message).toMatch(/platform_payment_fixed/);
+    expect((await ownerError('UPDATE drivy.platform_payment_allocation SET amount=1 WHERE payment_id=$1', [payment.id]))?.message).toMatch(/platform_allocation_fixed/);
+    expect((await ownerError('DELETE FROM drivy.platform_payment_allocation WHERE payment_id=$1', [payment.id]))?.message).toMatch(/platform_allocation_fixed/);
+    expect((await ownerError('UPDATE drivy.platform_payment_regularization SET amount=1 WHERE payment_id=$1', [payment.id]))?.message).toMatch(/platform_regularization_fixed/);
+    expect((await ownerError('DELETE FROM drivy.platform_payment_regularization WHERE payment_id=$1', [payment.id]))?.message).toMatch(/platform_regularization_fixed/);
+    const rows = (await pool.query<{ forced: boolean }>(`SELECT relforcerowsecurity AS forced FROM pg_class
+      WHERE relnamespace='drivy'::regnamespace AND relname IN ('platform_payment','platform_payment_allocation','platform_payment_regularization')`)).rows;
+    expect(rows).toHaveLength(3);
+    expect(rows.every(row => row.forced)).toBe(true);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN'); await db.query('SET LOCAL ROLE drivy_app');
+      for (const table of ['platform_payment', 'platform_payment_allocation', 'platform_payment_regularization']) {
+        expect((await db.query(`SELECT count(*)::int AS n FROM drivy.${table}`)).rows[0].n).toBe(0);
+      }
       await db.query('ROLLBACK');
     } finally { db.release(); }
   });

@@ -29,8 +29,11 @@ import {
 } from '../src/platform-commercial-model.js';
 import {
   activationSchema, billingEnvelope, billingRunEnvelope, billingSchema, invoiceEnvelope, invoicePageEnvelope, invoiceSchema, issuerSchema, issuerSettingsEnvelope,
-  issuerSettingsSchema
+  issuerSettingsSchema, debtSchema, paymentSchema, settlementSchema
 } from '../src/platform-billing-contract.js';
+import {
+  allocateBody, correctBody, paymentBody, regularizationCancelBody, regularizeBody, releaseBody, voidBody
+} from '../src/platform-payments-model.js';
 import {
   activationBody, activationStopBody, cancelBody, creditBody, invoiceListQuery, issueBody, issuerBody, prepareBody, runBody, sentBody
 } from '../src/platform-billing-model.js';
@@ -214,7 +217,7 @@ await writeFile(new URL('../contracts/platform-commercial.json', import.meta.url
 
 await writeFile(new URL('../contracts/platform-billing.json', import.meta.url), JSON.stringify({
   $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:platform-billing:1',
-  title: 'Factures initiales et mensuelles, avoirs et préparation planifiée (R01-T05, #457)',
+  title: 'Factures initiales et mensuelles, avoirs, préparation planifiée (R01-T05, #457) et règlements manuels (R01-T06, #458)',
   description: 'GET et POST /v1/platform/billing/issuer, GET /v1/platform/invoices, GET /v1/platform/invoices/{id}, POST /v1/platform/billing/run, '
     + 'GET /v1/platform/clients/{id}/billing, POST /v1/platform/clients/{id}/billing/activation, /billing/activation/stop, /invoices, '
     + '/invoices/{invoiceId}/issue, /invoices/{invoiceId}/cancel, /invoices/{invoiceId}/credit et /invoices/{invoiceId}/sent. '
@@ -228,14 +231,27 @@ await writeFile(new URL('../contracts/platform-billing.json', import.meta.url), 
     + 'Une période ou un montant initial n’a qu’une facture vivante par génération ; aucune facture n’est jamais supprimée. '
     + 'Le passage planifié (rôle drivy_billing_worker, une fois par heure) prépare puis émet ce qui est dû ; il ne fait rien sans activation et ne rattrape '
     + 'jamais plus de 24 documents par école et par passage. Taxe : NONE ou TVA au taux en points de base, prix TTC ou HT, arrondi au centime le plus proche. '
-    + 'Les règlements (#458), le PDF et la référence QR (#459) et la lecture par l’école (#460) ne sont pas couverts. '
-    + 'Le journal commercial reçoit l’action, le numéro et les montants, jamais un motif, un IBAN ni une adresse électronique.',
+    + 'Règlements (R01-T06) : POST /v1/platform/clients/{id}/payments, /payments/{paymentId}/allocations, '
+    + '/payments/{paymentId}/allocations/{allocationId}/release, /payments/{paymentId}/void, /payments/{paymentId}/correct, '
+    + '/payments/{paymentId}/regularizations et /payments/{paymentId}/regularizations/{regularizationId}/cancel, sous la même version de facturation. '
+    + 'Un règlement est un fait confirmé à la main par l’équipe, en CHF seulement ; aucun prestataire d’encaissement, et un téléchargement, un QR '
+    + 'ou une déclaration de l’école ne règlent jamais une facture. Il s’affecte à des factures émises de la même école, sans dépasser son reste ni le solde '
+    + 'de la facture ; à la saisie, les affectations sont données ou réparties de l’échéance la plus ancienne à la plus récente. Un même montant pour la même école '
+    + 'à une référence identique ou à trois jours près est refusé (409 PAYMENT_POSSIBLE_DUPLICATE) sauf confirmDuplicate. Une correction annule l’original '
+    + '(gardé, avec son auteur) et réaffecte le nouveau règlement aux mêmes factures ; une régularisation explicite sort un reste du règlement, '
+    + 'aucun remboursement n’est déduit d’un avoir ni d’une correction. Un avoir est refusé tant qu’une facture porte des affectations (409 INVOICE_PAID). '
+    + 'Solde, état de règlement, retard et dette sont calculés par la base (platform_invoice_settlement, platform_client_debt), le même calcul pour '
+    + 'l’équipe, l’espace école et la suspension. Le PDF et la référence QR (#459), la lecture par l’école (#460) et la suspension (#461) ne sont pas couverts. '
+    + 'Le journal commercial reçoit l’action, le numéro et les montants, jamais un motif, une référence de paiement, une note, un IBAN ni une adresse électronique.',
   $defs: {
     Issuer: project(issuerSchema),
     IssuerSettings: project(issuerSettingsSchema),
     Invoice: project(invoiceSchema),
     Activation: project(activationSchema),
     Billing: project(billingSchema),
+    Settlement: project(settlementSchema),
+    Payment: project(paymentSchema),
+    Debt: project(debtSchema),
     IssuerBody: project(issuerBody),
     ActivationBody: project(activationBody),
     ActivationStopBody: project(activationStopBody),
@@ -245,6 +261,13 @@ await writeFile(new URL('../contracts/platform-billing.json', import.meta.url), 
     CreditBody: project(creditBody),
     SentBody: project(sentBody),
     RunBody: project(runBody),
+    PaymentBody: project(paymentBody),
+    AllocateBody: project(allocateBody),
+    ReleaseBody: project(releaseBody),
+    VoidPaymentBody: project(voidBody),
+    CorrectPaymentBody: project(correctBody),
+    RegularizeBody: project(regularizeBody),
+    RegularizationCancelBody: project(regularizationCancelBody),
     InvoiceListQuery: project(invoiceListQuery),
     IssuerSettingsEnvelope: project(issuerSettingsEnvelope),
     InvoiceEnvelope: project(invoiceEnvelope),

@@ -1,3 +1,17 @@
+## 22 novembre 2026 — R01-T06 : règlements manuels et soldes par école (#458)
+
+- Branche `tomyrms/r01-t06-reglements`, issue de la tête de `tomyrms/r01-t05-factures`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/reglements-20261118.md` détaille le modèle, les règles et les limites.
+- API :
+  - Migration `20261118_platform_payments.sql` : règlements, affectations et régularisations, RLS forcée, aucune suppression, écritures par fonctions `SECURITY DEFINER`.
+  - Calcul unique en base : `platform_payment_available`, `platform_invoice_settlement`, `platform_client_debt`.
+  - Sept commandes versionnées et idempotentes sous `/v1/platform/clients/:id/payments…` : saisir, affecter, libérer, annuler, corriger, régulariser, annuler une régularisation.
+  - Contrat `platform-billing.json` régénéré. L'OpenAPI canonique 3.11.0 n'est pas modifié.
+- Web : relais en liste fermée, rubrique « Règlements » de la fiche, boîtes de saisie et de correction, état de règlement et filtre dans l'onglet Factures.
+- Exécuté le 22 novembre 2026 : `tsc` de l'API, `tsc` du client, des vérifications et du serveur web, `vite build`, génération du contrat sans écart.
+- **Écrit, jamais exécuté** (règle du porteur du 13 novembre) : `platform-payments-model.test.ts`, `platform-billing-model.test.ts` et le bloc « Règlements » de `platform-billing.integration.test.ts`, qui corrige aussi trois erreurs du test T05. La migration n'a été appliquée à aucune base.
+- Reste à qualifier : migration et scénarios sur PostgreSQL, concurrence à deux opérateurs, interface dans un navigateur.
+- Reste à faire ailleurs : lecture par l'école (#460) et suspension (#461), qui doivent réutiliser le même calcul.
+
 ## 20 novembre 2026 — R01-T05 : factures initiales et mensuelles, avoirs et facturation planifiée (#457)
 
 - Branche `tomyrms/r01-t05-factures`, issue de la tête de `tomyrms/r01-t04-conditions-commerciales`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/factures-20261117.md` détaille le modèle, les règles des commandes, le passage planifié et les limites.

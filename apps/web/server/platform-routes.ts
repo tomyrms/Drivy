@@ -32,9 +32,9 @@ const adjustmentLiftPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustm
 // Conditions commerciales, essai, début payant et demandes (R01-T04) : le dossier d'une fiche, puis ses commandes versionnées.
 const commercialPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial$`);
 const commercialCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial/(?:terms|trial/(?:start|extend|end)|paid-start(?:/cancel)?|requests|requests/${uuidPath}/decision)$`);
-// Factures, avoirs, émetteur et activation (R01-T05) : la facturation d'une fiche, ses commandes versionnées, la liste et l'émetteur.
+// Factures, avoirs, émetteur et activation (R01-T05), règlements (R01-T06) : la facturation d'une fiche, ses commandes versionnées, la liste et l'émetteur.
 const billingPath = new RegExp(`^/v1/platform/clients/${uuidPath}/billing$`);
-const billingCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/(?:billing/activation(?:/stop)?|invoices|invoices/${uuidPath}/(?:issue|cancel|credit|sent))$`);
+const billingCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/(?:billing/activation(?:/stop)?|invoices|invoices/${uuidPath}/(?:issue|cancel|credit|sent)|payments|payments/${uuidPath}/(?:allocations|void|correct|regularizations)|payments/${uuidPath}/allocations/${uuidPath}/release|payments/${uuidPath}/regularizations/${uuidPath}/cancel)$`);
 const invoicePath = new RegExp(`^/v1/platform/invoices/${uuidPath}$`);
 
 export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
@@ -43,6 +43,8 @@ export const offerStatuses = ['ACTIVE', 'ARCHIVED'] as const;
 export const invoiceStatuses = ['DRAFT', 'ISSUED', 'CANCELLED'] as const;
 export const invoiceKinds = ['INITIAL', 'PERIOD', 'CREDIT_NOTE'] as const;
 export const sendStatuses = ['NOT_SENT', 'SENT'] as const;
+export const settlementStates = ['PAID', 'PARTIAL', 'UNPAID', 'CREDITED'] as const;
+const paymentMethods = ['BANK_TRANSFER', 'CASH', 'OTHER'] as const;
 
 type QueryRule = (value: string) => boolean;
 const limitUpTo = (max: number): QueryRule => value => /^[1-9][0-9]{0,2}$/.test(value) && Number(value) <= max;
@@ -72,7 +74,7 @@ const instantRule: QueryRule = value => value.length <= 40 && z.iso.datetime().s
 const previewRules: Record<string, QueryRule> = { offerId: uuidRule, effectiveAt: instantRule };
 const dayRule: QueryRule = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && z.iso.date().safeParse(value).success;
 const invoiceListRules: Record<string, QueryRule> = { clientId: uuidRule, status: oneOf(invoiceStatuses), kind: oneOf(invoiceKinds), sendStatus: oneOf(sendStatuses),
-  from: dayRule, to: dayRule, dueBefore: dayRule, overdue: oneOf(['true']), limit: limitUpTo(100), offset: value => /^(0|[1-9][0-9]{0,5})$/.test(value) && Number(value) <= 100_000 };
+  settlement: oneOf(settlementStates), from: dayRule, to: dayRule, dueBefore: dayRule, overdue: oneOf(['true']), limit: limitUpTo(100), offset: value => /^(0|[1-9][0-9]{0,5})$/.test(value) && Number(value) <= 100_000 };
 
 /** Liste fermée des appels que le relais peut émettre vers l'API de la plateforme : toute autre route reste inaccessible. */
 export function allowedPlatformRequest(request: PlatformRequest): boolean {
@@ -244,6 +246,9 @@ const issuerSchema = z.object({ id: z.uuid(), sequence: z.number().int().min(1),
 const issuerSettingsResult = z.object({ data: z.object({ current: issuerSchema.nullable(), versions: z.array(issuerSchema).max(50), version: z.number().int().min(1) }) });
 const invoiceLineSchema = z.object({ code: token, label: text(200), periodStart: isoDay.nullable(), periodEnd: isoDay.nullable(), amount: cents, discount: cents,
   net: cents, termsSequence: z.number().int().min(1).nullable() });
+const settlementSchema = z.object({ state: z.enum(settlementStates), allocated: cents, credited: cents, balance: cents, overdue: z.boolean() });
+const invoiceAllocationSchema = z.object({ id: z.uuid(), paymentId: z.uuid(), amount: cents, receivedOn: isoDay, method: z.enum(paymentMethods), createdAt: iso,
+  createdByName: nullableText(200) });
 const invoiceSchema = z.object({
   id: z.uuid(), clientId: z.uuid(), clientName: nullableText(150), schoolId: z.uuid().nullable(), kind: z.enum(invoiceKinds), generation: z.number().int().min(1),
   status: z.enum(invoiceStatuses), origin: z.enum(['MANUAL', 'SCHEDULED']), number: nullableText(40), currency: z.literal('CHF'),
@@ -256,12 +261,25 @@ const invoiceSchema = z.object({
     vatNumber: nullableText(40), taxNote: nullableText(200) }).nullable(),
   recipient: z.object({ name: text(150), contactName: nullableText(200), street: text(200), postalCode: text(20), city: text(100), country: text(100) }).nullable(),
   sendStatus: z.enum(sendStatuses), sentOn: isoDay.nullable(), sentRecordedAt: iso.nullable(), sentRecordedByName: nullableText(200),
-  balance: cents.nullable(), overdue: z.boolean(),
+  balance: cents.nullable(), overdue: z.boolean(), settlement: settlementSchema.nullable(), allocations: z.array(invoiceAllocationSchema).max(200),
   creditNote: z.object({ id: z.uuid(), number: text(40), total: cents, issuedOn: isoDay }).nullable(),
   creditsInvoice: z.object({ id: z.uuid(), number: nullableText(40) }).nullable(),
   reason: nullableText(500), preparedAt: iso, preparedByName: nullableText(200), cancelledAt: iso.nullable(), cancelledByName: nullableText(200),
   version: z.number().int().min(1),
 });
+const paymentSchema = z.object({
+  id: z.uuid(), clientId: z.uuid(), amount: cents, currency: z.literal('CHF'), receivedOn: isoDay, method: z.enum(paymentMethods), reference: nullableText(140),
+  note: nullableText(500), status: z.enum(['RECORDED', 'VOIDED']), allocated: cents, regularized: cents, available: cents, correctsPaymentId: z.uuid().nullable(),
+  correctedByPaymentId: z.uuid().nullable(), recordedAt: iso, recordedByName: nullableText(200), voidedAt: iso.nullable(), voidedByName: nullableText(200),
+  voidCause: z.enum(['VOIDED', 'CORRECTED']).nullable(), voidReason: nullableText(500),
+  allocations: z.array(z.object({ id: z.uuid(), invoiceId: z.uuid(), invoiceNumber: nullableText(40), amount: cents, status: z.enum(['ACTIVE', 'RELEASED']), createdAt: iso,
+    createdByName: nullableText(200), releasedAt: iso.nullable(), releasedByName: nullableText(200),
+    releaseCause: z.enum(['MANUAL', 'PAYMENT_VOIDED', 'PAYMENT_CORRECTED']).nullable(), releaseReason: nullableText(500) })).max(200),
+  regularizations: z.array(z.object({ id: z.uuid(), amount: cents, kind: z.enum(['REFUND_RECORDED', 'OTHER']), reason: text(500), status: z.enum(['ACTIVE', 'CANCELLED']),
+    createdAt: iso, createdByName: nullableText(200), cancelledAt: iso.nullable(), cancelledByName: nullableText(200), cancelReason: nullableText(500) })).max(200),
+  version: z.number().int().min(1),
+});
+const debtSchema = z.object({ outstanding: cents, overdueAmount: cents, overdueCount: z.number().int().min(0), oldestOverdueDueOn: isoDay.nullable(), unallocated: cents });
 const activationSchema = z.object({ id: z.uuid(), startsOn: isoDay, status: z.enum(['ACTIVE', 'STOPPED']), activatedAt: iso, activatedByName: nullableText(200),
   stoppedAt: iso.nullable(), stoppedByName: nullableText(200), stopReason: nullableText(500) });
 const documentState = { state: z.enum(['NOT_DUE', 'DUE', 'DRAFT', 'ISSUED', 'CREDITED']), invoiceId: z.uuid().nullable(), number: nullableText(40),
@@ -272,7 +290,8 @@ const billingSchema = z.object({
   initial: z.object({ dueOn: isoDay, amount: cents, discount: cents, net: cents, termsSequence: z.number().int().min(1), ...documentState }).nullable(),
   periods: z.array(z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay, amount: cents.nullable(), discount: cents, net: cents.nullable(),
     termsSequence: z.number().int().min(1).nullable(), ...documentState })).max(36),
-  invoices: z.array(invoiceSchema).max(200), outstanding: z.number().int().min(0), overdue: z.number().int().min(0), version: z.number().int().min(1),
+  invoices: z.array(invoiceSchema).max(200), outstanding: z.number().int().min(0), overdue: z.number().int().min(0), debt: debtSchema,
+  payments: z.array(paymentSchema).max(200), version: z.number().int().min(1),
 });
 const billingResult = z.object({ data: billingSchema });
 const invoiceResult = z.object({ data: invoiceSchema });
@@ -378,9 +397,21 @@ const issueCommand = z.object({ operationId: uuid, version: versionField, confir
 const cancelDraftCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason }).strict();
 const creditCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason, confirm: z.literal(true) }).strict();
 const sentCommand = z.object({ operationId: uuid, version: versionField, sentOn: day }).strict();
+// Règlements : mêmes bornes que l'API, qui relit la devise, la date, l'école de chaque facture et le reste disponible.
+const paymentAmount = z.number().int().min(1).max(100_000_000);
+const paymentFields = { operationId: uuid, version: versionField, amount: paymentAmount, currency: z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/), receivedOn: day,
+  method: z.enum(paymentMethods), reference: z.string().trim().max(140).nullable(), note: z.string().trim().max(500).nullable() };
+const lowerUuid = uuid.transform(value => value.toLowerCase());
+const paymentCommand = z.object({ ...paymentFields, allocations: z.array(z.object({ invoiceId: lowerUuid, amount: paymentAmount }).strict()).max(50), spread: z.boolean(),
+  confirmDuplicate: z.boolean() }).strict();
+const allocateCommand = z.object({ operationId: uuid, version: versionField, invoiceId: lowerUuid, amount: paymentAmount }).strict();
+const paymentReasonCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason }).strict();
+const voidPaymentCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason, confirm: z.literal(true) }).strict();
+const correctPaymentCommand = z.object({ ...paymentFields, reason: commercialReason }).strict();
+const regularizeCommand = z.object({ operationId: uuid, version: versionField, amount: paymentAmount, kind: z.enum(['REFUND_RECORDED', 'OTHER']), reason: commercialReason }).strict();
 const optionalDay = z.preprocess(value => (value === '' ? undefined : value), day.optional());
 const invoiceListParams = z.object({ clientId: uuid.optional(), status: z.enum(invoiceStatuses).optional(), kind: z.enum(invoiceKinds).optional(),
-  sendStatus: z.enum(sendStatuses).optional(), from: optionalDay, to: optionalDay, dueBefore: optionalDay, overdue: z.enum(['true']).optional(),
+  sendStatus: z.enum(sendStatuses).optional(), settlement: z.enum(settlementStates).optional(), from: optionalDay, to: optionalDay, dueBefore: optionalDay, overdue: z.enum(['true']).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(), offset: z.coerce.number().int().min(0).max(100_000).optional() }).strict();
 const searchOf = (parameters: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();
@@ -680,6 +711,22 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
       const { id, invoiceId } = z.object({ id: uuid, invoiceId: uuid }).parse(request.params);
       const { version, ...body } = schema.parse(request.body);
       return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/invoices/${invoiceId.toLowerCase()}/${path}`,
+        idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, billingResult);
+    });
+  }
+  // Règlements (R01-T06) : chaque commande part sous la version de facturation et rend la facturation relue ; rien n'est calculé ici.
+  const paymentCommands: Array<[string, z.ZodType<{ operationId: string; version: number }>]> = [
+    ['payments', paymentCommand], ['payments/:paymentId/allocations', allocateCommand], ['payments/:paymentId/allocations/:allocationId/release', paymentReasonCommand],
+    ['payments/:paymentId/void', voidPaymentCommand], ['payments/:paymentId/correct', correctPaymentCommand], ['payments/:paymentId/regularizations', regularizeCommand],
+    ['payments/:paymentId/regularizations/:regularizationId/cancel', paymentReasonCommand],
+  ];
+  for (const [path, schema] of paymentCommands) {
+    app.post(`/app/bff/platform/clients/:id/${path}`, async (request, reply) => {
+      empty.parse(request.query);
+      const params = z.record(z.string(), uuid).parse(request.params);
+      const target = path.replace(/:([A-Za-z]+)/g, (_match, name: string) => params[name]!.toLowerCase());
+      const { version, ...body } = schema.parse(request.body);
+      return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${params.id!.toLowerCase()}/${target}`,
         idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, billingResult);
     });
   }

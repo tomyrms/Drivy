@@ -92,30 +92,38 @@ const baseRow = (patch: Partial<InvoiceRow> = {}): InvoiceRow => ({
   payment_term_days: 30, tax_mode: 'NONE', tax_rate_bp: null, prices_include_tax: null, tax_amount: 0, total: 9_900, send_status: 'NOT_SENT', sent_on: null,
   sent_recorded_at: null, prepared_at: '2027-01-15T07:00:00.000Z', cancelled_at: null, reason: null, version: 2,
   client_name: 'Auto-école des Lilas', school_id: randomUUID(), prepared_by_name: null, issued_by_name: null, cancelled_by_name: null,
-  sent_recorded_by_name: null, credit_note: null, credited_number: null, ...patch,
+  sent_recorded_by_name: null, credit_note: null, credited_number: null,
+  settlement: { allocated: 0, credited: 0, balance: 9_900, state: 'UNPAID', overdue: false }, allocations: [], ...patch,
 });
+const unpaid = (overdue: boolean) => ({ allocated: 0, credited: 0, balance: 9_900, state: 'UNPAID' as const, overdue });
+const noDebt = { outstanding: 0, overdueAmount: 0, overdueCount: 0, oldestOverdueDueOn: null, unallocated: 0 };
 
+// Le solde et le retard sont calculés par la base (`platform_invoice_settlement`) ; le modèle les reprend sans les recalculer.
 describe('solde et échéance', () => {
-  it('une facture émise doit son total ; échue le lendemain de son échéance seulement', () => {
-    expect(invoiceBalance(baseRow(), '2027-02-14')).toEqual({ balance: 9_900, overdue: false });
-    expect(invoiceBalance(baseRow(), '2027-02-15')).toEqual({ balance: 9_900, overdue: true });
+  it('une facture émise reprend le solde et le retard calculés par la base', () => {
+    expect(invoiceBalance(baseRow())).toEqual({ balance: 9_900, overdue: false });
+    expect(invoiceBalance(baseRow({ settlement: unpaid(true) }))).toEqual({ balance: 9_900, overdue: true });
+    expect(invoiceBalance(baseRow({ settlement: { allocated: 4_000, credited: 0, balance: 5_900, state: 'PARTIAL', overdue: true } })))
+      .toEqual({ balance: 5_900, overdue: true });
   });
   it('un avoir total solde la facture ; brouillon, annulation et avoir n’ont pas de solde', () => {
-    expect(invoiceBalance(baseRow({ credit_note: { id: randomUUID(), number: 'AV-2027-00001', total: 9_900, issued_on: '2027-01-20' } }), '2027-03-01'))
-      .toEqual({ balance: 0, overdue: false });
-    expect(invoiceBalance(baseRow({ status: 'DRAFT', total: null }), '2027-03-01').balance).toBeNull();
-    expect(invoiceBalance(baseRow({ status: 'CANCELLED' }), '2027-03-01').balance).toBeNull();
-    expect(invoiceBalance(baseRow({ kind: 'CREDIT_NOTE' }), '2027-03-01').balance).toBeNull();
+    expect(invoiceBalance(baseRow({
+      credit_note: { id: randomUUID(), number: 'AV-2027-00001', total: 9_900, issued_on: '2027-01-20' },
+      settlement: { allocated: 0, credited: 9_900, balance: 0, state: 'CREDITED', overdue: false },
+    }))).toEqual({ balance: 0, overdue: false });
+    expect(invoiceBalance(baseRow({ status: 'DRAFT', total: null, settlement: null })).balance).toBeNull();
+    expect(invoiceBalance(baseRow({ status: 'CANCELLED', settlement: null })).balance).toBeNull();
+    expect(invoiceBalance(baseRow({ kind: 'CREDIT_NOTE', settlement: null })).balance).toBeNull();
   });
   it('la vue d’une facture respecte le contrat, brouillon compris', () => {
-    expect(invoiceSchema.safeParse(invoiceView(baseRow(), '2027-01-20')).success).toBe(true);
+    expect(invoiceSchema.safeParse(invoiceView(baseRow())).success).toBe(true);
     const draft = baseRow({
       status: 'DRAFT', number: null, issued_on: null, due_on: null, issued_at: null, issuer: null, recipient: null, payment_term_days: null,
-      tax_mode: null, tax_amount: null, total: null, version: 1,
+      tax_mode: null, tax_amount: null, total: null, version: 1, settlement: null,
     });
-    const view = invoiceView(draft, '2027-01-20');
+    const view = invoiceView(draft);
     expect(invoiceSchema.safeParse(view).success).toBe(true);
-    expect(view).toMatchObject({ number: null, total: null, tax: null, issuer: null, balance: null, overdue: false });
+    expect(view).toMatchObject({ number: null, total: null, tax: null, issuer: null, balance: null, overdue: false, settlement: null });
   });
 });
 
@@ -123,20 +131,23 @@ describe('état d’une période', () => {
   it('sans facture : due si commencée ; brouillon ; émise ; créditée puis à refaire tant qu’elle est due', () => {
     expect(documentState([], 'PERIOD', '2027-01-15', true).state).toBe('DUE');
     expect(documentState([], 'PERIOD', '2027-02-15', false).state).toBe('NOT_DUE');
-    const draft = invoiceView(baseRow({ status: 'DRAFT', number: null, total: null }), '2027-01-20');
+    const draft = invoiceView(baseRow({ status: 'DRAFT', number: null, total: null, settlement: null }));
     expect(documentState([draft], 'PERIOD', '2027-01-15', true).state).toBe('DRAFT');
-    const issued = invoiceView(baseRow(), '2027-01-20');
+    const issued = invoiceView(baseRow());
     expect(documentState([issued], 'PERIOD', '2027-01-15', true)).toMatchObject({ state: 'ISSUED', number: 'F-2027-00001', total: 9_900, balance: 9_900 });
-    const credited = invoiceView(baseRow({ credit_note: { id: randomUUID(), number: 'AV-2027-00001', total: 9_900, issued_on: '2027-01-20' } }), '2027-01-20');
+    const credited = invoiceView(baseRow({
+      credit_note: { id: randomUUID(), number: 'AV-2027-00001', total: 9_900, issued_on: '2027-01-20' },
+      settlement: { allocated: 0, credited: 9_900, balance: 0, state: 'CREDITED', overdue: false },
+    }));
     expect(documentState([credited], 'PERIOD', '2027-01-15', true).state).toBe('DUE');
     expect(documentState([credited], 'PERIOD', '2027-01-15', false).state).toBe('CREDITED');
-    const second = invoiceView(baseRow({ generation: 2, number: 'F-2027-00002' }), '2027-01-20');
+    const second = invoiceView(baseRow({ generation: 2, number: 'F-2027-00002' }));
     expect(documentState([credited, second], 'PERIOD', '2027-01-15', true)).toMatchObject({ state: 'ISSUED', number: 'F-2027-00002' });
   });
   it('une annulation est ignorée ; une autre période ne compte pas', () => {
-    const cancelled = invoiceView(baseRow({ status: 'CANCELLED' }), '2027-01-20');
+    const cancelled = invoiceView(baseRow({ status: 'CANCELLED', settlement: null }));
     expect(documentState([cancelled], 'PERIOD', '2027-01-15', true).state).toBe('DUE');
-    expect(documentState([invoiceView(baseRow(), '2027-01-20')], 'PERIOD', '2027-02-15', true).state).toBe('DUE');
+    expect(documentState([invoiceView(baseRow())], 'PERIOD', '2027-02-15', true).state).toBe('DUE');
   });
 });
 
@@ -152,7 +163,7 @@ describe('facturation d’une fiche', () => {
   }) as unknown as CommercialDetail;
 
   it('reprend exactement les montants de l’échéancier de R01-T04, de la première période à la période en cours plus trois', () => {
-    const view = billingView({ commercial: commercial('2027-03-20', '2027-01-15'), activation: null, activations: [], invoices: [], issuerReady: true, version: 1 });
+    const view = billingView({ commercial: commercial('2027-03-20', '2027-01-15'), activation: null, activations: [], invoices: [], issuerReady: true, version: 1, payments: [], debt: noDebt });
     const expected = billingSchedule({ paidStartsOn: '2027-01-15', terminationOn: null, terms, today: '2027-01-15', count: 6 });
     expect(view.periods.map(period => [period.startsOn, period.amount, period.discount, period.net]))
       .toEqual(expected.periods.map(period => [period.startsOn, period.amount, period.discount, period.net]));
@@ -163,21 +174,24 @@ describe('facturation d’une fiche', () => {
     expect(billingSchema.safeParse(view).success).toBe(true);
   });
   it('s’arrête à la résiliation ; sans début payant, aucune période', () => {
-    const ended = billingView({ commercial: commercial('2027-02-20', '2027-01-15', '2027-03-15'), activation: null, activations: [], invoices: [], issuerReady: false, version: 1 });
+    const ended = billingView({ commercial: commercial('2027-02-20', '2027-01-15', '2027-03-15'), activation: null, activations: [], invoices: [], issuerReady: false, version: 1, payments: [], debt: noDebt });
     expect(ended.periods.map(period => period.startsOn)).toEqual(['2027-01-15', '2027-02-15']);
     expect(ended.terminationOn).toBe('2027-03-15');
-    const none = billingView({ commercial: commercial('2027-02-20', null), activation: null, activations: [], invoices: [], issuerReady: false, version: 1 });
+    const none = billingView({ commercial: commercial('2027-02-20', null), activation: null, activations: [], invoices: [], issuerReady: false, version: 1, payments: [], debt: noDebt });
     expect(none).toMatchObject({ initial: null, periods: [], paidStartsOn: null, outstanding: 0, overdue: 0 });
     expect(billingSchema.safeParse(none).success).toBe(true);
   });
-  it('le solde dû et le nombre de factures échues ne comptent que les factures émises', () => {
+  it('le solde dû et le nombre de factures échues viennent du calcul de la base', () => {
     const invoices = [
-      baseRow(),
+      baseRow({ settlement: unpaid(true) }),
       baseRow({ period_start: '2027-02-15', period_end: '2027-03-14', period_index: 1, number: 'F-2027-00002', due_on: '2027-03-30' }),
-      baseRow({ status: 'DRAFT', number: null, total: null, period_start: '2027-03-15', period_end: '2027-04-14', period_index: 2 }),
+      baseRow({ status: 'DRAFT', number: null, total: null, period_start: '2027-03-15', period_end: '2027-04-14', period_index: 2, settlement: null }),
     ];
-    const view = billingView({ commercial: commercial('2027-03-20', '2027-01-15'), activation: null, activations: [], invoices, issuerReady: true, version: 4 });
-    expect(view).toMatchObject({ outstanding: 19_800, overdue: 1, version: 4 });
+    const debt = { outstanding: 19_800, overdueAmount: 9_900, overdueCount: 1, oldestOverdueDueOn: '2027-02-14', unallocated: 0 };
+    const view = billingView({ commercial: commercial('2027-03-20', '2027-01-15'), activation: null, activations: [], invoices, issuerReady: true, version: 4,
+      payments: [], debt });
+    expect(view).toMatchObject({ outstanding: 19_800, overdue: 1, version: 4, debt });
+    expect(billingSchema.safeParse(view).success).toBe(true);
     expect(view.periods.slice(0, 3).map(period => period.state)).toEqual(['ISSUED', 'ISSUED', 'DRAFT']);
   });
 });

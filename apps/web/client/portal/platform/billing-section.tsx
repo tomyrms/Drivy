@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { ReceiptText } from 'lucide-react';
 import {
-  chf, documentStateLabel, ibanLabel, ibanValid, invoiceKindLabel, invoiceStatusLabel, rateOf, sendStatusLabel, taxRateLabel,
+  chf, documentStateLabel, ibanLabel, ibanValid, invoiceKindLabel, invoiceStatusLabel, paymentMethodLabel, rateOf, sendStatusLabel, settlementLabel, settlementStates, taxRateLabel,
   type PlatformBilling, type PlatformBillingPeriod, type PlatformClientDetail, type PlatformInvoice, type PlatformIssuer,
 } from '../../platform-model';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
@@ -9,35 +9,31 @@ import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from '../../components/ui/empty';
-import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/field';
-import { Input } from '../../components/ui/input';
-import { Textarea } from '../../components/ui/textarea';
+import { FieldGroup } from '../../components/ui/field';
 import { PortalSelect } from '../components/portal-select';
-import type { InvoiceFilter, IssuerInput } from './use-platform-billing';
+import { by, civil, dateTime, dayPattern, Fact, Failure, Footer, NotFound, ReasonField, reasonProblem, selectError, TextField } from './billing-parts';
+import { PaymentDialogBody, PaymentsBlock } from './payments-section';
+import { isPaymentDialog, type InvoiceFilter, type IssuerInput } from './use-platform-billing';
 import type { PlatformConsoleState } from './use-platform-console';
 
-const dateTime = (value: string) => new Intl.DateTimeFormat('fr-CH', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-/** Un jour civil reste ce jour-là, quel que soit le fuseau du navigateur. */
-const civil = (value: string) => new Intl.DateTimeFormat('fr-CH', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(`${value}T00:00:00Z`));
-const by = (name: string | null) => (name ? ` · par ${name}` : '');
-const selectError = (message: string | undefined) => (message ? { error: message } : {});
-const reasonProblem = (text: string) => {
-  const trimmed = text.trim();
-  if (trimmed.length < 3) return 'Indiquez le motif en quelques mots.';
-  return trimmed.length > 500 ? 'Ce texte est limité à 500 caractères.' : null;
-};
-const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 type DocumentState = PlatformBillingPeriod['state'];
 const invoiceTitle = (invoice: PlatformInvoice) => `${invoiceKindLabel(invoice.kind)}${invoice.number ? ` ${invoice.number}` : ''}`;
 const periodText = (invoice: PlatformInvoice) => (invoice.period ? `${civil(invoice.period.startsOn)} → ${civil(invoice.period.endsOn)}` : null);
+/** L'état calculé par la base, en clair dans la ligne : rien pour un brouillon, un avoir ou une facture créditée. */
+function settlementText(invoice: PlatformInvoice) {
+  const settlement = invoice.settlement;
+  if (!settlement || settlement.state === 'CREDITED') return null;
+  if (settlement.state === 'PAID') return 'réglée';
+  return settlement.state === 'PARTIAL' ? `reste ${chf(settlement.balance)}` : 'à régler';
+}
 
 /**
- * Facturation de l'école (R01-T05) : documents dus, brouillons, factures émises, avoirs et facturation planifiée.
+ * Facturation de l'école (R01-T05, R01-T06) : documents dus, brouillons, factures émises, avoirs, règlements et facturation planifiée.
  * Chaque montant, numéro et échéance vient de la facturation relue par l'API ; l'écran ne fait que proposer les commandes permises.
  */
 export function BillingPanel({ state, client }: { state: PlatformConsoleState; client: PlatformClientDetail }) {
   const { billing } = state, data = billing.billing;
-  if (!data || (!data.billable && !data.activation && data.invoices.length === 0)) return null;
+  if (!data || (!data.billable && !data.activation && data.invoices.length === 0 && data.payments.length === 0)) return null;
   const pending = [
     ...(data.initial && (data.initial.state === 'DUE' || data.initial.state === 'DRAFT') ? [{ key: 'initial', kind: 'INITIAL' as const, startsOn: null, endsOn: null, ...data.initial }] : []),
     ...data.periods.filter(period => period.state === 'DUE' || period.state === 'DRAFT').map(period => ({ key: period.startsOn, kind: 'PERIOD' as const, ...period })),
@@ -54,7 +50,10 @@ export function BillingPanel({ state, client }: { state: PlatformConsoleState; c
     {!data.issuerReady && <div className="platform-summary"><strong><Badge variant="destructive">Émetteur à compléter</Badge></strong></div>}
     <dl className="platform-facts">
       <Fact label="Facturation planifiée">{data.activation ? `Active depuis le ${civil(data.activation.startsOn)}` : 'Manuelle'}</Fact>
-      <Fact label="Solde ouvert">{chf(data.outstanding)}{data.overdue > 0 ? ` · ${data.overdue === 1 ? '1 facture en retard' : `${data.overdue} factures en retard`}` : ''}</Fact>
+      <Fact label="Solde ouvert">{chf(data.debt.outstanding)}</Fact>
+      {data.debt.overdueCount > 0 && <Fact label="En retard">{[chf(data.debt.overdueAmount), data.debt.overdueCount === 1 ? '1 facture' : `${data.debt.overdueCount} factures`,
+        ...(data.debt.oldestOverdueDueOn ? [`depuis le ${civil(data.debt.oldestOverdueDueOn)}`] : [])].join(' · ')}</Fact>}
+      {data.debt.unallocated > 0 && <Fact label="Non affecté">{chf(data.debt.unallocated)}</Fact>}
       {data.terminationOn && <Fact label="Résiliation">{civil(data.terminationOn)}</Fact>}
     </dl>
     {pending.length > 0 && <ul className="platform-list" aria-label="Documents à traiter">{pending.map(item => <li key={item.key}>
@@ -71,14 +70,12 @@ export function BillingPanel({ state, client }: { state: PlatformConsoleState; c
       <InvoiceSummary invoice={invoice} />
       <OpenInvoice state={state} invoice={invoice} label="Voir" />
     </li>)}</ul>}
+    <PaymentsBlock state={state} data={data} />
     <Schedule data={data} />
     <History data={data} />
   </div>;
 }
 
-function Fact({ label, children }: { label: string; children: ReactNode }) {
-  return <div><dt>{label}</dt><dd>{children}</dd></div>;
-}
 function StateBadge({ state }: { state: DocumentState }) {
   return state === 'ISSUED' || state === 'NOT_DUE' ? null : <Badge variant="outline">{documentStateLabel(state)}</Badge>;
 }
@@ -94,6 +91,7 @@ function InvoiceSummary({ invoice, withClient = false }: { invoice: PlatformInvo
     ...(invoice.issuedOn ? [`émise le ${civil(invoice.issuedOn)}`] : []),
     ...(invoice.dueOn && invoice.kind !== 'CREDIT_NOTE' ? [`échéance ${civil(invoice.dueOn)}`] : []),
     ...(invoice.status === 'ISSUED' ? [sendStatusLabel(invoice.sendStatus).toLowerCase()] : []),
+    ...(settlementText(invoice) ? [settlementText(invoice)!] : []),
   ];
   return <div className="platform-summary">
     <strong>{invoiceTitle(invoice)} · {chf(invoice.total ?? invoice.netTotal)}
@@ -140,6 +138,7 @@ function History({ data }: { data: PlatformBilling }) {
 const statusOptions = [{ value: 'ALL', label: 'Tous les statuts' }, { value: 'DRAFT', label: 'Brouillons' }, { value: 'ISSUED', label: 'Émises' }, { value: 'CANCELLED', label: 'Annulées' }];
 const kindOptions = [{ value: 'ALL', label: 'Toutes les natures' }, { value: 'INITIAL', label: 'Montants initiaux' }, { value: 'PERIOD', label: 'Mensualités' }, { value: 'CREDIT_NOTE', label: 'Avoirs' }];
 const sendOptions = [{ value: 'ALL', label: 'Tous les envois' }, { value: 'NOT_SENT', label: 'Non envoyées' }, { value: 'SENT', label: 'Envoyées' }];
+const settlementOptions = [{ value: 'ALL', label: 'Tous les règlements' }, ...settlementStates.map(value => ({ value, label: settlementLabel(value) }))];
 
 export function InvoicesSection({ state }: { state: PlatformConsoleState }) {
   const { billing } = state, { filter, invoices, issuer } = billing;
@@ -165,6 +164,8 @@ export function InvoicesSection({ state }: { state: PlatformConsoleState }) {
           onValueChange={value => choose({ kind: (value ?? 'ALL') as InvoiceFilter['kind'] })} />
         <PortalSelect id="invoice-send" label="Envoi" options={sendOptions} value={filter.sendStatus} disabled={state.busy}
           onValueChange={value => choose({ sendStatus: (value ?? 'ALL') as InvoiceFilter['sendStatus'] })} />
+        <PortalSelect id="invoice-settlement" label="Règlement" options={settlementOptions} value={filter.settlement} disabled={state.busy}
+          onValueChange={value => choose({ settlement: (value ?? 'ALL') as InvoiceFilter['settlement'] })} />
       </div>
       <Button variant={filter.overdue ? 'secondary' : 'ghost'} aria-pressed={filter.overdue} disabled={state.busy} onClick={() => choose({ overdue: !filter.overdue })}>En retard</Button>
     </div>
@@ -195,32 +196,9 @@ export function BillingDialog({ state, openClient }: { state: PlatformConsoleSta
       {data && target?.kind === 'sent' && <SentBody state={state} data={data} invoice={find(target.invoiceId)} />}
       {target?.kind === 'issuer' && <IssuerBody state={state} issuer={billing.issuer?.current ?? null} />}
       {target?.kind === 'run' && <RunBody state={state} />}
+      {data && target && isPaymentDialog(target) && <PaymentDialogBody key={`${target.kind}:${'paymentId' in target ? target.paymentId : ''}`} state={state} data={data} target={target} />}
     </DialogContent>
   </Dialog>;
-}
-
-function Failure({ state, title }: { state: PlatformConsoleState; title: string }) {
-  return state.error ? <Alert variant="destructive"><AlertTitle>{title}</AlertTitle><AlertDescription>{state.error}</AlertDescription></Alert> : null;
-}
-function Footer({ state, label, busyLabel = 'Enregistrement…', destructive = false, cancel = 'Annuler' }: {
-  state: PlatformConsoleState; label: string; busyLabel?: string; destructive?: boolean; cancel?: string;
-}) {
-  return <DialogFooter><Button type="button" variant="outline" disabled={state.busy} onClick={state.billing.stop}>{cancel}</Button>
-    <Button type="submit" variant={destructive ? 'destructive' : 'default'} disabled={state.busy} aria-busy={state.busy}>{state.busy ? busyLabel : label}</Button></DialogFooter>;
-}
-function TextField({ id, label, value, onChange, error, type = 'text', disabled, inputMode, autoComplete }: {
-  id: string; label: string; value: string; onChange: (value: string) => void; error?: string | null | undefined; type?: string; disabled: boolean;
-  inputMode?: 'decimal' | 'numeric' | 'email'; autoComplete?: string;
-}) {
-  return <Field data-invalid={!!error}>
-    <FieldLabel htmlFor={id}>{label}</FieldLabel>
-    <Input id={id} name={id} type={type} inputMode={inputMode} autoComplete={autoComplete ?? 'off'} value={value} disabled={disabled} aria-invalid={!!error}
-      aria-describedby={error ? `${id}-error` : undefined} onChange={event => onChange(event.target.value)} />
-    {error && <FieldError id={`${id}-error`}>{error}</FieldError>}
-  </Field>;
-}
-function NotFound() {
-  return <DialogHeader><DialogTitle>Document introuvable</DialogTitle><DialogDescription>L’écran a été actualisé.</DialogDescription></DialogHeader>;
 }
 
 /** Une facture telle que l'API l'a figée : lignes, taxe, total, émetteur et destinataire. Les commandes ne sont offertes que depuis sa fiche. */
@@ -247,12 +225,20 @@ function InvoiceBody({ state, invoice, fresh, openClient }: {
       <Fact label="Total">{invoice.total === null ? 'À l’émission' : chf(invoice.total)}</Fact>
       {invoice.issuedOn && <Fact label="Émise">{civil(invoice.issuedOn)}{by(invoice.issuedByName)}</Fact>}
       {invoice.dueOn && invoice.kind !== 'CREDIT_NOTE' && <Fact label="Échéance">{civil(invoice.dueOn)}</Fact>}
+      {issued && invoice.settlement && <Fact label="Règlement">{settlementLabel(invoice.settlement.state)}</Fact>}
+      {issued && invoice.settlement && invoice.settlement.allocated > 0 && <Fact label="Réglé">{chf(invoice.settlement.allocated)}</Fact>}
       {issued && invoice.balance !== null && <Fact label="Solde">{chf(invoice.balance)}</Fact>}
       {issued && <Fact label="Envoi">{invoice.sentOn ? `Envoyée le ${civil(invoice.sentOn)}` : 'Non envoyée'}</Fact>}
       {invoice.recipient && <Fact label="Destinataire">{[invoice.recipient.name, invoice.recipient.street, `${invoice.recipient.postalCode} ${invoice.recipient.city}`, invoice.recipient.country].join(', ')}</Fact>}
       {invoice.issuer && <Fact label="Émetteur">{invoice.issuer.legalName} · {ibanLabel(invoice.issuer.iban)}</Fact>}
       {invoice.reason && <Fact label="Motif">{invoice.reason === 'TERMS_CHANGED' ? 'Conditions modifiées' : invoice.reason}</Fact>}
     </dl>
+    {invoice.allocations.length > 0 && <ul className="platform-list platform-dialog-list" aria-label="Règlements affectés">{invoice.allocations.map(item => <li key={item.id}>
+      <div className="platform-summary"><strong>{chf(item.amount)} · {paymentMethodLabel(item.method)}</strong>
+        <span>Reçu le {civil(item.receivedOn)}{by(item.createdByName)}</span></div>
+      {fresh && <Button variant="ghost" disabled={state.busy} aria-label={`Voir le règlement de ${chf(item.amount)}`}
+        onClick={() => billing.start({ kind: 'paymentDetail', paymentId: item.paymentId })}>Voir</Button>}
+    </li>)}</ul>}
     <DialogFooter>
       {!fresh && <Button variant="outline" disabled={state.busy} onClick={() => { billing.stop(); openClient(invoice.clientId); }}>Ouvrir la fiche</Button>}
       {fresh && draft && <Button variant="ghost" disabled={state.busy} onClick={() => billing.start({ kind: 'cancel', invoiceId: invoice.id })}>Annuler le brouillon</Button>}
@@ -301,12 +287,7 @@ function ReasonBody({ state, kind, invoice }: { state: PlatformConsoleState; kin
       {kind === 'credit' && invoice && <DialogDescription>{invoiceTitle(invoice)} · avoir de {chf(invoice.total)}</DialogDescription>}
       {kind === 'cancel' && invoice && <DialogDescription>{invoiceKindLabel(invoice.kind)}{periodText(invoice) ? ` · ${periodText(invoice)}` : ''}</DialogDescription>}</DialogHeader>
     <FieldGroup>
-      <Field data-invalid={!!invalid}>
-        <FieldLabel htmlFor="billing-reason">Motif</FieldLabel>
-        <Textarea id="billing-reason" name="billing-reason" rows={3} maxLength={500} value={reason} disabled={state.busy} aria-invalid={!!invalid}
-          aria-describedby={invalid ? 'billing-reason-error' : undefined} onChange={event => { setReason(event.target.value); setInvalid(null); }} />
-        {invalid && <FieldError id="billing-reason-error">{invalid}</FieldError>}
-      </Field>
+      <ReasonField id="billing-reason" value={reason} error={invalid} disabled={state.busy} onChange={value => { setReason(value); setInvalid(null); }} />
     </FieldGroup>
     <Failure state={state} title={failures[kind]} />
     <Footer state={state} label={labels[kind]} destructive cancel="Retour" />

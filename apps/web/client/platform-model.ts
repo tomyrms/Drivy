@@ -138,6 +138,9 @@ export const platformCommercialResult = z.object({ data: platformCommercialDetai
 export const invoiceStatuses = ['DRAFT', 'ISSUED', 'CANCELLED'] as const;
 export const invoiceKinds = ['INITIAL', 'PERIOD', 'CREDIT_NOTE'] as const;
 export const sendStatuses = ['NOT_SENT', 'SENT'] as const;
+export const settlementStates = ['PAID', 'PARTIAL', 'UNPAID', 'CREDITED'] as const;
+export const paymentMethods = ['BANK_TRANSFER', 'CASH', 'OTHER'] as const;
+export const regularizationKinds = ['REFUND_RECORDED', 'OTHER'] as const;
 const label = (max: number) => z.string().max(max);
 const optionalLabel = (max: number) => z.string().max(max).nullable();
 export const platformIssuerSchema = z.object({
@@ -145,6 +148,9 @@ export const platformIssuerSchema = z.object({
   email: optionalLabel(254), iban: optionalLabel(42), taxMode: z.enum(['NONE', 'VAT']), vatNumber: optionalLabel(40), taxRateBp: z.number().int().min(1).max(5000).nullable(),
   pricesIncludeTax: z.boolean().nullable(), taxNote: optionalLabel(200), createdAt: iso, createdByName: optionalLabel(200),
 });
+const platformSettlementSchema = z.object({ state: z.enum(settlementStates), allocated: cents, credited: cents, balance: cents, overdue: z.boolean() });
+const platformInvoiceAllocationSchema = z.object({ id, paymentId: id, amount: cents, receivedOn: isoDay, method: z.enum(paymentMethods), createdAt: iso,
+  createdByName: optionalLabel(200) });
 export const platformInvoiceSchema = z.object({
   id, clientId: id, clientName: optionalLabel(150), schoolId: id.nullable(), kind: z.enum(invoiceKinds), generation: z.number().int().min(1),
   status: z.enum(invoiceStatuses), origin: z.enum(['MANUAL', 'SCHEDULED']), number: optionalLabel(40), currency: z.literal('CHF'),
@@ -159,12 +165,26 @@ export const platformInvoiceSchema = z.object({
     iban: optionalLabel(42), vatNumber: optionalLabel(40), taxNote: optionalLabel(200) }).nullable(),
   recipient: z.object({ name: label(150), contactName: optionalLabel(200), street: label(200), postalCode: label(20), city: label(100), country: label(100) }).nullable(),
   sendStatus: z.enum(sendStatuses), sentOn: isoDay.nullable(), sentRecordedAt: iso.nullable(), sentRecordedByName: optionalLabel(200),
-  balance: cents.nullable(), overdue: z.boolean(),
+  balance: cents.nullable(), overdue: z.boolean(), settlement: platformSettlementSchema.nullable(), allocations: z.array(platformInvoiceAllocationSchema).max(200),
   creditNote: z.object({ id, number: label(40), total: cents, issuedOn: isoDay }).nullable(),
   creditsInvoice: z.object({ id, number: optionalLabel(40) }).nullable(),
   reason: optionalLabel(500), preparedAt: iso, preparedByName: optionalLabel(200), cancelledAt: iso.nullable(), cancelledByName: optionalLabel(200),
   version: z.number().int().min(1),
 });
+// Règlements (R01-T06) : soldes, reste disponible et dette viennent de la base ; l'écran n'en recalcule aucun.
+export const platformPaymentSchema = z.object({
+  id, clientId: id, amount: cents, currency: z.literal('CHF'), receivedOn: isoDay, method: z.enum(paymentMethods), reference: optionalLabel(140), note: optionalLabel(500),
+  status: z.enum(['RECORDED', 'VOIDED']), allocated: cents, regularized: cents, available: cents, correctsPaymentId: id.nullable(), correctedByPaymentId: id.nullable(),
+  recordedAt: iso, recordedByName: optionalLabel(200), voidedAt: iso.nullable(), voidedByName: optionalLabel(200), voidCause: z.enum(['VOIDED', 'CORRECTED']).nullable(),
+  voidReason: optionalLabel(500),
+  allocations: z.array(z.object({ id, invoiceId: id, invoiceNumber: optionalLabel(40), amount: cents, status: z.enum(['ACTIVE', 'RELEASED']), createdAt: iso,
+    createdByName: optionalLabel(200), releasedAt: iso.nullable(), releasedByName: optionalLabel(200),
+    releaseCause: z.enum(['MANUAL', 'PAYMENT_VOIDED', 'PAYMENT_CORRECTED']).nullable(), releaseReason: optionalLabel(500) })).max(200),
+  regularizations: z.array(z.object({ id, amount: cents, kind: z.enum(regularizationKinds), reason: label(500), status: z.enum(['ACTIVE', 'CANCELLED']), createdAt: iso,
+    createdByName: optionalLabel(200), cancelledAt: iso.nullable(), cancelledByName: optionalLabel(200), cancelReason: optionalLabel(500) })).max(200),
+  version: z.number().int().min(1),
+});
+const platformDebtSchema = z.object({ outstanding: cents, overdueAmount: cents, overdueCount: z.number().int().min(0), oldestOverdueDueOn: isoDay.nullable(), unallocated: cents });
 const billingActivationSchema = z.object({ id, startsOn: isoDay, status: z.enum(['ACTIVE', 'STOPPED']), activatedAt: iso, activatedByName: optionalLabel(200),
   stoppedAt: iso.nullable(), stoppedByName: optionalLabel(200), stopReason: optionalLabel(500) });
 const documentStates = ['NOT_DUE', 'DUE', 'DRAFT', 'ISSUED', 'CREDITED'] as const;
@@ -175,7 +195,8 @@ export const platformBillingSchema = z.object({
   initial: z.object({ dueOn: isoDay, amount: cents, discount: cents, net: cents, termsSequence: z.number().int().min(1), ...documentState }).nullable(),
   periods: z.array(z.object({ index: z.number().int().min(0), startsOn: isoDay, endsOn: isoDay, amount: cents.nullable(), discount: cents, net: cents.nullable(),
     termsSequence: z.number().int().min(1).nullable(), ...documentState })).max(36),
-  invoices: z.array(platformInvoiceSchema).max(200), outstanding: z.number().int().min(0), overdue: z.number().int().min(0), version: z.number().int().min(1),
+  invoices: z.array(platformInvoiceSchema).max(200), outstanding: z.number().int().min(0), overdue: z.number().int().min(0), debt: platformDebtSchema,
+  payments: z.array(platformPaymentSchema).max(200), version: z.number().int().min(1),
 });
 export const platformBillingResult = z.object({ data: platformBillingSchema });
 export const platformInvoiceResult = z.object({ data: platformInvoiceSchema });
@@ -242,6 +263,10 @@ export type PlatformBillingRun = z.infer<typeof platformBillingRunResult>['data'
 export type PlatformInvoiceStatus = (typeof invoiceStatuses)[number];
 export type PlatformInvoiceKind = (typeof invoiceKinds)[number];
 export type PlatformSendStatus = (typeof sendStatuses)[number];
+export type PlatformPayment = z.infer<typeof platformPaymentSchema>;
+export type PlatformSettlementState = (typeof settlementStates)[number];
+export type PlatformPaymentMethod = (typeof paymentMethods)[number];
+export type PlatformRegularizationKind = (typeof regularizationKinds)[number];
 export type PlatformClient = z.infer<typeof platformClientSchema>;
 export type PlatformClientDetail = z.infer<typeof platformClientDetailSchema>;
 export type PlatformClientCode = z.infer<typeof platformClientCodeSchema>;
@@ -323,6 +348,13 @@ const actionLabels: Record<string, string> = {
   CANCEL_INVOICE_DRAFT: 'Brouillon annulé',
   ISSUE_CREDIT_NOTE: 'Avoir émis',
   MARK_INVOICE_SENT: 'Envoi enregistré',
+  RECORD_PAYMENT: 'Règlement enregistré',
+  ALLOCATE_PAYMENT: 'Règlement affecté',
+  RELEASE_ALLOCATION: 'Affectation libérée',
+  VOID_PAYMENT: 'Règlement annulé',
+  CORRECT_PAYMENT: 'Règlement corrigé',
+  REGULARIZE_PAYMENT: 'Régularisation enregistrée',
+  CANCEL_REGULARIZATION: 'Régularisation annulée',
 };
 export const actionLabel = (action: string) => actionLabels[action] ?? 'Action enregistrée';
 const reasonLabels: Record<string, string> = {
@@ -374,6 +406,24 @@ const reasonLabels: Record<string, string> = {
   INVOICE_SENT_DATE: 'Date d’envoi non valide',
   INVOICE_FIXED: 'Document émis',
   PAID_START_INVOICED: 'Début payant facturé',
+  INVOICE_PAID: 'Règlements affectés',
+  PAYMENT_CURRENCY: 'Autre devise',
+  PAYMENT_DATE_FUTURE: 'Date à venir',
+  PAYMENT_POSSIBLE_DUPLICATE: 'Doublon probable',
+  PAYMENT_ALLOCATION_MODE: 'Répartition non valide',
+  PAYMENT_ALLOCATED: 'Affectations actives',
+  PAYMENT_VOIDED: 'Règlement annulé',
+  PAYMENT_OTHER_CLIENT: 'Facture d’une autre école',
+  PAYMENT_INVOICE_INVALID: 'Facture non émise',
+  PAYMENT_EXCEEDS_AVAILABLE: 'Au-delà du disponible',
+  PAYMENT_EXCEEDS_BALANCE: 'Au-delà du solde',
+  PAYMENT_REGULARIZED: 'Régularisation active',
+  PAYMENT_UNCHANGED: 'Correction sans effet',
+  PAYMENT_FIXED: 'Règlement figé',
+  ALLOCATION_RELEASED: 'Affectation déjà libérée',
+  ALLOCATION_FIXED: 'Affectation figée',
+  REGULARIZATION_CANCELLED: 'Régularisation déjà annulée',
+  REGULARIZATION_FIXED: 'Régularisation figée',
 };
 export const reasonLabel = (code: string | null) => (code ? reasonLabels[code] ?? null : null);
 
@@ -432,6 +482,12 @@ export const invoiceStatusLabel = (status: PlatformInvoiceStatus) => invoiceStat
 export const sendStatusLabel = (status: PlatformSendStatus) => (status === 'SENT' ? 'Envoyée' : 'Non envoyée');
 const documentStateLabels: Record<(typeof documentStates)[number], string> = { NOT_DUE: 'À venir', DUE: 'À facturer', DRAFT: 'Brouillon', ISSUED: 'Émise', CREDITED: 'Créditée' };
 export const documentStateLabel = (state: (typeof documentStates)[number]) => documentStateLabels[state];
+const settlementLabels: Record<PlatformSettlementState, string> = { PAID: 'Réglée', PARTIAL: 'Partiellement réglée', UNPAID: 'À régler', CREDITED: 'Créditée' };
+export const settlementLabel = (state: PlatformSettlementState) => settlementLabels[state];
+const paymentMethodLabels: Record<PlatformPaymentMethod, string> = { BANK_TRANSFER: 'Virement', CASH: 'Espèces', OTHER: 'Autre' };
+export const paymentMethodLabel = (method: PlatformPaymentMethod) => paymentMethodLabels[method];
+const regularizationKindLabels: Record<PlatformRegularizationKind, string> = { REFUND_RECORDED: 'Remboursement effectué', OTHER: 'Autre régularisation' };
+export const regularizationKindLabel = (kind: PlatformRegularizationKind) => regularizationKindLabels[kind];
 /** Taux en points de base → « 8,1 % ». */
 export const taxRateLabel = (rateBp: number | null) => (rateBp === null ? 'À compléter' : `${new Intl.NumberFormat('fr-CH', { maximumFractionDigits: 2 }).format(rateBp / 100)} %`);
 /** Saisie d'un taux en pour cent (« 8.1 » ou « 8,1 ») → points de base ; vide = `null`, illisible = `undefined`. */
@@ -625,6 +681,24 @@ const failures: Record<string, string> = {
   INVOICE_SENT_DATE: 'La date d’envoi doit être entre l’émission et aujourd’hui.',
   INVOICE_FIXED: 'Un document émis ne se modifie pas.',
   PAID_START_INVOICED: 'Ce début payant est déjà facturé. Annulez le brouillon ou émettez un avoir d’abord.',
+  INVOICE_PAID: 'Libérez d’abord les règlements affectés à cette facture.',
+  PAYMENT_CURRENCY: 'Seuls les règlements en CHF sont pris en compte.',
+  PAYMENT_DATE_FUTURE: 'La date de réception ne peut pas être après aujourd’hui.',
+  PAYMENT_POSSIBLE_DUPLICATE: 'Un règlement du même montant existe déjà à une date ou une référence proche.',
+  PAYMENT_ALLOCATION_MODE: 'Choisissez une répartition automatique ou des affectations, pas les deux.',
+  PAYMENT_ALLOCATED: 'Libérez d’abord les affectations de ce règlement.',
+  PAYMENT_VOIDED: 'Ce règlement est annulé. L’écran est à jour.',
+  PAYMENT_OTHER_CLIENT: 'Cette facture appartient à une autre école.',
+  PAYMENT_INVOICE_INVALID: 'Seule une facture émise peut recevoir un règlement.',
+  PAYMENT_EXCEEDS_AVAILABLE: 'Le montant dépasse le reste disponible du règlement.',
+  PAYMENT_EXCEEDS_BALANCE: 'Le montant dépasse le solde de la facture.',
+  PAYMENT_REGULARIZED: 'Annulez d’abord les régularisations de ce règlement.',
+  PAYMENT_UNCHANGED: 'La correction ne change rien au règlement.',
+  PAYMENT_FIXED: 'Un règlement enregistré ne se modifie pas. Corrigez-le ou annulez-le.',
+  ALLOCATION_RELEASED: 'Cette affectation est déjà libérée.',
+  ALLOCATION_FIXED: 'Une affectation ne se modifie pas. Libérez-la puis affectez à nouveau.',
+  REGULARIZATION_CANCELLED: 'Cette régularisation est déjà annulée.',
+  REGULARIZATION_FIXED: 'Une régularisation ne se modifie pas.',
   PLATFORM_CODE_IN_PROGRESS: 'Un code est déjà en cours de création. Affichez-le ou fermez-le avant d’en créer un autre.',
   NOT_FOUND: 'Cet élément n’existe plus. L’écran a été actualisé.',
   LAST_PLATFORM_OPERATOR: 'Le dernier opérateur actif ne peut pas être retiré.',

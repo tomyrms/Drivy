@@ -2,9 +2,13 @@ import { z } from 'zod';
 import {
   activationStatuses, invoiceKinds, invoiceOrigins, invoiceStatuses, periodBillingStates, sendStatuses, taxModes,
 } from './platform-billing-model.js';
+import {
+  allocationReleaseCauses, allocationStatuses, paymentMethods, paymentStatuses, paymentVoidCauses, regularizationKinds, regularizationStatuses,
+  settlementStates,
+} from './platform-payments-model.js';
 
 /**
- * Extension exécutable du dépôt (R01-T05, #457) : factures, avoirs, émetteur, activation et préparation planifiée.
+ * Extension exécutable du dépôt (R01-T05, #457 ; R01-T06, #458) : factures, avoirs, émetteur, activation, préparation planifiée et règlements manuels.
  * L'OpenAPI canonique 3.11.0 reste immuable. Ces schémas décrivent exactement ce que `src/platform-billing.ts` renvoie ;
  * `contracts/platform-billing.json` en est la projection. Montants en centimes de CHF ; jours en Europe/Zurich.
  */
@@ -30,8 +34,15 @@ const invoiceLineSchema = z.object({
 }).strict();
 /**
  * Facture ou avoir. Les zones figées (numéro, émetteur, destinataire, taxe, total, dates) sont nulles tant que le document est un brouillon.
- * `balance` : total moins l'avoir émis (null pour un brouillon, une annulation ou un avoir) ; les règlements arrivent avec #458.
+ * `balance` et `overdue` viennent de `settlement`, calculé par la base : total moins les affectations actives, zéro après un avoir.
+ * Null pour un brouillon, une annulation ou un avoir. Un téléchargement, un QR ou une déclaration de l'école ne changent jamais ce solde.
  */
+export const settlementSchema = z.object({
+  state: z.enum(settlementStates), allocated: cents, credited: cents, balance: cents, overdue: z.boolean(),
+}).strict();
+export const invoiceAllocationSchema = z.object({
+  id: z.uuid(), paymentId: z.uuid(), amount: cents, receivedOn: day, method: z.enum(paymentMethods), createdAt: timestamp, createdByName: nullableText,
+}).strict();
 export const invoiceSchema = z.object({
   id: z.uuid(), clientId: z.uuid(), clientName: nullableText, schoolId: z.uuid().nullable(), kind: z.enum(invoiceKinds),
   generation: z.number().int().min(1), status: z.enum(invoiceStatuses), origin: z.enum(invoiceOrigins), number: nullableText, currency: z.literal('CHF'),
@@ -49,11 +60,36 @@ export const invoiceSchema = z.object({
     name: z.string(), contactName: nullableText, street: z.string(), postalCode: z.string(), city: z.string(), country: z.string(),
   }).strict().nullable(),
   sendStatus: z.enum(sendStatuses), sentOn: day.nullable(), sentRecordedAt: timestamp.nullable(), sentRecordedByName: nullableText,
-  balance: cents.nullable(), overdue: z.boolean(),
+  balance: cents.nullable(), overdue: z.boolean(), settlement: settlementSchema.nullable(), allocations: z.array(invoiceAllocationSchema).max(200),
   creditNote: z.object({ id: z.uuid(), number: z.string(), total: cents, issuedOn: day }).strict().nullable(),
   creditsInvoice: z.object({ id: z.uuid(), number: nullableText }).strict().nullable(),
   reason: nullableText, preparedAt: timestamp, preparedByName: nullableText, cancelledAt: timestamp.nullable(), cancelledByName: nullableText,
   version: z.number().int().min(1),
+}).strict();
+
+/**
+ * Règlement saisi à la main. `available` (relu en base) = montant moins affectations actives moins régularisations actives.
+ * Un règlement annulé ou corrigé reste lisible avec son auteur ; `correctsPaymentId` et `correctedByPaymentId` relient original et correction.
+ */
+export const paymentSchema = z.object({
+  id: z.uuid(), clientId: z.uuid(), amount: cents, currency: z.literal('CHF'), receivedOn: day, method: z.enum(paymentMethods),
+  reference: nullableText, note: nullableText, status: z.enum(paymentStatuses), allocated: cents, regularized: cents, available: cents,
+  correctsPaymentId: z.uuid().nullable(), correctedByPaymentId: z.uuid().nullable(), recordedAt: timestamp, recordedByName: nullableText,
+  voidedAt: timestamp.nullable(), voidedByName: nullableText, voidCause: z.enum(paymentVoidCauses).nullable(), voidReason: nullableText,
+  allocations: z.array(z.object({
+    id: z.uuid(), invoiceId: z.uuid(), invoiceNumber: nullableText, amount: cents, status: z.enum(allocationStatuses), createdAt: timestamp,
+    createdByName: nullableText, releasedAt: timestamp.nullable(), releasedByName: nullableText, releaseCause: z.enum(allocationReleaseCauses).nullable(),
+    releaseReason: nullableText,
+  }).strict()),
+  regularizations: z.array(z.object({
+    id: z.uuid(), amount: cents, kind: z.enum(regularizationKinds), reason: z.string(), status: z.enum(regularizationStatuses), createdAt: timestamp,
+    createdByName: nullableText, cancelledAt: timestamp.nullable(), cancelledByName: nullableText, cancelReason: nullableText,
+  }).strict()),
+  version: z.number().int().min(1),
+}).strict();
+/** Dette d'une école, même calcul (`platform_client_debt`) pour l'équipe, l'espace école et la suspension. */
+export const debtSchema = z.object({
+  outstanding: cents, overdueAmount: cents, overdueCount: z.number().int().min(0), oldestOverdueDueOn: day.nullable(), unallocated: cents,
 }).strict();
 
 export const activationSchema = z.object({
@@ -75,7 +111,8 @@ export const billingSchema = z.object({
     index: z.number().int().min(0), startsOn: day, endsOn: day, amount: cents.nullable(), discount: cents, net: cents.nullable(),
     termsSequence: z.number().int().min(1).nullable(), ...documentStateFields,
   }).strict()).max(36),
-  invoices: z.array(invoiceSchema).max(200), outstanding: cents, overdue: z.number().int().min(0), version: z.number().int().min(1),
+  invoices: z.array(invoiceSchema).max(200), outstanding: cents, overdue: z.number().int().min(0), debt: debtSchema,
+  payments: z.array(paymentSchema).max(200), version: z.number().int().min(1),
 }).strict();
 export const invoicePageSchema = z.object({
   items: z.array(invoiceSchema).max(100), total: z.number().int().min(0), limit: z.number().int().min(1), offset: z.number().int().min(0), today: day,

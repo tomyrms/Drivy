@@ -12,11 +12,17 @@ import {
 import { commercialView, lockedClient } from './platform-commercial.js';
 import { addDays, maxAheadDays } from './platform-commercial-model.js';
 import { platformCommand, platformRead } from './platform-command.js';
+import {
+  allocateBody, correctBody, paymentBody, regularizationCancelBody, regularizeBody, releaseBody, voidBody, type DebtRow, type PaymentRow,
+} from './platform-payments-model.js';
 
 const empty = z.object({}).strict();
 const idParams = z.object({ id: z.uuid() }).strict();
 const invoiceParams = z.object({ id: z.uuid(), invoiceId: z.uuid() }).strict();
 const invoiceOnlyParams = z.object({ invoiceId: z.uuid() }).strict();
+const paymentParams = z.object({ id: z.uuid(), paymentId: z.uuid() }).strict();
+const allocationParams = z.object({ id: z.uuid(), paymentId: z.uuid(), allocationId: z.uuid() }).strict();
+const regularizationParams = z.object({ id: z.uuid(), paymentId: z.uuid(), regularizationId: z.uuid() }).strict();
 
 const billingConflict = () => new ApiError(412, 'VERSION_CONFLICT', 'La facturation de cette école a changé. Rechargez-la avant de confirmer.');
 const issuerConflict = () => new ApiError(412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.');
@@ -30,8 +36,32 @@ const invoiceSelect = `SELECT to_jsonb(i) || jsonb_build_object(
     'sent_recorded_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = i.sent_recorded_by),
     'credit_note', (SELECT jsonb_build_object('id', n.id, 'number', n.number, 'total', n.total, 'issued_on', n.issued_on)
        FROM drivy.platform_invoice n WHERE n.credits_invoice_id = i.id),
-    'credited_number', (SELECT x.number FROM drivy.platform_invoice x WHERE x.id = i.credits_invoice_id)) AS row
+    'credited_number', (SELECT x.number FROM drivy.platform_invoice x WHERE x.id = i.credits_invoice_id),
+    'settlement', drivy.platform_invoice_settlement(i.id),
+    'allocations', coalesce((SELECT jsonb_agg(jsonb_build_object('id', a.id, 'payment_id', a.payment_id, 'amount', a.amount,
+        'received_on', p.received_on, 'method', p.method, 'created_at', a.created_at,
+        'created_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = a.created_by)) ORDER BY a.created_at, a.id)
+      FROM drivy.platform_payment_allocation a JOIN drivy.platform_payment p ON p.id = a.payment_id
+      WHERE a.invoice_id = i.id AND a.status = 'ACTIVE'), '[]'::jsonb)) AS row
   FROM drivy.platform_invoice i JOIN drivy.platform_client c ON c.id = i.client_id`;
+
+/** Lecture d'un règlement : auteurs, correction, reste relu en base, affectations (libérées comprises) et régularisations. */
+const paymentSelect = `SELECT to_jsonb(p) - 'recorded_by' - 'voided_by' || jsonb_build_object(
+    'recorded_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = p.recorded_by),
+    'voided_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = p.voided_by),
+    'corrected_by_id', (SELECT n.id FROM drivy.platform_payment n WHERE n.corrects_payment_id = p.id),
+    'available', drivy.platform_payment_available(p.id),
+    'allocations', coalesce((SELECT jsonb_agg(jsonb_build_object('id', a.id, 'invoice_id', a.invoice_id, 'invoice_number', i.number, 'amount', a.amount,
+        'status', a.status, 'created_at', a.created_at, 'released_at', a.released_at, 'release_cause', a.release_cause, 'release_reason', a.release_reason,
+        'created_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = a.created_by),
+        'released_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = a.released_by)) ORDER BY a.created_at, a.id)
+      FROM drivy.platform_payment_allocation a JOIN drivy.platform_invoice i ON i.id = a.invoice_id WHERE a.payment_id = p.id), '[]'::jsonb),
+    'regularizations', coalesce((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'amount', r.amount, 'kind', r.kind, 'reason', r.reason,
+        'status', r.status, 'created_at', r.created_at, 'cancelled_at', r.cancelled_at, 'cancel_reason', r.cancel_reason,
+        'created_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = r.created_by),
+        'cancelled_by_name', (SELECT o.display_name FROM drivy.platform_operator o WHERE o.id = r.cancelled_by)) ORDER BY r.created_at, r.id)
+      FROM drivy.platform_payment_regularization r WHERE r.payment_id = p.id), '[]'::jsonb)) AS row
+  FROM drivy.platform_payment p`;
 
 async function readToday(db: PoolClient): Promise<string> {
   return (await db.query<{ today: string }>('SELECT drivy.zurich_today()::text AS today')).rows[0]!.today;
@@ -39,6 +69,11 @@ async function readToday(db: PoolClient): Promise<string> {
 async function readInvoice(db: PoolClient, invoiceId: string, clientId?: string): Promise<InvoiceRow> {
   const row = (await db.query<{ row: InvoiceRow }>(`${invoiceSelect} WHERE i.id = $1 AND ($2::uuid IS NULL OR i.client_id = $2)`,
     [invoiceId, clientId ?? null])).rows[0]?.row;
+  if (!row) throw notFound();
+  return row;
+}
+async function readPayment(db: PoolClient, paymentId: string, clientId: string): Promise<PaymentRow> {
+  const row = (await db.query<{ row: PaymentRow }>(`${paymentSelect} WHERE p.id = $1 AND p.client_id = $2`, [paymentId, clientId])).rows[0]?.row;
   if (!row) throw notFound();
   return row;
 }
@@ -62,8 +97,13 @@ async function billingDetail(db: PoolClient, clientId: string): Promise<BillingV
   const invoices = (await db.query<{ row: InvoiceRow }>(`${invoiceSelect} WHERE i.client_id = $1 ORDER BY i.prepared_at DESC, i.id DESC LIMIT 200`, [clientId]))
     .rows.map(item => item.row);
   const issuerReady = ((await db.query('SELECT 1 FROM drivy.platform_billing_issuer LIMIT 1')).rowCount ?? 0) > 0;
+  const payments = (await db.query<{ row: PaymentRow }>(`${paymentSelect} WHERE p.client_id = $1 ORDER BY p.received_on DESC, p.recorded_at DESC, p.id DESC
+    LIMIT 200`, [clientId])).rows.map(item => item.row);
+  const debt = (await db.query<{ debt: DebtRow }>('SELECT drivy.platform_client_debt($1) AS debt', [clientId])).rows[0]!.debt;
   const version = (await db.query<{ version: number }>('SELECT drivy.platform_client_billing_version($1) AS version', [clientId])).rows[0]!.version;
-  return billingView({ commercial, activation: activations.find(item => item.status === 'ACTIVE') ?? null, activations, invoices, issuerReady, version });
+  return billingView({
+    commercial, activation: activations.find(item => item.status === 'ACTIVE') ?? null, activations, invoices, issuerReady, version, payments, debt,
+  });
 }
 
 /** Filtres de la liste des factures, en paramètres liés uniquement. */
@@ -78,15 +118,14 @@ function invoiceFilters(query: InvoiceListQuery, today: string) {
   if (query.from) add(index => `coalesce(i.period_start, i.issued_on, (i.prepared_at AT TIME ZONE 'Europe/Zurich')::date) >= ${index}::date`, query.from);
   if (query.to) add(index => `coalesce(i.period_start, i.issued_on, (i.prepared_at AT TIME ZONE 'Europe/Zurich')::date) <= ${index}::date`, query.to);
   if (query.dueBefore) add(index => `i.due_on < ${index}::date`, query.dueBefore);
-  if (query.overdue) {
-    add(index => `i.status = 'ISSUED' AND i.kind <> 'CREDIT_NOTE' AND i.due_on < ${index}::date
-      AND NOT EXISTS(SELECT 1 FROM drivy.platform_invoice n WHERE n.credits_invoice_id = i.id)`, today);
-  }
+  // Retard et état de règlement : le calcul de la base, le même que celui de la fiche et de la suspension.
+  if (query.overdue) add(index => `coalesce((drivy.platform_invoice_settlement(i.id, ${index}::date)->>'overdue')::boolean, false)`, today);
+  if (query.settlement) add(index => `drivy.platform_invoice_settlement(i.id)->>'state' = ${index}`, query.settlement);
   return { where: clauses.length ? `WHERE ${clauses.join(' AND ')}` : '', values };
 }
 
 /**
- * Factures initiales et mensuelles, avoirs, paramètres de l'émetteur et préparation planifiée (R01-T05, #457). Écritures par `platformCommand`
+ * Factures, avoirs, émetteur et préparation planifiée (R01-T05, #457), puis règlements manuels (R01-T06, #458). Écritures par `platformCommand`
  * (équipe relue en base, reçu, journal, effet dans un même commit) ; les montants, numéros et figements sont décidés par les fonctions de la base.
  * Le journal reçoit l'action, les identifiants, numéros et montants ; jamais un motif.
  */
@@ -133,12 +172,12 @@ export function registerPlatformBilling(app: FastifyInstance, options: { pool: P
       const rows = (await db.query<{ row: InvoiceRow }>(`${invoiceSelect} ${where}
         ORDER BY coalesce(i.issued_at, i.prepared_at) DESC, i.id DESC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
       [...values, query.limit, query.offset])).rows;
-      return { items: rows.map(item => invoiceView(item.row, today)), total, limit: query.limit, offset: query.offset, today };
+      return { items: rows.map(item => invoiceView(item.row)), total, limit: query.limit, offset: query.offset, today };
     }), request);
   });
   app.get('/v1/platform/invoices/:invoiceId', async request => {
     const identity = await identityOf(request); empty.parse(request.query); const { invoiceId } = invoiceOnlyParams.parse(request.params);
-    return envelope(await platformRead(options.pool, identity, async db => invoiceView(await readInvoice(db, invoiceId), await readToday(db))), request);
+    return envelope(await platformRead(options.pool, identity, async db => invoiceView(await readInvoice(db, invoiceId))), request);
   });
 
   // Passage demandé par un opérateur : même traitement que le service planifié, au jour de Zurich. Sans version : il est idempotent par nature.
@@ -162,7 +201,7 @@ export function registerPlatformBilling(app: FastifyInstance, options: { pool: P
   });
 
   type Effect = { status?: 200 | 201; journal: { action: string; changes: Record<string, unknown> } };
-  type Route = { id: string; invoiceId?: string };
+  type Route = { id: string; invoiceId?: string; paymentId?: string; allocationId?: string; regularizationId?: string };
   /** Commande de facturation d'une fiche : verrou de la fiche, version relue, effet, facturation rendue. */
   function command<B extends { operationId: string }>(path: string, kind: string, schema: z.ZodType<B>,
     work: (db: PoolClient, actor: { operatorId: string }, before: BillingView, body: B, route: Route) => Promise<Effect>,
@@ -178,6 +217,12 @@ export function registerPlatformBilling(app: FastifyInstance, options: { pool: P
         const schoolId = await lockedClient(db, id);
         // Une facture d'une autre fiche n'existe pas ici.
         if (route.invoiceId) await readInvoice(db, route.invoiceId, id);
+        // Un règlement d'une autre fiche, ou une affectation ou régularisation d'un autre règlement, n'existe pas ici.
+        if (route.paymentId) {
+          const payment = await readPayment(db, route.paymentId, id);
+          if (route.allocationId && !payment.allocations.some(item => item.id === route.allocationId)) throw notFound();
+          if (route.regularizationId && !payment.regularizations.some(item => item.id === route.regularizationId)) throw notFound();
+        }
         const before = await billingDetail(db, id);
         if (before.version !== expected) throw billingConflict();
         const effect = await work(db, actor, before, body, route);
@@ -249,4 +294,77 @@ export function registerPlatformBilling(app: FastifyInstance, options: { pool: P
     const row = await readInvoice(db, invoiceId!, id);
     return { journal: { action: 'MARK_INVOICE_SENT', changes: { invoiceId, number: row.number, sentOn: body.sentOn } } };
   }, invoiceParams);
+
+  // --- Règlements (R01-T06, #458) --------------------------------------------------------------------------------------------------
+  // Faits confirmés à la main par l'équipe. La base relit l'école, le reste du règlement, le solde de la facture et le doublon probable, sous le
+  // verrou de la fiche. Le journal reçoit montants, dates, moyen et identifiants ; jamais la référence, la note ni un motif.
+  const activeParts = (items: readonly { invoiceId: string; amount: number; status: string }[]) =>
+    items.filter(item => item.status === 'ACTIVE').map(item => ({ invoiceId: item.invoiceId, amount: item.amount }));
+
+  command('/payments', 'RECORD_PAYMENT', paymentBody, async (db, _actor, _before, body, { id }) => {
+    const paymentId = randomUUID();
+    await db.query('SELECT drivy.platform_payment_record($1,$2,$3,$4,$5::date,$6,$7,$8,$9::jsonb,$10,$11)', [paymentId, id, body.amount, body.currency,
+      body.receivedOn, body.method, body.reference, body.note, JSON.stringify(body.allocations), body.spread, body.confirmDuplicate]);
+    const payment = await readPayment(db, paymentId, id);
+    return { status: 201, journal: { action: 'RECORD_PAYMENT', changes: {
+      paymentId, amount: payment.amount, receivedOn: payment.received_on, method: payment.method, spread: body.spread,
+      allocations: payment.allocations.map(item => ({ invoiceId: item.invoice_id, amount: item.amount })), available: payment.available,
+      duplicateConfirmed: body.confirmDuplicate,
+    } } };
+  });
+
+  command('/payments/:paymentId/allocations', 'ALLOCATE_PAYMENT', allocateBody, async (db, _actor, _before, body, { paymentId }) => {
+    const allocationId = (await db.query<{ id: string }>('SELECT drivy.platform_payment_allocate($1,$2,$3) AS id',
+      [paymentId, body.invoiceId, body.amount])).rows[0]!.id;
+    return { status: 201, journal: { action: 'ALLOCATE_PAYMENT', changes: { paymentId, allocationId, invoiceId: body.invoiceId, amount: body.amount } } };
+  }, paymentParams);
+
+  command('/payments/:paymentId/allocations/:allocationId/release', 'RELEASE_ALLOCATION', releaseBody,
+    async (db, _actor, before, body, { paymentId, allocationId }) => {
+      const allocation = before.payments.find(item => item.id === paymentId)?.allocations.find(item => item.id === allocationId);
+      await db.query('SELECT drivy.platform_payment_release($1,$2)', [allocationId, body.reason]);
+      return { journal: { action: 'RELEASE_ALLOCATION', changes: {
+        paymentId, allocationId, invoiceId: allocation?.invoiceId ?? null, amount: allocation?.amount ?? null,
+      } } };
+    }, allocationParams);
+
+  // Annulation d'une erreur de saisie : le règlement reste lisible, ses affectations sont libérées.
+  command('/payments/:paymentId/void', 'VOID_PAYMENT', voidBody, async (db, _actor, before, body, { paymentId }) => {
+    const payment = before.payments.find(item => item.id === paymentId);
+    await db.query('SELECT drivy.platform_payment_void($1,$2)', [paymentId, body.reason]);
+    return { journal: { action: 'VOID_PAYMENT', changes: {
+      paymentId, amount: payment?.amount ?? null, released: payment ? activeParts(payment.allocations) : [],
+    } } };
+  }, paymentParams);
+
+  // Correction : l'original reste (annulé, avec son auteur) ; le nouveau règlement reprend ses factures jusqu'à son montant.
+  command('/payments/:paymentId/correct', 'CORRECT_PAYMENT', correctBody, async (db, _actor, before, body, { id, paymentId }) => {
+    const original = before.payments.find(item => item.id === paymentId);
+    const correctionId = randomUUID();
+    await db.query('SELECT drivy.platform_payment_correct($1,$2,$3,$4,$5::date,$6,$7,$8,$9)', [paymentId, correctionId, body.amount, body.currency,
+      body.receivedOn, body.method, body.reference, body.note, body.reason]);
+    const correction = await readPayment(db, correctionId, id);
+    return { status: 201, journal: { action: 'CORRECT_PAYMENT', changes: {
+      paymentId, correctionId,
+      before: original ? { amount: original.amount, receivedOn: original.receivedOn, method: original.method, allocations: activeParts(original.allocations) } : null,
+      after: { amount: correction.amount, receivedOn: correction.received_on, method: correction.method,
+        allocations: correction.allocations.map(item => ({ invoiceId: item.invoice_id, amount: item.amount })) },
+    } } };
+  }, paymentParams);
+
+  // Régularisation explicite du reste non affecté : jamais déduite d'un avoir ni d'une correction.
+  command('/payments/:paymentId/regularizations', 'REGULARIZE_PAYMENT', regularizeBody, async (db, _actor, _before, body, { paymentId }) => {
+    const regularizationId = randomUUID();
+    await db.query('SELECT drivy.platform_payment_regularize($1,$2,$3,$4,$5)', [paymentId, regularizationId, body.amount, body.kind, body.reason]);
+    return { status: 201, journal: { action: 'REGULARIZE_PAYMENT', changes: { paymentId, regularizationId, amount: body.amount, kind: body.kind } } };
+  }, paymentParams);
+
+  command('/payments/:paymentId/regularizations/:regularizationId/cancel', 'CANCEL_REGULARIZATION', regularizationCancelBody,
+    async (db, _actor, before, body, { paymentId, regularizationId }) => {
+      const regularization = before.payments.find(item => item.id === paymentId)?.regularizations.find(item => item.id === regularizationId);
+      await db.query('SELECT drivy.platform_payment_regularization_cancel($1,$2)', [regularizationId, body.reason]);
+      return { journal: { action: 'CANCEL_REGULARIZATION', changes: {
+        paymentId, regularizationId, amount: regularization?.amount ?? null, kind: regularization?.kind ?? null,
+      } } };
+    }, regularizationParams);
 }
