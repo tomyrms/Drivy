@@ -5,6 +5,7 @@ import {
   debtView, invoiceAllocationView, paymentView, settlementStates, settlementView,
   type DebtRow, type InvoiceAllocationRow, type PaymentRow, type SettlementRow,
 } from './platform-payments-model.js';
+import { paymentModes, referenceTypes } from './platform-invoice-qr.js';
 
 /**
  * Factures initiales et mensuelles, avoirs et échéancier (R01-T05, #457). Modèle pur : bornes des saisies, contrôle d'IBAN, calcul de la taxe
@@ -71,10 +72,12 @@ const text = (max: number) => z.string().trim().min(1).max(max);
 /** Paramètres de l'émetteur : chaque version redonne tout ; aucune n'est modifiée. La TVA n'est jamais devinée. */
 export const issuerBody = z.object({
   operationId,
-  legalName: text(150), street: text(200), postalCode: text(20), city: text(100),
+  legalName: text(150), street: text(200), buildingNumber: text(16).nullable().default(null), postalCode: text(20), city: text(100),
   country: z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/),
   email: z.email().max(254).transform(value => value.toLowerCase()).nullable(),
-  iban: z.string().max(42).transform(normalizeIban).refine(ibanValid, { message: 'IBAN invalide.' }).nullable(),
+  // Compte de la QR-facture : suisse ou liechtensteinois, IBAN ou QR-IBAN. Le titulaire est le créancier du QR.
+  iban: z.string().max(42).transform(normalizeIban).refine(value => /^(CH|LI)[0-9]{7}[A-Z0-9]{12}$/.test(value) && ibanValid(value), { message: 'IBAN invalide.' }).nullable(),
+  accountHolder: text(70).nullable().default(null),
   taxMode: z.enum(taxModes),
   vatNumber: z.string().trim().regex(/^CHE-[0-9]{3}\.[0-9]{3}\.[0-9]{3} (TVA|MWST|IVA)$/).nullable(),
   taxRateBp: z.number().int().min(1).max(5000).nullable(),
@@ -100,6 +103,12 @@ export const cancelBody = z.object({ operationId, reason }).strict();
 export const creditBody = z.object({ operationId, reason, confirm: z.literal(true) }).strict();
 export const sentBody = z.object({ operationId, sentOn: day }).strict();
 export const runBody = z.object({ operationId }).strict();
+/** Document PDF (R01-T07). `revision` absente : le plus récent. */
+export const documentBody = z.object({ operationId }).strict();
+export const documentQuery = z.object({ revision: z.coerce.number().int().min(1).max(20).optional() }).strict();
+/** Envoi après aperçu : `resend` doit être explicite dès qu'un envoi a pu partir. */
+export const deliveryBody = z.object({ operationId, confirm: z.literal(true), resend: z.boolean() }).strict();
+export const deliveryStatuses = ['QUEUED', 'PROCESSING', 'ACCEPTED', 'FAILED', 'UNCERTAIN', 'CANCELLED'] as const;
 
 const queryText = (schema: z.ZodType) => z.preprocess(value => (value === '' ? undefined : value), schema.optional());
 export const invoiceListQuery = z.object({
@@ -128,12 +137,23 @@ export interface InvoiceRow {
   client_name: string | null; school_id: string | null; prepared_by_name: string | null; issued_by_name: string | null; cancelled_by_name: string | null;
   sent_recorded_by_name: string | null; credit_note: { id: string; number: string; total: number; issued_on: string } | null;
   credited_number: string | null;
+  documents: InvoiceDocumentRow[]; delivery: InvoiceDeliveryRow | null;
   /** Calcul de la base (`platform_invoice_settlement`) : null pour un brouillon, une annulation ou un avoir. */
   settlement: SettlementRow | null; allocations: InvoiceAllocationRow[];
 }
+/** Document conservé, sans son contenu. */
+export interface InvoiceDocumentRow {
+  id: string; revision: number; payment_mode: (typeof paymentModes)[number]; reference_type: (typeof referenceTypes)[number] | null; reference: string | null;
+  amount: number; byte_size: number; sha256: string; created_at: string; created_by_name: string | null;
+}
+/** Dernier envoi, sans son contenu chiffré. */
+export interface InvoiceDeliveryRow {
+  id: string; status: (typeof deliveryStatuses)[number]; recipient_masked: string; attempts: number; failure_code: string | null; document_id: string;
+  resend_of: string | null; requested_at: string; requested_by_name: string | null; accepted_at: string | null; finished_at: string | null;
+}
 export interface IssuerRow {
-  id: string; sequence: number; legal_name: string; street: string; postal_code: string; city: string; country: string; email: string | null;
-  iban: string | null; tax_mode: (typeof taxModes)[number]; vat_number: string | null; tax_rate_bp: number | null; prices_include_tax: boolean | null;
+  id: string; sequence: number; legal_name: string; street: string; building_number: string | null; postal_code: string; city: string; country: string;
+  email: string | null; iban: string | null; account_holder: string | null; tax_mode: (typeof taxModes)[number]; vat_number: string | null; tax_rate_bp: number | null; prices_include_tax: boolean | null;
   tax_note: string | null; created_at: string; created_by_name: string | null;
 }
 export interface ActivationRow {
@@ -168,8 +188,9 @@ export function invoiceView(row: InvoiceRow) {
     total: row.total, issuedOn: row.issued_on, dueOn: row.due_on, paymentTermDays: row.payment_term_days, issuedAt: iso(row.issued_at),
     issuedByName: row.issued_by_name,
     issuer: row.issuer ? {
-      legalName: row.issuer.legalName ?? '', street: row.issuer.street ?? '', postalCode: row.issuer.postalCode ?? '', city: row.issuer.city ?? '',
-      country: row.issuer.country ?? '', email: row.issuer.email ?? null, iban: row.issuer.iban ?? null, vatNumber: row.issuer.vatNumber ?? null,
+      legalName: row.issuer.legalName ?? '', street: row.issuer.street ?? '', buildingNumber: row.issuer.buildingNumber ?? null,
+      postalCode: row.issuer.postalCode ?? '', city: row.issuer.city ?? '', country: row.issuer.country ?? '', email: row.issuer.email ?? null,
+      iban: row.issuer.iban ?? null, accountHolder: row.issuer.accountHolder ?? row.issuer.legalName ?? null, vatNumber: row.issuer.vatNumber ?? null,
       taxNote: row.issuer.taxNote ?? null,
     } : null,
     recipient: row.recipient ? {
@@ -179,6 +200,15 @@ export function invoiceView(row: InvoiceRow) {
     sendStatus: row.send_status, sentOn: row.sent_on, sentRecordedAt: iso(row.sent_recorded_at), sentRecordedByName: row.sent_recorded_by_name,
     balance, overdue, settlement: invoiceBalance(row).balance === null ? null : settlementView(row.settlement),
     allocations: row.allocations.map(invoiceAllocationView),
+    documents: (row.documents ?? []).map(item => ({
+      id: item.id, revision: item.revision, paymentMode: item.payment_mode, referenceType: item.reference_type, reference: item.reference, amount: item.amount,
+      byteSize: item.byte_size, sha256: item.sha256, createdAt: iso(item.created_at)!, createdByName: item.created_by_name,
+    })),
+    delivery: row.delivery ? {
+      id: row.delivery.id, status: row.delivery.status, recipientMasked: row.delivery.recipient_masked, attempts: row.delivery.attempts,
+      failureCode: row.delivery.failure_code, documentId: row.delivery.document_id, resendOf: row.delivery.resend_of, requestedAt: iso(row.delivery.requested_at)!,
+      requestedByName: row.delivery.requested_by_name, acceptedAt: iso(row.delivery.accepted_at), finishedAt: iso(row.delivery.finished_at),
+    } : null,
     creditNote: row.credit_note ? { id: row.credit_note.id, number: row.credit_note.number, total: row.credit_note.total, issuedOn: row.credit_note.issued_on } : null,
     creditsInvoice: row.credits_invoice_id ? { id: row.credits_invoice_id, number: row.credited_number } : null,
     reason: row.reason, preparedAt: iso(row.prepared_at)!, preparedByName: row.prepared_by_name, cancelledAt: iso(row.cancelled_at),
@@ -188,8 +218,8 @@ export function invoiceView(row: InvoiceRow) {
 export type InvoiceView = ReturnType<typeof invoiceView>;
 
 export const issuerView = (row: IssuerRow) => ({
-  id: row.id, sequence: row.sequence, legalName: row.legal_name, street: row.street, postalCode: row.postal_code, city: row.city, country: row.country,
-  email: row.email, iban: row.iban, taxMode: row.tax_mode, vatNumber: row.vat_number, taxRateBp: row.tax_rate_bp, pricesIncludeTax: row.prices_include_tax,
+  id: row.id, sequence: row.sequence, legalName: row.legal_name, street: row.street, buildingNumber: row.building_number ?? null,
+  postalCode: row.postal_code, city: row.city, country: row.country, email: row.email, iban: row.iban, accountHolder: row.account_holder ?? null, taxMode: row.tax_mode, vatNumber: row.vat_number, taxRateBp: row.tax_rate_bp, pricesIncludeTax: row.prices_include_tax,
   taxNote: row.tax_note, createdAt: iso(row.created_at)!, createdByName: row.created_by_name,
 });
 

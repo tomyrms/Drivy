@@ -144,13 +144,19 @@ export const regularizationKinds = ['REFUND_RECORDED', 'OTHER'] as const;
 const label = (max: number) => z.string().max(max);
 const optionalLabel = (max: number) => z.string().max(max).nullable();
 export const platformIssuerSchema = z.object({
-  id, sequence: z.number().int().min(1), legalName: label(150), street: label(200), postalCode: label(20), city: label(100), country: z.string().regex(/^[A-Z]{2}$/),
-  email: optionalLabel(254), iban: optionalLabel(42), taxMode: z.enum(['NONE', 'VAT']), vatNumber: optionalLabel(40), taxRateBp: z.number().int().min(1).max(5000).nullable(),
+  id, sequence: z.number().int().min(1), legalName: label(150), street: label(200), buildingNumber: optionalLabel(16), postalCode: label(20), city: label(100), country: z.string().regex(/^[A-Z]{2}$/),
+  email: optionalLabel(254), iban: optionalLabel(42), accountHolder: optionalLabel(70), taxMode: z.enum(['NONE', 'VAT']), vatNumber: optionalLabel(40), taxRateBp: z.number().int().min(1).max(5000).nullable(),
   pricesIncludeTax: z.boolean().nullable(), taxNote: optionalLabel(200), createdAt: iso, createdByName: optionalLabel(200),
 });
 const platformSettlementSchema = z.object({ state: z.enum(settlementStates), allocated: cents, credited: cents, balance: cents, overdue: z.boolean() });
 const platformInvoiceAllocationSchema = z.object({ id, paymentId: id, amount: cents, receivedOn: isoDay, method: z.enum(paymentMethods), createdAt: iso,
   createdByName: optionalLabel(200) });
+// PDF et envoi (R01-T07) : `ACCEPTED` veut dire accepté par le serveur SMTP, ni livré ni lu.
+export const deliveryStatuses = ['QUEUED', 'PROCESSING', 'ACCEPTED', 'FAILED', 'UNCERTAIN', 'CANCELLED'] as const;
+const platformInvoiceDocumentSchema = z.object({ id, revision: z.number().int().min(1).max(20), paymentMode: z.enum(['QR', 'NONE']), referenceType: z.enum(['QRR', 'SCOR']).nullable(),
+  reference: optionalLabel(40), amount: cents, byteSize: z.number().int().min(1), sha256: z.string().regex(/^[0-9a-f]{64}$/), createdAt: iso, createdByName: optionalLabel(200) });
+const platformInvoiceDeliverySchema = z.object({ id, status: z.enum(deliveryStatuses), recipientMasked: label(254), attempts: z.number().int().min(0).max(5), failureCode: optionalLabel(80),
+  documentId: id, resendOf: id.nullable(), requestedAt: iso, requestedByName: optionalLabel(200), acceptedAt: iso.nullable(), finishedAt: iso.nullable() });
 export const platformInvoiceSchema = z.object({
   id, clientId: id, clientName: optionalLabel(150), schoolId: id.nullable(), kind: z.enum(invoiceKinds), generation: z.number().int().min(1),
   status: z.enum(invoiceStatuses), origin: z.enum(['MANUAL', 'SCHEDULED']), number: optionalLabel(40), currency: z.literal('CHF'),
@@ -161,11 +167,12 @@ export const platformInvoiceSchema = z.object({
   tax: z.object({ mode: z.enum(['NONE', 'VAT']), rateBp: z.number().int().nullable(), pricesIncludeTax: z.boolean().nullable(), amount: cents }).nullable(),
   total: cents.nullable(), issuedOn: isoDay.nullable(), dueOn: isoDay.nullable(), paymentTermDays: z.number().int().min(0).nullable(), issuedAt: iso.nullable(),
   issuedByName: optionalLabel(200),
-  issuer: z.object({ legalName: label(150), street: label(200), postalCode: label(20), city: label(100), country: label(2), email: optionalLabel(254),
-    iban: optionalLabel(42), vatNumber: optionalLabel(40), taxNote: optionalLabel(200) }).nullable(),
+  issuer: z.object({ legalName: label(150), street: label(200), buildingNumber: optionalLabel(16), postalCode: label(20), city: label(100), country: label(2), email: optionalLabel(254),
+    iban: optionalLabel(42), accountHolder: optionalLabel(70), vatNumber: optionalLabel(40), taxNote: optionalLabel(200) }).nullable(),
   recipient: z.object({ name: label(150), contactName: optionalLabel(200), street: label(200), postalCode: label(20), city: label(100), country: label(100) }).nullable(),
   sendStatus: z.enum(sendStatuses), sentOn: isoDay.nullable(), sentRecordedAt: iso.nullable(), sentRecordedByName: optionalLabel(200),
   balance: cents.nullable(), overdue: z.boolean(), settlement: platformSettlementSchema.nullable(), allocations: z.array(platformInvoiceAllocationSchema).max(200),
+  documents: z.array(platformInvoiceDocumentSchema).max(20), delivery: platformInvoiceDeliverySchema.nullable(),
   creditNote: z.object({ id, number: label(40), total: cents, issuedOn: isoDay }).nullable(),
   creditsInvoice: z.object({ id, number: optionalLabel(40) }).nullable(),
   reason: optionalLabel(500), preparedAt: iso, preparedByName: optionalLabel(200), cancelledAt: iso.nullable(), cancelledByName: optionalLabel(200),
@@ -200,6 +207,9 @@ export const platformBillingSchema = z.object({
 });
 export const platformBillingResult = z.object({ data: platformBillingSchema });
 export const platformInvoiceResult = z.object({ data: platformInvoiceSchema });
+export const platformDeliveryPreviewResult = z.object({ data: z.object({ to: optionalLabel(254), subject: label(300), text: label(4000), fileName: label(80), paymentMode: z.enum(['QR', 'NONE']),
+  amount: cents, resend: z.boolean(), ready: z.boolean(), problems: z.array(z.object({ code: z.string().max(64), message: label(300) })).max(10) }) });
+export type PlatformDeliveryPreview = z.infer<typeof platformDeliveryPreviewResult>['data'];
 export const platformInvoicePageResult = z.object({ data: z.object({ items: z.array(platformInvoiceSchema).max(100), total: z.number().int().min(0),
   limit: z.number().int().min(1), offset: z.number().int().min(0), today: isoDay }) });
 export const platformIssuerResult = z.object({ data: z.object({ current: platformIssuerSchema.nullable(), versions: z.array(platformIssuerSchema).max(50),
@@ -348,6 +358,12 @@ const actionLabels: Record<string, string> = {
   CANCEL_INVOICE_DRAFT: 'Brouillon annulé',
   ISSUE_CREDIT_NOTE: 'Avoir émis',
   MARK_INVOICE_SENT: 'Envoi enregistré',
+  GENERATE_INVOICE_DOCUMENT: 'PDF de facture généré',
+  QUEUE_INVOICE_DELIVERY: 'Envoi de facture demandé',
+  INVOICE_DELIVERY_ACCEPTED: 'Facture acceptée par le serveur d’envoi',
+  INVOICE_DELIVERY_FAILED: 'Envoi de facture en échec',
+  INVOICE_DELIVERY_UNCERTAIN: 'Envoi de facture incertain',
+  INVOICE_DELIVERY_CANCELLED: 'Envoi de facture annulé',
   RECORD_PAYMENT: 'Règlement enregistré',
   ALLOCATE_PAYMENT: 'Règlement affecté',
   RELEASE_ALLOCATION: 'Affectation libérée',
@@ -405,6 +421,17 @@ const reasonLabels: Record<string, string> = {
   INVOICE_ALREADY_SENT: 'Envoi déjà enregistré',
   INVOICE_SENT_DATE: 'Date d’envoi non valide',
   INVOICE_FIXED: 'Document émis',
+  INVOICE_PAYMENT_ACCOUNT: 'Compte de paiement à corriger',
+  INVOICE_ISSUER_ADDRESS: 'Adresse de l’émetteur à corriger',
+  INVOICE_RECIPIENT_ADDRESS: 'Adresse de l’école à corriger',
+  INVOICE_QR_INVALID: 'QR non valide',
+  INVOICE_DOCUMENT_STALE: 'Document modifié',
+  INVOICE_DELIVERY_CREDITED: 'Facture créditée',
+  INVOICE_DELIVERY_SETTLED: 'Facture déjà réglée',
+  INVOICE_DELIVERY_ACTIVE: 'Envoi déjà en cours',
+  INVOICE_DELIVERY_RESEND_REQUIRED: 'Renvoi à confirmer',
+  BILLING_MAIL_NOT_CONFIGURED: 'Envoi non configuré',
+  BILLING_CONTACT_MISSING: 'Contact de facturation manquant',
   PAID_START_INVOICED: 'Début payant facturé',
   INVOICE_PAID: 'Règlements affectés',
   PAYMENT_CURRENCY: 'Autre devise',
@@ -480,6 +507,10 @@ export const invoiceKindLabel = (kind: PlatformInvoiceKind) => invoiceKindLabels
 const invoiceStatusLabels: Record<PlatformInvoiceStatus, string> = { DRAFT: 'Brouillon', ISSUED: 'Émise', CANCELLED: 'Annulée' };
 export const invoiceStatusLabel = (status: PlatformInvoiceStatus) => invoiceStatusLabels[status];
 export const sendStatusLabel = (status: PlatformSendStatus) => (status === 'SENT' ? 'Envoyée' : 'Non envoyée');
+const deliveryStatusLabels: Record<(typeof deliveryStatuses)[number], string> = {
+  QUEUED: 'En attente', PROCESSING: 'En cours', ACCEPTED: 'Accepté par le serveur', FAILED: 'Échec', UNCERTAIN: 'Issue incertaine', CANCELLED: 'Annulé',
+};
+export const deliveryStatusLabel = (status: (typeof deliveryStatuses)[number]) => deliveryStatusLabels[status];
 const documentStateLabels: Record<(typeof documentStates)[number], string> = { NOT_DUE: 'À venir', DUE: 'À facturer', DRAFT: 'Brouillon', ISSUED: 'Émise', CREDITED: 'Créditée' };
 export const documentStateLabel = (state: (typeof documentStates)[number]) => documentStateLabels[state];
 const settlementLabels: Record<PlatformSettlementState, string> = { PAID: 'Réglée', PARTIAL: 'Partiellement réglée', UNPAID: 'À régler', CREDITED: 'Créditée' };
@@ -680,6 +711,17 @@ const failures: Record<string, string> = {
   INVOICE_ALREADY_SENT: 'L’envoi de ce document est déjà enregistré.',
   INVOICE_SENT_DATE: 'La date d’envoi doit être entre l’émission et aujourd’hui.',
   INVOICE_FIXED: 'Un document émis ne se modifie pas.',
+  INVOICE_PAYMENT_ACCOUNT: 'Renseignez un IBAN ou QR-IBAN suisse ou liechtensteinois valide dans l’émetteur.',
+  INVOICE_ISSUER_ADDRESS: 'Corrigez le titulaire ou l’adresse de l’émetteur : format de la QR-facture non respecté.',
+  INVOICE_RECIPIENT_ADDRESS: 'Corrigez le nom ou l’adresse de facturation de l’école : format de la QR-facture non respecté.',
+  INVOICE_QR_INVALID: 'Cette facture ne permet pas un ordre de paiement cohérent.',
+  INVOICE_DOCUMENT_STALE: 'Le document a changé. Rechargez la fiche.',
+  INVOICE_DELIVERY_CREDITED: 'Cette facture est créditée. Envoyez l’avoir.',
+  INVOICE_DELIVERY_SETTLED: 'Cette facture est déjà réglée au moins en partie : son QR ne correspond plus au solde.',
+  INVOICE_DELIVERY_ACTIVE: 'Un envoi de cette facture est déjà en cours.',
+  INVOICE_DELIVERY_RESEND_REQUIRED: 'Cette facture a peut-être déjà été envoyée. Confirmez le renvoi.',
+  BILLING_MAIL_NOT_CONFIGURED: 'L’envoi des factures n’est pas configuré.',
+  BILLING_CONTACT_MISSING: 'Renseignez l’adresse du contact de facturation de l’école.',
   PAID_START_INVOICED: 'Ce début payant est déjà facturé. Annulez le brouillon ou émettez un avoir d’abord.',
   INVOICE_PAID: 'Libérez d’abord les règlements affectés à cette facture.',
   PAYMENT_CURRENCY: 'Seuls les règlements en CHF sont pris en compte.',

@@ -3,6 +3,7 @@ import { buildApp } from './app.js';
 import { createTokenVerifier } from './auth.js';
 import { readConfig } from './config.js';
 import { readAccountRecoveryConfig } from './account-recovery.js';
+import { billingMailConfig } from './billing-mail.js';
 import { invitationMailConfig } from './invitation-mail.js';
 import { readCaptureConfig } from './capture-crypto.js';
 import { guardPool } from './database.js';
@@ -23,11 +24,12 @@ try {
     throw new Error('La connexion de production doit utiliser un rôle sans superuser/BYPASSRLS.');
   }
   const invitationMail=invitationMailConfig();
+  const billingMail=billingMailConfig();
   const capture=readCaptureConfig();
   const mapMatching=readMapMatchingConfig();
   if(mapMatching&&mapMatching.provider!=='osrm')throw new Error('Le serveur exige un moteur OSRM privé.');
   const accounts=readAccountProvisioningConfig();
-  const app = buildApp({ pool, gpsOnlyQualificationSchoolIds: config.GPS_ONLY_QUALIFICATION_SCHOOL_IDS, accountRecovery: readAccountRecoveryConfig(), messaging: { mode: config.MESSAGING_MODE, schoolIds: config.MESSAGING_QUALIFICATION_SCHOOL_IDS }, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, schoolOpening:readSchoolOpeningConfig(), reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(config.INVITATION_CODE_SECRET?{invitationCodeSecret:config.INVITATION_CODE_SECRET}:{}),...(invitationMail?{invitationMail}:{}),...(capture?{capture}:{}),...(mapMatching?{mapMatching,mapMatcher:createMapMatcher(mapMatching),liveMatcher:createOSRMLiveMatcher(mapMatching.baseURL)}:{}),...(accounts?{provisionAccount:createKeycloakProvisioner(accounts)}:{}),...(config.TRUST_PROXY?{trustProxy:config.TRUST_PROXY}:{}) });
+  const app = buildApp({ pool, gpsOnlyQualificationSchoolIds: config.GPS_ONLY_QUALIFICATION_SCHOOL_IDS, accountRecovery: readAccountRecoveryConfig(), messaging: { mode: config.MESSAGING_MODE, schoolIds: config.MESSAGING_QUALIFICATION_SCHOOL_IDS }, verifyToken: createTokenVerifier(config), cursorSecret: config.CURSOR_SECRET, schoolOpening:readSchoolOpeningConfig(), reauthMaxAgeSeconds:config.REAUTH_MAX_AGE_SECONDS,logger: true,...(config.INVITATION_CODE_SECRET?{invitationCodeSecret:config.INVITATION_CODE_SECRET}:{}),...(invitationMail?{invitationMail}:{}),...(billingMail?{billingMail}:{}),...(capture?{capture}:{}),...(mapMatching?{mapMatching,mapMatcher:createMapMatcher(mapMatching),liveMatcher:createOSRMLiveMatcher(mapMatching.baseURL)}:{}),...(accounts?{provisionAccount:createKeycloakProvisioner(accounts)}:{}),...(config.TRUST_PROXY?{trustProxy:config.TRUST_PROXY}:{}) });
   const shutdown = async () => { await app.close(); await pool.end(); };
   process.once('SIGINT', () => { void shutdown(); });
   process.once('SIGTERM', () => { void shutdown(); });

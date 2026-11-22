@@ -233,10 +233,22 @@ const billingMessages: [string, number, string, string][] = [
   ['platform_regularization_cancelled', 409, 'REGULARIZATION_CANCELLED', 'Cette régularisation est déjà annulée.'],
   ['platform_regularization_fixed', 409, 'REGULARIZATION_FIXED', 'Une régularisation ne se modifie pas.'],
   ['platform_invoice_paid', 409, 'INVOICE_PAID', 'Libérez d’abord les règlements affectés à cette facture.'],
+  // Documents et envois (R01-T07, #459).
+  ['platform_invoice_payment_account', 409, 'INVOICE_PAYMENT_ACCOUNT', 'Renseignez un IBAN ou QR-IBAN suisse ou liechtensteinois valide dans l’émetteur.'],
+  ['platform_invoice_issuer_address', 409, 'INVOICE_ISSUER_ADDRESS', 'Corrigez le titulaire ou l’adresse de l’émetteur : format de la QR-facture non respecté.'],
+  ['platform_invoice_recipient_address', 409, 'INVOICE_RECIPIENT_ADDRESS', 'Corrigez le nom ou l’adresse de facturation de l’école : format de la QR-facture non respecté.'],
+  ['platform_invoice_qr_invalid', 409, 'INVOICE_QR_INVALID', 'Cette facture ne permet pas un ordre de paiement cohérent.'],
+  ['platform_invoice_document_stale', 409, 'INVOICE_DOCUMENT_STALE', 'Le document a changé. Rechargez la fiche.'],
+  ['platform_invoice_document_fixed', 409, 'INVOICE_FIXED', 'Un document émis ne se modifie pas.'],
+  ['platform_invoice_delivery_credited', 409, 'INVOICE_DELIVERY_CREDITED', 'Cette facture est créditée. Envoyez l’avoir.'],
+  ['platform_invoice_delivery_settled', 409, 'INVOICE_DELIVERY_SETTLED', 'Cette facture est déjà réglée au moins en partie : son QR ne correspond plus au solde.'],
+  ['platform_invoice_delivery_active', 409, 'INVOICE_DELIVERY_ACTIVE', 'Un envoi de cette facture est déjà en cours.'],
+  ['platform_invoice_delivery_resend_required', 409, 'INVOICE_DELIVERY_RESEND_REQUIRED', 'Cette facture a peut-être déjà été envoyée. Confirmez le renvoi.'],
 ];
 const billingConstraints: Record<string, [number, string, string]> = {
   platform_billing_activation_active: [409, 'BILLING_ACTIVE', 'La facturation planifiée est déjà active pour cette école.'],
   platform_invoice_initial_once: [409, 'INVOICE_EXISTS', 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.'],
+  platform_invoice_delivery_active: [409, 'INVOICE_DELIVERY_ACTIVE', 'Un envoi de cette facture est déjà en cours.'],
   platform_invoice_period_once: [409, 'INVOICE_EXISTS', 'Une facture existe déjà pour ce document. Annulez le brouillon ou émettez un avoir d’abord.'],
   platform_invoice_credit_once: [409, 'INVOICE_CREDITED', 'Un avoir a déjà été émis pour cette facture.'],
   platform_billing_issuer_sequence_key: [412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.'],

@@ -1,6 +1,6 @@
 import { isUUID, matchSchoolRoute, type SchoolMethod } from './school-routes.js';
 import { allowedOpeningRequest, type OpeningGateway } from './opening-routes.js';
-import { allowedPlatformRequest, type PlatformGateway } from './platform-routes.js';
+import { allowedPlatformRequest, type PlatformDocumentGateway, type PlatformGateway } from './platform-routes.js';
 
 export type ApiResult = { status: number; body: unknown };
 export type ApiGateway = (path: string, accessToken: string, body?: unknown) => Promise<ApiResult>;
@@ -36,6 +36,35 @@ export function createPlatformGateway(baseURL:string):PlatformGateway {
         ...(command.ifMatch?{'If-Match':command.ifMatch}:{})},
       ...(write?{body:JSON.stringify(command.body)}:{})});
     return {status:response.status,body:await readJSON(response,1024*1024)};
+  };
+}
+
+const MAX_INVOICE_PDF_BYTES = 2 * 1024 * 1024;
+const invoiceDisposition = /^attachment; filename="(?:facture|avoir)-[A-Za-z0-9-]{1,60}\.pdf"$/;
+/** Un seul chemin en lecture, un PDF en réponse : type, nom de fichier et taille sont contrôlés, et le contenu n'est jamais conservé. */
+export function createPlatformDocumentGateway(baseURL: string): PlatformDocumentGateway {
+  return async (request, accessToken) => {
+    const revision = request.revision;
+    if (!isUUID(request.clientId) || !isUUID(request.invoiceId) || (revision !== undefined && (!Number.isInteger(revision) || revision < 1 || revision > 20))) {
+      throw new Error('Route API non autorisée.');
+    }
+    const query = revision === undefined ? '' : `?revision=${revision}`;
+    const response = await fetch(`${baseURL}/v1/platform/clients/${request.clientId.toLowerCase()}/invoices/${request.invoiceId.toLowerCase()}/document${query}`, {
+      method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20_000),
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/pdf, application/problem+json', 'Cache-Control': 'no-store' },
+    });
+    if (response.status !== 200) return { status: response.status, body: await readJSON(response, 64 * 1024) };
+    const disposition = response.headers.get('content-disposition') ?? '';
+    if (response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/pdf' || !invoiceDisposition.test(disposition) || !response.body) {
+      throw new Error('Réponse API inattendue.');
+    }
+    const chunks: Uint8Array[] = []; let size = 0;
+    for await (const chunk of response.body) {
+      size += chunk.byteLength;
+      if (size > MAX_INVOICE_PDF_BYTES) throw new Error('Réponse API trop grande.');
+      chunks.push(chunk);
+    }
+    return { status: 200, pdf: Buffer.concat(chunks), disposition };
   };
 }
 

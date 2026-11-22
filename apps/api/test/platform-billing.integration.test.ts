@@ -1,11 +1,14 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
+import { isQRReferenceValid, isSCORReferenceValid } from 'swissqrbill/utils';
 import { buildApp } from '../src/app.js';
 import type { Identity } from '../src/auth.js';
+import { deliverOneInvoice, type BillingMailConfig, type BillingTransport } from '../src/billing-mail.js';
 import { ApiError } from '../src/errors.js';
 import { addDays, periodIndexOf, periodStart, zurichDay } from '../src/platform-commercial-model.js';
 import { billingEnvelope, billingRunEnvelope, invoiceEnvelope, invoicePageEnvelope, issuerSettingsEnvelope } from '../src/platform-billing-contract.js';
+import { billingCountry, qrText } from '../src/platform-invoice-qr.js';
 import { fixtureIds as id, seedFixtures } from '../scripts/fixtures.js';
 import { freshDatabase, issuer, prepareSchool, seedPlatformOperator } from './support/harness.js';
 
@@ -18,6 +21,8 @@ import { freshDatabase, issuer, prepareSchool, seedPlatformOperator } from './su
  */
 let pool: Pool, app: ReturnType<typeof buildApp>;
 const A = 'op-a', B = 'op-b';
+/** Configuration synthétique : aucune connexion n'est ouverte, chaque test injecte son transport. */
+const billingMail: BillingMailConfig = { encryptionKey: 'b2'.repeat(32), host: '127.0.0.1', port: 1025, secure: false, requireTLS: false, from: 'factures@example.invalid' };
 const verifyToken = async (header: string | undefined): Promise<Identity> => {
   if (!header?.startsWith('Bearer ')) throw new ApiError(401, 'AUTHENTICATION_REQUIRED', 'Connexion requise.');
   return { issuer, subject: header.slice(7) };
@@ -27,7 +32,7 @@ const billingTables = 'drivy.platform_billing_issuer, drivy.platform_billing_act
   + 'drivy.platform_payment, drivy.platform_payment_allocation, drivy.platform_payment_regularization';
 beforeAll(async () => {
   pool = await freshDatabase();
-  app = buildApp({ pool, verifyToken, cursorSecret: 'platform-billing-synthetic-secret-32-characters' });
+  app = buildApp({ pool, verifyToken, cursorSecret: 'platform-billing-synthetic-secret-32-characters', billingMail });
 });
 beforeEach(async () => {
   await pool.query(`TRUNCATE ${billingTables}, drivy.person, drivy.school, drivy.platform_operator, drivy.platform_operation, drivy.platform_audit_event,
@@ -741,5 +746,385 @@ describe('règlements : journal et garde-fous', () => {
       }
       await db.query('ROLLBACK');
     } finally { db.release(); }
+  });
+});
+
+// --- Documents PDF et envoi (R01-T07, #459). Écrit sans être exécuté. Aucun SMTP : transport injecté. Adresses et comptes synthétiques. -----
+const invoicePath = (clientId: string, invoiceId: string) => `/v1/platform/clients/${clientId}/invoices/${invoiceId}`;
+const download = (clientId: string, invoiceId: string, revision?: number, subject: string | null = A) => app.inject({
+  method: 'GET', url: `${invoicePath(clientId, invoiceId)}/document${revision ? `?revision=${revision}` : ''}`,
+  headers: subject ? { authorization: `Bearer ${subject}` } : {},
+});
+async function generated(clientId: string, invoiceId: string, status = 201) {
+  const response = await bill(clientId, `/invoices/${invoiceId}/document`);
+  expect(response.statusCode, response.body).toBe(status);
+  return invoiceIn(response, invoice => invoice.id === invoiceId);
+}
+const preview = (clientId: string, invoiceId: string) => call(A, 'GET', `${invoicePath(clientId, invoiceId)}/delivery/preview`);
+const send = (clientId: string, invoiceId: string, resend = false) => bill(clientId, `/invoices/${invoiceId}/delivery`, { confirm: true, resend });
+async function queued(clientId: string, invoiceId: string, resend = false) {
+  const response = await send(clientId, invoiceId, resend);
+  expect(response.statusCode, response.body).toBe(201);
+  return invoiceIn(response, invoice => invoice.id === invoiceId).delivery;
+}
+const deliveryRow = async (deliveryId: string) => (await pool.query(`SELECT status, attempts, failure_code, payload, lease_id, accepted_at, finished_at
+  FROM drivy.platform_invoice_delivery WHERE id=$1`, [deliveryId])).rows[0];
+/** Transport de recette : retient chaque message présenté, puis répond ce que le test demande. */
+function smtp(outcome: () => { rejected?: unknown[] } = () => ({ rejected: [] })) {
+  const messages: Record<string, any>[] = [];
+  const factory = (): BillingTransport => ({
+    verify: async () => true,
+    sendMail: async message => { messages.push(message); return outcome(); },
+    close: () => undefined,
+  });
+  return { messages, factory };
+}
+const smtpError = (fields: Record<string, unknown>) => smtp(() => { throw Object.assign(new Error('Erreur SMTP de recette'), fields); });
+async function asMailer<T>(work: (db: PoolClient) => Promise<T>) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN'); await db.query('SET LOCAL ROLE drivy_billing_mailer');
+    const result = await work(db);
+    await db.query('COMMIT');
+    return result;
+  } catch (error) { await db.query('ROLLBACK'); throw error; } finally { db.release(); }
+}
+async function roleError(role: string, sql: string) {
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN'); await db.query(`SET LOCAL ROLE ${role}`); await db.query(sql);
+    return undefined;
+  } catch (error) { return error as Error & { code?: string }; } finally { await db.query('ROLLBACK'); db.release(); }
+}
+
+describe('documents PDF', () => {
+  it('rendu une fois depuis l’instantané : mêmes octets, même après un changement de l’émetteur', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const first = await generated(clientId, initial.id);
+    expect(first.documents).toHaveLength(1);
+    const document = first.documents[0];
+    expect(document).toMatchObject({ revision: 1, paymentMode: 'QR', referenceType: 'SCOR', amount: 40_000, createdByName: 'Camille Exemple' });
+    expect(isSCORReferenceValid(document.reference)).toBe(true);
+    const file = await download(clientId, initial.id);
+    expect(file.statusCode).toBe(200);
+    expect(file.headers).toMatchObject({
+      'content-type': 'application/pdf', 'content-disposition': `attachment; filename="facture-${initial.number}.pdf"`,
+      'cache-control': 'no-store', 'x-content-type-options': 'nosniff',
+    });
+    expect(file.rawPayload.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(createHash('sha256').update(file.rawPayload).digest('hex')).toBe(document.sha256);
+    expect(file.rawPayload.byteLength).toBe(document.byteSize);
+
+    expect((await setIssuer({ ...issuerFields, legalName: 'Drivy Renommée Sàrl' })).statusCode).toBe(201);
+    const again = await generated(clientId, initial.id, 200);
+    expect(again.documents.map((item: { id: string }) => item.id)).toEqual([document.id]);
+    expect((await download(clientId, initial.id)).rawPayload.equals(file.rawPayload)).toBe(true);
+    expect((await download(clientId, initial.id, 1)).rawPayload.equals(file.rawPayload)).toBe(true);
+    expect((await download(clientId, initial.id, 9)).statusCode).toBe(404);
+    expect(await count('platform_invoice_document')).toBe(1);
+    expect(JSON.stringify(await journal('GENERATE_INVOICE_DOCUMENT'))).not.toMatch(/CH9300762011623852957|marie@|Rue des Lilas/);
+  });
+
+  it('un QR-IBAN donne une référence QRR ; un brouillon n’a pas de document', async () => {
+    await setIssuer({ ...issuerFields, iban: 'CH44 3199 9123 0008 8901 2' });
+    const { clientId, initial } = await invoicedClient();
+    const document = (await generated(clientId, initial.id)).documents[0];
+    expect(document).toMatchObject({ paymentMode: 'QR', referenceType: 'QRR', amount: 40_000 });
+    expect(isQRReferenceValid(document.reference)).toBe(true);
+    const draft = await prepared(clientId, { kind: 'PERIOD', periodStart: periodStart(today(), 1) });
+    expectProblem(await bill(clientId, `/invoices/${draft.id}/document`), 409, 'INVOICE_NOT_ISSUED');
+    expect((await download(clientId, draft.id)).statusCode).toBe(404);
+  });
+
+  it('une autre école, un visiteur ou un compte d’école n’obtiennent ni le PDF ni l’aperçu', async () => {
+    await setIssuer();
+    const a = await invoicedClient();
+    const b = await invoicedClient(id.schoolB);
+    await generated(a.clientId, a.initial.id);
+    expect((await download(b.clientId, a.initial.id)).statusCode).toBe(404);
+    expectProblem(await preview(b.clientId, a.initial.id), 404, 'NOT_FOUND');
+    expectProblem(await bill(b.clientId, `/invoices/${a.initial.id}/document`), 404, 'NOT_FOUND');
+    expectProblem(await send(b.clientId, a.initial.id), 404, 'NOT_FOUND');
+    expect((await download(a.clientId, a.initial.id, undefined, null)).statusCode).toBe(401);
+    expect((await download(a.clientId, a.initial.id, undefined, 'demo-admin')).statusCode).toBe(403);
+    expectProblem(await call('demo-admin', 'GET', `${invoicePath(a.clientId, a.initial.id)}/delivery/preview`), 403, 'PLATFORM_OPERATOR_REQUIRED');
+  });
+
+  it('l’émission refuse un compte ou une adresse non conformes, sans consommer de numéro', async () => {
+    expect((await setIssuer({ ...issuerFields, iban: null })).statusCode).toBe(201);
+    const clientId = await billableClient();
+    const draft = await prepared(clientId, { kind: 'INITIAL' });
+    const issue = () => bill(clientId, `/invoices/${draft.id}/issue`, { confirm: true });
+    expectProblem(await issue(), 409, 'INVOICE_PAYMENT_ACCOUNT');
+    expect((await setIssuer({ ...issuerFields, postalCode: 'CH-1000' })).statusCode).toBe(201);
+    expectProblem(await issue(), 409, 'INVOICE_ISSUER_ADDRESS');
+    expect((await setIssuer()).statusCode).toBe(201);
+    await pool.query(`UPDATE drivy.platform_client SET billing_postal_code='CH-1200' WHERE id=$1`, [clientId]);
+    expectProblem(await issue(), 409, 'INVOICE_RECIPIENT_ADDRESS');
+    expect(await count('platform_invoice', `status='ISSUED'`)).toBe(0);
+    await pool.query(`UPDATE drivy.platform_client SET billing_postal_code='1200' WHERE id=$1`, [clientId]);
+    expect(await issued(clientId, draft.id)).toMatchObject({ number: `F-${year()}-00001` });
+  });
+
+  it('un avoir ne porte aucun ordre de paiement ; le document d’origine reste téléchargeable', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    await generated(clientId, initial.id);
+    const original = (await download(clientId, initial.id)).rawPayload;
+    const credit = await bill(clientId, `/invoices/${initial.id}/credit`, { reason: 'Montant erroné', confirm: true });
+    expect(credit.statusCode, credit.body).toBe(201);
+    const note = invoiceIn(credit, invoice => invoice.kind === 'CREDIT_NOTE' && invoice.creditsInvoice?.id === initial.id);
+    expect((await generated(clientId, note.id)).documents[0]).toMatchObject({ paymentMode: 'NONE', referenceType: null, reference: null, amount: 0 });
+    const after = await generated(clientId, initial.id);
+    expect(after.documents.map((item: { revision: number; paymentMode: string }) => [item.revision, item.paymentMode])).toEqual([[2, 'NONE'], [1, 'QR']]);
+    expect((await download(clientId, initial.id, 1)).rawPayload.equals(original)).toBe(true);
+    expectProblem(await send(clientId, initial.id), 409, 'INVOICE_DELIVERY_CREDITED');
+    await queued(clientId, note.id);
+    const transport = smtp();
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    expect(transport.messages[0]!.attachments[0].filename).toBe(`avoir-${note.number}.pdf`);
+    expect(transport.messages[0]!.text).toMatch(/aucun paiement/);
+  });
+
+  it('après un règlement partiel, aucun QR au montant total n’est créé ni envoyé ; le reste dû reste exact', async () => {
+    await setIssuer();
+    const { clientId, initial, period } = await invoicedClient();
+    await generated(clientId, initial.id);
+    await paid(clientId, { amount: 15_000, allocations: [{ invoiceId: initial.id, amount: 15_000 }] });
+    expectProblem(await send(clientId, initial.id), 409, 'INVOICE_DELIVERY_SETTLED');
+    expect(await count('platform_invoice_delivery')).toBe(0);
+    expect(invoiceOf(await billing(clientId), initial.id)).toMatchObject({ balance: 25_000, documents: [expect.objectContaining({ paymentMode: 'QR', amount: 40_000 })] });
+    await paid(clientId, { amount: 1_000, allocations: [{ invoiceId: period.id, amount: 1_000 }] });
+    const late = await generated(clientId, period.id);
+    expect(late).toMatchObject({ balance: 8_900, documents: [expect.objectContaining({ paymentMode: 'NONE', amount: 0, reference: null })] });
+  });
+});
+
+describe('envoi des factures', () => {
+  it('aperçu, file, acceptation, renvoi explicite : une acceptation ne règle rien', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const seen = (await preview(clientId, initial.id)).json().data;
+    expect(seen).toMatchObject({
+      to: 'marie@example.invalid', subject: `Facture ${initial.number}`, fileName: `facture-${initial.number}.pdf`, paymentMode: 'QR', amount: 40_000,
+      resend: false, ready: true, problems: [],
+    });
+    expect((await bill(clientId, `/invoices/${initial.id}/delivery`, { resend: false })).statusCode).toBe(400);
+    const delivery = await queued(clientId, initial.id);
+    expect(delivery).toMatchObject({ status: 'QUEUED', recipientMasked: 'ma***@example.invalid', attempts: 0, resendOf: null });
+    const stored = await deliveryRow(delivery.id);
+    expect(stored.payload.toString('latin1')).not.toMatch(/marie|%PDF/);
+    expectProblem(await send(clientId, initial.id), 409, 'INVOICE_DELIVERY_ACTIVE');
+    const busy = (await preview(clientId, initial.id)).json().data;
+    expect(busy.ready).toBe(false);
+    expect(busy.problems.map((item: { code: string }) => item.code)).toContain('INVOICE_DELIVERY_ACTIVE');
+
+    const transport = smtp();
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(false);
+    expect(transport.messages).toHaveLength(1);
+    const message = transport.messages[0]!;
+    expect(message).toMatchObject({ from: billingMail.from, to: 'marie@example.invalid', subject: `Facture ${initial.number}`, messageId: `<drivy-invoice-${delivery.id}@example.invalid>` });
+    expect(message.attachments[0]).toMatchObject({ filename: `facture-${initial.number}.pdf`, contentType: 'application/pdf' });
+    expect(message.attachments[0].content.equals((await download(clientId, initial.id)).rawPayload)).toBe(true);
+    expect(await deliveryRow(delivery.id)).toMatchObject({ status: 'ACCEPTED', attempts: 1, failure_code: null, payload: null, lease_id: null });
+
+    const after = invoiceOf(await billing(clientId), initial.id);
+    expect(after).toMatchObject({ sendStatus: 'SENT', sentOn: today(), dueOn: initial.dueOn, balance: 40_000, settlement: { state: 'UNPAID', allocated: 0 }, allocations: [] });
+    expect(after.delivery).toMatchObject({ status: 'ACCEPTED' });
+    expect(await count('platform_payment')).toBe(0);
+
+    expect((await preview(clientId, initial.id)).json().data.resend).toBe(true);
+    expectProblem(await send(clientId, initial.id), 409, 'INVOICE_DELIVERY_RESEND_REQUIRED');
+    const resent = await queued(clientId, initial.id, true);
+    expect(resent.resendOf).toBe(delivery.id);
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    expect(transport.messages).toHaveLength(2);
+    expect(transport.messages[1]!.messageId).not.toBe(message.messageId);
+    expect(await count('platform_invoice_document')).toBe(1);
+
+    const trail = JSON.stringify([...await journal('QUEUE_INVOICE_DELIVERY'), ...await journal('INVOICE_DELIVERY_ACCEPTED')]);
+    expect(trail).not.toMatch(/marie|CH9300762011623852957|Veuillez trouver|Rue des Lilas/);
+  });
+
+  it('un rejeu ne crée pas de second envoi ; deux opérateurs en même temps : un seul passe', async () => {
+    await setIssuer();
+    const { clientId, initial, period } = await invoicedClient();
+    const version = (await billing(clientId)).version;
+    const body = { operationId: randomUUID(), confirm: true, resend: false };
+    const url = `${invoicePath(clientId, initial.id)}/delivery`;
+    const first = await call(A, 'POST', url, { body, version });
+    const replay = await call(A, 'POST', url, { body, version });
+    expect([first.statusCode, replay.statusCode]).toEqual([201, 201]);
+    expect(await count('platform_invoice_delivery', `invoice_id='${initial.id}'`)).toBe(1);
+
+    const current = (await billing(clientId)).version;
+    const raced = await Promise.all([A, B].map(as => call(as, 'POST', `${invoicePath(clientId, period.id)}/delivery`, {
+      body: { operationId: randomUUID(), confirm: true, resend: false }, version: current,
+    })));
+    expect(raced.map(item => item.statusCode).sort()).toEqual([201, 409]);
+    expect(await count('platform_invoice_delivery', `invoice_id='${period.id}'`)).toBe(1);
+    expect(await count('platform_invoice_document', `invoice_id='${period.id}'`)).toBe(1);
+  });
+
+  it('un refus SMTP ne change ni paiement ni échéance ; l’envoi peut être refait', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const delivery = await queued(clientId, initial.id);
+    const transport = smtpError({ responseCode: 550 });
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    expect(await deliveryRow(delivery.id)).toMatchObject({ status: 'FAILED', failure_code: 'SMTP_REJECTED', payload: null });
+    expect(invoiceOf(await billing(clientId), initial.id)).toMatchObject({
+      sendStatus: 'NOT_SENT', sentOn: null, dueOn: initial.dueOn, balance: 40_000, settlement: { state: 'UNPAID', allocated: 0 },
+    });
+    expect(await count('platform_payment')).toBe(0);
+    expect((await queued(clientId, initial.id)).resendOf).toBe(delivery.id);
+  });
+
+  it('un refus temporaire est repris avec délai, puis abandonné après cinq tentatives', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const delivery = await queued(clientId, initial.id);
+    const transport = smtpError({ responseCode: 451 });
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    const waiting = await deliveryRow(delivery.id);
+    expect(waiting).toMatchObject({ status: 'QUEUED', attempts: 1, failure_code: 'SMTP_TEMPORARY', lease_id: null });
+    expect(waiting.payload).not.toBeNull();
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(false);
+    for (let attempt = 2; attempt <= 5; attempt += 1) {
+      await pool.query('UPDATE drivy.platform_invoice_delivery SET available_at=now() WHERE id=$1', [delivery.id]);
+      expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    }
+    expect(transport.messages).toHaveLength(5);
+    expect(await deliveryRow(delivery.id)).toMatchObject({ status: 'FAILED', attempts: 5, failure_code: 'RETRY_EXHAUSTED', payload: null });
+  });
+
+  it('une connexion impossible est reprise sans rien présenter ; un contenu indéchiffrable échoue sans envoi', async () => {
+    await setIssuer();
+    const { clientId, initial, period } = await invoicedClient();
+    const unreachable = await queued(clientId, initial.id);
+    let presented = 0;
+    expect(await deliverOneInvoice(pool, billingMail, () => ({
+      verify: async () => { throw new Error('Connexion de recette impossible'); },
+      sendMail: async () => { presented += 1; return { rejected: [] }; },
+      close: () => undefined,
+    }))).toBe(true);
+    expect(presented).toBe(0);
+    expect(await deliveryRow(unreachable.id)).toMatchObject({ status: 'QUEUED', failure_code: 'SMTP_UNREACHABLE' });
+    await pool.query(`UPDATE drivy.platform_invoice_delivery SET available_at=now()+interval '1 hour' WHERE id=$1`, [unreachable.id]);
+
+    const unreadable = await queued(clientId, period.id);
+    const transport = smtp();
+    expect(await deliverOneInvoice(pool, { ...billingMail, encryptionKey: 'c3'.repeat(32) }, transport.factory)).toBe(true);
+    expect(transport.messages).toHaveLength(0);
+    expect(await deliveryRow(unreadable.id)).toMatchObject({ status: 'FAILED', failure_code: 'PAYLOAD_INVALID', payload: null });
+  });
+
+  it('une issue inconnue n’est jamais rejouée seule et exige un renvoi explicite', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const delivery = await queued(clientId, initial.id);
+    const transport = smtpError({ code: 'ESOCKET' });
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(true);
+    expect(await deliveryRow(delivery.id)).toMatchObject({ status: 'UNCERTAIN', failure_code: 'SMTP_UNCERTAIN', payload: null });
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(false);
+    expect(transport.messages).toHaveLength(1);
+    expect(invoiceOf(await billing(clientId), initial.id).sendStatus).toBe('NOT_SENT');
+    expect((await preview(clientId, initial.id)).json().data.resend).toBe(true);
+    expectProblem(await send(clientId, initial.id), 409, 'INVOICE_DELIVERY_RESEND_REQUIRED');
+    expect((await queued(clientId, initial.id, true)).resendOf).toBe(delivery.id);
+  });
+
+  it('un bail expiré donne une issue inconnue ; l’écriture tardive de l’ancien service est ignorée', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const delivery = await queued(clientId, initial.id);
+    const job = await asMailer(async db => (await db.query('SELECT * FROM drivy.platform_invoice_delivery_claim()')).rows[0]);
+    expect(job.job_id).toBe(delivery.id);
+    await pool.query(`UPDATE drivy.platform_invoice_delivery SET lease_until=now()-interval '1 second' WHERE id=$1`, [delivery.id]);
+    const transport = smtp();
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(false);
+    expect(transport.messages).toHaveLength(0);
+    expect(await deliveryRow(delivery.id)).toMatchObject({ status: 'UNCERTAIN', failure_code: 'LEASE_EXPIRED', payload: null, lease_id: null });
+    const late = await asMailer(db => db.query('SELECT drivy.platform_invoice_delivery_settle($1,$2,$3,$4) AS result', [job.job_id, job.job_lease, 'ACCEPTED', null]));
+    expect(late.rows[0].result).toBe('STALE');
+    expect(invoiceOf(await billing(clientId), initial.id).sendStatus).toBe('NOT_SENT');
+  });
+
+  it('un règlement saisi avant la prise en charge annule l’envoi du QR', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const delivery = await queued(clientId, initial.id);
+    await paid(clientId, { amount: 5_000, allocations: [{ invoiceId: initial.id, amount: 5_000 }] });
+    const transport = smtp();
+    expect(await deliverOneInvoice(pool, billingMail, transport.factory)).toBe(false);
+    expect(transport.messages).toHaveLength(0);
+    expect(await deliveryRow(delivery.id)).toMatchObject({ status: 'CANCELLED', failure_code: 'SETTLEMENT_CHANGED', payload: null });
+    expect(invoiceOf(await billing(clientId), initial.id)).toMatchObject({ sendStatus: 'NOT_SENT', balance: 35_000 });
+  });
+
+  it('sans configuration ou sans contact, l’aperçu le dit et rien n’entre en file', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const plain = buildApp({ pool, verifyToken, cursorSecret: 'platform-billing-synthetic-secret-32-characters' });
+    try {
+      const authorization = `Bearer ${A}`;
+      const seen = await plain.inject({ method: 'GET', url: `${invoicePath(clientId, initial.id)}/delivery/preview`, headers: { authorization } });
+      expect(seen.json().data.ready).toBe(false);
+      expect(seen.json().data.problems.map((item: { code: string }) => item.code)).toContain('BILLING_MAIL_NOT_CONFIGURED');
+      const operationId = randomUUID();
+      const refused = await plain.inject({
+        method: 'POST', url: `${invoicePath(clientId, initial.id)}/delivery`,
+        headers: { authorization, 'idempotency-key': operationId, 'if-match': `"${(await billing(clientId)).version}"` },
+        payload: { operationId, confirm: true, resend: false },
+      });
+      expect(refused.statusCode, refused.body).toBe(409);
+      expect(refused.json().code).toBe('BILLING_MAIL_NOT_CONFIGURED');
+    } finally { await plain.close(); }
+    await pool.query('UPDATE drivy.platform_client SET contact_email=NULL WHERE id=$1', [clientId]);
+    const missing = (await preview(clientId, initial.id)).json().data;
+    expect(missing).toMatchObject({ to: null, ready: false });
+    expect(missing.problems.map((item: { code: string }) => item.code)).toContain('BILLING_CONTACT_MISSING');
+    expectProblem(await send(clientId, initial.id), 409, 'BILLING_CONTACT_MISSING');
+    expect(await count('platform_invoice_delivery')).toBe(0);
+  });
+});
+
+describe('documents et envois : garde-fous', () => {
+  it('un document ne se réécrit pas ; RLS forcée ; contenu chiffré illisible par l’application ; le service d’envoi n’a aucun droit de table', async () => {
+    await setIssuer();
+    const { clientId, initial } = await invoicedClient();
+    const document = (await generated(clientId, initial.id)).documents[0];
+    await queued(clientId, initial.id);
+    expect((await ownerError('UPDATE drivy.platform_invoice_document SET generator=$2 WHERE id=$1', [document.id, 'autre']))?.message).toMatch(/platform_invoice_document_fixed/);
+    expect((await ownerError('DELETE FROM drivy.platform_invoice_document WHERE id=$1', [document.id]))?.message).toMatch(/platform_invoice_document_fixed/);
+    const rows = (await pool.query<{ forced: boolean }>(`SELECT relforcerowsecurity AS forced FROM pg_class
+      WHERE relnamespace='drivy'::regnamespace AND relname IN ('platform_invoice_document','platform_invoice_delivery')`)).rows;
+    expect(rows).toHaveLength(2);
+    expect(rows.every(row => row.forced)).toBe(true);
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN'); await db.query('SET LOCAL ROLE drivy_app');
+      expect((await db.query('SELECT count(*)::int AS n FROM drivy.platform_invoice_document')).rows[0].n).toBe(0);
+      expect((await db.query('SELECT count(id)::int AS n FROM drivy.platform_invoice_delivery')).rows[0].n).toBe(0);
+      await db.query('ROLLBACK');
+    } finally { db.release(); }
+    expect((await roleError('drivy_app', 'SELECT payload FROM drivy.platform_invoice_delivery'))?.code).toBe('42501');
+    expect((await roleError('drivy_app', 'SELECT lease_id FROM drivy.platform_invoice_delivery'))?.code).toBe('42501');
+    expect((await roleError('drivy_app', 'SELECT * FROM drivy.platform_invoice_delivery_claim()'))?.code).toBe('42501');
+    expect((await roleError('drivy_billing_mailer', 'SELECT id FROM drivy.platform_invoice_delivery'))?.code).toBe('42501');
+    expect((await roleError('drivy_billing_mailer', 'SELECT id FROM drivy.platform_invoice_document'))?.code).toBe('42501');
+  });
+
+  it('les contrôles de la base et de l’API lisent pays et texte de la même façon', async () => {
+    for (const value of ['CH', 'ch', ' Suisse ', 'Liechtenstein', 'france', 'Österreich', 'Narnia', '']) {
+      const row = (await pool.query<{ value: string | null }>('SELECT drivy.platform_billing_country($1) AS value', [value])).rows[0]!;
+      expect(row.value, value).toBe(billingCountry(value));
+    }
+    for (const value of ['Rue de l’Exemple  1', '  Genève ', 'A – B — C', '“Lilas”']) {
+      const row = (await pool.query<{ value: string }>('SELECT drivy.platform_qr_text($1) AS value', [value])).rows[0]!;
+      expect(row.value, value).toBe(qrText(value));
+    }
   });
 });

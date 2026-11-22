@@ -7,9 +7,9 @@ import type { WebConfig } from './config.js';
 import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { clientKey, RateLimiter } from './rate-limit.js';
 import { SessionStore, bindOpeningIdentity, matchesSecret, type Session, type Tokens } from './session.js';
-import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createPlatformGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createPlatformDocumentGateway, createPlatformGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest, type OpeningState } from './opening-routes.js';
-import { registerPlatformRoutes, type PlatformGateway, type PlatformRequest } from './platform-routes.js';
+import { registerPlatformRoutes, type PlatformDocumentGateway, type PlatformDocumentRequest, type PlatformDocumentResult, type PlatformGateway, type PlatformRequest } from './platform-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
 
 class WebError extends Error {
@@ -50,7 +50,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; platformGateway?: PlatformGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; platformGateway?: PlatformGateway; platformDocumentGateway?: PlatformDocumentGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
@@ -65,6 +65,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const metricsExportGateway = options.metricsExportGateway ?? createMetricsExportGateway(config.apiBaseURL);
   const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
   const platformGateway = options.platformGateway ?? createPlatformGateway(config.apiBaseURL);
+  const platformDocumentGateway = options.platformDocumentGateway ?? createPlatformDocumentGateway(config.apiBaseURL);
   const anonymousGateway = options.anonymousGateway ?? createAnonymousGateway(config.apiBaseURL);
   const notificationGateway = options.notificationGateway ?? createNotificationGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
@@ -188,7 +189,13 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     if(result.status===401){store.destroy(session);throw new WebError(401,'SESSION_EXPIRED');}
     return result;
   };
-  registerPlatformRoutes(app,{origin:config.origin,current,protect,call:callPlatform,send:sendApi,error:(status,code)=>new WebError(status,code)});
+  const callPlatformDocument = async(session:Session,command:PlatformDocumentRequest):Promise<PlatformDocumentResult>=>{
+    const result=await platformDocumentGateway(command,await accessToken(session));
+    if(!store.isCurrent(session))throw new WebError(401,'SESSION_EXPIRED');
+    if(result.status===401){store.destroy(session);throw new WebError(401,'SESSION_EXPIRED');}
+    return result;
+  };
+  registerPlatformRoutes(app,{origin:config.origin,current,protect,call:callPlatform,document:callPlatformDocument,send:sendApi,error:(status,code)=>new WebError(status,code)});
   app.get('/app/bff/session',async request => {
     const session = store.get(request.cookies[cookieName]);
     // No session is created for a visitor who only looks: that would let anyone fill the table.

@@ -1,3 +1,18 @@
+## 22 novembre 2026 — R01-T07 : factures PDF avec QR suisse et envoi (#459)
+
+- Branche `tomyrms/r01-t07-factures-pdf`, issue de la tête de `tomyrms/r01-t06-reglements`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/factures-pdf-20261119.md` détaille le modèle, les états d'envoi et les limites.
+- API :
+  - Migration `20261119_platform_invoice_documents.sql` : documents conservés, file d'envoi chiffrée, RLS forcée, rôle `drivy_billing_mailer` limité à deux fonctions.
+  - PDF avec `pdfkit` et `swissqrbill`, version verrouillée. QR selon les directives SIX v2.4 : QR-IBAN avec QRR, IBAN ordinaire avec SCOR.
+  - Quatre routes sous `/v1/platform/clients/:id/invoices/:invoiceId` : document, téléchargement, aperçu et envoi. Contrat `platform-billing.json` régénéré, OpenAPI canonique 3.11.0 non modifié.
+  - Service d'envoi `billing:mail`, distinct de celui des invitations.
+- Web : relais en liste fermée, document, téléchargement, aperçu, envoi et renvoi dans l'onglet Factures.
+- Exécuté le 22 novembre 2026 : `tsc` de l'API, `tsc` du client, des vérifications et du serveur web, `vite build`, génération du contrat.
+- **Écrit, jamais exécuté** (règle du porteur du 13 novembre) : `platform-invoice-qr.test.ts`, `billing-mail.test.ts` et la section « documents PDF / envoi » de `platform-billing.integration.test.ts`. La migration n'a été appliquée à aucune base. Aucun PDF n'a été rendu, aucun QR décodé, aucun courriel envoyé.
+- Reste à qualifier : migration et scénarios sur PostgreSQL, rendu et impression du PDF, décodage du QR, envoi par un SMTP de test, interface dans un navigateur.
+- Reste à faire au déploiement : rôle de connexion du service d'envoi, `BILLING_MAIL_DATABASE_URL`, `BILLING_OUTBOX_KEY`, SMTP (absent du homelab).
+- Reporté : rappel avec QR au solde (#461).
+
 ## 22 novembre 2026 — R01-T06 : règlements manuels et soldes par école (#458)
 
 - Branche `tomyrms/r01-t06-reglements`, issue de la tête de `tomyrms/r01-t05-factures`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/reglements-20261118.md` détaille le modèle, les règles et les limites.

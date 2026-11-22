@@ -1,11 +1,12 @@
 import { z } from 'zod';
 import {
-  activationStatuses, invoiceKinds, invoiceOrigins, invoiceStatuses, periodBillingStates, sendStatuses, taxModes,
+  activationStatuses, deliveryStatuses, invoiceKinds, invoiceOrigins, invoiceStatuses, periodBillingStates, sendStatuses, taxModes,
 } from './platform-billing-model.js';
 import {
   allocationReleaseCauses, allocationStatuses, paymentMethods, paymentStatuses, paymentVoidCauses, regularizationKinds, regularizationStatuses,
   settlementStates,
 } from './platform-payments-model.js';
+import { paymentModes, referenceTypes } from './platform-invoice-qr.js';
 
 /**
  * Extension exécutable du dépôt (R01-T05, #457 ; R01-T06, #458) : factures, avoirs, émetteur, activation, préparation planifiée et règlements manuels.
@@ -18,8 +19,8 @@ const cents = z.number().int().min(0);
 const nullableText = z.string().nullable();
 
 export const issuerSchema = z.object({
-  id: z.uuid(), sequence: z.number().int().min(1), legalName: z.string(), street: z.string(), postalCode: z.string(), city: z.string(),
-  country: z.string().regex(/^[A-Z]{2}$/), email: nullableText, iban: nullableText, taxMode: z.enum(taxModes), vatNumber: nullableText,
+  id: z.uuid(), sequence: z.number().int().min(1), legalName: z.string(), street: z.string(), buildingNumber: nullableText, postalCode: z.string(), city: z.string(),
+  country: z.string().regex(/^[A-Z]{2}$/), email: nullableText, iban: nullableText, accountHolder: nullableText, taxMode: z.enum(taxModes), vatNumber: nullableText,
   taxRateBp: z.number().int().min(1).max(5000).nullable(), pricesIncludeTax: z.boolean().nullable(), taxNote: nullableText,
   createdAt: timestamp, createdByName: nullableText,
 }).strict();
@@ -43,6 +44,20 @@ export const settlementSchema = z.object({
 export const invoiceAllocationSchema = z.object({
   id: z.uuid(), paymentId: z.uuid(), amount: cents, receivedOn: day, method: z.enum(paymentMethods), createdAt: timestamp, createdByName: nullableText,
 }).strict();
+/** Document PDF conservé (R01-T07). Son contenu ne passe que par le téléchargement authentifié. */
+export const invoiceDocumentSchema = z.object({
+  id: z.uuid(), revision: z.number().int().min(1).max(20), paymentMode: z.enum(paymentModes), referenceType: z.enum(referenceTypes).nullable(),
+  reference: nullableText, amount: cents, byteSize: z.number().int().min(1), sha256: z.string().regex(/^[0-9a-f]{64}$/), createdAt: timestamp, createdByName: nullableText,
+}).strict();
+/** Dernier envoi. `ACCEPTED` : accepté par le serveur SMTP, ni livraison ni lecture prouvées. `UNCERTAIN` : issue inconnue, jamais rejoué seul. */
+export const invoiceDeliverySchema = z.object({
+  id: z.uuid(), status: z.enum(deliveryStatuses), recipientMasked: z.string(), attempts: z.number().int().min(0).max(5), failureCode: nullableText,
+  documentId: z.uuid(), resendOf: z.uuid().nullable(), requestedAt: timestamp, requestedByName: nullableText, acceptedAt: timestamp.nullable(), finishedAt: timestamp.nullable(),
+}).strict();
+export const deliveryPreviewSchema = z.object({
+  to: nullableText, subject: z.string(), text: z.string(), fileName: z.string(), paymentMode: z.enum(paymentModes), amount: cents, resend: z.boolean(), ready: z.boolean(),
+  problems: z.array(z.object({ code: z.string(), message: z.string() }).strict()).max(10),
+}).strict();
 export const invoiceSchema = z.object({
   id: z.uuid(), clientId: z.uuid(), clientName: nullableText, schoolId: z.uuid().nullable(), kind: z.enum(invoiceKinds),
   generation: z.number().int().min(1), status: z.enum(invoiceStatuses), origin: z.enum(invoiceOrigins), number: nullableText, currency: z.literal('CHF'),
@@ -53,14 +68,15 @@ export const invoiceSchema = z.object({
   total: cents.nullable(), issuedOn: day.nullable(), dueOn: day.nullable(), paymentTermDays: z.number().int().min(0).nullable(), issuedAt: timestamp.nullable(),
   issuedByName: nullableText,
   issuer: z.object({
-    legalName: z.string(), street: z.string(), postalCode: z.string(), city: z.string(), country: z.string(), email: nullableText, iban: nullableText,
-    vatNumber: nullableText, taxNote: nullableText,
+    legalName: z.string(), street: z.string(), buildingNumber: nullableText, postalCode: z.string(), city: z.string(), country: z.string(), email: nullableText,
+    iban: nullableText, accountHolder: nullableText, vatNumber: nullableText, taxNote: nullableText,
   }).strict().nullable(),
   recipient: z.object({
     name: z.string(), contactName: nullableText, street: z.string(), postalCode: z.string(), city: z.string(), country: z.string(),
   }).strict().nullable(),
   sendStatus: z.enum(sendStatuses), sentOn: day.nullable(), sentRecordedAt: timestamp.nullable(), sentRecordedByName: nullableText,
   balance: cents.nullable(), overdue: z.boolean(), settlement: settlementSchema.nullable(), allocations: z.array(invoiceAllocationSchema).max(200),
+  documents: z.array(invoiceDocumentSchema).max(20), delivery: invoiceDeliverySchema.nullable(),
   creditNote: z.object({ id: z.uuid(), number: z.string(), total: cents, issuedOn: day }).strict().nullable(),
   creditsInvoice: z.object({ id: z.uuid(), number: nullableText }).strict().nullable(),
   reason: nullableText, preparedAt: timestamp, preparedByName: nullableText, cancelledAt: timestamp.nullable(), cancelledByName: nullableText,
@@ -131,3 +147,4 @@ export const invoiceEnvelope = envelope(invoiceSchema);
 export const invoicePageEnvelope = envelope(invoicePageSchema);
 export const billingEnvelope = envelope(billingSchema);
 export const billingRunEnvelope = envelope(billingRunSchema);
+export const deliveryPreviewEnvelope = envelope(deliveryPreviewSchema);

@@ -18,18 +18,23 @@
     "mail:worker": "node dist/invitation-mail-worker.js",
     "mail:worker:dev": "tsx src/invitation-mail-worker.ts",
     "course:worker": "node dist/course-worker.js",
-    "billing:worker": "node dist/billing-worker.js"
+    "billing:worker": "node dist/billing-worker.js",
+    "billing:mail": "node dist/billing-mail-worker.js",
+    "billing:mail:dev": "tsx src/billing-mail-worker.ts"
   },
   "dependencies": {
     "fastify": "5.12.6",
     "jose": "^6.1.0",
     "nodemailer": "10.1.4",
+    "pdfkit": "0.20.2",
     "pg": "^8.16.3",
+    "swissqrbill": "4.4.4",
     "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/nodemailer": "8.0.2",
+    "@types/pdfkit": "0.17.7",
     "@types/pg": "^8.15.5",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",

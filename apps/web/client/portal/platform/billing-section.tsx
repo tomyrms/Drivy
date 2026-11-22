@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ReceiptText } from 'lucide-react';
 import {
-  chf, documentStateLabel, ibanLabel, ibanValid, invoiceKindLabel, invoiceStatusLabel, paymentMethodLabel, rateOf, sendStatusLabel, settlementLabel, settlementStates, taxRateLabel,
+  chf, deliveryStatusLabel, documentStateLabel, ibanLabel, ibanValid, invoiceKindLabel, invoiceStatusLabel, paymentMethodLabel, rateOf, sendStatusLabel, settlementLabel, settlementStates, taxRateLabel,
   type PlatformBilling, type PlatformBillingPeriod, type PlatformClientDetail, type PlatformInvoice, type PlatformIssuer,
 } from '../../platform-model';
 import { Alert, AlertDescription, AlertTitle } from '../../components/ui/alert';
@@ -194,6 +194,7 @@ export function BillingDialog({ state, openClient }: { state: PlatformConsoleSta
       {data && target?.kind === 'issue' && <IssueBody state={state} data={data} invoice={find(target.invoiceId)} />}
       {data && (target?.kind === 'cancel' || target?.kind === 'credit') && <ReasonBody state={state} kind={target.kind} invoice={find(target.invoiceId)} />}
       {data && target?.kind === 'sent' && <SentBody state={state} data={data} invoice={find(target.invoiceId)} />}
+      {data && target?.kind === 'delivery' && <DeliveryBody state={state} invoice={find(target.invoiceId)} />}
       {target?.kind === 'issuer' && <IssuerBody state={state} issuer={billing.issuer?.current ?? null} />}
       {target?.kind === 'run' && <RunBody state={state} />}
       {data && target && isPaymentDialog(target) && <PaymentDialogBody key={`${target.kind}:${'paymentId' in target ? target.paymentId : ''}`} state={state} data={data} target={target} />}
@@ -208,6 +209,10 @@ function InvoiceBody({ state, invoice, fresh, openClient }: {
   const { billing } = state;
   const draft = invoice.status === 'DRAFT', issued = invoice.status === 'ISSUED';
   const creditable = issued && invoice.kind !== 'CREDIT_NOTE' && !invoice.creditNote;
+  // L'API rend la dernière révision en premier. Une facture créditée après coup ne garde pas un QR à payer comme dernier document.
+  const latest = invoice.documents[0] ?? null;
+  const needsDocument = issued && (!latest || (invoice.creditNote !== null && latest.paymentMode === 'QR'));
+  const sending = invoice.delivery?.status === 'QUEUED' || invoice.delivery?.status === 'PROCESSING';
   return <div className="platform-form">
     <DialogHeader><DialogTitle>{invoiceTitle(invoice)}</DialogTitle>
       <DialogDescription>{[invoice.clientName ?? 'École sans nom', ...(periodText(invoice) ? [periodText(invoice)!] : [])].join(' · ')}</DialogDescription></DialogHeader>
@@ -229,6 +234,8 @@ function InvoiceBody({ state, invoice, fresh, openClient }: {
       {issued && invoice.settlement && invoice.settlement.allocated > 0 && <Fact label="Réglé">{chf(invoice.settlement.allocated)}</Fact>}
       {issued && invoice.balance !== null && <Fact label="Solde">{chf(invoice.balance)}</Fact>}
       {issued && <Fact label="Envoi">{invoice.sentOn ? `Envoyée le ${civil(invoice.sentOn)}` : 'Non envoyée'}</Fact>}
+      {issued && <Fact label="PDF">{latest ? `Révision ${latest.revision} · ${latest.paymentMode === 'QR' ? 'avec QR' : 'sans QR'}` : 'À générer'}</Fact>}
+      {invoice.delivery && <Fact label="Courriel">{`${deliveryStatusLabel(invoice.delivery.status)} · ${invoice.delivery.recipientMasked}`}</Fact>}
       {invoice.recipient && <Fact label="Destinataire">{[invoice.recipient.name, invoice.recipient.street, `${invoice.recipient.postalCode} ${invoice.recipient.city}`, invoice.recipient.country].join(', ')}</Fact>}
       {invoice.issuer && <Fact label="Émetteur">{invoice.issuer.legalName} · {ibanLabel(invoice.issuer.iban)}</Fact>}
       {invoice.reason && <Fact label="Motif">{invoice.reason === 'TERMS_CHANGED' ? 'Conditions modifiées' : invoice.reason}</Fact>}
@@ -239,6 +246,12 @@ function InvoiceBody({ state, invoice, fresh, openClient }: {
       {fresh && <Button variant="ghost" disabled={state.busy} aria-label={`Voir le règlement de ${chf(item.amount)}`}
         onClick={() => billing.start({ kind: 'paymentDetail', paymentId: item.paymentId })}>Voir</Button>}
     </li>)}</ul>}
+    {issued && (latest || fresh) && <div className="platform-actions" role="group" aria-label="Document PDF">
+      {fresh && needsDocument && <Button variant="outline" disabled={state.busy} onClick={() => void billing.generateDocument(invoice)}>{latest ? 'Générer sans QR' : 'Générer le PDF'}</Button>}
+      {latest && <Button variant="outline" disabled={state.busy} onClick={() => void billing.downloadDocument(invoice)}>Télécharger</Button>}
+      {fresh && !invoice.creditNote && <Button variant="outline" disabled={state.busy || sending} onClick={() => void billing.openDelivery(invoice)}>{invoice.delivery ? 'Renvoyer' : 'Envoyer'}</Button>}
+    </div>}
+    <Failure state={state} title="Action non aboutie" />
     <DialogFooter>
       {!fresh && <Button variant="outline" disabled={state.busy} onClick={() => { billing.stop(); openClient(invoice.clientId); }}>Ouvrir la fiche</Button>}
       {fresh && draft && <Button variant="ghost" disabled={state.busy} onClick={() => billing.start({ kind: 'cancel', invoiceId: invoice.id })}>Annuler le brouillon</Button>}
@@ -344,11 +357,33 @@ function SentBody({ state, data, invoice }: { state: PlatformConsoleState; data:
   </form>;
 }
 
-type IssuerDraft = Record<'legalName' | 'street' | 'postalCode' | 'city' | 'country' | 'email' | 'iban' | 'vatNumber' | 'taxRate' | 'taxNote', string>
+/** Aperçu relu au serveur avant l'envoi. Une issue incertaine se dit ici : renvoyer peut produire un second courriel. */
+function DeliveryBody({ state, invoice }: { state: PlatformConsoleState; invoice: PlatformInvoice | null }) {
+  const { billing } = state, preview = billing.preview;
+  if (!invoice || !preview) return <NotFound />;
+  return <form className="platform-form" noValidate onSubmit={event => { event.preventDefault(); if (preview.ready) void billing.sendInvoice(invoice, preview.resend); }}>
+    <DialogHeader><DialogTitle>{preview.resend ? 'Renvoyer' : 'Envoyer'} {invoiceTitle(invoice).toLowerCase()} ?</DialogTitle>
+      <DialogDescription>{preview.to ?? 'Adresse à renseigner'}</DialogDescription></DialogHeader>
+    <dl className="platform-facts">
+      <Fact label="Objet">{preview.subject}</Fact>
+      <Fact label="Pièce jointe">{preview.fileName}</Fact>
+      <Fact label="Montant">{chf(preview.amount)}</Fact>
+    </dl>
+    <div className="platform-summary" aria-label="Texte du courriel">{preview.text.split(/\n+/).map((line, index) => <span key={index}>{line}</span>)}</div>
+    {invoice.delivery?.status === 'UNCERTAIN' && <Alert><AlertTitle>Envoi précédent incertain</AlertTitle><AlertDescription>L’école l’a peut-être déjà reçu.</AlertDescription></Alert>}
+    {preview.problems.length > 0 && <Alert variant="destructive"><AlertTitle>Envoi impossible</AlertTitle>
+      <AlertDescription>{preview.problems.map(item => item.message).join(' ')}</AlertDescription></Alert>}
+    <Failure state={state} title="Envoi non demandé" />
+    <Footer state={state} label={preview.resend ? 'Renvoyer' : 'Envoyer'} busyLabel="Envoi…" cancel="Retour" disabled={!preview.ready}
+      onCancel={() => billing.start({ kind: 'invoice', invoice })} />
+  </form>;
+}
+
+type IssuerDraft = Record<'legalName' | 'street' | 'buildingNumber' | 'postalCode' | 'city' | 'country' | 'email' | 'iban' | 'accountHolder' | 'vatNumber' | 'taxRate' | 'taxNote', string>
   & { taxMode: string | null; pricesIncludeTax: string | null };
 const issuerDraftOf = (issuer: PlatformIssuer | null): IssuerDraft => ({
-  legalName: issuer?.legalName ?? '', street: issuer?.street ?? '', postalCode: issuer?.postalCode ?? '', city: issuer?.city ?? '', country: issuer?.country ?? 'CH',
-  email: issuer?.email ?? '', iban: issuer?.iban ? ibanLabel(issuer.iban) : '', vatNumber: issuer?.vatNumber ?? '',
+  legalName: issuer?.legalName ?? '', street: issuer?.street ?? '', buildingNumber: issuer?.buildingNumber ?? '', postalCode: issuer?.postalCode ?? '', city: issuer?.city ?? '', country: issuer?.country ?? 'CH',
+  email: issuer?.email ?? '', iban: issuer?.iban ? ibanLabel(issuer.iban) : '', accountHolder: issuer?.accountHolder ?? '', vatNumber: issuer?.vatNumber ?? '',
   taxRate: issuer?.taxRateBp ? String(issuer.taxRateBp / 100) : '', taxNote: issuer?.taxNote ?? '', taxMode: issuer?.taxMode ?? 'NONE',
   pricesIncludeTax: issuer?.pricesIncludeTax === null || issuer?.pricesIncludeTax === undefined ? null : issuer.pricesIncludeTax ? 'INCLUDED' : 'EXCLUDED',
 });
@@ -362,12 +397,15 @@ function issuerInput(draft: IssuerDraft): { input: IssuerInput } | { field: keyo
     const problem = required(field, max);
     if (problem) return { field, message: problem };
   }
+  const buildingNumber = draft.buildingNumber.trim(), accountHolder = draft.accountHolder.trim();
+  if (buildingNumber.length > 16) return { field: 'buildingNumber', message: 'Ce texte est limité à 16 caractères.' };
+  if (accountHolder.length > 70) return { field: 'accountHolder', message: 'Ce texte est limité à 70 caractères.' };
   const country = draft.country.trim().toUpperCase();
   if (!/^[A-Z]{2}$/.test(country)) return { field: 'country', message: 'Code pays à deux lettres, par exemple CH.' };
   const email = draft.email.trim().toLowerCase();
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { field: 'email', message: 'Saisissez une adresse e-mail valide.' };
   const iban = draft.iban.replace(/\s+/g, '').toUpperCase();
-  if (iban && !ibanValid(iban)) return { field: 'iban', message: 'Cet IBAN n’est pas valide.' };
+  if (iban && (!/^(CH|LI)/.test(iban) || !ibanValid(iban))) return { field: 'iban', message: 'Saisissez un IBAN ou QR-IBAN suisse ou liechtensteinois valide.' };
   const vat = draft.taxMode === 'VAT';
   const taxRateBp = vat ? rateOf(draft.taxRate) : null;
   if (vat && (taxRateBp === undefined || taxRateBp === null)) return { field: 'taxRate', message: 'Saisissez un taux en pour cent, par exemple 8.1.' };
@@ -377,8 +415,8 @@ function issuerInput(draft: IssuerDraft): { input: IssuerInput } | { field: keyo
   const taxNote = draft.taxNote.trim();
   if (taxNote && (taxNote.length < 3 || taxNote.length > 200)) return { field: 'taxNote', message: 'Entre 3 et 200 caractères.' };
   return { input: {
-    legalName: draft.legalName.trim(), street: draft.street.trim(), postalCode: draft.postalCode.trim(), city: draft.city.trim(), country,
-    email: email || null, iban: iban || null, taxMode: vat ? 'VAT' : 'NONE', vatNumber: vat ? vatNumber : null, taxRateBp: vat ? taxRateBp ?? null : null,
+    legalName: draft.legalName.trim(), street: draft.street.trim(), buildingNumber: buildingNumber || null, postalCode: draft.postalCode.trim(), city: draft.city.trim(), country,
+    email: email || null, iban: iban || null, accountHolder: accountHolder || null, taxMode: vat ? 'VAT' : 'NONE', vatNumber: vat ? vatNumber : null, taxRateBp: vat ? taxRateBp ?? null : null,
     pricesIncludeTax: vat ? draft.pricesIncludeTax === 'INCLUDED' : null, taxNote: taxNote || null,
   } };
 }
@@ -399,12 +437,14 @@ function IssuerBody({ state, issuer }: { state: PlatformConsoleState; issuer: Pl
       <DialogDescription>Vaut pour les prochaines émissions ; une facture émise garde son émetteur.</DialogDescription></DialogHeader>
     <FieldGroup className="platform-grid">
       <TextField id="issuer-name" label="Raison sociale" value={draft.legalName} onChange={set('legalName')} error={errorOf('legalName')} disabled={state.busy} />
-      <TextField id="issuer-street" label="Rue et numéro" value={draft.street} onChange={set('street')} error={errorOf('street')} disabled={state.busy} />
+      <TextField id="issuer-street" label="Rue" value={draft.street} onChange={set('street')} error={errorOf('street')} disabled={state.busy} />
+      <TextField id="issuer-building" label="Numéro (facultatif)" value={draft.buildingNumber} onChange={set('buildingNumber')} error={errorOf('buildingNumber')} disabled={state.busy} />
       <TextField id="issuer-postal" label="NPA" value={draft.postalCode} onChange={set('postalCode')} error={errorOf('postalCode')} disabled={state.busy} />
       <TextField id="issuer-city" label="Localité" value={draft.city} onChange={set('city')} error={errorOf('city')} disabled={state.busy} />
       <TextField id="issuer-country" label="Pays (code)" value={draft.country} onChange={set('country')} error={errorOf('country')} disabled={state.busy} />
       <TextField id="issuer-email" label="E-mail (facultatif)" type="email" inputMode="email" value={draft.email} onChange={set('email')} error={errorOf('email')} disabled={state.busy} />
-      <TextField id="issuer-iban" label="IBAN (facultatif)" value={draft.iban} onChange={set('iban')} error={errorOf('iban')} disabled={state.busy} />
+      <TextField id="issuer-iban" label="IBAN ou QR-IBAN" value={draft.iban} onChange={set('iban')} error={errorOf('iban')} disabled={state.busy} />
+      <TextField id="issuer-holder" label="Titulaire du compte (facultatif)" value={draft.accountHolder} onChange={set('accountHolder')} error={errorOf('accountHolder')} disabled={state.busy} />
       <PortalSelect id="issuer-tax" label="TVA" value={draft.taxMode} disabled={state.busy}
         options={[{ value: 'NONE', label: 'Non assujetti' }, { value: 'VAT', label: 'Assujetti' }]} onValueChange={set('taxMode')} />
       {vat && <TextField id="issuer-vat" label="Numéro de TVA" value={draft.vatNumber} onChange={set('vatNumber')} error={errorOf('vatNumber')} disabled={state.busy} />}

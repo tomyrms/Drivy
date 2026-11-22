@@ -1,15 +1,15 @@
 import { useRef, useState } from 'react';
 import { request, RequestFailure, type Session } from '../../protocol';
 import {
-  platformBillingResult, platformBillingRunResult, platformInvoicePageResult, platformIssuerResult,
-  type PlatformBilling, type PlatformBillingRun, type PlatformInvoice, type PlatformInvoiceKind, type PlatformInvoiceStatus, type PlatformIssuerSettings,
+  platformBillingResult, platformBillingRunResult, platformDeliveryPreviewResult, platformInvoicePageResult, platformIssuerResult,
+  type PlatformBilling, type PlatformBillingRun, type PlatformDeliveryPreview, type PlatformInvoice, type PlatformInvoiceKind, type PlatformInvoiceStatus, type PlatformIssuerSettings,
   type PlatformPaymentMethod, type PlatformRegularizationKind, type PlatformSendStatus, type PlatformSettlementState,
 } from '../../platform-model';
 import type { ClientBilling } from './use-platform-clients';
 import { useOperationIds } from './use-platform-offers';
 
 type Kernel = {
-  session: Session | null; perform: (action: () => Promise<void>) => Promise<void>; reload: () => Promise<void>;
+  session: Session | null; perform: (action: () => Promise<void>) => Promise<void>; reload: () => Promise<void>; clearError: () => void;
   clientId: string | null; billing: ClientBilling | null; setBilling: (next: ClientBilling | null) => void;
 };
 export type BillingDialog =
@@ -20,6 +20,7 @@ export type BillingDialog =
   | { kind: 'cancel'; invoiceId: string }
   | { kind: 'credit'; invoiceId: string }
   | { kind: 'sent'; invoiceId: string }
+  | { kind: 'delivery'; invoiceId: string }
   | { kind: 'invoice'; invoice: PlatformInvoice }
   | { kind: 'issuer' }
   | { kind: 'run' }
@@ -41,7 +42,7 @@ export type PaymentFields = { amount: number; currency: 'CHF'; receivedOn: strin
 export type PaymentInput = PaymentFields & { allocations: Array<{ invoiceId: string; amount: number }>; spread: boolean };
 /** L'émetteur au format de la commande : chaque version redonne tout. */
 export type IssuerInput = {
-  legalName: string; street: string; postalCode: string; city: string; country: string; email: string | null; iban: string | null;
+  legalName: string; street: string; buildingNumber: string | null; postalCode: string; city: string; country: string; email: string | null; iban: string | null; accountHolder: string | null;
   taxMode: 'NONE' | 'VAT'; vatNumber: string | null; taxRateBp: number | null; pricesIncludeTax: boolean | null; taxNote: string | null;
 };
 export type InvoiceFilter = {
@@ -69,18 +70,20 @@ export function invoicesPath(filter: InvoiceFilter, offset = 0) {
  * part sous la version de facturation que l'écran a lue et rend la facturation relue après écriture ; un conflit relit toute la console.
  * Aucun montant, aucune échéance ni aucun numéro ne sont calculés ici.
  */
-export function usePlatformBilling({ session, perform, reload, clientId, billing, setBilling }: Kernel) {
+export function usePlatformBilling({ session, perform, reload, clearError, clientId, billing, setBilling }: Kernel) {
   const [dialog, setDialog] = useState<BillingDialog | null>(null);
   const [invoices, setInvoices] = useState<InvoiceList>(emptyList), [filter, setFilter] = useState<InvoiceFilter>(allInvoices);
   const [issuer, setIssuer] = useState<PlatformIssuerSettings | null>(null), [run, setRun] = useState<PlatformBillingRun | null>(null);
   // Doublon probable signalé par la base : rien n'est écrit tant que l'opérateur ne l'a pas confirmé.
   const [duplicate, setDuplicate] = useState(false);
+  const [preview, setPreview] = useState<PlatformDeliveryPreview | null>(null);
   const filterRef = useRef(allInvoices);
   const operations = useOperationIds();
   const current: PlatformBilling | null = billing && billing.clientId === clientId ? billing.data : null;
 
-  const stop = () => { setDialog(null); setRun(null); setDuplicate(false); };
-  const start = (next: BillingDialog) => { setRun(null); setDuplicate(false); setDialog(next); };
+  const stop = () => { setDialog(null); setRun(null); setDuplicate(false); setPreview(null); };
+  // Ouvrir une boîte efface le refus de la précédente ; `stop` le garde, car un conflit le dit après avoir fermé.
+  const start = (next: BillingDialog) => { clearError(); setRun(null); setDuplicate(false); setPreview(null); setDialog(next); };
   function reset() {
     stop(); operations.clear(); setInvoices(emptyList); setFilter(allInvoices); setIssuer(null); filterRef.current = allInvoices;
   }
@@ -91,7 +94,7 @@ export function usePlatformBilling({ session, perform, reload, clientId, billing
   }
   function apply(next: BillingSnapshot) { setInvoices(next.invoices); setIssuer(next.issuer); }
 
-  async function write(action: string, path: string, body: object) {
+  async function write(action: string, path: string, body: object, next: BillingDialog | null = null) {
     if (!session || !clientId || !current) return;
     const key = `${action}:${clientId}:${current.version}:${JSON.stringify(body)}`;
     const operationId = operations.operationFor(key);
@@ -100,7 +103,7 @@ export function usePlatformBilling({ session, perform, reload, clientId, billing
         { csrf: session.csrfToken, body: { operationId, version: current.version, ...body } });
       operations.settle(key); setBilling({ clientId, data: result.data });
     } catch (reason) { operations.settle(key, reason); throw reason; }
-    stop();
+    if (next) { setRun(null); setDuplicate(false); setPreview(null); setDialog(next); } else stop();
     await reload();
   }
 
@@ -112,6 +115,40 @@ export function usePlatformBilling({ session, perform, reload, clientId, billing
   const cancel = (invoiceId: string, reason: string) => perform(() => write(`cancel:${invoiceId}`, `invoices/${invoiceId}/cancel`, { reason: reason.trim() }));
   const credit = (invoiceId: string, reason: string) => perform(() => write(`credit:${invoiceId}`, `invoices/${invoiceId}/credit`, { reason: reason.trim(), confirm: true }));
   const markSent = (invoiceId: string, sentOn: string) => perform(() => write(`sent:${invoiceId}`, `invoices/${invoiceId}/sent`, { sentOn }));
+
+  // --- PDF et envoi (R01-T07) : rien ici ne touche au paiement ni à l'échéance ; l'écran reste sur la facture relue. ---
+  const generateDocument = (invoice: PlatformInvoice) =>
+    perform(() => write(`document:${invoice.id}`, `invoices/${invoice.id}/document`, {}, { kind: 'invoice', invoice }));
+  const sendInvoice = (invoice: PlatformInvoice, resend: boolean) =>
+    perform(() => write(`delivery:${invoice.id}`, `invoices/${invoice.id}/delivery`, { confirm: true, resend }, { kind: 'invoice', invoice }));
+  const openDelivery = (invoice: PlatformInvoice) => perform(async () => {
+    const result = await request(`platform/clients/${invoice.clientId}/invoices/${invoice.id}/delivery/preview`, platformDeliveryPreviewResult);
+    start({ kind: 'delivery', invoiceId: invoice.id });
+    setPreview(result.data);
+  });
+  /** Le fichier passe par la session : aucune adresse réutilisable, et une réponse en erreur ne produit aucun fichier. */
+  const downloadDocument = (invoice: PlatformInvoice) => perform(async () => {
+    let response: Response, blob: Blob;
+    try {
+      response = await fetch(new URL(`/app/bff/platform/clients/${invoice.clientId}/invoices/${invoice.id}/document`, window.location.origin), {
+        credentials: 'same-origin', cache: 'no-store', redirect: 'error', referrerPolicy: 'no-referrer', signal: AbortSignal.timeout(25_000),
+        headers: { Accept: 'application/pdf, application/problem+json' },
+      });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => null) as { code?: unknown } | null;
+        throw new RequestFailure(typeof problem?.code === 'string' ? problem.code : 'REQUEST_FAILED', response.status);
+      }
+      if (response.headers.get('content-type')?.split(';')[0]?.trim() !== 'application/pdf') throw new RequestFailure('INVALID_RESPONSE', response.status);
+      blob = await response.blob();
+    } catch (reason) {
+      if (reason instanceof RequestFailure) throw reason;
+      throw new RequestFailure('NETWORK_UNAVAILABLE');
+    }
+    const link = document.createElement('a'), url = URL.createObjectURL(blob);
+    link.href = url; link.download = `${invoice.kind === 'CREDIT_NOTE' ? 'avoir' : 'facture'}-${invoice.number ?? invoice.id}.pdf`; link.rel = 'noopener'; link.hidden = true;
+    document.body.append(link); link.click(); link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  });
 
   // --- Règlements : la même opération rejoue une réponse perdue, et seule la facturation relue confirme l'écriture. ---
   const recordPayment = (input: PaymentInput, confirmDuplicate: boolean) => perform(async () => {
@@ -176,6 +213,7 @@ export function usePlatformBilling({ session, perform, reload, clientId, billing
 
   return { billing: current, dialog, start, stop, reset, snapshot, apply, invoices, filter, issuer, run,
     activate, stopBilling, prepare, issue, cancel, credit, markSent, chooseFilter, moreInvoices, saveIssuer, runBilling,
+    preview, generateDocument, downloadDocument, openDelivery, sendInvoice,
     duplicate, clearDuplicate, recordPayment, allocatePayment, releaseAllocation, voidPayment, correctPayment, regularizePayment, cancelRegularization };
 }
 export type PlatformBillingState = ReturnType<typeof usePlatformBilling>;

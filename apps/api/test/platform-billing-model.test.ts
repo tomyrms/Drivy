@@ -87,13 +87,13 @@ const baseRow = (patch: Partial<InvoiceRow> = {}): InvoiceRow => ({
   lines: [{ code: 'MONTHLY', label: 'Abonnement du 15.01.2027 au 14.02.2027', periodStart: '2027-01-15', periodEnd: '2027-02-14', amount: 9_900, discount: 0, net: 9_900, termsSequence: 1 }],
   subtotal: 9_900, discount_total: 0, net_total: 9_900, number: 'F-2027-00001', issued_on: '2027-01-15', due_on: '2027-02-14',
   issued_at: '2027-01-15T08:00:00.000Z',
-  issuer: { legalName: 'Drivy Exemple Sàrl', street: 'Rue de l’Exemple 1', postalCode: '1000', city: 'Lausanne', country: 'CH', email: null, iban: null, vatNumber: null, taxNote: null },
+  issuer: { legalName: 'Drivy Exemple Sàrl', street: 'Rue de l’Exemple', buildingNumber: '1', accountHolder: null, postalCode: '1000', city: 'Lausanne', country: 'CH', email: null, iban: null, vatNumber: null, taxNote: null },
   recipient: { name: 'Auto-école des Lilas', contactName: null, street: 'Rue des Lilas 2', postalCode: '1200', city: 'Genève', country: 'CH' },
   payment_term_days: 30, tax_mode: 'NONE', tax_rate_bp: null, prices_include_tax: null, tax_amount: 0, total: 9_900, send_status: 'NOT_SENT', sent_on: null,
   sent_recorded_at: null, prepared_at: '2027-01-15T07:00:00.000Z', cancelled_at: null, reason: null, version: 2,
   client_name: 'Auto-école des Lilas', school_id: randomUUID(), prepared_by_name: null, issued_by_name: null, cancelled_by_name: null,
   sent_recorded_by_name: null, credit_note: null, credited_number: null,
-  settlement: { allocated: 0, credited: 0, balance: 9_900, state: 'UNPAID', overdue: false }, allocations: [], ...patch,
+  settlement: { allocated: 0, credited: 0, balance: 9_900, state: 'UNPAID', overdue: false }, allocations: [], documents: [], delivery: null, ...patch,
 });
 const unpaid = (overdue: boolean) => ({ allocated: 0, credited: 0, balance: 9_900, state: 'UNPAID' as const, overdue });
 const noDebt = { outstanding: 0, overdueAmount: 0, overdueCount: 0, oldestOverdueDueOn: null, unallocated: 0 };

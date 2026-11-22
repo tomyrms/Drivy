@@ -124,7 +124,7 @@ export function usePlatformConsole() {
   const rights = usePlatformRights({ session, perform, reload: () => load(), clientId: clients.selected?.id ?? null, rights: clients.rights, setRights: clients.setRights });
   const commercial = usePlatformCommercial({ session, perform, reload: () => load(), clientId: clients.selected?.id ?? null, commercial: clients.commercial,
     setCommercial: clients.setCommercial });
-  const billing = usePlatformBilling({ session, perform, reload: () => load(), clientId: clients.selected?.id ?? null, billing: clients.billing,
+  const billing = usePlatformBilling({ session, perform, reload: () => load(), clearError: () => setError(null), clientId: clients.selected?.id ?? null, billing: clients.billing,
     setBilling: clients.setBilling });
   const changeAccount = () => perform(async () => { noteSessionClosure(await endSession()); setLogoutUnconfirmed(readLogoutNotice()); await boot(); });
 
