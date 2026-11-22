@@ -241,7 +241,7 @@ describe('Brouillon, aperçu et commande', () => {
 
 describe('Projection du serveur', () => {
   const schoolId = randomUUID();
-  const projection = { id: schoolId, schoolId, version: 1, canManage: true, themes };
+  const projection = { id: schoolId, schoolId, version: 1, canManage: true, personalizationAllowed: true, themes };
 
   test('les dix-huit thèmes du contrat sont lus tels quels', () => {
     const parsed = observationThemesSchema.safeParse(projection);
@@ -256,6 +256,7 @@ describe('Projection du serveur', () => {
     ['sans version', { ...projection, version: undefined }],
     ['version nulle', { ...projection, version: 0 }],
     ['sans canManage', { ...projection, canManage: undefined }],
+    ['sans personalizationAllowed', { ...projection, personalizationAllowed: undefined }],
     ['aucun thème', { ...projection, themes: [] }],
     ['clé en double', { ...projection, themes: [themes[0], themes[0]] }],
     ['position d’origine en double', { ...projection, themes: [themes[0], { ...themes[1], defaultPosition: 0 }] }],

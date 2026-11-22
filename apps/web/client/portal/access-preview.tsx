@@ -8,6 +8,7 @@ import { PortalFrame } from './frame';
 import { AccessPilot } from './access/access-page';
 import { portalPages, portalSections } from './pages';
 import { PortalPreferencesPage } from './account/preferences-page';
+import { PortalSignalsPreferencesPage } from './account/signals-preferences-page';
 import { Button } from '../components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
@@ -34,9 +35,11 @@ const allowedScenes: readonly string[] = ['login', 'schools', 'empty', 'invitati
 const entryScene = previewPage && entryScenes[previewPage] ? requestedScene && allowedScenes.includes(requestedScene) ? requestedScene as EntryScene : entryScenes[previewPage] : null;
 if (entryScene) installEntryPreview(entryScene); else installPreviewTransport();
 if (previewPage === 'preparation') previewSchool.status = 'DRAFT';
-// `?page=plateforme&scenario=refused|conflict|slow|lost-reply` : les situations de la console des opérateurs, sans passer par la boîte de scénario.
-const platformScenario = new URLSearchParams(location.search).get('scenario');
-if (previewPage?.startsWith('plateforme') && platformScenario && ['refused', 'slow', 'lost-reply', 'conflict'].includes(platformScenario)) setPreviewScenario(platformScenario as PreviewScenario);
+// Signalements du compte : `?role=moniteur` se lit comme un moniteur sans droit d'administration.
+if (new URLSearchParams(location.search).get('role') === 'moniteur') { previewMembership.roles = ['INSTRUCTOR']; previewMembership.grants = ['TAKE_ATTENDANCE']; }
+// `?scenario=refused|conflict|slow|lost-reply` règle le prochain enregistrement (console des opérateurs, signalements du compte), sans passer par la boîte de scénario.
+const requestedScenario = new URLSearchParams(location.search).get('scenario');
+if (requestedScenario && ['refused', 'slow', 'lost-reply', 'conflict'].includes(requestedScenario)) setPreviewScenario(requestedScenario as PreviewScenario);
 commandStore.scopeToPerson(ids.person);
 commandStore.scopeToAccess(ids.school, ids.admin, 1);
 // The first published link (no page parameter) keeps opening the access editor directly.
@@ -94,6 +97,7 @@ const openingRoutes = { ...entryRoutes, account: '?page=ecoles', invitation: '?p
 const platformRoutes = { console: '?page=plateforme', join: '?page=plateforme-rejoindre' };
 createRoot(document.getElementById('root')!).render(entryScene ? <EntryPreview scene={entryScene} />
   : previewPage === 'preferences' ? <PortalPreferencesPage back="?page=agenda" />
+  : previewPage === 'signalements-compte' ? <PortalSignalsPreferencesPage />
   : previewPage === 'ouverture' || previewPage === 'operateur' ? <SchoolOpeningPage link={{ token: null, error: false }} operator={previewPage === 'operateur'} routes={openingRoutes} destination={() => '?page=preparation'} />
   : previewPage === 'plateforme' ? <PlatformConsolePage routes={openingRoutes} platform={platformRoutes} />
   : previewPage === 'plateforme-rejoindre' ? <PlatformJoinPage routes={openingRoutes} platform={platformRoutes} />

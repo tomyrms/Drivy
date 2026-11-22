@@ -162,8 +162,10 @@ export function registerSchoolSetup(app:FastifyInstance,options:{pool:Pool;verif
       const trainingCommand=result.rows[0].commandType==='CREATE_TRAINING';
       // La preuve appartient déjà à son auteur (filtre ci-dessus) ; le droit de gérer les signalements est relu.
       const observationThemesCommand=result.rows[0].commandType==='SAVE_OBSERVATION_THEMES' && (await db.query<{ok:boolean}>('SELECT drivy.can_manage_observation_themes($1) AS ok',[schoolId])).rows[0]?.ok===true;
-      // Le classement des signalements appartient au moniteur : il relit la preuve de sa propre préférence.
-      const observationRankingCommand=['SAVE_OBSERVATION_RANKING','REFRESH_OBSERVATION_RANKING'].includes(result.rows[0].commandType) && result.rows[0].resourceId===member.id && member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role));
+      // Les préférences de signalements appartiennent au compte : il relit la preuve de sa propre préférence. Les preuves
+      // antérieures au 11 novembre 2026 portent l'identifiant de l'adhésion ; les suivantes, celui de la personne.
+      const observationRankingCommand=['SAVE_OBSERVATION_RANKING','REFRESH_OBSERVATION_RANKING','SAVE_OBSERVATION_PRESENTATION','RESET_OBSERVATION_PRESENTATION','RESET_OBSERVATION_LEARNING'].includes(result.rows[0].commandType)
+        && (result.rows[0].resourceId===member.id || result.rows[0].resourceId===actor.personId) && member.roles.some(role=>['ADMIN','INSTRUCTOR'].includes(role));
       if(trainingCommand && !(await db.query('SELECT t.id FROM drivy.training t JOIN drivy.learner_profile l ON l.id=t.learner_id AND l.school_id=t.school_id WHERE t.school_id=$1 AND t.id=$2',[schoolId,result.rows[0].resourceId])).rowCount)throw notFound();
       const ownMemberChange=result.rows[0].commandType==='UPDATE_MEMBER' && result.rows[0].resourceId===member.id;
       if(profileCommand && !(await db.query('SELECT id FROM drivy.learner_profile WHERE school_id=$1 AND (id=$2 OR profile_id=$2)',[schoolId,result.rows[0].resourceId])).rowCount) throw notFound();

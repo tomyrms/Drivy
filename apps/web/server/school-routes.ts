@@ -109,6 +109,12 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   // Signalements configurables : un réglage d'école versionné (ordre et affichage des quinze thèmes).
   { method: 'GET', segments: ['observation-themes'] },
   { method: 'PUT', segments: ['observation-themes'], ifMatch: true, bodyLimit: 4_096 },
+  // Préférences de signalements du compte (R08, #465) : ordre, visibilité personnelle, mode et apprentissage, versionnés avec le compte.
+  // Sans ces lignes la route répond 404 en production alors que l'aperçu et l'API directe l'acceptent.
+  { method: 'GET', segments: ['observation-preferences'] },
+  { method: 'PUT', segments: ['observation-preferences'], ifMatch: true, bodyLimit: 4_096 },
+  { method: 'POST', segments: ['observation-preferences', 'presentation-reset'], ifMatch: true, bodyLimit: 1_024 },
+  { method: 'POST', segments: ['observation-preferences', 'learning-reset'], ifMatch: true, bodyLimit: 1_024 },
   // Cours collectifs (#38) : catalogue, types, conditions d'annulation, séries brouillon puis publiées.
   { method: 'GET', segments: ['course-catalogue'] },
   { method: 'POST', segments: ['course-types'], bodyLimit: 8_192 },

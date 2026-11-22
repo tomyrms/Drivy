@@ -25,7 +25,7 @@ export const portalWorkspaces: readonly PortalWorkspace[] = [
   ] },
   { key: 'settings', label: 'Réglages', shortLabel: 'Réglages', items: [
     { section: 'configuration', label: 'École' }, { section: 'confidentialite', label: 'Confidentialité' },
-    { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
+    { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements de l’école' },
     { section: 'apercu', label: 'Préparation', query: { from: 'configuration' } },
   ] },
 ];

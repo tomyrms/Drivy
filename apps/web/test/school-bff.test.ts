@@ -287,6 +287,41 @@ describe('Écritures de gestion', () => {
     expect(gateway).toHaveBeenCalledTimes(2);
   });
 
+  test('les préférences de signalements du compte traversent la passerelle, versionnées et bornées (R08)', async () => {
+    const base = `/schools/${school}/observation-preferences`;
+    // Une route absente de la liste blanche donnerait 404 en production sans que l'aperçu ni l'API directe ne le voient.
+    expect(matchSchoolRoute('GET', base, '')?.path).toBe(`/v1${base}`);
+    for (const [path, limit] of [[base, 4_096], [`${base}/presentation-reset`, 1_024], [`${base}/learning-reset`, 1_024]] as const) {
+      const match = matchSchoolRoute(path === base ? 'PUT' : 'POST', path, '');
+      expect(match?.path, path).toBe(`/v1${path}`);
+      expect(match?.route.ifMatch, path).toBe(true);
+      expect(match?.route.bodyLimit, path).toBe(limit);
+    }
+    for (const [method, path, search] of [
+      ['POST', base, ''], ['PATCH', base, ''], ['DELETE', base, ''], ['GET', base, '?limit=5'], ['GET', `${base}/presentation-reset`, ''],
+      ['PUT', `${base}/presentation-reset`, ''], ['POST', `${base}/learning`, ''], ['GET', `/schools/${school}/observation-ranking`, ''],
+    ] as const) expect(matchSchoolRoute(method, path, search), `${method} ${path}${search}`).toBeUndefined();
+
+    const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({ id: school, schoolId: school, version: 3 }), etag: '"3"' }));
+    const h = await harness(gateway);
+    expect((await h.get(`/app/bff${base}`)).statusCode).toBe(401);
+    expect(gateway).not.toHaveBeenCalled();
+    await h.login();
+    expect((await h.get(`/app/bff${base}`)).statusCode).toBe(200);
+    expect(gateway).toHaveBeenLastCalledWith({ method: 'GET', path: `/v1${base}`, query: '' }, h.tokens.accessToken);
+    for (const [url, payload] of [[base, { operationId, order: ['vehicle'] }], [`${base}/presentation-reset`, { operationId }], [`${base}/learning-reset`, { operationId }]] as const) {
+      const method = url === base ? 'PUT' : 'POST';
+      expect((await h.write(method, `/app/bff${url}`, payload, { 'idempotency-key': operationId })).statusCode, `${url} sans version`).toBe(428);
+      const sent = await h.write(method, `/app/bff${url}`, payload, { 'idempotency-key': operationId, 'if-match': '"2"' });
+      expect(sent.statusCode, url).toBe(200);
+      expect(gateway).toHaveBeenLastCalledWith({ method, path: `/v1${url}`, query: '', body: payload, idempotencyKey: operationId, ifMatch: '"2"' } satisfies SchoolRequest, h.tokens.accessToken);
+    }
+    const calls = gateway.mock.calls.length;
+    const tooLarge = await h.write('POST', `/app/bff${base}/learning-reset`, { operationId, padding: 'x'.repeat(2_000) }, { 'idempotency-key': operationId, 'if-match': '"2"' });
+    expect(tooLarge.statusCode).toBe(413);
+    expect(gateway).toHaveBeenCalledTimes(calls);
+  });
+
   test('If-Match est exigé et strict sur les commandes versionnées', async () => {
     const gateway = vi.fn<SchoolGateway>(async () => ({ status: 200, body: envelope({}) }));
     const h = await harness(gateway); await h.login();

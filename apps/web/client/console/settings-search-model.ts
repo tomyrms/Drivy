@@ -13,7 +13,7 @@ export const settingsIndex: readonly SettingDestination[] = [
   { id: 'retention', label: 'Conservation des données', group: 'École · Confidentialité', section: 'confidentialite', target: 'privacy-retention', keywords: 'durée rétention suppression texte' },
   { id: 'data-contact', label: 'Contact pour les données', group: 'École · Confidentialité', section: 'confidentialite', target: 'privacy-contact', keywords: 'email courriel demande données personnelles' },
   { id: 'fields', label: 'Informations demandées aux élèves', group: 'École · Informations élèves', section: 'champs-profil', target: 'fields-title', keywords: 'profil champs obligatoires facultatifs naissance adresse téléphone requis avant leçon finalité' },
-  { id: 'themes', label: 'Thèmes de signalement', group: 'École · Pédagogie', section: 'signalements', keywords: 'observations ordre activer masquer catégories moniteur' },
+  { id: 'themes', label: 'Signalements de l’école', group: 'École · Pédagogie', section: 'signalements', keywords: 'thèmes observations ordre activer masquer catégories moniteur personnaliser autoriser référence' },
   { id: 'hours', label: 'Horaires des moniteurs', group: 'Planning · Disponibilités', section: 'disponibilites', keywords: 'hebdomadaire jour travail horaire récurrent' },
   { id: 'absence', label: 'Absences des moniteurs', group: 'Planning · Absences', section: 'absences', keywords: 'congé vacances indisponible dates' },
   { id: 'access', label: 'Rôles et autorisations', group: 'Équipe · Membres et accès', section: 'equipe', keywords: 'droits administrateur moniteur retirer accès permissions équipe' },

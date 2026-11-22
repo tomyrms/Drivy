@@ -88,8 +88,8 @@ export function draftProblem(rows: readonly ThemeRow[]): string | null {
 }
 
 /** Corps de la commande `SAVE_OBSERVATION_THEMES` (sans `operationId`, ajouté par la commande) : toutes les clés, dans le nouvel ordre. */
-export function saveBody(rows: readonly ThemeRow[]): { themes: ThemeSetting[] } {
-  return { themes: settingsOf(rows) };
+export function saveBody(rows: readonly ThemeRow[], personalizationAllowed?: boolean): { themes: ThemeSetting[]; personalizationAllowed?: boolean } {
+  return { themes: settingsOf(rows), ...(personalizationAllowed === undefined ? {} : { personalizationAllowed }) };
 }
 
 /** Tuiles de la grille « Signaler » vue par le moniteur : les thèmes affichés, dans l'ordre. */

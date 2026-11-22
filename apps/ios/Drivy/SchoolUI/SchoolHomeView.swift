@@ -228,9 +228,9 @@ struct SchoolHomeView: View {
         .task(id: observationThemeScope) {
             guard let themes = agendaClient?.observationThemeStore(person: workspace.person, membership: workspace.membership) else { return }
             await themes.refresh()
-            // Classement du moniteur : relu au même moment, pour que la prochaine leçon parte du dernier ordre.
-            if let ranking = agendaClient?.observationRankingStore(person: workspace.person, membership: workspace.membership) {
-                await ranking.refresh()
+            // Préférences du compte : relues au même moment, pour que la prochaine leçon parte de la dernière palette.
+            if let preferences = agendaClient?.observationPreferencesStore(person: workspace.person, membership: workspace.membership) {
+                await preferences.refresh()
             }
         }
     }
