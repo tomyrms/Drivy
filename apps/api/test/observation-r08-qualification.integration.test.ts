@@ -94,8 +94,9 @@ describe('scénario 2 · deux moniteurs et un administrateur',()=>{
   for(const subject of ['demo-instructor','demo-other-instructor']){
    const refused=await call('PUT',themes,body,version,subject);expect(refused.statusCode,subject).toBe(403);expect(refused.json().code).toBe('OBSERVATION_THEMES_ACCESS_REQUIRED');
   }
-  // L'administrateur de A n'est rien dans B.
-  expect((await call('PUT',themesB,save({themes:defaults,personalizationAllowed:true}),(await current(themesB)).version,'demo-admin')).statusCode).toBe(403);
+  // L'administrateur de A n'est rien dans B : une école dont il n'est pas membre n'existe pas pour lui (404, sans révéler qu'elle existe).
+  const foreign=await call('PUT',themesB,save({themes:defaults,personalizationAllowed:true}),(await current(themesB)).version,'demo-admin');
+  expect(foreign.statusCode).toBe(404);expect(foreign.json().code).toBe('NOT_FOUND');
   expect((await current(themes,'demo-admin')).personalizationAllowed).toBe(true);expect((await current(themesB)).personalizationAllowed).toBe(false);
   // L'administrateur de A impose sa visibilité : chacun voit celle de l'école, et ses choix restent en réserve, sans écrasement.
   const reserve=[await stored(id.instructor),await stored(id.otherInstructor),await stored(id.admin)];
