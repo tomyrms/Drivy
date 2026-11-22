@@ -203,8 +203,8 @@ async function sendCourseNotification(db:PoolClient,sender:PushSender,id:string,
  // Relecture à chaque tentative, y compris après un tick ancien ou une reprise (un refus clôt aussi les destinations restantes).
  if(!(await db.query<{allowed:boolean}>('SELECT drivy.push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed)return true;
  if(!(await openDeliveries(db,n))){await db.query("UPDATE drivy.push_notification SET status='SKIPPED',failure_code='NO_DEVICE' WHERE id=$1",[n.id]);return true;}
- // Demandes et examens n'emportent que le texte et la catégorie ; les cours gardent leur charge déployée.
- const payload=isLessonExamCategory(n.category)?{aps:{alert:{title:n.title,body:n.body}},category:n.category}
+ // Demandes, examens et abonnement n'emportent que le texte et la catégorie ; les cours gardent leur charge déployée.
+ const payload=isLessonExamCategory(n.category)||n.category==='COMMERCIAL'?{aps:{alert:{title:n.title,body:n.body}},category:n.category}
   :{aps:{alert:{title:n.title,body:n.body},sound:'default'},seriesId:n.series_id,category:n.category};
  if(await attemptDeliveries(db,sender,n,payload,state,async()=>(await db.query<{allowed:boolean}>('SELECT drivy.push_revalidate($1::uuid) AS allowed',[n.id])).rows[0]?.allowed===true))
   await settleNotification(db,n.id);

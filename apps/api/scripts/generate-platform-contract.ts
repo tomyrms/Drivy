@@ -22,11 +22,15 @@ import {
   adjustModuleBody, assignOfferBody, assignmentPreviewQuery, createOfferBody, liftAdjustmentBody, offerCommandBody, offerListQuery, updateOfferBody
 } from '../src/platform-offers-model.js';
 import {
-  commercialDetailEnvelope, commercialDetailSchema, commercialRequestSchema, commercialRestrictionSchema, termsVersionSchema, trialChangeSchema
+  commercialDetailEnvelope, commercialDetailSchema, commercialNoticeSchema, commercialNoticesEnvelope, commercialNoticesReadEnvelope, commercialRequestSchema,
+  commercialRestrictionSchema, termsVersionSchema, trialChangeSchema
 } from '../src/platform-commercial-contract.js';
 import {
-  decisionBody, paidStartBody, paidStartCancelBody, requestBody, termsBody, trialEndBody, trialExtendBody, trialStartBody
+  decisionBody, noticesReadBody, paidStartBody, paidStartCancelBody, requestBody, revisionBody, termsBody, trialEndBody, trialExtendBody, trialStartBody
 } from '../src/platform-commercial-model.js';
+import {
+  schoolSubscriptionEnvelope, schoolSubscriptionSchema, subscriptionCommandBody, subscriptionNoticesEnvelope, subscriptionRequestBody, subscriptionRequestEnvelope
+} from '../src/school-subscription-contract.js';
 import {
   activationSchema, billingEnvelope, billingRunEnvelope, billingSchema, deliveryPreviewEnvelope, deliveryPreviewSchema, invoiceDeliverySchema, invoiceDocumentSchema, invoiceEnvelope, invoicePageEnvelope, invoiceSchema, issuerSchema, issuerSettingsEnvelope,
   issuerSettingsSchema, debtSchema, paymentSchema, settlementSchema
@@ -179,11 +183,31 @@ await writeFile(new URL('../contracts/school-entitlements.json', import.meta.url
   }
 }, null, 2) + '\n');
 
+await writeFile(new URL('../contracts/school-subscription.json', import.meta.url), JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:school-subscription:1',
+  title: 'Espace abonnement de l’école (R01-T08, #460)',
+  description: 'GET /v1/schools/{schoolId}/subscription, POST .../subscription/requests, POST .../subscription/requests/{requestId}/withdraw (If-Match), '
+    + 'POST .../subscription/notices/read et GET .../subscription/invoices/{invoiceId}/document. '
+    + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
+    + 'Réservé au rôle ADMIN actif de l’école, quel que soit l’état de l’école (403 COMMERCIAL_ACCESS_REQUIRED sinon). '
+    + 'Une demande ne change ni offre, ni module, ni date de fin : seule une décision de l’équipe Drivy le fait. Une seule demande ouverte par type (409 REQUEST_ALREADY_OPEN). '
+    + 'Les montants sont ceux des factures émises et des règlements enregistrés, en centimes de CHF.',
+  $defs: {
+    SchoolSubscription: project(schoolSubscriptionSchema),
+    SchoolSubscriptionEnvelope: project(schoolSubscriptionEnvelope),
+    SubscriptionRequestBody: project(subscriptionRequestBody),
+    SubscriptionCommandBody: project(subscriptionCommandBody),
+    SubscriptionRequestEnvelope: project(subscriptionRequestEnvelope),
+    SubscriptionNoticesEnvelope: project(subscriptionNoticesEnvelope)
+  }
+}, null, 2) + '\n');
+
 await writeFile(new URL('../contracts/platform-commercial.json', import.meta.url), JSON.stringify({
   $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:platform-commercial:1',
   title: 'Conditions commerciales, essai, début payant et demandes (R01-T04, #456)',
   description: 'GET /v1/platform/clients/{id}/commercial, POST /v1/platform/clients/{id}/commercial/terms, /trial/start, /trial/extend, /trial/end, '
-    + '/paid-start, /paid-start/cancel, /requests et /requests/{requestId}/decision. '
+    + '/paid-start, /paid-start/cancel, /requests, /requests/{requestId}/decision et /requests/{requestId}/revision ; GET /v1/platform/commercial-notices et POST /v1/platform/commercial-notices/read. '
+    + 'Une demande est un changement d’offre, une résiliation ou une régularisation, saisie par l’équipe ou reçue de l’école (source). Une résiliation confirmée ne change de date ou ne reprend (REVOKED) que par une décision conservée, avant sa date d’effet. '
     + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
     + 'Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). '
     + 'If-Match "N" porte la version du dossier commercial (428 sans version, 412 VERSION_CONFLICT si elle a changé) ; chaque commande rend le dossier relu après écriture. '
@@ -210,6 +234,11 @@ await writeFile(new URL('../contracts/platform-commercial.json', import.meta.url
     PaidStartCancelBody: project(paidStartCancelBody),
     RequestBody: project(requestBody),
     DecisionBody: project(decisionBody),
+    RevisionBody: project(revisionBody),
+    NoticesReadBody: project(noticesReadBody),
+    CommercialNotice: project(commercialNoticeSchema),
+    CommercialNoticesEnvelope: project(commercialNoticesEnvelope),
+    CommercialNoticesReadEnvelope: project(commercialNoticesReadEnvelope),
     CommercialDetailEnvelope: project(commercialDetailEnvelope),
     PlatformError: project(platformErrorSchema)
   }

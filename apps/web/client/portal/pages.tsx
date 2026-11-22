@@ -28,6 +28,7 @@ export const portalPages: Partial<Record<SectionKey, LazyExoticComponent<Compone
   confidentialite: lazy(() => import('./settings/privacy-page').then(module => ({ default: module.PrivacyPilot }))),
   'champs-profil': lazy(() => import('./settings/privacy-page').then(module => ({ default: module.ProfileFieldsPilot }))),
   signalements: lazy(() => import('./signals/signals-page').then(module => ({ default: module.SignalsPilot }))),
+  abonnement: lazy(() => import('./subscription/subscription-page').then(module => ({ default: module.SubscriptionPage }))),
 };
 
 export const portalSections = Object.keys(portalPages) as SectionKey[];

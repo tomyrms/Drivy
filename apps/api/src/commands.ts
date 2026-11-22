@@ -40,6 +40,8 @@ export interface CommandGuards<T> {
   writeMemberships?:(db:PoolClient)=>Promise<string[]>;
   authorize?:(db:PoolClient,actor:CommandActor,school:SchoolRow)=>Promise<void>;
   replay?:(db:PoolClient,actor:CommandActor,data:T)=>Promise<T>;
+  /** Commande commerciale (R01-T08) : elle reste possible sur une école archivée, sous son autorisation propre. */
+  allowArchived?:boolean;
 }
 export const commandHash = (body:unknown,expectedVersion:number|null) => createHash('sha256').update(canonical({body,expectedVersion})).digest('hex');
 /** Global per author, including commands sent to different schools. Take after person locks and before school locks. */
@@ -102,7 +104,7 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
       await db.query('COMMIT');
       return data;
     }
-    if (school.status === 'ARCHIVED') throw new ApiError(409,'SCHOOL_ARCHIVED','Cette école archivée ne peut plus être configurée.');
+    if (school.status === 'ARCHIVED' && !guards.allowArchived) throw new ApiError(409,'SCHOOL_ARCHIVED','Cette école archivée ne peut plus être configurée.');
     const effect = await work(db,actor,school);
     await recordCommand(db,actor,schoolId,commandType,body.operationId,hash,effect);
     await db.query('COMMIT');

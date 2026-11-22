@@ -209,6 +209,7 @@ describe('dossier commercial', () => {
       id: randomUUID(), kind: 'TERMINATION' as const, status: 'ACCEPTED' as const, requestedOn: '2027-02-01', requestedOfferId: null, requestedOfferName: null,
       desiredOn: null, details: null, response: null, effectiveOn: '2027-02-28', assignmentId: null, decidedAt: '2027-02-02T09:00:00.000+00:00',
       decidedByName: 'Camille Exemple', version: 2, createdAt: '2027-02-01T09:00:00.000+00:00', createdByName: 'Camille Exemple', updatedAt: '2027-02-02T09:00:00.000+00:00',
+      source: 'OPERATOR' as const, requestedModules: [], withdrawnBySchool: false, revisions: [],
     };
     const detail = commercialDetailView(row({ requests: [termination] }), now);
     expect(detail.termination).toEqual({ requestId: termination.id, effectiveOn: '2027-02-28', decidedAt: '2027-02-02T09:00:00.000Z' });

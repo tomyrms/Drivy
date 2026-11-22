@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
-  centsOf, chf, francsOf, instantOf, lifecycleLabel, lifecycleRestricted, missingLabel, requestKindLabel, requestOpen, requestStatusLabel, suspensionLabel,
+  centsOf, chf, francsOf, instantOf, lifecycleLabel, lifecycleRestricted, missingLabel, modulesLabel, requestKindLabel, requestOpen, requestStatusLabel, suspensionLabel,
   termsPhaseLabel, trialKindLabel, wholeOf, zurichToday,
   type PlatformClientDetail, type PlatformCommercialDetail, type PlatformCommercialRequest, type PlatformTermsVersion,
 } from '../../platform-model';
@@ -45,6 +45,8 @@ export function CommercialPanel({ state, client }: { state: PlatformConsoleState
   const trialOpen = !terminated && !data.paidStart?.started;
   const latest = data.terms.scheduled ?? data.terms.inForce;
   const open = data.requests.filter(item => requestOpen(item.status));
+  // Après confirmation, seule une décision d'opérateur change la date ou reprend le service, et seulement avant la date d'effet.
+  const revisable = data.requests.filter(item => item.kind === 'TERMINATION' && item.status === 'ACCEPTED' && item.effectiveOn !== null && item.effectiveOn > data.today);
   return <div className="platform-group platform-rights-panel" role="group" aria-label={`Contrat de ${client.displayName ?? client.school?.name ?? 'l’école'}`}>
     <div className="platform-fiche-head">
       <h4 className="platform-subtitle">Contrat</h4>
@@ -79,6 +81,13 @@ export function CommercialPanel({ state, client }: { state: PlatformConsoleState
       <RequestSummary item={item} />
       <Button variant="ghost" disabled={state.busy} aria-label={`Traiter la demande : ${requestKindLabel(item.kind)}`} onClick={() => commercial.start({ kind: 'decision', requestId: item.id })}>Traiter</Button>
     </li>)}</ul>}
+    {revisable.length > 0 && <ul className="platform-list" aria-label="Résiliations confirmées">{revisable.map(item => <li key={item.id}>
+      <RequestSummary item={item} />
+      <div className="platform-actions">
+        <Button variant="outline" disabled={state.busy} onClick={() => commercial.start({ kind: 'revision', requestId: item.id, action: 'CHANGE_DATE' })}>Changer la date</Button>
+        <Button variant="ghost" disabled={state.busy} onClick={() => commercial.start({ kind: 'revision', requestId: item.id, action: 'RESUME' })}>Reprendre le service</Button>
+      </div>
+    </li>)}</ul>}
     <Schedule data={data} />
     <History data={data} />
   </div>;
@@ -101,14 +110,19 @@ function TermsFacts({ terms }: { terms: PlatformTermsVersion }) {
 
 function RequestSummary({ item }: { item: PlatformCommercialRequest }) {
   const parts = [`Reçue le ${civil(item.requestedOn)}`];
+  if (item.source === 'SCHOOL') parts.push('demande de l’école');
   if (item.requestedOfferName) parts.push(item.requestedOfferName);
+  if (item.requestedModules.length > 0) parts.push(modulesLabel(item.requestedModules));
   if (item.desiredOn) parts.push(`souhaitée le ${civil(item.desiredOn)}`);
   if (item.effectiveOn) parts.push(`effet le ${civil(item.effectiveOn)}`);
   return <div className="platform-summary">
-    <strong>{requestKindLabel(item.kind)}<Badge variant="outline">{requestStatusLabel(item.status)}</Badge></strong>
+    <strong>{requestKindLabel(item.kind)}<Badge variant="outline">{item.withdrawnBySchool ? 'Retirée par l’école' : requestStatusLabel(item.status)}</Badge></strong>
     <span>{parts.join(' · ')}</span>
     {item.details && <span>{item.details}</span>}
     {item.response && <span>Réponse : {item.response}</span>}
+    {item.revisions.map(revision => <span key={revision.decidedAt}>
+      {revision.action === 'RESUME' ? 'Service repris' : `Date reportée au ${civil(revision.newEffectiveOn ?? revision.previousEffectiveOn)}`} · {dateTime(revision.decidedAt)}{by(revision.decidedByName)} : {revision.response}
+    </span>)}
   </div>;
 }
 
@@ -160,6 +174,7 @@ export function CommercialDialog({ state }: { state: PlatformConsoleState }) {
       {data && target?.kind === 'paid-start' && <PaidStartBody state={state} data={data} />}
       {data && target?.kind === 'request' && <RequestBody state={state} data={data} />}
       {data && target?.kind === 'decision' && <DecisionBody state={state} item={data.requests.find(item => item.id === target.requestId) ?? null} />}
+      {data && target?.kind === 'revision' && <RevisionBody state={state} data={data} action={target.action} item={data.requests.find(item => item.id === target.requestId) ?? null} />}
     </DialogContent>
   </Dialog>;
 }
@@ -369,11 +384,11 @@ function RequestBody({ state, data }: { state: PlatformConsoleState; data: Platf
 }
 
 function DecisionBody({ state, item }: { state: PlatformConsoleState; item: PlatformCommercialRequest | null }) {
-  const [status, setStatus] = useState<DecisionInput['status'] | null>(null), [response, setResponse] = useState(''), [effectiveOn, setEffectiveOn] = useState(item?.desiredOn ?? '');
+  const [status, setStatus] = useState<DecisionInput['status'] | null>(null), [response, setResponse] = useState(''), [effectiveOn, setEffectiveOn] = useState(item?.desiredOn ?? (item?.kind === 'REGULARIZATION' ? zurichToday() : ''));
   const [offerId, setOfferId] = useState<string | null>(item?.requestedOfferId ?? null), [invalid, setInvalid] = useState<{ field: string; message: string } | null>(null);
   const offers = state.offers.offers.filter(offer => offer.status === 'ACTIVE').map(offer => ({ value: offer.id, label: offer.name }));
   if (!item) return <DialogHeader><DialogTitle>Demande introuvable</DialogTitle></DialogHeader>;
-  const termination = item.kind === 'TERMINATION';
+  const termination = item.kind === 'TERMINATION', offerChange = item.kind === 'OFFER_CHANGE';
   const statuses = [
     ...(item.status === 'RECEIVED' ? [{ value: 'IN_PROGRESS', label: 'Prendre en charge' }] : []),
     { value: 'ACCEPTED', label: 'Accepter' }, { value: 'REFUSED', label: 'Refuser' }, { value: 'WITHDRAWN', label: 'Retirée par l’école' },
@@ -384,21 +399,21 @@ function DecisionBody({ state, item }: { state: PlatformConsoleState; item: Plat
     if (status === 'REFUSED' && !text) { setInvalid({ field: 'response', message: 'Un refus porte sa réponse.' }); return; }
     if (text && reasonProblem(text, 3, 1000)) { setInvalid({ field: 'response', message: reasonProblem(text, 3, 1000)! }); return; }
     if (status === 'ACCEPTED' && !/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn)) { setInvalid({ field: 'effectiveOn', message: 'Une acceptation porte sa date d’effet.' }); return; }
-    if (status === 'ACCEPTED' && !termination && !offerId) { setInvalid({ field: 'offer', message: 'Choisissez l’offre acceptée.' }); return; }
+    if (status === 'ACCEPTED' && offerChange && !offerId) { setInvalid({ field: 'offer', message: 'Choisissez l’offre acceptée.' }); return; }
     void state.commercial.decide(item.id, { status, ...(text ? { response: text } : {}),
-      ...(status === 'ACCEPTED' ? { effectiveOn, ...(!termination && offerId ? { offerId } : {}) } : {}) });
+      ...(status === 'ACCEPTED' ? { effectiveOn, ...(offerChange && offerId ? { offerId } : {}) } : {}) });
   };
   const errorOf = (field: string) => (invalid?.field === field ? invalid.message : undefined);
   const final = status === 'ACCEPTED' || status === 'REFUSED' || status === 'WITHDRAWN';
   return <form className="platform-form" noValidate onSubmit={event => { event.preventDefault(); submit(); }}>
     <DialogHeader><DialogTitle>{requestKindLabel(item.kind)}</DialogTitle>
-      <DialogDescription>Reçue le {civil(item.requestedOn)}{item.requestedOfferName ? ` · ${item.requestedOfferName}` : ''}</DialogDescription></DialogHeader>
+      <DialogDescription>Reçue le {civil(item.requestedOn)}{item.requestedOfferName ? ` · ${item.requestedOfferName}` : ''}{item.requestedModules.length ? ` · ${modulesLabel(item.requestedModules)}` : ''}</DialogDescription></DialogHeader>
     <FieldGroup>
       <PortalSelect id="decision-status" label="Décision" value={status} options={statuses} disabled={state.busy} {...selectError(errorOf('status'))}
         onValueChange={value => { setStatus(value as DecisionInput['status'] | null); setInvalid(null); }} />
       {status === 'ACCEPTED' && <TextField id="decision-effective" label="Date d’effet" type="date" value={effectiveOn} onChange={value => { setEffectiveOn(value); setInvalid(null); }}
         error={errorOf('effectiveOn')} disabled={state.busy} />}
-      {status === 'ACCEPTED' && !termination && <PortalSelect id="decision-offer" label="Offre acceptée" value={offerId} options={offers} disabled={state.busy} {...selectError(errorOf('offer'))}
+      {status === 'ACCEPTED' && offerChange && <PortalSelect id="decision-offer" label="Offre acceptée" value={offerId} options={offers} disabled={state.busy} {...selectError(errorOf('offer'))}
         onValueChange={value => { setOfferId(value); setInvalid(null); }} />}
       <ReasonField id="decision-response" label={status === 'REFUSED' ? 'Réponse' : 'Réponse (facultative)'} max={1000} value={response}
         onChange={value => { setResponse(value); setInvalid(null); }} error={errorOf('response')} disabled={state.busy} />
@@ -407,5 +422,32 @@ function DecisionBody({ state, item }: { state: PlatformConsoleState; item: Plat
       <AlertDescription>L’usage nouveau se fermera à la date d’effet.</AlertDescription></Alert>}
     <Failure state={state} title="Décision non enregistrée" />
     <Footer state={state} label={final ? 'Enregistrer la décision' : 'Prendre en charge'} destructive={status === 'ACCEPTED' && termination} />
+  </form>;
+}
+
+/** Une résiliation confirmée ne change qu'ici : décision conservée à côté de la première, jamais après la date d'effet. */
+function RevisionBody({ state, data, action, item }: { state: PlatformConsoleState; data: PlatformCommercialDetail; action: 'CHANGE_DATE' | 'RESUME'; item: PlatformCommercialRequest | null }) {
+  const [effectiveOn, setEffectiveOn] = useState(item?.effectiveOn ?? ''), [response, setResponse] = useState('');
+  const [invalid, setInvalid] = useState<{ field: 'effectiveOn' | 'response'; message: string } | null>(null);
+  if (!item) return <DialogHeader><DialogTitle>Demande introuvable</DialogTitle></DialogHeader>;
+  const changing = action === 'CHANGE_DATE';
+  const submit = () => {
+    if (changing && (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveOn) || effectiveOn < data.today)) { setInvalid({ field: 'effectiveOn', message: 'Choisissez aujourd’hui ou une date à venir.' }); return; }
+    if (changing && effectiveOn === item.effectiveOn) { setInvalid({ field: 'effectiveOn', message: 'Choisissez une autre date.' }); return; }
+    const text = response.trim(), problem = reasonProblem(text, 3, 1000);
+    if (problem) { setInvalid({ field: 'response', message: problem }); return; }
+    void state.commercial.revise(item.id, { action, ...(changing ? { effectiveOn } : {}), response: text });
+  };
+  return <form className="platform-form" noValidate onSubmit={event => { event.preventDefault(); submit(); }}>
+    <DialogHeader><DialogTitle>{changing ? 'Changer la date de résiliation' : 'Reprendre le service ?'}</DialogTitle>
+      {item.effectiveOn && <DialogDescription>Fin prévue le {civil(item.effectiveOn)}</DialogDescription>}</DialogHeader>
+    <FieldGroup>
+      {changing && <TextField id="revision-effective" label="Nouvelle date d’effet" type="date" value={effectiveOn} onChange={value => { setEffectiveOn(value); setInvalid(null); }}
+        error={invalid?.field === 'effectiveOn' ? invalid.message : null} disabled={state.busy} />}
+      <ReasonField id="revision-response" label="Réponse à l’école" max={1000} value={response} onChange={value => { setResponse(value); setInvalid(null); }}
+        error={invalid?.field === 'response' ? invalid.message : null} disabled={state.busy} />
+    </FieldGroup>
+    <Failure state={state} title="Décision non enregistrée" />
+    <Footer state={state} label={changing ? 'Enregistrer la date' : 'Reprendre le service'} />
   </form>;
 }

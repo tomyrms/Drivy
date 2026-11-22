@@ -23,7 +23,8 @@ export type CommandKind =
   | 'staffEnrollCourse' | 'staffCancelCourseEnrollment' | 'cancelCourseSeries' | 'rescheduleCourseSeries' | 'saveCoursePolicy'
   | 'recordCourseAttendance' | 'recordCoursePayment' | 'voidCoursePayment' | 'validateCourse' | 'revokeCourseCompletion'
   | 'createExam' | 'updateExam' | 'postponeExam' | 'setExamResult'
-  | 'refuseLessonChangeRequest';
+  | 'refuseLessonChangeRequest'
+  | 'createSubscriptionRequest' | 'withdrawSubscriptionRequest' | 'acknowledgeSubscriptionNotices';
 export type CommandMethod = 'POST' | 'PATCH' | 'PUT';
 
 interface CommandSpec {
@@ -102,6 +103,9 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   // Demandes de l'élève sur sa leçon (#52) : seul le refus a sa commande, accepter passe par le déplacement ou l'annulation.
   refuseLessonChangeRequest: { operationType: 'REFUSE_LESSON_CHANGE_REQUEST', resourceType: 'LessonChangeRequest', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Refus d’une demande de l’élève' },
   setExamResult: { operationType: 'SET_EXAM_RESULT', resourceType: 'Exam', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Résultat d’un examen' },
+  createSubscriptionRequest: { operationType: 'CREATE_SUBSCRIPTION_REQUEST', resourceType: 'SubscriptionRequest', target: 'created', method: 'POST', expectedStatus: 201, label: 'Demande d’abonnement' },
+  withdrawSubscriptionRequest: { operationType: 'WITHDRAW_SUBSCRIPTION_REQUEST', resourceType: 'SubscriptionRequest', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une demande' },
+  acknowledgeSubscriptionNotices: { operationType: 'ACKNOWLEDGE_SUBSCRIPTION_NOTICES', resourceType: 'School', target: 'school', method: 'POST', expectedStatus: 200, label: 'Lecture des réponses' },
 };
 
 export interface SchoolCommand {
@@ -302,6 +306,14 @@ export function commandMessage(code: string): string {
     EXAM_ESCORT_CONFLICT: 'Le moniteur est absent ou déjà pris pendant l’accompagnement. Rien n’a été modifié.',
     CANCELLATION_RULES_DECISION_REQUIRED: 'Le texte d’annulation change : confirmez le délai structuré ou retirez-le, puis enregistrez.',
     OBSERVATION_THEMES_ACCESS_REQUIRED: 'Vos accès ne permettent pas de modifier les signalements.',
+    REQUEST_ALREADY_OPEN: 'Une demande de ce type est déjà ouverte.',
+    TERMINATION_CONFIRMED: 'La résiliation est déjà confirmée. Contactez Drivy pour la modifier.',
+    TERMINATION_EFFECTIVE: 'Cette résiliation a déjà pris effet.',
+    CLIENT_TERMINATED: 'L’abonnement est résilié. Contactez Drivy.',
+    COMMERCIAL_ACCESS_REQUIRED: 'Vos accès ne permettent pas de gérer l’abonnement.',
+    COMMERCIAL_CLIENT_MISSING: 'Aucun abonnement n’est rattaché à cette école.',
+    DOCUMENT_UNAVAILABLE: 'Ce document n’est pas encore disponible.',
+    REQUEST_CLOSED: 'Cette demande est déjà traitée.',
     SETUP_ACCESS_REQUIRED: 'Vos accès ne permettent plus cette opération dans l’école.',
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',

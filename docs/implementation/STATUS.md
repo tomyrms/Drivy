@@ -1,3 +1,16 @@
+## 22 novembre 2026 — R01-T08 : espace abonnement, factures et demandes de l'école (#460)
+
+- Branche `tomyrms/r01-t08-espace-ecole`, issue de la tête de `tomyrms/r01-t07-factures-pdf`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/espace-abonnement-20261120.md` détaille le modèle, les règles et les limites.
+- API :
+  - Migration `20261120_school_commercial_space.sql` : autorisation commerciale indépendante de l'état de l'école, demandes de l'école, journal des révisions de résiliation, avis sans doublon, push `COMMERCIAL`.
+  - Cinq routes sous `/v1/schools/:schoolId/subscription`, révision et boîte d'avis côté plateforme. Contrats `school-subscription.json` et `platform-commercial.json` générés, OpenAPI canonique 3.11.0 non modifié.
+- Web : rubrique « Abonnement » du portail de gestion, relais en liste fermée, téléchargement des factures, traitement des demandes côté équipe Drivy.
+- iOS : ligne « Abonnement » du compte de l'école vers la rubrique web, y compris pour une école archivée.
+- Exécuté le 22 novembre 2026 : `tsc` de l'API, `tsc` du client, des vérifications et du serveur web, `vite build`, génération du contrat.
+- **Écrit, jamais exécuté** (règle du porteur du 13 novembre) : `school-subscription.integration.test.ts` et `subscription-model.test.ts`. La migration n'a été appliquée à aucune base. Le code Swift n'a pas été compilé et la rubrique n'a été ouverte dans aucun navigateur.
+- Reste à qualifier : migration et scénarios sur PostgreSQL, rubrique sur mobile et ordinateur, accessibilité, accès depuis l'app, notification push.
+- À décider : reprise d'une école dont la résiliation a déjà pris effet, refusée pour l'instant car elle créerait des factures de rattrapage.
+
 ## 22 novembre 2026 — R01-T07 : factures PDF avec QR suisse et envoi (#459)
 
 - Branche `tomyrms/r01-t07-factures-pdf`, issue de la tête de `tomyrms/r01-t06-reglements`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/factures-pdf-20261119.md` détaille le modèle, les états d'envoi et les limites.

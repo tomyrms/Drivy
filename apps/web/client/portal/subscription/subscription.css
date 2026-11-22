@@ -1,0 +1,83 @@
+.subscription-page { width: min(100%, 1120px); margin-inline: auto; display: grid; gap: 20px; }
+.subscription-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.subscription-head h1 { margin: 0; font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; }
+.subscription-empty { border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.subscription-alert-action { margin-top: 10px; }
+
+.subscription-notices { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.subscription-notices ul { display: grid; gap: 4px; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.subscription-notices li { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 0.875rem; }
+.subscription-notices li span { color: var(--muted-foreground); }
+
+.subscription-statement { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border: 1px solid var(--border); border-radius: 12px; background: var(--card); overflow: hidden; }
+.subscription-statement > div { min-width: 0; padding: 12px 16px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); margin: 0 -1px -1px 0; }
+.subscription-statement dt, .subscription-details dt { color: var(--muted-foreground); font-size: 0.8125rem; }
+.subscription-statement dd { display: grid; margin: 2px 0 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.subscription-statement small { color: var(--muted-foreground); font-size: 0.75rem; font-weight: 400; }
+.subscription-statement [data-tone='danger'] dd { color: var(--destructive); }
+
+.subscription-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 1fr); align-items: start; gap: 20px; }
+.subscription-main, .subscription-side { display: grid; gap: 20px; min-width: 0; }
+.subscription-block { display: grid; gap: 12px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.subscription-block-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.subscription-block h2 { margin: 0; font-size: 1rem; font-weight: 650; }
+.subscription-none { margin: 0; color: var(--muted-foreground); font-size: 0.875rem; }
+
+.subscription-invoices, .subscription-lines, .subscription-requests, .subscription-modules, .subscription-revisions { display: grid; margin: 0; padding: 0; list-style: none; }
+.subscription-invoices > li { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--border); }
+.subscription-invoices > li:first-child { padding-top: 0; border-top: 0; }
+.subscription-invoice-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 44px; align-items: center; gap: 12px; }
+.subscription-invoice-row button { width: 44px; height: 44px; }
+.subscription-invoice-title { display: grid; min-width: 0; }
+.subscription-invoice-title span { color: var(--muted-foreground); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.subscription-invoice-amount { display: grid; justify-items: end; gap: 3px; font-variant-numeric: tabular-nums; }
+.subscription-invoices summary, .subscription-history summary { width: fit-content; min-height: 28px; color: var(--muted-foreground); font-size: 0.8125rem; cursor: pointer; }
+.subscription-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 16px; margin: 6px 0 4px; }
+.subscription-details dd { margin: 0; font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.subscription-error { margin: 0; color: var(--destructive); font-size: 0.8125rem; }
+
+.subscription-lines li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--border); font-size: 0.875rem; font-variant-numeric: tabular-nums; }
+.subscription-lines li:first-child { padding-top: 0; border-top: 0; }
+.subscription-modules { gap: 6px; font-size: 0.875rem; }
+.subscription-modules li { display: flex; align-items: center; gap: 8px; }
+.subscription-modules svg { width: 16px; height: 16px; flex: none; }
+.subscription-modules [data-on='false'] { color: var(--muted-foreground); }
+.subscription-future { margin: 0; color: var(--muted-foreground); font-size: 0.8125rem; }
+
+.subscription-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.subscription-requests { gap: 0; }
+.subscription-requests > li { display: grid; justify-items: start; gap: 6px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 0.875rem; }
+.subscription-request-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.subscription-requests p { margin: 0; overflow-wrap: anywhere; }
+.subscription-quote { color: var(--muted-foreground); white-space: pre-line; }
+.subscription-steps { display: grid; gap: 4px; width: 100%; margin: 2px 0; padding: 0; list-style: none; }
+.subscription-steps li { display: flex; justify-content: space-between; gap: 12px; padding-left: 16px; position: relative; font-size: 0.8125rem; }
+.subscription-steps li::before { content: ''; position: absolute; left: 0; top: 0.4em; width: 8px; height: 8px; border: 1.5px solid var(--muted-foreground); border-radius: 50%; }
+.subscription-steps [data-state='done']::before { border-color: var(--primary); background: var(--primary); }
+.subscription-steps [data-state='current']::before { border-color: var(--primary); }
+.subscription-steps [data-state='stopped']::before { border-color: var(--destructive); background: var(--destructive); }
+.subscription-steps [data-state='upcoming'] { color: var(--muted-foreground); }
+.subscription-steps small { color: var(--muted-foreground); font-size: inherit; text-align: right; }
+.subscription-revisions { gap: 4px; width: 100%; }
+.subscription-revisions li { display: grid; font-size: 0.8125rem; }
+.subscription-revisions span { color: var(--muted-foreground); overflow-wrap: anywhere; }
+.subscription-history { display: grid; gap: 6px; }
+.subscription-contact { margin: 0; font-size: 0.875rem; }
+.subscription-block a { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+.subscription-form { display: grid; gap: 16px; }
+.subscription-checks { display: grid; gap: 4px; }
+.subscription-checks label { display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 0.875rem; cursor: pointer; }
+
+@media (max-width: 1023px) {
+  .subscription-statement { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .subscription-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .subscription-page { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+  .subscription-head h1 { font-size: 1.625rem; }
+  .subscription-notices { align-items: stretch; flex-direction: column; }
+  .subscription-statement > div { padding: 10px 12px; }
+  .subscription-actions > * { flex: 1 1 auto; }
+  .subscription-invoice-row { gap: 8px; }
+}

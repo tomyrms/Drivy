@@ -4,12 +4,12 @@ import type { Pool, PoolClient } from 'pg';
 import { z } from 'zod';
 import type { TokenVerifier } from './auth.js';
 import { checkIdempotency, requireVersion } from './commands.js';
-import { entitlementDetailView } from './entitlements-model.js';
+import { entitlementDetailView, iso } from './entitlements-model.js';
 import { readClientEntitlements } from './entitlements.js';
 import { ApiError, notFound } from './errors.js';
 import {
-  addDays, commercialDetailView, commercialQuery, decisionBody, isPeriodStart, maxAheadDays, maxTrialDays, nextPeriodStart, paidStartBody,
-  paidStartCancelBody, requestBody, requestTransitionAllowed, termsAt, termsBody, trialEndBody, trialExtendBody, trialStartBody,
+  addDays, commercialDetailView, commercialQuery, decisionBody, isPeriodStart, maxAheadDays, maxTrialDays, nextPeriodStart, noticesReadBody, paidStartBody,
+  paidStartCancelBody, requestBody, requestTransitionAllowed, revisionBody, termsAt, termsBody, trialEndBody, trialExtendBody, trialStartBody,
   type CommercialDetail, type CommercialRow, type MissingField, type RequestKind, type RequestStatus,
 } from './platform-commercial-model.js';
 import { platformCommand, platformRead } from './platform-command.js';
@@ -221,6 +221,9 @@ export function registerPlatformCommercial(app: FastifyInstance, options: { pool
   command('/requests', 'RECORD_COMMERCIAL_REQUEST', requestBody, async (db, actor, before, body, { id }) => {
     if (body.requestedOn > before.today) throw new ApiError(409, 'REQUEST_DATE_FUTURE', 'La date de la demande ne peut pas être à venir.');
     if (body.desiredOn) futureDay(body.desiredOn, before.today);
+    // Une seule demande ouverte par type : la contrainte de la base reste la dernière barrière.
+    const open = await db.query("SELECT 1 FROM drivy.platform_commercial_request WHERE client_id=$1 AND kind=$2 AND status IN ('RECEIVED','IN_PROGRESS') LIMIT 1", [id, body.kind]);
+    if (open.rowCount) throw new ApiError(409, 'REQUEST_ALREADY_OPEN', 'Une demande de ce type est déjà en cours.');
     let offerName: string | null = null;
     if (body.requestedOfferId) {
       offerName = (await db.query<{ name: string }>('SELECT name FROM drivy.platform_offer WHERE id=$1', [body.requestedOfferId])).rows[0]?.name ?? null;
@@ -245,8 +248,9 @@ export function registerPlatformCommercial(app: FastifyInstance, options: { pool
     let effectiveOn: string | null = null; let assignmentId: string | null = null; let offerId: string | null = null;
     if (body.status === 'ACCEPTED') {
       effectiveOn = futureDay(body.effectiveOn!, before.today);
-      if (before.lifecycle === 'TERMINATED' || (row.kind === 'TERMINATION' && before.termination)) throw terminated();
-      if (row.kind === 'TERMINATION' && body.offerId) throw new ApiError(400, 'INVALID_REQUEST', 'Une résiliation ne désigne pas d’offre.');
+      // Accepter une régularisation ne réactive rien et reste possible après une résiliation.
+      if (row.kind !== 'REGULARIZATION' && (before.lifecycle === 'TERMINATED' || (row.kind === 'TERMINATION' && before.termination))) throw terminated();
+      if (row.kind !== 'OFFER_CHANGE' && body.offerId) throw new ApiError(400, 'INVALID_REQUEST', 'Seul un changement d’offre désigne une offre.');
       if (row.kind === 'OFFER_CHANGE') {
         offerId = body.offerId ?? row.requested_offer_id;
         if (!offerId) throw new ApiError(400, 'INVALID_REQUEST', 'Choisissez l’offre acceptée.');
@@ -274,4 +278,43 @@ export function registerPlatformCommercial(app: FastifyInstance, options: { pool
       requestId, kind: row.kind, from: row.status, to: body.status, effectiveOn, assignmentId, offerId, responded: body.response !== undefined,
     } } };
   }, requestParams);
+
+  // Après confirmation : nouvelle date ou reprise, avant la date d'effet seulement, par une décision conservée (R01-T08).
+  command('/requests/:requestId/revision', 'REVISE_TERMINATION', revisionBody, async (db, actor, before, body, { id, requestId }) => {
+    const row = (await db.query<{ kind: RequestKind; status: RequestStatus; effective_on: string | null; version: number }>(
+      'SELECT kind,status,effective_on::text AS effective_on,version FROM drivy.platform_commercial_request WHERE id=$1 AND client_id=$2', [requestId!, id])).rows[0];
+    if (!row) throw notFound();
+    if (row.kind !== 'TERMINATION' || row.status !== 'ACCEPTED' || !row.effective_on) throw new ApiError(409, 'REQUEST_CLOSED', 'Seule une résiliation confirmée peut être révisée.');
+    if (row.effective_on <= before.today) throw new ApiError(409, 'TERMINATION_EFFECTIVE', 'Cette résiliation a déjà pris effet.');
+    const nextOn = body.action === 'CHANGE_DATE' ? futureDay(body.effectiveOn!, before.today) : null;
+    if (nextOn === row.effective_on) throw new ApiError(409, 'TERMINATION_DATE_UNCHANGED', 'Choisissez une autre date.');
+    const decisionId = randomUUID();
+    await db.query(`INSERT INTO drivy.platform_termination_decision(id,client_id,request_id,request_version,action,previous_effective_on,new_effective_on,response,decided_by)
+      VALUES($1,$2,$3,$4,$5,$6::date,$7::date,$8,$9)`, [decisionId, id, requestId, row.version + 1, body.action, row.effective_on, nextOn, body.response, actor.operatorId]);
+    const updated = await db.query(`UPDATE drivy.platform_commercial_request SET status=$2,effective_on=$3::date,decided_by=$4,updated_by=$5 WHERE id=$1 AND status='ACCEPTED'`,
+      [requestId, nextOn ? 'ACCEPTED' : 'REVOKED', nextOn ?? row.effective_on, actor.operatorId, actor.operatorId]);
+    if (updated.rowCount !== 1) throw commercialConflict();
+    return { journal: { action: 'REVISE_TERMINATION', changes: { requestId, decisionId, revision: body.action, previousEffectiveOn: row.effective_on, newEffectiveOn: nextOn } } };
+  }, requestParams);
+
+  // Boîte de l'équipe : demandes reçues ou retirées par les écoles, non lues.
+  app.get('/v1/platform/commercial-notices', async request => {
+    const identity = await identityOf(request); empty.parse(request.query);
+    const items = await platformRead(options.pool, identity, async db =>
+      (await db.query<{ notices: Array<{ createdAt: string } & Record<string, unknown>> }>('SELECT drivy.platform_commercial_notices() AS notices')).rows[0]!.notices);
+    return envelope({ items: items.map(item => ({ ...item, createdAt: iso(item.createdAt)! })) }, request);
+  });
+  app.post('/v1/platform/commercial-notices/read', async (request, reply) => {
+    const identity = await identityOf(request); empty.parse(request.query);
+    const body = noticesReadBody.parse(request.body);
+    checkIdempotency(request.headers['idempotency-key'], body.operationId);
+    const { operationId, ...content } = body;
+    const result = await platformCommand(options.pool, identity, {
+      kind: 'READ_COMMERCIAL_NOTICES', operationId, expectedVersion: null, body: content, refusal: { action: 'READ_COMMERCIAL_NOTICES', subject: null },
+    }, async db => {
+      const read = (await db.query<{ read: number }>('SELECT drivy.platform_commercial_notices_read($1::uuid[]) AS read', [body.ids])).rows[0]?.read ?? 0;
+      return { data: { read }, journal: { action: 'READ_COMMERCIAL_NOTICES', subject: null, changes: { count: read } } };
+    });
+    reply.status(result.status); return envelope(result.data, request);
+  });
 }

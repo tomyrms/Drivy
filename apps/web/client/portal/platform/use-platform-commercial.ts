@@ -16,7 +16,8 @@ export type CommercialDialog =
   | { kind: 'paid-start' }
   | { kind: 'paid-cancel' }
   | { kind: 'request' }
-  | { kind: 'decision'; requestId: string };
+  | { kind: 'decision'; requestId: string }
+  | { kind: 'revision'; requestId: string; action: 'CHANGE_DATE' | 'RESUME' };
 
 /** Valeurs d'une version de conditions, au format de la commande : chaque version redonne tout, `null` reste à compléter. */
 export type TermsInput = {
@@ -26,6 +27,7 @@ export type TermsInput = {
 };
 export type RequestInput = { kind: 'OFFER_CHANGE' | 'TERMINATION'; requestedOn: string; requestedOfferId?: string; desiredOn?: string; details?: string };
 export type DecisionInput = { status: 'IN_PROGRESS' | 'ACCEPTED' | 'REFUSED' | 'WITHDRAWN'; response?: string; effectiveOn?: string; offerId?: string };
+export type RevisionInput = { action: 'CHANGE_DATE' | 'RESUME'; effectiveOn?: string; response: string };
 
 /**
  * Dossier commercial d'une école cliente (R01-T04) : conditions, essai, début payant, demandes. Chaque commande part sous la version du
@@ -61,7 +63,8 @@ export function usePlatformCommercial({ session, perform, reload, clientId, comm
   const cancelPaidStart = (reason: string) => perform(() => write('paid-cancel', 'paid-start/cancel', { reason: reason.trim() }));
   const recordRequest = (input: RequestInput) => perform(() => write('request', 'requests', input));
   const decide = (requestId: string, input: DecisionInput) => perform(() => write(`decision:${requestId}`, `requests/${requestId}/decision`, input));
+  const revise = (requestId: string, input: RevisionInput) => perform(() => write(`revision:${requestId}`, `requests/${requestId}/revision`, input));
 
-  return { commercial: current, dialog, start, stop, reset, saveTerms, startTrial, extendTrial, endTrial, confirmPaidStart, cancelPaidStart, recordRequest, decide };
+  return { commercial: current, dialog, start, stop, reset, saveTerms, startTrial, extendTrial, endTrial, confirmPaidStart, cancelPaidStart, recordRequest, decide, revise };
 }
 export type PlatformCommercialState = ReturnType<typeof usePlatformCommercial>;

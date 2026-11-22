@@ -14,6 +14,8 @@ struct SchoolAccountActions {
     var resumeOnboarding: (() -> Void)? = nil
     /// Un trajet GPS est en cours : quitter le compte ou l’école l’arrêterait, ces gestes demandent alors un accord.
     var tripInProgress = false
+    /// Abonnement et factures sur le portail : gardé quand l’école est suspendue ou archivée.
+    var subscriptionURL: URL? = nil
 
     /// Les lignes du compte, dans l’ordre de la feuille. `afterChangingSchool` ferme la feuille qui les porte, s’il y en a une.
     @MainActor @ViewBuilder
@@ -54,6 +56,13 @@ struct SchoolAccountActions {
             })
                 .accessibilityIdentifier("open-school-management")
         }
+        if let subscriptionURL {
+            DrivyNavigationRow(title: "Abonnement", detail: "Sur le web", action: {
+                workspace?.willOpenManagement()
+                openURL(subscriptionURL)
+            })
+                .accessibilityIdentifier("open-school-subscription")
+        }
         if let workspace, (workspace.person?.memberships.count ?? 0) > 1, !tripInProgress {
             SchoolChangeSchoolRow(workspace: workspace, chooseSchool: chooseSchool, afterChangingSchool: afterChangingSchool)
         }
@@ -65,7 +74,7 @@ struct SchoolAccountActions {
 
     /// Ce que montre la section Compte sans « Mon profil » (passé dans Paramètres) : vide, elle n’est pas posée.
     @MainActor func hasSchoolRows(workspace: SchoolWorkspace?) -> Bool {
-        workspace?.ownLearnerError != nil || resumeOnboarding != nil || openInvitations != nil || manageURL != nil
+        workspace?.ownLearnerError != nil || resumeOnboarding != nil || openInvitations != nil || manageURL != nil || subscriptionURL != nil
             || ((workspace?.person?.memberships.count ?? 0) > 1 && !tripInProgress) || openJoinSchool != nil
     }
 

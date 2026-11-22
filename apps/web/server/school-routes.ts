@@ -54,6 +54,11 @@ export const schoolRoutes: readonly SchoolRoute[] = [
   { method: 'POST', segments: ['invitations'], bodyLimit: 8_192 },
   { method: 'POST', segments: ['invitations', ':id', 'resend'], ifMatch: true, bodyLimit: 1_024 },
   { method: 'POST', segments: ['invitations', ':id', 'revoke'], ifMatch: true, bodyLimit: 8_192 },
+  // Abonnement (R01-T08) : l'API relit le responsable, y compris sur une école archivée. Le PDF a sa propre route dans app.ts.
+  { method: 'GET', segments: ['subscription'] },
+  { method: 'POST', segments: ['subscription', 'requests'], bodyLimit: 8_192 },
+  { method: 'POST', segments: ['subscription', 'requests', ':id', 'withdraw'], ifMatch: true, bodyLimit: 1_024 },
+  { method: 'POST', segments: ['subscription', 'notices', 'read'], bodyLimit: 1_024 },
   { method: 'GET', segments: ['offerings'], query: list },
   { method: 'POST', segments: ['offerings'], bodyLimit: 4_096 },
   { method: 'GET', segments: ['curricula'], query: list },

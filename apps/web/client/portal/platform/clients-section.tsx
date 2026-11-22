@@ -16,6 +16,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { PortalSelect } from '../components/portal-select';
 import { BillingPanel } from './billing-section';
 import { CommercialPanel } from './commercial-section';
+import { CommercialNotices } from './commercial-notices';
 import { RightsPanel } from './rights-section';
 import type { ClientFilter } from './use-platform-clients';
 import type { PlatformConsoleState } from './use-platform-console';
@@ -59,6 +60,7 @@ function ClientDirectory({ state }: { state: PlatformConsoleState }) {
   const searching = clients.search !== '' || clients.preparation !== 'ALL';
   const items = clients.page.items;
   return <>
+    <CommercialNotices state={state} />
     <div className="platform-toolbar">
       <form className="platform-search" role="search" onSubmit={event => { event.preventDefault(); void clients.searchClients(text); }}>
         <Input type="search" name="q" aria-label="Rechercher une école" placeholder="Rechercher une école" autoComplete="off" maxLength={100} value={text} onChange={event => setText(event.target.value)} />

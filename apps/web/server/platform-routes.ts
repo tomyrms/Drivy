@@ -18,7 +18,7 @@ export type PlatformDocumentGateway = (request: PlatformDocumentRequest, accessT
 
 const uuidPath = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
-const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations', '/v1/platform/modules']);
+const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations', '/v1/platform/modules', '/v1/platform/commercial-notices']);
 const operationPath = new RegExp(`^/v1/platform/operations/${uuidPath}$`);
 const revokePath = new RegExp(`^/v1/platform/(?:invitations|operators)/${uuidPath}/revoke$`);
 const clientPath = new RegExp(`^/v1/platform/clients/${uuidPath}$`);
@@ -35,7 +35,7 @@ const adjustmentsPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustment
 const adjustmentLiftPath = new RegExp(`^/v1/platform/clients/${uuidPath}/adjustments/${uuidPath}/lift$`);
 // Conditions commerciales, essai, début payant et demandes (R01-T04) : le dossier d'une fiche, puis ses commandes versionnées.
 const commercialPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial$`);
-const commercialCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial/(?:terms|trial/(?:start|extend|end)|paid-start(?:/cancel)?|requests|requests/${uuidPath}/decision)$`);
+const commercialCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/commercial/(?:terms|trial/(?:start|extend|end)|paid-start(?:/cancel)?|requests|requests/${uuidPath}/(?:decision|revision))$`);
 // Factures, avoirs, émetteur et activation (R01-T05), règlements (R01-T06) : la facturation d'une fiche, ses commandes versionnées, la liste et l'émetteur.
 const billingPath = new RegExp(`^/v1/platform/clients/${uuidPath}/billing$`);
 const billingCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/(?:billing/activation(?:/stop)?|invoices|invoices/${uuidPath}/(?:issue|cancel|credit|sent|document|delivery)|payments|payments/${uuidPath}/(?:allocations|void|correct|regularizations)|payments/${uuidPath}/allocations/${uuidPath}/release|payments/${uuidPath}/regularizations/${uuidPath}/cancel)$`);
@@ -112,6 +112,7 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
   // L'émetteur et la facturation d'une fiche partent sous leur version ; le passage manuel est idempotent par nature, sans version.
   if (path === '/v1/platform/billing/issuer' || billingCommandPath.test(path)) return keyed && versioned;
   if (path === '/v1/platform/billing/run') return keyed && request.ifMatch === undefined;
+  if (path === '/v1/platform/commercial-notices/read') return keyed && request.ifMatch === undefined;
   return false;
 }
 
@@ -214,7 +215,10 @@ const termsVersionSchema = z.object({ id: z.uuid(), sequence: z.number().int().m
 const commercialRequestSchema = z.object({ id: z.uuid(), kind: token, status: token, requestedOn: isoDay, requestedOfferId: z.uuid().nullable(),
   requestedOfferName: text(100).nullable(), desiredOn: isoDay.nullable(), details: text(1000).nullable(), response: text(1000).nullable(),
   effectiveOn: isoDay.nullable(), assignmentId: z.uuid().nullable(), decidedAt: iso.nullable(), decidedByName: text(200).nullable(),
-  version: z.number().int().min(1), createdAt: iso, createdByName: text(200).nullable(), updatedAt: iso });
+  version: z.number().int().min(1), createdAt: iso, createdByName: text(200).nullable(), updatedAt: iso,
+  source: token, requestedModules: z.array(token).max(10), withdrawnBySchool: z.boolean(),
+  revisions: z.array(z.object({ action: token, previousEffectiveOn: isoDay, newEffectiveOn: isoDay.nullable(), response: text(1000), decidedAt: iso,
+    decidedByName: text(200).nullable() })).max(100) });
 const commercialDetailSchema = z.object({
   state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5) }).nullable(),
   offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
@@ -395,6 +399,12 @@ const requestCommand = z.object({ operationId: uuid, version: versionField, kind
   requestedOfferId: uuid.optional(), desiredOn: day.optional(), details: longText.optional() }).strict();
 const decisionCommand = z.object({ operationId: uuid, version: versionField, status: z.enum(['IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN']),
   response: longText.optional(), effectiveOn: day.optional(), offerId: uuid.optional() }).strict();
+const revisionCommand = z.object({ operationId: uuid, version: versionField, action: z.enum(['CHANGE_DATE', 'RESUME']), effectiveOn: day.optional(),
+  response: longText }).strict();
+const noticesReadCommand = z.object({ operationId: uuid, ids: z.array(uuid).min(1).max(50) }).strict();
+const commercialNoticesResult = z.object({ data: z.object({ items: z.array(z.object({ id: uuid, clientId: uuid, clientName: text(200), requestId: uuid, kind: token,
+  event: token, createdAt: iso })).max(50) }) });
+const commercialNoticesReadResult = z.object({ data: z.object({ read: z.number().int().min(0) }) });
 // Facturation : mêmes bornes que l'API, qui relit l'IBAN (clé de contrôle), la TVA, les dates et chaque état de document.
 const issuerCommand = z.object({ operationId: uuid, version: versionField,
   legalName: z.string().trim().min(1).max(150), street: z.string().trim().min(1).max(200), buildingNumber: z.string().trim().min(1).max(16).nullable(),
@@ -679,6 +689,22 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
     const { version, ...body } = decisionCommand.parse(request.body);
     return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/commercial/requests/${requestId.toLowerCase()}/decision`,
       idempotencyKey: body.operationId, ifMatch: `"${version}"`, body: lowerIds(body) }, commercialResult);
+  });
+  // Après confirmation, une autre date ou une reprise reste une décision d'opérateur, conservée à côté de la première.
+  app.post('/app/bff/platform/clients/:id/commercial/requests/:requestId/revision', async (request, reply) => {
+    empty.parse(request.query);
+    const { id, requestId } = z.object({ id: uuid, requestId: uuid }).parse(request.params);
+    const { version, ...body } = revisionCommand.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${id.toLowerCase()}/commercial/requests/${requestId.toLowerCase()}/revision`,
+      idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, commercialResult);
+  });
+  // Avis aux opérateurs (R01-T08) : une relecture ne les duplique pas, les marquer lus est idempotent.
+  app.get('/app/bff/platform/commercial-notices', read('/v1/platform/commercial-notices', commercialNoticesResult));
+  app.post('/app/bff/platform/commercial-notices/read', async (request, reply) => {
+    empty.parse(request.query);
+    const body = noticesReadCommand.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/commercial-notices/read', idempotencyKey: body.operationId,
+      body: { operationId: body.operationId, ids: body.ids.map(item => item.toLowerCase()) } }, commercialNoticesReadResult);
   });
 
   // --- Facturation (R01-T05) : l'émetteur, la liste de toutes les factures, le passage manuel, puis la facturation d'une fiche. ---

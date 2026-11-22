@@ -53,19 +53,37 @@ export function createPlatformDocumentGateway(baseURL: string): PlatformDocument
       method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20_000),
       headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/pdf, application/problem+json', 'Cache-Control': 'no-store' },
     });
-    if (response.status !== 200) return { status: response.status, body: await readJSON(response, 64 * 1024) };
-    const disposition = response.headers.get('content-disposition') ?? '';
-    if (response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/pdf' || !invoiceDisposition.test(disposition) || !response.body) {
-      throw new Error('Réponse API inattendue.');
-    }
-    const chunks: Uint8Array[] = []; let size = 0;
-    for await (const chunk of response.body) {
-      size += chunk.byteLength;
-      if (size > MAX_INVOICE_PDF_BYTES) throw new Error('Réponse API trop grande.');
-      chunks.push(chunk);
-    }
-    return { status: 200, pdf: Buffer.concat(chunks), disposition };
+    return readInvoiceDocument(response);
   };
+}
+
+export type SchoolDocumentRequest = { schoolId: string; invoiceId: string };
+export type SchoolDocumentGateway = (request: SchoolDocumentRequest, accessToken: string) => ReturnType<PlatformDocumentGateway>;
+/** Document d'une facture vu par l'école : un seul chemin, les droits et l'appartenance de la facture sont relus par l'API. */
+export function createSchoolDocumentGateway(baseURL: string): SchoolDocumentGateway {
+  return async (request, accessToken) => {
+    if (!isUUID(request.schoolId) || !isUUID(request.invoiceId)) throw new Error('Route API non autorisée.');
+    const response = await fetch(`${baseURL}/v1/schools/${request.schoolId.toLowerCase()}/subscription/invoices/${request.invoiceId.toLowerCase()}/document`, {
+      method: 'GET', redirect: 'error', signal: AbortSignal.timeout(20_000),
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/pdf, application/problem+json', 'Cache-Control': 'no-store' },
+    });
+    return readInvoiceDocument(response);
+  };
+}
+
+async function readInvoiceDocument(response: Response): ReturnType<PlatformDocumentGateway> {
+  if (response.status !== 200) return { status: response.status, body: await readJSON(response, 64 * 1024) };
+  const disposition = response.headers.get('content-disposition') ?? '';
+  if (response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/pdf' || !invoiceDisposition.test(disposition) || !response.body) {
+    throw new Error('Réponse API inattendue.');
+  }
+  const chunks: Uint8Array[] = []; let size = 0;
+  for await (const chunk of response.body) {
+    size += chunk.byteLength;
+    if (size > MAX_INVOICE_PDF_BYTES) throw new Error('Réponse API trop grande.');
+    chunks.push(chunk);
+  }
+  return { status: 200, pdf: Buffer.concat(chunks), disposition };
 }
 
 async function readJSON(response: Response, limit: number): Promise<unknown> {

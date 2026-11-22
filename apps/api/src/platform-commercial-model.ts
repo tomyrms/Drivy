@@ -16,11 +16,15 @@ export const termsPhases = ['IN_FORCE', 'SCHEDULED', 'ENDED', 'SUPERSEDED'] as c
 export type TermsPhase = (typeof termsPhases)[number];
 export const trialKinds = ['START', 'EXTEND', 'END_EARLY'] as const;
 export const trialPhases = ['SCHEDULED', 'RUNNING', 'ENDED'] as const;
-export const requestKinds = ['OFFER_CHANGE', 'TERMINATION'] as const;
+export const requestKinds = ['OFFER_CHANGE', 'TERMINATION', 'REGULARIZATION'] as const;
 export type RequestKind = (typeof requestKinds)[number];
-export const requestStatuses = ['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const;
+export const requestStatuses = ['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'REVOKED'] as const;
 export type RequestStatus = (typeof requestStatuses)[number];
 export const decisionStatuses = ['IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const;
+/** Origine d'une demande et révision d'une résiliation confirmée (R01-T08). */
+export const requestSources = ['OPERATOR', 'SCHOOL'] as const;
+export const revisionActions = ['CHANGE_DATE', 'RESUME'] as const;
+export const noticeEvents = ['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'DATE_CHANGED', 'RESUMED'] as const;
 export const paidStartStatuses = ['ACTIVE', 'CANCELLED'] as const;
 
 /** Plus lointaine date acceptée pour une échéance commerciale saisie (essai, début payant, effet) : une saison, pas une décennie. */
@@ -124,6 +128,10 @@ export const decisionBody = z.object({
   .refine(body => body.status === 'ACCEPTED' || body.effectiveOn === undefined, { message: 'Seule une acceptation porte une date d’effet.', path: ['effectiveOn'] })
   .refine(body => body.status !== 'REFUSED' || body.response !== undefined, { message: 'Un refus porte sa réponse.', path: ['response'] })
   .refine(body => body.status === 'ACCEPTED' || body.offerId === undefined, { message: 'Seule une acceptation désigne une offre.', path: ['offerId'] });
+/** Après confirmation d'une résiliation : nouvelle date ou reprise du service, toujours par une décision opérateur motivée. */
+export const revisionBody = z.object({ operationId, action: z.enum(revisionActions), effectiveOn: day.optional(), response: z.string().trim().min(3).max(1000) }).strict()
+  .refine(body => (body.action === 'CHANGE_DATE') === (body.effectiveOn !== undefined), { message: 'Seul un changement de date porte une date.', path: ['effectiveOn'] });
+export const noticesReadBody = z.object({ operationId, ids: z.array(z.uuid()).min(1).max(50) }).strict();
 export const commercialQuery = z.object({}).strict();
 
 // --- Lignes de la base et projection -----------------------------------------------------------------------------------------
@@ -146,6 +154,10 @@ export interface RequestRow {
   id: string; kind: RequestKind; status: RequestStatus; requestedOn: string; requestedOfferId: string | null; requestedOfferName: string | null;
   desiredOn: string | null; details: string | null; response: string | null; effectiveOn: string | null; assignmentId: string | null;
   decidedAt: string | null; decidedByName: string | null; version: number; createdAt: string; createdByName: string | null; updatedAt: string;
+  source: (typeof requestSources)[number]; requestedModules: string[]; withdrawnBySchool: boolean; revisions: RevisionRow[];
+}
+export interface RevisionRow {
+  action: (typeof revisionActions)[number]; previousEffectiveOn: string; newEffectiveOn: string | null; response: string; decidedAt: string; decidedByName: string | null;
 }
 /** Ligne rendue par `drivy.platform_client_commercial`. */
 export interface CommercialRow {
@@ -271,6 +283,8 @@ export const requestView = (item: RequestRow) => ({
   requestedOfferName: item.requestedOfferName, desiredOn: item.desiredOn, details: item.details, response: item.response, effectiveOn: item.effectiveOn,
   assignmentId: item.assignmentId, decidedAt: iso(item.decidedAt), decidedByName: item.decidedByName, version: item.version,
   createdAt: iso(item.createdAt)!, createdByName: item.createdByName, updatedAt: iso(item.updatedAt)!,
+  source: item.source, requestedModules: [...item.requestedModules], withdrawnBySchool: item.withdrawnBySchool,
+  revisions: item.revisions.map(revision => ({ ...revision, decidedAt: iso(revision.decidedAt)! })),
 });
 
 /** Statut d'arrivée autorisé pour une demande dans un statut donné ; une décision (acceptée, refusée, retirée) est définitive. */

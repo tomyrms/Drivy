@@ -23,6 +23,7 @@ export const workspaces: readonly Workspace[] = [
   { key: 'settings', label: 'Réglages', symbol: 'settings', home: 'configuration', items: [
     { section: 'configuration', label: 'École' }, { section: 'confidentialite', label: 'Confidentialité' },
     { section: 'champs-profil', label: 'Informations élèves' }, { section: 'signalements', label: 'Signalements' },
+    { section: 'abonnement', label: 'Abonnement' },
     { section: 'apercu', label: 'Préparation', query: { from: 'configuration' } },
   ] },
 ];
@@ -33,7 +34,7 @@ export const sectionTitles: Record<SectionKey, string> = {
   equipe: 'Équipe', trajets: 'Trajets', formations: 'Formations et tarifs', offres: 'Formations et tarifs',
   referentiels: 'Formations et tarifs', procedures: 'Formations et tarifs', prestations: 'Prestations sans permis',
   conditions: 'Conditions commerciales', configuration: 'École', confidentialite: 'Confidentialité', 'champs-profil': 'Informations des élèves',
-  apercu: 'Préparation de l’école', signalements: 'Signalements',
+  apercu: 'Préparation de l’école', signalements: 'Signalements', abonnement: 'Abonnement',
 };
 
 export function workspaceFor(section: SectionKey, query: NavigationQuery = {}): Workspace {

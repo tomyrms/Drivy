@@ -105,7 +105,8 @@ export const platformCommercialRequestSchema = z.object({
   id, kind: token, status: token, requestedOn: isoDay, requestedOfferId: id.nullable(), requestedOfferName: z.string().max(100).nullable(), desiredOn: isoDay.nullable(),
   details: z.string().max(1000).nullable(), response: z.string().max(1000).nullable(), effectiveOn: isoDay.nullable(), assignmentId: id.nullable(),
   decidedAt: iso.nullable(), decidedByName: z.string().max(200).nullable(), version: z.number().int().min(1), createdAt: iso, createdByName: z.string().max(200).nullable(),
-  updatedAt: iso,
+  updatedAt: iso, source: token, requestedModules: z.array(token).max(10), withdrawnBySchool: z.boolean(),
+  revisions: z.array(z.object({ action: token, previousEffectiveOn: isoDay, newEffectiveOn: isoDay.nullable(), response: z.string().max(1000), decidedAt: iso, decidedByName: z.string().max(200).nullable() })).max(100),
 });
 export const platformCommercialDetailSchema = z.object({
   state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5) }).nullable(),
@@ -133,6 +134,10 @@ export const platformCommercialDetailSchema = z.object({
   today: isoDay, entitlementVersion: z.number().int().min(1), nextChangeAt: iso.nullable(), version: z.number().int().min(1),
 });
 export const platformCommercialResult = z.object({ data: platformCommercialDetailSchema });
+export const platformCommercialNoticeSchema = z.object({ id, clientId: id, clientName: z.string().max(200), requestId: id, kind: token, event: token, createdAt: iso });
+export const platformCommercialNoticesResult = z.object({ data: z.object({ items: z.array(platformCommercialNoticeSchema).max(50) }) });
+export const platformCommercialNoticesReadResult = z.object({ data: z.object({ read: z.number().int().min(0) }) });
+export type PlatformCommercialNotice = z.infer<typeof platformCommercialNoticeSchema>;
 
 // --- Facturation (R01-T05) : factures, avoirs et échéancier relus par l'API ; l'écran ne calcule aucun montant. ---
 export const invoiceStatuses = ['DRAFT', 'ISSUED', 'CANCELLED'] as const;
@@ -465,9 +470,11 @@ export const missingLabel = (codes: readonly string[]) => codes.map(code => miss
 export const termsPhaseLabel = (phase: string) => ({ IN_FORCE: 'En vigueur', SCHEDULED: 'Prévue', ENDED: 'Terminée', SUPERSEDED: 'Remplacée' } as Record<string, string>)[phase] ?? 'Version';
 export const suspensionLabel = (value: string | null) => (value === 'CONTINUE' ? 'Facturée' : value === 'PAUSE' ? 'Non facturée' : 'À compléter');
 export const trialKindLabel = (kind: string) => ({ START: 'Essai accordé', EXTEND: 'Prolongé', END_EARLY: 'Terminé plus tôt' } as Record<string, string>)[kind] ?? 'Essai';
-export const requestKindLabel = (kind: string) => ({ OFFER_CHANGE: 'Changement d’offre', TERMINATION: 'Résiliation' } as Record<string, string>)[kind] ?? 'Demande';
+export const requestKindLabel = (kind: string) => ({ OFFER_CHANGE: 'Changement d’offre', TERMINATION: 'Résiliation', REGULARIZATION: 'Régularisation' } as Record<string, string>)[kind] ?? 'Demande';
 export const requestStatusLabel = (status: string) =>
-  ({ RECEIVED: 'Reçue', IN_PROGRESS: 'En cours', ACCEPTED: 'Acceptée', REFUSED: 'Refusée', WITHDRAWN: 'Retirée' } as Record<string, string>)[status] ?? 'Demande';
+  ({ RECEIVED: 'Reçue', IN_PROGRESS: 'En cours', ACCEPTED: 'Acceptée', REFUSED: 'Refusée', WITHDRAWN: 'Retirée', REVOKED: 'Annulée' } as Record<string, string>)[status] ?? 'Demande';
+export const noticeEventLabel = (event: string) => ({ RECEIVED: 'Reçue', IN_PROGRESS: 'En cours', ACCEPTED: 'Acceptée', REFUSED: 'Refusée', WITHDRAWN: 'Retirée par l’école',
+  DATE_CHANGED: 'Date modifiée', RESUMED: 'Service repris' } as Record<string, string>)[event] ?? 'Mise à jour';
 export const requestOpen = (status: string) => status === 'RECEIVED' || status === 'IN_PROGRESS';
 const chfFormat = new Intl.NumberFormat('fr-CH', { style: 'currency', currency: 'CHF' });
 /** Centimes → « CHF 1 234.50 » ; `null` reste à compléter. */
@@ -693,6 +700,9 @@ const failures: Record<string, string> = {
   CLIENT_TERMINATED: 'La résiliation de cette école est confirmée.',
   REQUEST_CLOSED: 'Cette demande a déjà reçu une décision.',
   REQUEST_DATE_FUTURE: 'La date de la demande ne peut pas être à venir.',
+  REQUEST_ALREADY_OPEN: 'Une demande de ce type est déjà ouverte.',
+  TERMINATION_EFFECTIVE: 'Cette résiliation a déjà pris effet.',
+  TERMINATION_DATE_UNCHANGED: 'Choisissez une autre date.',
   BILLING_ACTIVE: 'La facturation planifiée est déjà active pour cette école.',
   BILLING_NOT_READY: 'Confirmez d’abord un début payant sur des conditions complètes.',
   BILLING_NOT_ACTIVE: 'La facturation planifiée n’est pas active pour cette école.',

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:platform-commercial:1",
   "title": "Conditions commerciales, essai, début payant et demandes (R01-T04, #456)",
-  "description": "GET /v1/platform/clients/{id}/commercial, POST /v1/platform/clients/{id}/commercial/terms, /trial/start, /trial/extend, /trial/end, /paid-start, /paid-start/cancel, /requests et /requests/{requestId}/decision. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). If-Match \"N\" porte la version du dossier commercial (428 sans version, 412 VERSION_CONFLICT si elle a changé) ; chaque commande rend le dossier relu après écriture. Montants entiers en centimes de CHF ; jours commerciaux en Europe/Zurich. Une version de conditions redonne toutes ses valeurs (null = à compléter) ; aucune n’est jamais modifiée ni supprimée. Après le début payant, une nouvelle version prend effet au prochain début de période ; une autre date exige un motif (409 TERMS_EXCEPTION_REASON_REQUIRED). Aucun prorata. Les périodes gardent le jour du mois du début payant, ramené au dernier jour des mois plus courts. Le début payant exige confirm=true, une date explicite et des conditions complètes à cette date (409 TERMS_INCOMPLETE). Un essai expiré ne crée aucun montant ; il ferme l’usage nouveau (lifecycle TRIAL_EXPIRED) sans retirer la consultation. Une résiliation acceptée est définitive et ferme l’usage nouveau à sa date. Les demandes (changement d’offre, résiliation) passent par RECEIVED, IN_PROGRESS puis ACCEPTED, REFUSED ou WITHDRAWN ; une décision est définitive. schedule est prévisionnel : aucune facture n’est émise (#457). billable n’est vrai qu’avec un début payant confirmé, des conditions complètes et sans résiliation effective. Le journal commercial reçoit l’action et les montants, jamais un motif ni une réponse en texte libre.",
+  "description": "GET /v1/platform/clients/{id}/commercial, POST /v1/platform/clients/{id}/commercial/terms, /trial/start, /trial/extend, /trial/end, /paid-start, /paid-start/cancel, /requests, /requests/{requestId}/decision et /requests/{requestId}/revision ; GET /v1/platform/commercial-notices et POST /v1/platform/commercial-notices/read. Une demande est un changement d’offre, une résiliation ou une régularisation, saisie par l’équipe ou reçue de l’école (source). Une résiliation confirmée ne change de date ou ne reprend (REVOKED) que par une décision conservée, avant sa date d’effet. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). If-Match \"N\" porte la version du dossier commercial (428 sans version, 412 VERSION_CONFLICT si elle a changé) ; chaque commande rend le dossier relu après écriture. Montants entiers en centimes de CHF ; jours commerciaux en Europe/Zurich. Une version de conditions redonne toutes ses valeurs (null = à compléter) ; aucune n’est jamais modifiée ni supprimée. Après le début payant, une nouvelle version prend effet au prochain début de période ; une autre date exige un motif (409 TERMS_EXCEPTION_REASON_REQUIRED). Aucun prorata. Les périodes gardent le jour du mois du début payant, ramené au dernier jour des mois plus courts. Le début payant exige confirm=true, une date explicite et des conditions complètes à cette date (409 TERMS_INCOMPLETE). Un essai expiré ne crée aucun montant ; il ferme l’usage nouveau (lifecycle TRIAL_EXPIRED) sans retirer la consultation. Une résiliation acceptée est définitive et ferme l’usage nouveau à sa date. Les demandes (changement d’offre, résiliation) passent par RECEIVED, IN_PROGRESS puis ACCEPTED, REFUSED ou WITHDRAWN ; une décision est définitive. schedule est prévisionnel : aucune facture n’est émise (#457). billable n’est vrai qu’avec un début payant confirmé, des conditions complètes et sans résiliation effective. Le journal commercial reçoit l’action et les montants, jamais un motif ni une réponse en texte libre.",
   "$defs": {
     "CommercialRestriction": {
       "type": "object",
@@ -258,7 +258,8 @@
           "type": "string",
           "enum": [
             "OFFER_CHANGE",
-            "TERMINATION"
+            "TERMINATION",
+            "REGULARIZATION"
           ]
         },
         "status": {
@@ -268,7 +269,8 @@
             "IN_PROGRESS",
             "ACCEPTED",
             "REFUSED",
-            "WITHDRAWN"
+            "WITHDRAWN",
+            "REVOKED"
           ]
         },
         "requestedOn": {
@@ -380,6 +382,77 @@
           "type": "string",
           "format": "date-time",
           "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "OPERATOR",
+            "SCHOOL"
+          ]
+        },
+        "requestedModules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "withdrawnBySchool": {
+          "type": "boolean"
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "CHANGE_DATE",
+                  "RESUME"
+                ]
+              },
+              "previousEffectiveOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "newEffectiveOn": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "response": {
+                "type": "string"
+              },
+              "decidedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "decidedByName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "action",
+              "previousEffectiveOn",
+              "newEffectiveOn",
+              "response",
+              "decidedAt",
+              "decidedByName"
+            ],
+            "additionalProperties": false
+          }
         }
       },
       "required": [
@@ -399,7 +472,11 @@
         "version",
         "createdAt",
         "createdByName",
-        "updatedAt"
+        "updatedAt",
+        "source",
+        "requestedModules",
+        "withdrawnBySchool",
+        "revisions"
       ],
       "additionalProperties": false
     },
@@ -1436,7 +1513,8 @@
                 "type": "string",
                 "enum": [
                   "OFFER_CHANGE",
-                  "TERMINATION"
+                  "TERMINATION",
+                  "REGULARIZATION"
                 ]
               },
               "status": {
@@ -1446,7 +1524,8 @@
                   "IN_PROGRESS",
                   "ACCEPTED",
                   "REFUSED",
-                  "WITHDRAWN"
+                  "WITHDRAWN",
+                  "REVOKED"
                 ]
               },
               "requestedOn": {
@@ -1558,6 +1637,77 @@
                 "type": "string",
                 "format": "date-time",
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "OPERATOR",
+                  "SCHOOL"
+                ]
+              },
+              "requestedModules": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "withdrawnBySchool": {
+                "type": "boolean"
+              },
+              "revisions": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "action": {
+                      "type": "string",
+                      "enum": [
+                        "CHANGE_DATE",
+                        "RESUME"
+                      ]
+                    },
+                    "previousEffectiveOn": {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    "newEffectiveOn": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "response": {
+                      "type": "string"
+                    },
+                    "decidedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "decidedByName": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "action",
+                    "previousEffectiveOn",
+                    "newEffectiveOn",
+                    "response",
+                    "decidedAt",
+                    "decidedByName"
+                  ],
+                  "additionalProperties": false
+                }
               }
             },
             "required": [
@@ -1577,7 +1727,11 @@
               "version",
               "createdAt",
               "createdByName",
-              "updatedAt"
+              "updatedAt",
+              "source",
+              "requestedModules",
+              "withdrawnBySchool",
+              "revisions"
             ],
             "additionalProperties": false
           }
@@ -2029,7 +2183,8 @@
           "type": "string",
           "enum": [
             "OFFER_CHANGE",
-            "TERMINATION"
+            "TERMINATION",
+            "REGULARIZATION"
           ]
         },
         "requestedOn": {
@@ -2096,6 +2251,249 @@
       "required": [
         "operationId",
         "status"
+      ],
+      "additionalProperties": false
+    },
+    "RevisionBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "CHANGE_DATE",
+            "RESUME"
+          ]
+        },
+        "effectiveOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "response": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "operationId",
+        "action",
+        "response"
+      ],
+      "additionalProperties": false
+    },
+    "NoticesReadBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "ids": {
+          "minItems": 1,
+          "maxItems": 50,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          }
+        }
+      },
+      "required": [
+        "operationId",
+        "ids"
+      ],
+      "additionalProperties": false
+    },
+    "CommercialNotice": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "clientId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "clientName": {
+          "type": "string"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "OFFER_CHANGE",
+            "TERMINATION",
+            "REGULARIZATION"
+          ]
+        },
+        "event": {
+          "type": "string",
+          "enum": [
+            "RECEIVED",
+            "IN_PROGRESS",
+            "ACCEPTED",
+            "REFUSED",
+            "WITHDRAWN",
+            "DATE_CHANGED",
+            "RESUMED"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "clientName",
+        "requestId",
+        "kind",
+        "event",
+        "createdAt"
+      ],
+      "additionalProperties": false
+    },
+    "CommercialNoticesEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "maxItems": 50,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "clientId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "clientName": {
+                    "type": "string"
+                  },
+                  "requestId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "OFFER_CHANGE",
+                      "TERMINATION",
+                      "REGULARIZATION"
+                    ]
+                  },
+                  "event": {
+                    "type": "string",
+                    "enum": [
+                      "RECEIVED",
+                      "IN_PROGRESS",
+                      "ACCEPTED",
+                      "REFUSED",
+                      "WITHDRAWN",
+                      "DATE_CHANGED",
+                      "RESUMED"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "clientId",
+                  "clientName",
+                  "requestId",
+                  "kind",
+                  "event",
+                  "createdAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "CommercialNoticesReadEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "read": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "read"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "requestId",
+        "serverTime"
       ],
       "additionalProperties": false
     },
@@ -3135,7 +3533,8 @@
                     "type": "string",
                     "enum": [
                       "OFFER_CHANGE",
-                      "TERMINATION"
+                      "TERMINATION",
+                      "REGULARIZATION"
                     ]
                   },
                   "status": {
@@ -3145,7 +3544,8 @@
                       "IN_PROGRESS",
                       "ACCEPTED",
                       "REFUSED",
-                      "WITHDRAWN"
+                      "WITHDRAWN",
+                      "REVOKED"
                     ]
                   },
                   "requestedOn": {
@@ -3257,6 +3657,77 @@
                     "type": "string",
                     "format": "date-time",
                     "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "OPERATOR",
+                      "SCHOOL"
+                    ]
+                  },
+                  "requestedModules": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "withdrawnBySchool": {
+                    "type": "boolean"
+                  },
+                  "revisions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "action": {
+                          "type": "string",
+                          "enum": [
+                            "CHANGE_DATE",
+                            "RESUME"
+                          ]
+                        },
+                        "previousEffectiveOn": {
+                          "type": "string",
+                          "format": "date",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                        },
+                        "newEffectiveOn": {
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "format": "date",
+                              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "response": {
+                          "type": "string"
+                        },
+                        "decidedAt": {
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        "decidedByName": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "action",
+                        "previousEffectiveOn",
+                        "newEffectiveOn",
+                        "response",
+                        "decidedAt",
+                        "decidedByName"
+                      ],
+                      "additionalProperties": false
+                    }
                   }
                 },
                 "required": [
@@ -3276,7 +3747,11 @@
                   "version",
                   "createdAt",
                   "createdByName",
-                  "updatedAt"
+                  "updatedAt",
+                  "source",
+                  "requestedModules",
+                  "withdrawnBySchool",
+                  "revisions"
                 ],
                 "additionalProperties": false
               }

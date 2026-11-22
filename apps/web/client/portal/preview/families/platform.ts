@@ -60,6 +60,7 @@ export const platformFamily: PreviewFamily = {
         return tools.reply(200, { data: { items: structuredClone(refusedOnly ? journal.filter(item => item.result === 'REFUSED') : journal), nextCursor: null } });
       }
       if (path === 'join') return tools.reply(200, { pending: !join.accepted && join.submitted, uncertain: !join.accepted && join.submitted, accepted: join.accepted });
+      if (path === 'commercial-notices') return tools.reply(200, { data: { items: [] } });
       return offersRead(request, path, tools) ?? clientsRead(request, path, tools) ?? tools.reply(404, { code: 'NOT_FOUND' });
     }
     if (request.method !== 'POST') return tools.reply(405, { code: 'METHOD_NOT_ALLOWED' });

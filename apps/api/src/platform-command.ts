@@ -184,6 +184,19 @@ export function databaseRefusal(error: unknown): ApiError | undefined {
   if (code === '23505' && (constraint === 'platform_commercial_terms_client_id_sequence_key' || constraint === 'platform_trial_change_client_id_sequence_key')) {
     return new ApiError(412, 'VERSION_CONFLICT', 'Le dossier commercial de cette école a changé. Rechargez-le avant de confirmer.');
   }
+  // Espace abonnement de l'école et révision d'une résiliation (R01-T08).
+  if (code === '42501' && message.includes('school_commercial_denied')) return new ApiError(403, 'COMMERCIAL_ACCESS_REQUIRED', 'Cet espace est réservé aux responsables de l’école.');
+  if (code === '23514' && message.includes('school_commercial_no_client')) return new ApiError(409, 'COMMERCIAL_CLIENT_MISSING', 'Cette école n’a pas encore de dossier commercial. Contactez Drivy.');
+  if (code === '23514' && message.includes('school_termination_confirmed')) return new ApiError(409, 'TERMINATION_CONFIRMED', 'Une résiliation est déjà confirmée.');
+  if ((code === '23514' && message.includes('school_request_open')) || (code === '23505' && constraint === 'platform_request_open')) {
+    return new ApiError(409, 'REQUEST_ALREADY_OPEN', 'Une demande de ce type est déjà en cours.');
+  }
+  if (code === '23514' && message.includes('school_request_stale')) return new ApiError(412, 'VERSION_CONFLICT', 'Cette demande a changé. Rechargez-la avant de confirmer.');
+  if (code === '23514' && message.includes('platform_termination_effective')) return new ApiError(409, 'TERMINATION_EFFECTIVE', 'Cette résiliation a déjà pris effet.');
+  if (code === '23514' && (message.includes('platform_termination_undecided') || message.includes('platform_termination_decision_fixed'))) {
+    return new ApiError(409, 'REQUEST_CLOSED', 'Cette demande a déjà reçu une décision.');
+  }
+  if (code === '23514' && message.includes('platform_request_modules')) return new ApiError(400, 'INVALID_REQUEST', 'Les modules demandés ne sont pas valides.');
   return billingRefusal(code, message, constraint);
 }
 

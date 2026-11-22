@@ -325,7 +325,7 @@ struct SchoolRootView: View {
             openInvitations: followUp(.invitations, when: canManageInvitations),
             openJoinSchool: followUp(.join, when: canJoinSchool),
             signOut: signOut, resumeOnboarding: followUp(.onboarding, when: canResumeOnboarding),
-            tripInProgress: tripInProgress)
+            tripInProgress: tripInProgress, subscriptionURL: subscriptionURL)
     }
 
     /// Un trajet GPS tourne (ou attend encore la confirmation de l’école) : changer d’école fermerait sa portée.
@@ -347,6 +347,12 @@ struct SchoolRootView: View {
         guard let configuration, let membership = workspace?.membership, membership.roles.contains("ADMIN") else { return nil }
         guard workspace?.school?.status != "ARCHIVED" else { return nil }
         return configuration.managementURL(schoolID: membership.schoolId, preparation: workspace?.school?.status == "DRAFT")
+    }
+
+    /// L’abonnement reste consultable par l’administration, y compris sur une école archivée.
+    private var subscriptionURL: URL? {
+        guard let configuration, let membership = workspace?.membership, membership.roles.contains("ADMIN") else { return nil }
+        return configuration.subscriptionManagementURL(schoolID: membership.schoolId)
     }
 
     /// « Mon profil » existe pour tout compte Drivy connecté, élève, moniteur, administration ou sans école.

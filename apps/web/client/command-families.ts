@@ -15,6 +15,7 @@ export const commandFamilies = {
     'updateAdministrativeProfile'],
   school: ['updateSchool', 'saveSetup', 'saveSetupDraft', 'applySetupDraft', 'activate', 'saveDataPolicy', 'updateModules', 'createProfilePolicy',
     'publishProfilePolicy'],
+  subscription: ['createSubscriptionRequest', 'withdrawSubscriptionRequest', 'acknowledgeSubscriptionNotices'],
 } as const satisfies Record<string, readonly CommandKind[]>;
 
 export type CommandFamily = keyof typeof commandFamilies;

@@ -54,6 +54,14 @@ struct AppConfiguration: Codable, Equatable, Sendable {
         return parts.url
     }
 
+    /// La rubrique Abonnement du portail, ouverte aussi sur une école archivée.
+    func subscriptionManagementURL(schoolID: UUID) -> URL? {
+        guard let base = managementURL(schoolID: schoolID),
+              var parts = URLComponents(url: base, resolvingAgainstBaseURL: false) else { return nil }
+        parts.path += "/abonnement"
+        return parts.url
+    }
+
     func acceptsIdentityEndpoint(_ url: URL) -> Bool {
         Self.isSecureEndpoint(url) && url.host == issuer.host && (url.port ?? 443) == (issuer.port ?? 443)
     }

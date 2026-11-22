@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { actionClasses, commercialLifecycles, commercialStates, restrictionReasons } from './entitlements-model.js';
 import { commercialOfferSchema } from './platform-clients-contract.js';
 import {
-  missingFields, paidStartStatuses, requestKinds, requestStatuses, suspensionBillings, termsPhases, termsStatuses, trialKinds, trialPhases,
+  missingFields, noticeEvents, paidStartStatuses, requestKinds, requestSources, requestStatuses, revisionActions, suspensionBillings, termsPhases, termsStatuses, trialKinds, trialPhases,
 } from './platform-commercial-model.js';
 
 /**
@@ -31,6 +31,10 @@ export const commercialRequestSchema = z.object({
   requestedOfferName: nullableText, desiredOn: day.nullable(), details: nullableText, response: nullableText, effectiveOn: day.nullable(),
   assignmentId: z.uuid().nullable(), decidedAt: timestamp.nullable(), decidedByName: nullableText, version: z.number().int().min(1),
   createdAt: timestamp, createdByName: nullableText, updatedAt: timestamp,
+  source: z.enum(requestSources), requestedModules: z.array(z.string()), withdrawnBySchool: z.boolean(),
+  revisions: z.array(z.object({
+    action: z.enum(revisionActions), previousEffectiveOn: day, newEffectiveOn: day.nullable(), response: z.string(), decidedAt: timestamp, decidedByName: nullableText,
+  }).strict()),
 }).strict();
 const schedulePeriodSchema = z.object({
   index: z.number().int().min(0), startsOn: day, endsOn: day, amount: cents.nullable(), discount: cents, net: cents.nullable(),
@@ -75,3 +79,9 @@ export const commercialDetailSchema = z.object({
 
 const envelope = <T extends z.ZodType>(data: T) => z.object({ data, requestId: z.uuid(), serverTime: timestamp }).strict();
 export const commercialDetailEnvelope = envelope(commercialDetailSchema);
+/** Boîte de l'équipe (R01-T08) : événements non lus sur les demandes des écoles. */
+export const commercialNoticeSchema = z.object({
+  id: z.uuid(), clientId: z.uuid(), clientName: z.string(), requestId: z.uuid(), kind: z.enum(requestKinds), event: z.enum(noticeEvents), createdAt: timestamp,
+}).strict();
+export const commercialNoticesEnvelope = envelope(z.object({ items: z.array(commercialNoticeSchema).max(50) }).strict());
+export const commercialNoticesReadEnvelope = envelope(z.object({ read: z.number().int().min(0) }).strict());

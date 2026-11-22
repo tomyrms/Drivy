@@ -7,7 +7,7 @@ import type { WebConfig } from './config.js';
 import { IdentityUnavailable, InvalidCredentials, recentAuthentication, type IdentityProvider } from './oidc.js';
 import { clientKey, RateLimiter } from './rate-limit.js';
 import { SessionStore, bindOpeningIdentity, matchesSecret, type Session, type Tokens } from './session.js';
-import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createPlatformDocumentGateway, createPlatformGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
+import { createAnonymousGateway, createGateway, createSchoolGateway, createMetricsExportGateway, type MetricsExportGateway, createOpeningGateway, createPlatformDocumentGateway, createPlatformGateway, createSchoolDocumentGateway, type SchoolDocumentGateway, createNotificationGateway, type NotificationGateway, type AnonymousGateway, type ApiGateway, type ApiResult, type SchoolGateway, type SchoolRequest } from './upstream.js';
 import { openingTokenSchema, registerOpeningRoutes, type OpeningGateway, type OpeningRequest, type OpeningState } from './opening-routes.js';
 import { registerPlatformRoutes, type PlatformDocumentGateway, type PlatformDocumentRequest, type PlatformDocumentResult, type PlatformGateway, type PlatformRequest } from './platform-routes.js';
 import { isUUID, matchSchoolRoute, MAX_SCHOOL_BODY } from './school-routes.js';
@@ -50,7 +50,7 @@ function clientError(error: unknown): WebError | undefined {
 }
 
 export async function buildWebApp(options: { config: WebConfig; identity: IdentityProvider; gateway?: ApiGateway;
-  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; platformGateway?: PlatformGateway; platformDocumentGateway?: PlatformDocumentGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
+  schoolGateway?: SchoolGateway; metricsExportGateway?: MetricsExportGateway; openingGateway?: OpeningGateway; platformGateway?: PlatformGateway; platformDocumentGateway?: PlatformDocumentGateway; schoolDocumentGateway?: SchoolDocumentGateway; anonymousGateway?: AnonymousGateway; notificationGateway?: NotificationGateway; store?: SessionStore; staticRoot?: string; now?: () => number; entryLimiter?: RateLimiter }) {
   const { config, identity } = options;
   const now = options.now ?? Date.now;
   const reauthMaxAge = z.number().int().min(30).max(900).parse(config.reauthMaxAgeSeconds ?? 300);
@@ -66,6 +66,7 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
   const openingGateway = options.openingGateway ?? createOpeningGateway(config.apiBaseURL);
   const platformGateway = options.platformGateway ?? createPlatformGateway(config.apiBaseURL);
   const platformDocumentGateway = options.platformDocumentGateway ?? createPlatformDocumentGateway(config.apiBaseURL);
+  const schoolDocumentGateway = options.schoolDocumentGateway ?? createSchoolDocumentGateway(config.apiBaseURL);
   const anonymousGateway = options.anonymousGateway ?? createAnonymousGateway(config.apiBaseURL);
   const notificationGateway = options.notificationGateway ?? createNotificationGateway(config.apiBaseURL);
   const cookieName = config.development ? 'drivy-dev-session' : '__Host-drivy-session';
@@ -479,6 +480,24 @@ export async function buildWebApp(options: { config: WebConfig; identity: Identi
     reply.header('Content-Disposition',`attachment; filename="drivy-${measure}${part ?? ''}-${from}_${toExclusive}.csv"`);
     if ('drift' in result && result.drift) reply.header('X-Metrics-Drift','true');
     return reply.type('text/csv; charset=utf-8').send((result as { csv: string }).csv);
+  });
+  // Facture de l'abonnement (R01-T08) : l'API relit le responsable et l'appartenance à l'école ; le PDF ne reste pas dans le relais.
+  app.get('/app/bff/schools/:schoolId/subscription/invoices/:invoiceId/document', async (request, reply) => {
+    const { schoolId, invoiceId } = z.object({ schoolId: z.string(), invoiceId: z.string() }).parse(request.params);
+    if (!isUUID(schoolId) || !isUUID(invoiceId) || request.raw.url?.includes('?')) throw new WebError(404,'NOT_FOUND');
+    const session = current(request);
+    const result = await schoolDocumentGateway({ schoolId, invoiceId },await accessToken(session));
+    if (!store.isCurrent(session)) throw new WebError(401,'SESSION_EXPIRED');
+    if (result.status === 401) {
+      if (z.object({code:z.literal('REAUTH_REQUIRED')}).safeParse((result as {body:unknown}).body).success) throw new WebError(401,'REAUTH_REQUIRED');
+      store.destroy(session); throw new WebError(401,'SESSION_EXPIRED');
+    }
+    if (!('pdf' in result)) {
+      if (result.status < 400) throw new WebError(503,'INVALID_RESPONSE');
+      return sendApi(reply,result as ApiResult);
+    }
+    return reply.status(200).header('content-type','application/pdf').header('content-disposition',result.disposition)
+      .header('cache-control','no-store').header('x-content-type-options','nosniff').send(result.pdf);
   });
   app.route({ method: ['GET','POST','PATCH','PUT'], url: '/app/bff/schools/*', bodyLimit: MAX_SCHOOL_BODY + 1_024,
     // Refused before the body is read: an unknown path or a missing session costs nothing to serve.
