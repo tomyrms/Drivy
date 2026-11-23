@@ -43,3 +43,7 @@ Les indicateurs de revenu de Drivy devront reposer sur des faits disponibles, no
 Commencer par les offres de [R03](R03-modules-et-offres.md). Définir ensuite les règles commerciales et les responsabilités avant de choisir une solution de paiement. [R01](R01-administration-plateforme.md) affichera les états ; [R05](R05-site-vitrine.md) présentera seulement les offres effectivement retenues.
 
 **Aucun encaissement, abonnement réel, mécanisme de suspension ou modification de données n'est autorisé par cette fiche.**
+
+## État de réalisation
+
+Écrit sur les branches `tomyrms/r01-*` (#452), non fusionné, non qualifié. Procédure et recette : [mise en service R01](../../implementation/mise-en-service-r01-20261123.md).

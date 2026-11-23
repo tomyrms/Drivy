@@ -1,3 +1,10 @@
+## 23 novembre 2026 — R01-T11 : préparation de la mise en service (#463)
+
+- Branche `tomyrms/r01-t11-qualification`, issue de T10. Aucune PR, rien de fusionné, déployé ni poussé. L'issue reste ouverte.
+- Écrit : `docs/implementation/mise-en-service-r01-20261123.md` (paramètres privés, mise en service progressive, arrêt, retour arrière, grille de recette).
+- **Non exécuté** : toute la recette. 13 lignes sur 14 sont `NOT_EXECUTED`, l'envoi de test est `BLOCKED` faute de SMTP.
+- Aucune fonction de l'épic R01 n'est déclarée opérationnelle par ce relevé.
+
 ## 23 novembre 2026 — R01-T10 : tableau de bord commercial (#462)
 
 - Branche `tomyrms/r01-t10-tableau-commercial`, issue de la tête de `tomyrms/r01-t09-relances-suspension`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/tableau-commercial-20261122.md` donne les définitions et les limites.

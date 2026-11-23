@@ -41,3 +41,7 @@ Le périmètre minimal avant facturation automatisée reste à définir. Les con
 Définir les opérations indispensables, les données visibles par rôle et leurs limites. Vérifier ensuite l'existant et les dépendances, puis faire valider le périmètre par le porteur.
 
 **Aucun accès supplémentaire, développement ou déploiement n'est autorisé par cette fiche.**
+
+## État de réalisation
+
+Écrit sur les branches `tomyrms/r01-*` (#452), non fusionné, non qualifié. Procédure et recette : [mise en service R01](../../implementation/mise-en-service-r01-20261123.md).

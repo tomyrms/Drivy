@@ -47,3 +47,7 @@ Le lot R01-T03 (#455) de l'administration de la plateforme définit un catalogue
 Définir le socle et les modules retenus, puis les transitions d'offre et le devenir des données. Vérifier leur faisabilité sur l'architecture du moment avant de découper l'implémentation iOS, web et serveur.
 
 **Désactiver un module ne signifie jamais supprimer silencieusement son historique ou ses engagements. Cette fiche ne lance aucune modification du produit.**
+
+## État de réalisation
+
+Écrit sur les branches `tomyrms/r01-*` (#452), non fusionné, non qualifié. Procédure et recette : [mise en service R01](../../implementation/mise-en-service-r01-20261123.md).
