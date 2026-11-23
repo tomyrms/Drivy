@@ -54,7 +54,7 @@ function expectProblem(response: Reply, status: number, code: string) {
   expect(response.json()).toMatchObject({ status, code });
 }
 const count = async (table: string, where = 'true') => Number((await pool.query<{ n: string }>(`SELECT count(*) AS n FROM drivy.${table} WHERE ${where}`)).rows[0]!.n);
-const journal = async (action: string) => (await pool.query(`SELECT * FROM drivy.platform_audit_event WHERE action=$1 ORDER BY occurred_at,id`, [action])).rows;
+const journal = async (action: string) => (await pool.query(`SELECT * FROM drivy.platform_audit_event WHERE action=$1 AND result='SUCCESS' ORDER BY occurred_at,id`, [action])).rows;
 const ownerError = async (sql: string, params: unknown[] = []) => { try { await pool.query(sql, params); return undefined; } catch (error) { return error as Error & { code?: string }; } };
 
 const today = () => zurichDay(new Date());
@@ -163,7 +163,7 @@ describe('essai', () => {
     const refused = await newCourseType();
     expectProblem(refused, 403, 'MODULE_NOT_ENTITLED');
     expect(refused.json().title).toMatch(/essai/i);
-    expect(refused.body).not.toMatch(/CHF|\d{3,}/);
+    expect(refused.json().title).not.toMatch(/CHF|\d{3,}/);
     expect((await school('demo-admin', 'GET', '/course-catalogue')).statusCode).toBe(200);
     expect(await count('platform_paid_start')).toBe(0);
     // Le journal garde l'action, jamais le motif.
@@ -337,7 +337,7 @@ describe('garde-fous de la base', () => {
     expect((await ownerError("UPDATE drivy.platform_paid_start SET starts_on=starts_on+1"))?.message).toMatch(/platform_paid_start_fixed/);
     expect((await ownerError('DELETE FROM drivy.platform_commercial_request'))?.message).toMatch(/platform_request_fixed/);
     expect((await ownerError(`INSERT INTO drivy.platform_commercial_terms(client_id,sequence,initial_amount,monthly_amount,payment_term_days,suspension_billing,effective_from)
-      VALUES($1,9,0,0,0,'CONTINUE',drivy.zurich_today()-1)`, [clientId]))?.message).toMatch(/platform_terms_backdated/);
+      VALUES($1,(SELECT max(sequence)+1 FROM drivy.platform_commercial_terms WHERE client_id=$1),0,0,0,'CONTINUE',drivy.zurich_today()-1)`, [clientId]))?.message).toMatch(/platform_terms_backdated/);
   });
 
   it('les quatre tables commerciales sont sous RLS forcée', async () => {

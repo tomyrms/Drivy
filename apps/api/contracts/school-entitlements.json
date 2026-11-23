@@ -47,6 +47,16 @@
                       "WRITE_NEW"
                     ]
                   }
+                },
+                "causes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "PAYMENT",
+                      "MANUAL"
+                    ]
+                  }
                 }
               },
               "required": [
@@ -200,6 +210,16 @@
                           "READ_HISTORY",
                           "COMPLETE_COMMITMENT",
                           "WRITE_NEW"
+                        ]
+                      }
+                    },
+                    "causes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "PAYMENT",
+                          "MANUAL"
                         ]
                       }
                     }

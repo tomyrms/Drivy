@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  actionClasses, adjustmentPhases, assignmentPhases, commercialLifecycles, commercialStates, consequenceKinds, entitlementEffects, moduleCodes, restrictionReasons,
+  actionClasses, adjustmentPhases, assignmentPhases, commercialLifecycles, commercialStates, consequenceKinds, entitlementEffects, moduleCodes, restrictionCauses, restrictionReasons,
 } from './entitlements-model.js';
 import { commercialOfferSchema } from './platform-clients-contract.js';
 import { offerStatuses } from './platform-offers-model.js';
@@ -63,7 +63,7 @@ export const assignmentPreviewEnvelope = envelope(assignmentPreviewSchema);
  */
 export const schoolEntitlementsSchema = z.object({
   state: z.enum(commercialStates), lifecycle: z.enum(commercialLifecycles),
-  restriction: z.object({ reason: z.enum(restrictionReasons), closes: z.array(z.enum(actionClasses)) }).strict().nullable(),
+  restriction: z.object({ reason: z.enum(restrictionReasons), closes: z.array(z.enum(actionClasses)), causes: z.array(z.enum(restrictionCauses)).optional() }).strict().nullable(),
   trialEndsAt: timestamp.nullable(), paidStartsOn: z.iso.date().nullable(), terminationOn: z.iso.date().nullable(),
   modules: z.array(z.object({ code: moduleCode, entitled: z.boolean() }).strict()), version: z.number().int().min(1),
   nextChangeAt: timestamp.nullable(), computedAt: timestamp

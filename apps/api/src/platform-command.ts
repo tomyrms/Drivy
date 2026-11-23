@@ -104,7 +104,7 @@ const secretKey = /token|secret|password|passphrase|authorization|code_?hash|^co
 function safeChanges(changes: Record<string, unknown>): string {
   const walk = (value: unknown, depth: number): void => {
     if (value === null || ['string', 'number', 'boolean'].includes(typeof value)) return;
-    if (depth > 2 || typeof value !== 'object') throw new Error('Modification de journal non sérialisable.');
+    if (depth > 3 || typeof value !== 'object') throw new Error('Modification de journal non sérialisable.');
     for (const [key, item] of Object.entries(value)) {
       if (secretKey.test(key)) throw new Error('Un secret ne s’écrit jamais au journal commercial.');
       walk(item, depth + 1);

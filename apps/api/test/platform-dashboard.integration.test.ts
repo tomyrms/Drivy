@@ -106,7 +106,15 @@ describe('tableau de bord commercial', () => {
   });
 
   it('distingue une mensualité manquante d’un zéro et l’annonce comme action', async () => {
-    const clientId = await paidClient({ ...terms, monthlyAmount: null, recurringDiscount: 0 });
+    const clientId = await paidClient();
+    // Les routes et la base refusent ce cas après un début payant : on simule une donnée ancienne pour vérifier que l'écran ne la présente pas comme un zéro.
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query("SET LOCAL session_replication_role='replica'");
+      await db.query('UPDATE drivy.platform_commercial_terms SET monthly_amount=NULL,recurring_discount=0 WHERE client_id=$1', [clientId]);
+      await db.query('COMMIT');
+    } finally { db.release(); }
     const data = await read();
     const row = data.clients.find((item: any) => item.id === clientId);
     expect(row).toMatchObject({ monthly: null, monthlyState: 'MISSING' });

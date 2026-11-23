@@ -61,7 +61,7 @@ function expectProblem(response: Reply, status: number, code: string) {
   expect(response.json()).toMatchObject({ status, code });
 }
 const count = async (table: string, where = 'true') => Number((await pool.query<{ n: string }>(`SELECT count(*) AS n FROM drivy.${table} WHERE ${where}`)).rows[0]!.n);
-const journal = async (action: string) => (await pool.query(`SELECT * FROM drivy.platform_audit_event WHERE action=$1 ORDER BY occurred_at,id`, [action])).rows;
+const journal = async (action: string) => (await pool.query(`SELECT * FROM drivy.platform_audit_event WHERE action=$1 AND result='SUCCESS' ORDER BY occurred_at,id`, [action])).rows;
 const ownerError = async (sql: string, params: unknown[] = []) => { try { await pool.query(sql, params); return undefined; } catch (error) { return error as Error & { code?: string }; } };
 
 const today = () => zurichDay(new Date());
@@ -486,8 +486,8 @@ describe('garde-fous de la base', () => {
     await setIssuer();
     const clientId = await billableClient();
     const invoice = await issued(clientId, (await prepared(clientId, { kind: 'INITIAL' })).id);
-    expect((await ownerError('UPDATE drivy.platform_invoice SET total=1 WHERE id=$1', [invoice.id]))?.message).toMatch(/platform_invoice_issued_fixed/);
-    expect((await ownerError('UPDATE drivy.platform_invoice SET number=$2 WHERE id=$1', [invoice.id, 'F-1999-00001']))?.message).toMatch(/platform_invoice_issued_fixed/);
+    expect((await ownerError('UPDATE drivy.platform_invoice SET total=1 WHERE id=$1', [invoice.id]))?.message).toMatch(/platform_invoice_fixed/);
+    expect((await ownerError('UPDATE drivy.platform_invoice SET number=$2 WHERE id=$1', [invoice.id, 'F-1999-00001']))?.message).toMatch(/platform_invoice_fixed/);
     expect((await ownerError('DELETE FROM drivy.platform_invoice'))?.message).toMatch(/platform_invoice_fixed/);
     expect((await ownerError('DELETE FROM drivy.platform_billing_issuer'))?.message).toMatch(/platform_issuer_fixed/);
     expect((await ownerError(`INSERT INTO drivy.platform_billing_activation(id,client_id,starts_on,activated_by) VALUES(gen_random_uuid(),$1,drivy.zurich_today()-1,

@@ -62,7 +62,8 @@ describe('projections', () => {
       modules: [{ code: 'MESSAGING', entitled: true }, { code: 'COLLECTIVE_COURSES', entitled: false, offerName: 'Essentiel', reason: 'geste commercial' } as never]
     }, at);
     expect(view).toEqual({
-      state: 'OFFER_ACTIVE', modules: [{ code: 'MESSAGING', entitled: true }, { code: 'COLLECTIVE_COURSES', entitled: false }], version: 4,
+      state: 'OFFER_ACTIVE', lifecycle: 'NONE', restriction: null, trialEndsAt: null, paidStartsOn: null, terminationOn: null,
+      modules: [{ code: 'MESSAGING', entitled: true }, { code: 'COLLECTIVE_COURSES', entitled: false }], version: 4,
       nextChangeAt: '2026-12-01T00:00:00.000Z', computedAt: '2026-11-14T10:00:00.000Z'
     });
     expect(JSON.stringify(view)).not.toMatch(/offerName|reason|createdBy|assignment|adjustment/);

@@ -241,10 +241,14 @@ export function registerPlatformCommercial(app: FastifyInstance, options: { pool
   // Décision : en traitement, acceptée (avec date d'effet), refusée (avec réponse) ou retirée. Une décision est définitive.
   command('/requests/:requestId/decision', 'DECIDE_COMMERCIAL_REQUEST', decisionBody, async (db, actor, before, body, { id, requestId }) => {
     // Une demande d'une autre fiche n'existe pas ici.
+    const known = (await db.query<{ status: RequestStatus }>('SELECT status FROM drivy.platform_commercial_request WHERE id=$1 AND client_id=$2', [requestId!, id])).rows[0];
+    if (!known) throw notFound();
+    const closed = () => new ApiError(409, 'REQUEST_CLOSED', 'Cette demande a déjà reçu une décision.');
+    if (!requestTransitionAllowed(known.status, body.status)) throw closed();
+    // FOR UPDATE passe par la politique d'écriture : une demande close entre-temps n'y est plus visible.
     const row = (await db.query<{ kind: RequestKind; status: RequestStatus; requested_offer_id: string | null }>(
       'SELECT kind,status,requested_offer_id FROM drivy.platform_commercial_request WHERE id=$1 AND client_id=$2 FOR UPDATE', [requestId!, id])).rows[0];
-    if (!row) throw notFound();
-    if (!requestTransitionAllowed(row.status, body.status)) throw new ApiError(409, 'REQUEST_CLOSED', 'Cette demande a déjà reçu une décision.');
+    if (!row || !requestTransitionAllowed(row.status, body.status)) throw closed();
     let effectiveOn: string | null = null; let assignmentId: string | null = null; let offerId: string | null = null;
     if (body.status === 'ACCEPTED') {
       effectiveOn = futureDay(body.effectiveOn!, before.today);

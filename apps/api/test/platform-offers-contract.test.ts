@@ -213,7 +213,8 @@ it('le contrat des offres ne mentionne aucune propriété de montant, d’essai,
     'tracks', 'trips', 'documents', 'profiles', 'token', 'secret', 'password', 'codeHash', 'code_hash', 'issuer', 'subject'])
     expect(offers.has(forbidden), `propriété interdite : ${forbidden}`).toBe(false);
   const school = propertyNames((await readContract('school-entitlements')).$defs);
-  for (const forbidden of ['offer', 'offerName', 'scheduledOffer', 'reason', 'createdByName', 'assignments', 'adjustments', 'amount', 'dueDates'])
+  for (const forbidden of ['offer', 'offerName', 'scheduledOffer', 'createdByName', 'assignments', 'adjustments', 'amount', 'dueDates'])
     expect(school.has(forbidden), `propriété interdite côté école : ${forbidden}`).toBe(false);
-  expect([...school].sort()).toEqual(['code', 'computedAt', 'data', 'entitled', 'modules', 'nextChangeAt', 'requestId', 'serverTime', 'state', 'status', 'title', 'type', 'version'].sort());
+  // `reason` n'existe que dans `restriction`, en valeur fermée : jamais le motif libre d'un opérateur.
+  expect([...school].sort()).toEqual(['causes', 'closes', 'code', 'computedAt', 'data', 'entitled', 'lifecycle', 'modules', 'nextChangeAt', 'paidStartsOn', 'reason', 'requestId', 'restriction', 'serverTime', 'state', 'status', 'terminationOn', 'title', 'trialEndsAt', 'type', 'version'].sort());
 });

@@ -120,7 +120,7 @@ export const commercialView = (item: ClientCommercial, nextPeriodOn: string | nu
 
 export const schoolEntitlementsView = (row: SchoolEntitlementRow, computedAt: Date) => ({
   state: row.state, lifecycle: row.lifecycle ?? 'NONE',
-  restriction: row.restriction ? { reason: row.restriction.reason, closes: [...row.restriction.closes] } : null,
+  restriction: row.restriction ? { reason: row.restriction.reason, closes: [...row.restriction.closes], ...(row.restriction.causes ? { causes: [...row.restriction.causes] } : {}) } : null,
   trialEndsAt: iso(row.trialEndsAt), paidStartsOn: row.paidStartsOn ?? null, terminationOn: row.terminationOn ?? null,
   modules: row.modules.map(module => ({ code: module.code, entitled: module.entitled })), version: row.version,
   nextChangeAt: iso(row.nextChangeAt), computedAt: computedAt.toISOString(),

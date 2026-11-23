@@ -88,7 +88,7 @@ it('les projections réellement servies respectent le contrat publié, vérifié
     expect(validator('ClientEnvelope')({ data: { ...leaking, [extra]: 'x' }, ...meta }), extra).toBe(false);
   expect(validator('UnattachedSchoolsEnvelope')({ data: { items: [{ ...unattachedProjection(unattached), members: [] }] }, ...meta })).toBe(false);
   // L'emplacement commercial ne porte ni montant, ni essai, ni échéance inventés (#456) : seulement l'offre et ses modules.
-  const commercial = (value: Record<string, unknown>) => ({ data: { ...leaking, commercial: { state: 'NOT_CONFIGURED', offer: null, scheduledOffer: null, entitlementVersion: 1, dueDates: [], ...value } }, ...meta });
+  const commercial = (value: Record<string, unknown>) => ({ data: { ...leaking, commercial: { state: 'NOT_CONFIGURED', lifecycle: 'NONE', offer: null, scheduledOffer: null, trialEndsAt: null, paidStartsOn: null, terminationOn: null, billingReady: false, entitlementVersion: 1, dueDates: [], ...value } }, ...meta });
   const offer = { offerId: randomUUID(), name: 'Essentiel', effectiveAt: at.replace('+00:00', 'Z'), modules: ['MESSAGING'] };
   expect(validator('ClientEnvelope')(commercial({ state: 'OFFER_ACTIVE', offer, scheduledOffer: { ...offer, modules: ['MESSAGING', 'COLLECTIVE_COURSES'] }, entitlementVersion: 3 }))).toBe(true);
   expect(validator('ClientEnvelope')(commercial({ offer: { ...offer, price: 1 } }))).toBe(false);
