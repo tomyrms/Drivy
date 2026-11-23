@@ -46,6 +46,7 @@ export function subscriptionView(row: SubscriptionRow): SchoolSubscription {
     })),
     availableOffers: row.availableOffers ?? [],
     notices: (row.notices ?? []).map(item => ({ ...item, createdAt: iso(item.createdAt)! })),
+    dunning: row.dunning ?? null,
     version: row.version,
   };
 }

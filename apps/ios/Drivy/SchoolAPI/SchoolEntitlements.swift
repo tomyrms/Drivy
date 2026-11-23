@@ -21,11 +21,15 @@ struct SchoolEntitlements: Decodable, Sendable, Equatable {
         let entitled: Bool
     }
 
-    /// Fermeture commerciale (R01-T04, #456) : essai terminé ou contrat résilié. Les modules sont alors déjà rendus non accordés ;
-    /// la raison sert seulement à dire pourquoi. La consultation et la fin des engagements pris restent permises.
+    /// Fermeture commerciale (R01-T04, #456 ; R01-T09, #461) : essai terminé (`TRIAL_EXPIRED`), contrat résilié (`TERMINATED`)
+    /// ou école suspendue (`SUSPENDED`). Les modules sont alors déjà rendus non accordés ; la raison sert seulement à dire pourquoi.
+    /// La consultation et la fin des engagements pris restent permises : démarrer et terminer une leçon déjà planifiée, envoyer le
+    /// trajet, les observations et le bilan. Le serveur refuse tout engagement nouveau (`403 MODULE_NOT_ENTITLED`).
     struct Restriction: Decodable, Sendable, Equatable {
         let reason: String
         let closes: [String]
+        /// Causes d’une suspension : `PAYMENT` (impayé) ou `MANUAL` (autre décision de Drivy). Absent hors suspension et d’une API antérieure.
+        var causes: [String]? = nil
     }
 
     /// `NOT_CONFIGURED` (aucune offre : le périmètre d’avant ce lot, rien n’est restreint) ou `OFFER_ACTIVE`. Les états

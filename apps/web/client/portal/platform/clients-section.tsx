@@ -17,6 +17,7 @@ import { PortalSelect } from '../components/portal-select';
 import { BillingPanel } from './billing-section';
 import { CommercialPanel } from './commercial-section';
 import { CommercialNotices } from './commercial-notices';
+import { CommercialAlerts, DunningPanel } from './dunning-section';
 import { RightsPanel } from './rights-section';
 import type { ClientFilter } from './use-platform-clients';
 import type { PlatformConsoleState } from './use-platform-console';
@@ -61,6 +62,7 @@ function ClientDirectory({ state }: { state: PlatformConsoleState }) {
   const items = clients.page.items;
   return <>
     <CommercialNotices state={state} />
+    <CommercialAlerts state={state} />
     <div className="platform-toolbar">
       <form className="platform-search" role="search" onSubmit={event => { event.preventDefault(); void clients.searchClients(text); }}>
         <Input type="search" name="q" aria-label="Rechercher une école" placeholder="Rechercher une école" autoComplete="off" maxLength={100} value={text} onChange={event => setText(event.target.value)} />
@@ -118,6 +120,7 @@ function ClientFiche({ state, client }: { state: PlatformConsoleState; client: P
     <RightsPanel state={state} client={client} />
     <CommercialPanel state={state} client={client} />
     <BillingPanel state={state} client={client} />
+    <DunningPanel state={state} client={client} />
     <FicheForm key={`${client.id}:${client.version}`} state={state} client={client} />
     {client.codes.length > 0 && <div className="platform-group">
       <h4 className="platform-subtitle">Codes d’ouverture</h4>

@@ -18,7 +18,8 @@ export type PlatformDocumentGateway = (request: PlatformDocumentRequest, accessT
 
 const uuidPath = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
 const strongVersion = /^"[1-9][0-9]{0,9}"$/;
-const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations', '/v1/platform/modules', '/v1/platform/commercial-notices']);
+const staticReads = new Set(['/v1/platform/me', '/v1/platform/operators', '/v1/platform/invitations', '/v1/platform/modules', '/v1/platform/commercial-notices',
+  '/v1/platform/dunning/policy', '/v1/platform/commercial-alerts']);
 const operationPath = new RegExp(`^/v1/platform/operations/${uuidPath}$`);
 const revokePath = new RegExp(`^/v1/platform/(?:invitations|operators)/${uuidPath}/revoke$`);
 const clientPath = new RegExp(`^/v1/platform/clients/${uuidPath}$`);
@@ -41,6 +42,10 @@ const billingPath = new RegExp(`^/v1/platform/clients/${uuidPath}/billing$`);
 const billingCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/(?:billing/activation(?:/stop)?|invoices|invoices/${uuidPath}/(?:issue|cancel|credit|sent|document|delivery)|payments|payments/${uuidPath}/(?:allocations|void|correct|regularizations)|payments/${uuidPath}/allocations/${uuidPath}/release|payments/${uuidPath}/regularizations/${uuidPath}/cancel)$`);
 const invoicePath = new RegExp(`^/v1/platform/invoices/${uuidPath}$`);
 const deliveryPreviewPath = new RegExp(`^/v1/platform/clients/${uuidPath}/invoices/${uuidPath}/delivery/preview$`);
+// Relances et suspension (R01-T09) : le dossier d'une fiche se lit et ses commandes partent sous sa version ; les alertes se prennent en compte sans version.
+const dunningPath = new RegExp(`^/v1/platform/clients/${uuidPath}/dunning$`);
+const dunningCommandPath = new RegExp(`^/v1/platform/clients/${uuidPath}/dunning/(?:exceptions|exceptions/${uuidPath}/revoke|suspensions|suspensions/${uuidPath}/lift|steps/${uuidPath}/confirm)$`);
+const alertAckPath = new RegExp(`^/v1/platform/commercial-alerts/${uuidPath}/acknowledge$`);
 
 export const clientPreparations = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
 export const codeStates = ['AVAILABLE', 'USED', 'EXPIRED', 'REVOKED'] as const;
@@ -97,7 +102,8 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
     if (previewPath.test(path)) return new URLSearchParams(query).has('offerId') && validQuery(query, previewRules);
     if (path === '/v1/platform/invoices') return validQuery(query, invoiceListRules);
     return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path) || commercialPath.test(path)
-      || path === '/v1/platform/billing/issuer' || billingPath.test(path) || invoicePath.test(path) || deliveryPreviewPath.test(path));
+      || path === '/v1/platform/billing/issuer' || billingPath.test(path) || invoicePath.test(path) || deliveryPreviewPath.test(path)
+      || dunningPath.test(path));
   }
   if ((request.method !== 'POST' && request.method !== 'PATCH') || query !== '') return false;
   const keyed = typeof request.idempotencyKey === 'string' && z.uuid().safeParse(request.idempotencyKey).success;
@@ -112,6 +118,8 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
   // L'émetteur et la facturation d'une fiche partent sous leur version ; le passage manuel est idempotent par nature, sans version.
   if (path === '/v1/platform/billing/issuer' || billingCommandPath.test(path)) return keyed && versioned;
   if (path === '/v1/platform/billing/run') return keyed && request.ifMatch === undefined;
+  if (path === '/v1/platform/dunning/policy' || dunningCommandPath.test(path)) return keyed && versioned;
+  if (path === '/v1/platform/dunning/run' || alertAckPath.test(path)) return keyed && request.ifMatch === undefined;
   if (path === '/v1/platform/commercial-notices/read') return keyed && request.ifMatch === undefined;
   return false;
 }
@@ -220,7 +228,7 @@ const commercialRequestSchema = z.object({ id: z.uuid(), kind: token, status: to
   revisions: z.array(z.object({ action: token, previousEffectiveOn: isoDay, newEffectiveOn: isoDay.nullable(), response: text(1000), decidedAt: iso,
     decidedByName: text(200).nullable() })).max(100) });
 const commercialDetailSchema = z.object({
-  state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5) }).nullable(),
+  state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5), causes: z.array(token).max(2).optional() }).nullable(),
   offer: offerBriefSchema.nullable(), scheduledOffer: offerBriefSchema.nullable(),
   milestones: z.object({ codeIssuedAt: iso.nullable(), schoolCreatedAt: iso.nullable(), schoolLinkedAt: iso.nullable(), activatedAt: iso.nullable(),
     trialStartsAt: iso.nullable(), paidStartsOn: isoDay.nullable() }),
@@ -319,6 +327,34 @@ const billingRunResult = z.object({ data: z.union([z.object({ skipped: z.literal
   z.object({ skipped: z.literal(false), today: isoDay, clients: z.number().int().min(0), prepared: z.number().int().min(0), issued: z.number().int().min(0),
     waiting: z.number().int().min(0), failed: z.number().int().min(0) })]) });
 
+// --- Relances et suspension (R01-T09) : la passerelle relaie ce que l'API a calculé, sans rien en déduire. ---
+const dunningMonths = z.number().int().min(1).max(24);
+const dunningCount = z.number().int().min(0);
+const dunningPolicySchema = z.object({ remindersEnabled: z.boolean(), autoSuspend: z.boolean(), reminderDays: z.array(z.number().int().min(1).max(365)).min(1).max(6),
+  suspensionMonths: z.number().int().min(1).max(12), warningDays: z.number().int().min(3).max(28), trialAlertDays: z.number().int().min(1).max(30),
+  version: z.number().int().min(1), updatedAt: iso, updatedByName: nullableText(200) });
+const dunningStateSchema = z.object({ overdue: z.boolean(), hold: z.boolean(), exceptionId: z.uuid().nullable(), invoiceId: z.uuid().nullable(),
+  invoiceNumber: nullableText(64), dueOn: isoDay.nullable(), balance: cents.nullable(), months: dunningMonths.nullable(), baseOn: isoDay.nullable(), cycle: dunningCount,
+  warningStepId: z.uuid().nullable(), warningDelivery: token.nullable(), warningOn: isoDay.nullable(), suspensionOn: isoDay.nullable(), suspensionDue: z.boolean(),
+  daysLate: dunningCount, nextReminderOn: isoDay.nullable() });
+const dunningExceptionSchema = z.object({ id: z.uuid(), kind: token, suspensionMonths: dunningMonths.nullable(), endsOn: isoDay, reason: text(500), status: token,
+  createdAt: iso, createdByName: nullableText(200), revokedAt: iso.nullable(), revokeReason: nullableText(500) });
+const suspensionSchema = z.object({ id: z.uuid(), cause: token, origin: token, status: token, startsOn: isoDay, invoiceNumber: nullableText(64), dueOn: isoDay.nullable(),
+  months: dunningMonths.nullable(), reason: nullableText(500), createdByName: nullableText(200), liftedOn: isoDay.nullable(), liftCause: token.nullable(),
+  liftReason: nullableText(500), liftedByName: nullableText(200) });
+const dunningStepSchema = z.object({ id: z.uuid(), kind: token, invoiceNumber: text(64), dueOn: isoDay, offsetDays: dunningCount, plannedOn: isoDay, doneOn: isoDay,
+  status: token, suspensionOn: isoDay.nullable(), recipientCount: dunningCount, delivery: token, confirmedAt: iso.nullable(), confirmedByName: nullableText(200),
+  confirmReason: nullableText(500) });
+const dunningPolicyResult = z.object({ data: dunningPolicySchema });
+const dunningViewResult = z.object({ data: z.object({ today: isoDay, state: dunningStateSchema, recipients: dunningCount,
+  exceptions: z.array(dunningExceptionSchema).max(20), suspensions: z.array(suspensionSchema).max(20), steps: z.array(dunningStepSchema).max(40),
+  version: z.number().int().min(1) }) });
+const commercialAlertsResult = z.object({ data: z.object({ items: z.array(z.object({ id: z.uuid(), clientId: z.uuid(), clientName: text(200), kind: token,
+  invoiceNumber: nullableText(64), onDate: isoDay.nullable(), openedAt: iso })).max(100) }) });
+const dunningRunResult = z.object({ data: z.union([z.object({ skipped: z.literal(true) }),
+  z.object({ skipped: z.literal(false), today: isoDay, clients: dunningCount, reminders: dunningCount, warnings: dunningCount, suspended: dunningCount,
+    lifted: dunningCount, failed: dunningCount })]) });
+
 // --- État de session : un code émis et une acceptation en cours appartiennent au compte qui les a lancés. ---
 export type PlatformInviteState = { operationId: string; email: string; validityDays?: number; code: string; busy?: boolean };
 export type PlatformJoinState = { identity: string; operationId: string; code?: string; confirmation?: { id: string; digest: string };
@@ -402,6 +438,17 @@ const decisionCommand = z.object({ operationId: uuid, version: versionField, sta
 const revisionCommand = z.object({ operationId: uuid, version: versionField, action: z.enum(['CHANGE_DATE', 'RESUME']), effectiveOn: day.optional(),
   response: longText }).strict();
 const noticesReadCommand = z.object({ operationId: uuid, ids: z.array(uuid).min(1).max(50) }).strict();
+// Relances (R01-T09) : la politique et le dossier d'une fiche partent sous leur version ; l'API revalide chaque borne et chaque règle.
+const dunningPolicyCommand = z.object({ operationId: uuid, version: versionField, remindersEnabled: z.boolean(), autoSuspend: z.boolean(),
+  reminderDays: z.array(z.number().int().min(1).max(365)).min(1).max(6), suspensionMonths: z.number().int().min(1).max(12),
+  warningDays: z.number().int().min(3).max(28), trialAlertDays: z.number().int().min(1).max(30) }).strict()
+  .refine(value => !value.autoSuspend || value.remindersEnabled)
+  .refine(value => value.reminderDays.every((item, index, all) => index === 0 || item > all[index - 1]!));
+const dunningExceptionCommand = z.object({ operationId: uuid, version: versionField, kind: z.enum(['DELAY', 'HOLD']),
+  suspensionMonths: z.number().int().min(1).max(24).optional(), endsOn: day, reason: commercialReason }).strict()
+  .refine(value => (value.kind === 'DELAY') === (value.suspensionMonths !== undefined));
+const suspensionCommand = z.object({ operationId: uuid, version: versionField, cause: z.enum(['PAYMENT', 'MANUAL']), reason: commercialReason }).strict();
+const dunningReasonCommand = z.object({ operationId: uuid, version: versionField, reason: commercialReason }).strict();
 const commercialNoticesResult = z.object({ data: z.object({ items: z.array(z.object({ id: uuid, clientId: uuid, clientName: text(200), requestId: uuid, kind: token,
   event: token, createdAt: iso })).max(50) }) });
 const commercialNoticesReadResult = z.object({ data: z.object({ read: z.number().int().min(0) }) });
@@ -789,6 +836,47 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
       const { version, ...body } = schema.parse(request.body);
       return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${params.id!.toLowerCase()}/${target}`,
         idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, billingResult);
+    });
+  }
+
+  // --- Relances et suspension (R01-T09) : politique globale, passage manuel, alertes, puis dossier de relance d'une fiche. ---
+  app.get('/app/bff/platform/dunning/policy', read('/v1/platform/dunning/policy', dunningPolicyResult));
+  app.post('/app/bff/platform/dunning/policy', async (request, reply) => {
+    empty.parse(request.query);
+    const { version, ...body } = dunningPolicyCommand.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/dunning/policy', idempotencyKey: body.operationId,
+      ifMatch: `"${version}"`, body }, dunningPolicyResult);
+  });
+  app.post('/app/bff/platform/dunning/run', async (request, reply) => {
+    empty.parse(request.query);
+    const body = codeRevokeBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/dunning/run', idempotencyKey: body.operationId, body }, dunningRunResult);
+  });
+  app.get('/app/bff/platform/commercial-alerts', read('/v1/platform/commercial-alerts', commercialAlertsResult));
+  app.post('/app/bff/platform/commercial-alerts/:alertId/acknowledge', async (request, reply) => {
+    empty.parse(request.query);
+    const { alertId } = z.object({ alertId: uuid }).parse(request.params);
+    const body = codeRevokeBody.parse(request.body);
+    return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/commercial-alerts/${alertId.toLowerCase()}/acknowledge`,
+      idempotencyKey: body.operationId, body }, commercialAlertsResult);
+  });
+  app.get('/app/bff/platform/clients/:id/dunning', async (request, reply) => {
+    empty.parse(request.query);
+    const { id } = z.object({ id: uuid }).parse(request.params);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/clients/${id.toLowerCase()}/dunning` }, dunningViewResult);
+  });
+  const dunningCommands: Array<[string, z.ZodType<{ operationId: string; version: number }>]> = [
+    ['dunning/exceptions', dunningExceptionCommand], ['dunning/exceptions/:exceptionId/revoke', dunningReasonCommand], ['dunning/suspensions', suspensionCommand],
+    ['dunning/suspensions/:suspensionId/lift', dunningReasonCommand], ['dunning/steps/:stepId/confirm', dunningReasonCommand],
+  ];
+  for (const [path, schema] of dunningCommands) {
+    app.post(`/app/bff/platform/clients/:id/${path}`, async (request, reply) => {
+      empty.parse(request.query);
+      const params = z.record(z.string(), uuid).parse(request.params);
+      const target = path.replace(/:([A-Za-z]+)/g, (_match, name: string) => params[name]!.toLowerCase());
+      const { version, ...body } = schema.parse(request.body);
+      return relay(reply, deps.protect(request), { method: 'POST', path: `/v1/platform/clients/${params.id!.toLowerCase()}/${target}`,
+        idempotencyKey: body.operationId, ifMatch: `"${version}"`, body }, dunningViewResult);
     });
   }
 

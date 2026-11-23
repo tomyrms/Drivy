@@ -61,6 +61,10 @@ export const platformFamily: PreviewFamily = {
       }
       if (path === 'join') return tools.reply(200, { pending: !join.accepted && join.submitted, uncertain: !join.accepted && join.submitted, accepted: join.accepted });
       if (path === 'commercial-notices') return tools.reply(200, { data: { items: [] } });
+      // Relances (R01-T09) : la politique telle que la migration la crée, désactivée ; aucune alerte.
+      if (path === 'commercial-alerts') return tools.reply(200, { data: { items: [] } });
+      if (path === 'dunning/policy') return tools.reply(200, { data: { remindersEnabled: false, autoSuspend: false, reminderDays: [10, 30], suspensionMonths: 3,
+        warningDays: 14, trialAlertDays: 7, version: 1, updatedAt: '2026-11-21T08:00:00.000Z', updatedByName: null } });
       return offersRead(request, path, tools) ?? clientsRead(request, path, tools) ?? tools.reply(404, { code: 'NOT_FOUND' });
     }
     if (request.method !== 'POST') return tools.reply(405, { code: 'METHOD_NOT_ALLOWED' });

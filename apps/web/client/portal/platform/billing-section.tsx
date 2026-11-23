@@ -13,6 +13,7 @@ import { FieldGroup } from '../../components/ui/field';
 import { PortalSelect } from '../components/portal-select';
 import { by, civil, dateTime, dayPattern, Fact, Failure, Footer, NotFound, ReasonField, reasonProblem, selectError, TextField } from './billing-parts';
 import { PaymentDialogBody, PaymentsBlock } from './payments-section';
+import { DunningPolicyBlock } from './dunning-section';
 import { isPaymentDialog, type InvoiceFilter, type IssuerInput } from './use-platform-billing';
 import type { PlatformConsoleState } from './use-platform-console';
 
@@ -156,6 +157,7 @@ export function InvoicesSection({ state }: { state: PlatformConsoleState }) {
         <Button variant="ghost" disabled={state.busy} onClick={() => billing.start({ kind: 'run' })}>Lancer la facturation du jour</Button>
       </div>
     </div>
+    <DunningPolicyBlock state={state} />
     <div className="platform-toolbar">
       <div className="platform-filter" role="group" aria-label="Filtrer les factures">
         <PortalSelect id="invoice-status" label="Statut" options={statusOptions} value={filter.status} disabled={state.busy}

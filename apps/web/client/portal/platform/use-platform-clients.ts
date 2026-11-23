@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import { okSchema, request, RequestFailure, type Session } from '../../protocol';
 import {
-  ficheChanges, platformClientDetailResult, platformBillingResult, platformClientsResult, platformCodeResult, platformCommercialResult, platformEntitlementsResult, platformFailureKind, platformIssuedCodeResult,
+  ficheChanges, platformClientDetailResult, platformBillingResult, platformDunningViewResult, platformClientsResult, platformCodeResult, platformCommercialResult, platformEntitlementsResult, platformFailureKind, platformIssuedCodeResult,
   platformPendingCodeResult, platformUnattachedResult,
-  type FicheDraft, type PlatformBilling, type PlatformClient, type PlatformClientCode, type PlatformClientDetail, type PlatformClientPreparation, type PlatformCommercialDetail,
+  type FicheDraft, type PlatformBilling, type PlatformDunningView, type PlatformClient, type PlatformClientCode, type PlatformClientDetail, type PlatformClientPreparation, type PlatformCommercialDetail,
   type PlatformEntitlements,
   type PlatformIssuedCode, type PlatformPendingCode, type PlatformUnattachedSchool,
 } from '../../platform-model';
@@ -16,13 +16,15 @@ export type ClientRights = { clientId: string; data: PlatformEntitlements };
 export type ClientCommercial = { clientId: string; data: PlatformCommercialDetail };
 /** La facturation de la fiche ouverte (R01-T05), attachée à sa fiche. */
 export type ClientBilling = { clientId: string; data: PlatformBilling };
+/** Le dossier de relance de la fiche ouverte (R01-T09), attaché à sa fiche. */
+export type ClientDunning = { clientId: string; data: PlatformDunningView };
 /** « Créer un code » : pour une fiche existante, ou pour une école cliente nouvelle dont seul le nom est saisi. */
 export type CodeTarget = { clientId: string | null; clientName: string | null };
 /** « Rattacher une école » : à une fiche existante, ou en créant la fiche avec l'école. */
 export type AttachTarget = { client: PlatformClientDetail | null };
 export type CopyKind = 'code' | 'link';
 export type ClientSnapshot = { page: ClientPage; pending: PlatformPendingCode | null; selected: PlatformClientDetail | null; rights: ClientRights | null;
-  commercial: ClientCommercial | null; billing: ClientBilling | null };
+  commercial: ClientCommercial | null; billing: ClientBilling | null; dunning: ClientDunning | null };
 type Kernel = {
   session: Session | null; perform: (action: () => Promise<void>) => Promise<void>;
   /** Relecture à l'intérieur d'une commande en cours, et relecture qui prend sa propre place. */
@@ -54,6 +56,7 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
   const [attach, setAttach] = useState<AttachTarget | null>(null), [unattached, setUnattached] = useState<PlatformUnattachedSchool[]>([]);
   const [rights, setRights] = useState<ClientRights | null>(null), [commercial, setCommercial] = useState<ClientCommercial | null>(null);
   const [billing, setBilling] = useState<ClientBilling | null>(null);
+  const [dunning, setDunning] = useState<ClientDunning | null>(null);
   const filters = useRef({ search: '', preparation: 'ALL' as ClientFilter }), selectedId = useRef<string | null>(null);
   const operations = useRef(new Map<string, string>());
   const codeOperation = useRef<{ signature: string; operationId: string } | null>(null);
@@ -68,7 +71,7 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
 
   function reset() {
     setPage(emptyPage); setSearch(''); setPreparation('ALL'); setSelected(null); setPending(null); setCodeTarget(null); setIssued(null); setCopied(null);
-    setCopyFailed(false); setUncertain(false); setAttach(null); setUnattached([]); setRights(null); setCommercial(null); setBilling(null);
+    setCopyFailed(false); setUncertain(false); setAttach(null); setUnattached([]); setRights(null); setCommercial(null); setBilling(null); setDunning(null);
     filters.current = { search: '', preparation: 'ALL' }; selectedId.current = null; operations.current.clear(); codeOperation.current = null;
   }
 
@@ -78,21 +81,23 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
   const readRights = (id: string) => request(`platform/clients/${id}/entitlements`, platformEntitlementsResult).then(result => ({ clientId: id, data: result.data }));
   const readCommercial = (id: string) => request(`platform/clients/${id}/commercial`, platformCommercialResult).then(result => ({ clientId: id, data: result.data }));
   const readBilling = (id: string) => request(`platform/clients/${id}/billing`, platformBillingResult).then(result => ({ clientId: id, data: result.data }));
+  const readDunning = (id: string) => request(`platform/clients/${id}/dunning`, platformDunningViewResult).then(result => ({ clientId: id, data: result.data }));
   async function snapshot(): Promise<ClientSnapshot> {
     const open = selectedId.current;
-    const [list, waiting, detail, current, dossier, invoicing] = await Promise.all([
+    const [list, waiting, detail, current, dossier, invoicing, followUp] = await Promise.all([
       request(clientsPath(filters.current.search, filters.current.preparation), platformClientsResult),
       request('platform/school-codes/pending', platformPendingCodeResult),
       open ? request(`platform/clients/${open}`, platformClientDetailResult).then(result => result.data).catch(absent) : Promise.resolve(null),
       open ? readRights(open).catch(absent) : Promise.resolve(null),
       open ? readCommercial(open).catch(absent) : Promise.resolve(null),
       open ? readBilling(open).catch(absent) : Promise.resolve(null),
+      open ? readDunning(open).catch(absent) : Promise.resolve(null),
     ]);
     return { page: list.data, pending: waiting.pending, selected: detail, rights: detail ? current : null, commercial: detail ? dossier : null,
-      billing: detail ? invoicing : null };
+      billing: detail ? invoicing : null, dunning: detail ? followUp : null };
   }
   function apply(next: ClientSnapshot) {
-    setPage(next.page); setPending(next.pending); setSelected(next.selected); setRights(next.rights); setCommercial(next.commercial); setBilling(next.billing);
+    setPage(next.page); setPending(next.pending); setSelected(next.selected); setRights(next.rights); setCommercial(next.commercial); setBilling(next.billing); setDunning(next.dunning);
     if (!next.selected) selectedId.current = null;
   }
 
@@ -113,11 +118,11 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
 
   // --- Fiche ---
   const openClient = (id: string) => perform(async () => {
-    const [result, current, dossier, invoicing] = await Promise.all([request(`platform/clients/${id}`, platformClientDetailResult), readRights(id), readCommercial(id),
-      readBilling(id)]);
-    selectedId.current = result.data.id; setSelected(result.data); setRights(current); setCommercial(dossier); setBilling(invoicing);
+    const [result, current, dossier, invoicing, followUp] = await Promise.all([request(`platform/clients/${id}`, platformClientDetailResult), readRights(id),
+      readCommercial(id), readBilling(id), readDunning(id).catch(absent)]);
+    selectedId.current = result.data.id; setSelected(result.data); setRights(current); setCommercial(dossier); setBilling(invoicing); setDunning(followUp);
   });
-  const closeClient = () => { selectedId.current = null; setSelected(null); setRights(null); setCommercial(null); setBilling(null); };
+  const closeClient = () => { selectedId.current = null; setSelected(null); setRights(null); setCommercial(null); setBilling(null); setDunning(null); };
   const saveFiche = (client: PlatformClientDetail, draft: FicheDraft) => perform(async () => {
     if (!session) return;
     const changes = ficheChanges(client, draft);
@@ -208,7 +213,7 @@ export function usePlatformClients({ session, perform, reload, refresh }: Kernel
     await reload();
   });
 
-  return { page, search, preparation, selected, rights, setRights, commercial, setCommercial, billing, setBilling, pending, codeTarget, issued, copied, copyFailed, uncertain, attach, unattached,
+  return { page, search, preparation, selected, rights, setRights, commercial, setCommercial, billing, setBilling, dunning, setDunning, pending, codeTarget, issued, copied, copyFailed, uncertain, attach, unattached,
     reset, snapshot, apply, searchClients, moreClients, openClient, closeClient, saveFiche,
     startCode, stopCode, issueCode, resumeCode, closeCode, revokeCode, copy, startAttach, stopAttach, searchUnattached, attachSchool };
 }

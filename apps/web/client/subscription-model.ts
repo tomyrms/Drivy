@@ -8,6 +8,7 @@ const id = z.string().uuid();
 const instant = z.string().datetime({ offset: true });
 const civilDay = z.string().date();
 const cents = z.number().int().min(0);
+const suspensionCause = z.enum(['PAYMENT', 'MANUAL']);
 
 const termsSchema = z.object({
   currency: z.literal('CHF'), initialAmount: cents.nullable(), initialDiscount: cents, initialDueOn: civilDay.nullable(), monthlyAmount: cents.nullable(),
@@ -34,7 +35,8 @@ const requestSchema = z.object({
 export const schoolSubscriptionSchema = z.object({
   hasClient: z.boolean(), today: civilDay, contact: z.object({ name: z.string().max(200), email: z.string().max(320).nullable() }).nullable(),
   lifecycle: z.enum(['NONE', 'TRIAL', 'TRIAL_EXPIRED', 'PAID', 'TERMINATED']), state: z.enum(['NOT_CONFIGURED', 'OFFER_ACTIVE']),
-  restriction: z.object({ reason: z.enum(['TRIAL_EXPIRED', 'TERMINATED']), closes: z.array(z.string().max(64)).max(10) }).nullable(),
+  restriction: z.object({ reason: z.enum(['TRIAL_EXPIRED', 'TERMINATED', 'SUSPENDED']), closes: z.array(z.string().max(64)).max(10),
+    causes: z.array(suspensionCause).max(2).optional() }).nullable(),
   trial: z.object({ startsAt: instant, endsAt: instant }).nullable(), paidStartsOn: civilDay.nullable(), terminationOn: civilDay.nullable(),
   nextPeriodStart: civilDay.nullable(), nextDueOn: civilDay.nullable(), offer: offerSchema.nullable(), scheduledOffer: offerSchema.nullable(),
   modules: z.array(z.object({ code: z.string().max(64), inOffer: z.boolean(), entitled: z.boolean() })).max(20),
@@ -42,7 +44,12 @@ export const schoolSubscriptionSchema = z.object({
   debt: z.object({ outstanding: cents, overdueAmount: cents, overdueCount: z.number().int().min(0), oldestOverdueDueOn: civilDay.nullable(), unallocated: cents }).nullable(),
   invoices: z.array(invoiceSchema).max(200), payments: z.array(paymentSchema).max(200), requests: z.array(requestSchema).max(50),
   availableOffers: z.array(z.object({ id, name: z.string().max(100), modules: z.array(z.string().max(64)).max(20) })).max(100),
-  notices: z.array(z.object({ id, requestId: id, event: z.enum(['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'DATE_CHANGED', 'RESUMED']), createdAt: instant })).max(20),
+  // Les avis de relance et de suspension (R01-T09) n'ont pas de demande d'origine.
+  notices: z.array(z.object({ id, requestId: id.nullable(), event: z.enum(['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'DATE_CHANGED', 'RESUMED',
+    'PAYMENT_REMINDER', 'SUSPENSION_WARNING', 'SUSPENDED', 'REACTIVATED']), createdAt: instant })).max(20),
+  /** Relances et suspension (R01-T09) : null sans retard ni suspension. Ni motif, ni auteur, ni exception ne sont exposés. */
+  dunning: z.object({ suspended: z.boolean(), causes: z.array(suspensionCause).max(2), since: civilDay.nullable(), invoiceNumber: z.string().max(40).nullable(),
+    dueOn: civilDay.nullable(), balance: cents.nullable(), suspensionOn: civilDay.nullable() }).nullable(),
   version: z.number().int().min(0),
 });
 export type SchoolSubscription = z.infer<typeof schoolSubscriptionSchema>;
@@ -67,7 +74,8 @@ export const moduleName = (code: string) => moduleNames[code] ?? 'Module';
 export const requestableModules = ['MESSAGING', 'COLLECTIVE_COURSES'] as const;
 export const noticeLabels: Record<SchoolSubscription['notices'][number]['event'], string> = {
   RECEIVED: 'Demande reçue', IN_PROGRESS: 'Prise en charge', ACCEPTED: 'Demande acceptée', REFUSED: 'Demande refusée', WITHDRAWN: 'Demande retirée',
-  DATE_CHANGED: 'Date modifiée', RESUMED: 'Service repris',
+  DATE_CHANGED: 'Date modifiée', RESUMED: 'Service repris', PAYMENT_REMINDER: 'Rappel de paiement', SUSPENSION_WARNING: 'Suspension annoncée',
+  SUSPENDED: 'École suspendue', REACTIVATED: 'Accès rétabli',
 };
 
 /** Une facture réglée ou créditée n'est jamais présentée comme due ; le retard vient du calcul serveur. */
@@ -125,8 +133,19 @@ export function subscriptionAttention(subscription: SchoolSubscription): Subscri
   if (!subscription.hasClient) return null;
   if (subscription.lifecycle === 'TERMINATED') return { tone: 'danger', title: 'Abonnement résilié', regularize: true,
     detail: subscription.terminationOn ? `Fin effective le ${civilLabel(subscription.terminationOn)}.` : 'La résiliation a pris effet.' };
+  // Une suspension (R01-T09) prime sur l'essai terminé : c'est elle qui ferme l'usage nouveau tant qu'elle dure.
+  const dunning = subscription.dunning;
+  if (subscription.restriction?.reason === 'SUSPENDED' || dunning?.suspended) {
+    const unpaid = dunning?.causes.includes('PAYMENT') ?? subscription.restriction?.causes?.includes('PAYMENT') ?? false;
+    const cause = unpaid && dunning?.invoiceNumber
+      ? `Facture ${dunning.invoiceNumber}${dunning.dueOn ? ` échue le ${civilLabel(dunning.dueOn)}` : ''}${dunning.balance !== null ? `, reste ${chfAmount(dunning.balance)}` : ''}.`
+      : unpaid ? 'Facture impayée.' : 'Décision de Drivy.';
+    return { tone: 'danger', title: 'Abonnement suspendu', regularize: true, detail: `${cause} L’historique reste consultable.` };
+  }
   if (subscription.lifecycle === 'TRIAL_EXPIRED') return { tone: 'danger', title: 'Essai terminé', regularize: true,
     detail: subscription.trial ? `Terminé le ${instantDayLabel(subscription.trial.endsAt)}.` : 'L’essai a pris fin.' };
+  if (dunning?.suspensionOn) return { tone: 'danger', title: `Suspension prévue le ${civilLabel(dunning.suspensionOn)}`, regularize: true,
+    detail: dunning.invoiceNumber ? `Facture ${dunning.invoiceNumber}${dunning.balance !== null ? `, reste ${chfAmount(dunning.balance)}` : ''}.` : 'Une facture reste impayée.' };
   if (subscription.debt && subscription.debt.overdueCount > 0) {
     const count = subscription.debt.overdueCount;
     const since = subscription.debt.oldestOverdueDueOn ? ` depuis le ${civilLabel(subscription.debt.oldestOverdueDueOn)}` : '';

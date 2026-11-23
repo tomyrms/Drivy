@@ -11,7 +11,8 @@
           "type": "string",
           "enum": [
             "TRIAL_EXPIRED",
-            "TERMINATED"
+            "TERMINATED",
+            "SUSPENDED"
           ]
         },
         "closes": {
@@ -22,6 +23,16 @@
               "READ_HISTORY",
               "COMPLETE_COMMITMENT",
               "WRITE_NEW"
+            ]
+          }
+        },
+        "causes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "PAYMENT",
+              "MANUAL"
             ]
           }
         }
@@ -509,7 +520,8 @@
                   "type": "string",
                   "enum": [
                     "TRIAL_EXPIRED",
-                    "TERMINATED"
+                    "TERMINATED",
+                    "SUSPENDED"
                   ]
                 },
                 "closes": {
@@ -520,6 +532,16 @@
                       "READ_HISTORY",
                       "COMPLETE_COMMITMENT",
                       "WRITE_NEW"
+                    ]
+                  }
+                },
+                "causes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "PAYMENT",
+                      "MANUAL"
                     ]
                   }
                 }
@@ -2350,7 +2372,11 @@
             "REFUSED",
             "WITHDRAWN",
             "DATE_CHANGED",
-            "RESUMED"
+            "RESUMED",
+            "PAYMENT_REMINDER",
+            "SUSPENSION_WARNING",
+            "SUSPENDED",
+            "REACTIVATED"
           ]
         },
         "createdAt": {
@@ -2417,7 +2443,11 @@
                       "REFUSED",
                       "WITHDRAWN",
                       "DATE_CHANGED",
-                      "RESUMED"
+                      "RESUMED",
+                      "PAYMENT_REMINDER",
+                      "SUSPENSION_WARNING",
+                      "SUSPENDED",
+                      "REACTIVATED"
                     ]
                   },
                   "createdAt": {
@@ -2529,7 +2559,8 @@
                       "type": "string",
                       "enum": [
                         "TRIAL_EXPIRED",
-                        "TERMINATED"
+                        "TERMINATED",
+                        "SUSPENDED"
                       ]
                     },
                     "closes": {
@@ -2540,6 +2571,16 @@
                           "READ_HISTORY",
                           "COMPLETE_COMMITMENT",
                           "WRITE_NEW"
+                        ]
+                      }
+                    },
+                    "causes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "PAYMENT",
+                          "MANUAL"
                         ]
                       }
                     }

@@ -1,3 +1,14 @@
+## 23 novembre 2026 — R01-T09 : relances, suspension et réactivation (#461)
+
+- Branche `tomyrms/r01-t09-relances-suspension`, issue de la tête de `tomyrms/r01-t08-espace-ecole`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/relances-suspension-20261121.md` détaille les règles et les limites.
+- API : migration `20261121_platform_dunning_suspension.sql`, politique créée désactivée, passage planifié idempotent, causes de suspension distinctes, porte serveur sur les nouveaux engagements. Contrat `platform-dunning.json` généré, OpenAPI canonique 3.11.0 non modifié.
+- Web : relances dans la console, dossier de la fiche, état visible dans l'espace abonnement.
+- iOS : le refus commercial affiche le motif du serveur au lieu de « Tes accès ont changé ».
+- Exécuté le 23 novembre 2026 : `tsc` de l'API (tests compris), `tsc` du client, des vérifications et du serveur web, build API, `vite build`, génération du contrat sans écart.
+- **Écrit, jamais exécuté** (règle du porteur du 13 novembre) : `platform-dunning.integration.test.ts` (17 cas), compléments de `subscription-model.test.ts` et `SchoolEntitlementsTests.swift`. La migration n'a été appliquée à aucune base. Le code Swift n'a pas été compilé et les écrans n'ont été ouverts dans aucun navigateur.
+- Reste à qualifier : migration et scénarios sur PostgreSQL, concurrence paiement contre suspension, interfaces, accessibilité, refus sur appareil, notification push.
+- Non réalisé : rappel par courriel avec QR au solde (pas de SMTP sur le homelab).
+
 ## 22 novembre 2026 — R01-T08 : espace abonnement, factures et demandes de l'école (#460)
 
 - Branche `tomyrms/r01-t08-espace-ecole`, issue de la tête de `tomyrms/r01-t07-factures-pdf`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/espace-abonnement-20261120.md` détaille le modèle, les règles et les limites.

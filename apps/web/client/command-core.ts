@@ -248,6 +248,7 @@ export function commandMessage(code: string): string {
     CATALOGUE_ACCESS_REQUIRED: 'L’autorisation de configurer les formations et tarifs est nécessaire.',
     CONFIG_IMPACT_REVIEW_REQUIRED: 'Cette modification demande une analyse d’impact dédiée (par exemple un changement de fuseau).',
     MODULE_NOT_READY: 'Ce changement n’est pas encore disponible.',
+    MODULE_NOT_ENTITLED: 'L’abonnement de cette école ne permet pas cette action. L’historique reste consultable.',
     POLICY_REVIEW_REQUIRED: 'Adoptez d’abord les textes d’information et de conservation de l’école.',
     SCHOOL_ALREADY_ACTIVE: 'Cette école est déjà active.',
     PROFILE_POLICY_CHANGED: 'Les informations demandées par l’école ont changé. Rechargez le dossier puis recommencez.',

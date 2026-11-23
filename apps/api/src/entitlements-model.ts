@@ -22,13 +22,18 @@ export type CommercialState = (typeof commercialStates)[number];
  * Cycle commercial (R01-T04, #456), distinct de `state` qui garde son sens de R01-T03 (offre en vigueur ou non). NONE = école pilote ou
  * sans essai ni début payant : aucune restriction. TRIAL_EXPIRED et TERMINATED ferment l'usage nouveau de tous les modules (`restriction`) ;
  * la consultation de l'historique et la fin des engagements déjà pris restent possibles. Précédence : TERMINATED > PAID > TRIAL > TRIAL_EXPIRED.
+ * Suspension (R01-T09, #461) : une restriction SUSPENDED, distincte du cycle, ferme aussi l'usage nouveau de tous les modules et des opérations
+ * de base de l'école ; `causes` dit pourquoi (PAYMENT = impayé, MANUAL = autre décision de l'équipe). Précédence de la restriction :
+ * TERMINATED > SUSPENDED > TRIAL_EXPIRED. Ni l'archivage, ni la fin d'essai, ni la résiliation ne sont une suspension.
  */
 export const commercialLifecycles = ['NONE', 'TRIAL', 'TRIAL_EXPIRED', 'PAID', 'TERMINATED'] as const;
 export type CommercialLifecycle = (typeof commercialLifecycles)[number];
-export const restrictionReasons = ['TRIAL_EXPIRED', 'TERMINATED'] as const;
-export interface CommercialRestriction { reason: (typeof restrictionReasons)[number]; closes: ActionClass[] }
+export const restrictionReasons = ['TRIAL_EXPIRED', 'TERMINATED', 'SUSPENDED'] as const;
+export const restrictionCauses = ['PAYMENT', 'MANUAL'] as const;
+export type RestrictionCause = (typeof restrictionCauses)[number];
+export interface CommercialRestriction { reason: (typeof restrictionReasons)[number]; closes: ActionClass[]; causes?: RestrictionCause[] }
 /** Raison rendue par `drivy.school_module_access` pour un usage nouveau. */
-export const moduleAccesses = ['ENTITLED', 'NOT_ENTITLED', 'TRIAL_EXPIRED', 'TERMINATED'] as const;
+export const moduleAccesses = ['ENTITLED', 'NOT_ENTITLED', 'TRIAL_EXPIRED', 'TERMINATED', 'SUSPENDED'] as const;
 export type ModuleAccess = (typeof moduleAccesses)[number];
 
 /**

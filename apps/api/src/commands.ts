@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Pool, PoolClient } from 'pg';
 import type { Identity } from './auth.js';
 import { rollbackQuietly } from './database.js';
+import { requireSchoolNotSuspended } from './entitlements.js';
 import { ApiError, forbidden, notFound } from './errors.js';
 
 export interface CommandActor { personId: string; membershipId: string; roles:string[] }
@@ -57,6 +58,15 @@ export async function recordCommand<T>(db:PoolClient,actor:CommandActor,schoolId
 }
 
 /** Un seul commit contient l'effet, sa preuve durable et son audit ; aucun appel réseau sous verrou. */
+/**
+ * Opérations de base fermées pendant une suspension commerciale (R01-T09, #461) : tout ce qui ouvre un engagement nouveau (rendez-vous,
+ * leçon improvisée, déplacement, invitation, formation, attribution, examen). Restent permis : la lecture, le rejeu d'un reçu, le
+ * démarrage et la fin d'une leçon déjà planifiée, la capture et l'envoi du trajet, les observations, le bilan, l'annulation, la demande
+ * de changement d'un élève (son traitement par déplacement reste fermé) et la synchronisation. Les modules (messagerie, cours collectifs) sont fermés par leur propre droit.
+ */
+export const suspensionGatedCommands: ReadonlySet<string> = new Set(['CREATE_LESSON','START_LESSON_NOW','MOVE_LESSON','CREATE_INVITATION','RESEND_INVITATION',
+  'CREATE_TRAINING','CREATE_ASSIGNMENT','CREATE_EXAM']);
+
 export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId: string,
   commandType: string, body: { operationId:string }, expectedVersion: number|null,
   work: (db:PoolClient, actor:CommandActor, school:SchoolRow)=>Promise<CommandEffect<T>>, allowedRoles:string[]=['ADMIN'],guards:CommandGuards<T>={}): Promise<T> {
@@ -105,6 +115,7 @@ export async function schoolCommand<T>(pool: Pool, identity: Identity, schoolId:
       return data;
     }
     if (school.status === 'ARCHIVED' && !guards.allowArchived) throw new ApiError(409,'SCHOOL_ARCHIVED','Cette école archivée ne peut plus être configurée.');
+    if (suspensionGatedCommands.has(commandType)) await requireSchoolNotSuspended(db,schoolId);
     const effect = await work(db,actor,school);
     await recordCommand(db,actor,schoolId,commandType,body.operationId,hash,effect);
     await db.query('COMMIT');

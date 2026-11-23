@@ -24,9 +24,10 @@ const messages: Record<ModuleCode, string> = {
 const restrictedMessages: Record<Exclude<ModuleAccess, 'ENTITLED' | 'NOT_ENTITLED'>, string> = {
   TRIAL_EXPIRED: 'L’essai de cette école est terminé. Contactez Drivy pour le prolonger ou passer à l’abonnement.',
   TERMINATED: 'Le contrat de cette école est résilié. L’historique reste consultable.',
+  SUSPENDED: 'L’abonnement de cette école est suspendu. L’historique reste consultable. Contactez Drivy pour le rétablir.',
 };
 export const moduleNotEntitled = (module: ModuleCode, access: ModuleAccess = 'NOT_ENTITLED') =>
-  new ApiError(403, 'MODULE_NOT_ENTITLED', access === 'TRIAL_EXPIRED' || access === 'TERMINATED' ? restrictedMessages[access] : messages[module]);
+  new ApiError(403, 'MODULE_NOT_ENTITLED', access !== 'ENTITLED' && access !== 'NOT_ENTITLED' ? restrictedMessages[access] : messages[module]);
 
 type Queryable = Pick<PoolClient, 'query'>;
 
@@ -37,7 +38,7 @@ export async function schoolModuleEntitled(db: Queryable, schoolId: string, modu
 /** Accès d'un usage nouveau et sa raison ; NOT_ENTITLED pour un appelant hors de l'école ou une réponse inattendue (échec fermé). */
 export async function schoolModuleAccess(db: Queryable, schoolId: string, module: ModuleCode): Promise<ModuleAccess> {
   const row = (await db.query<{ access: string }>('SELECT drivy.school_module_access($1::uuid,$2::text) AS access', [schoolId, module])).rows[0];
-  return row?.access === 'ENTITLED' || row?.access === 'TRIAL_EXPIRED' || row?.access === 'TERMINATED' ? row.access : 'NOT_ENTITLED';
+  return row?.access === 'ENTITLED' || row?.access === 'TRIAL_EXPIRED' || row?.access === 'TERMINATED' || row?.access === 'SUSPENDED' ? row.access : 'NOT_ENTITLED';
 }
 
 /**
@@ -48,6 +49,17 @@ export async function requireModule(db: Queryable, schoolId: string, module: Mod
   if (moduleActionAllowed(false, action)) return;
   const access = await schoolModuleAccess(db, schoolId, module);
   if (access !== 'ENTITLED') throw moduleNotEntitled(module, access);
+}
+
+/**
+ * Porte des opérations de base d'une école suspendue (R01-T09, #461) : relue au serveur dans la transaction de la commande, quel que soit
+ * l'âge du client. Même 403 MODULE_NOT_ENTITLED que tout refus d'usage nouveau, avec la marche à suivre. Faux hors de l'école (échec fermé
+ * côté appelant : la commande vérifie déjà l'appartenance).
+ */
+export const schoolSuspended = () => new ApiError(403, 'MODULE_NOT_ENTITLED', restrictedMessages.SUSPENDED);
+export async function requireSchoolNotSuspended(db: Queryable, schoolId: string): Promise<void> {
+  const row = (await db.query<{ suspended: boolean }>('SELECT drivy.school_commercially_suspended($1::uuid) AS suspended', [schoolId])).rows[0];
+  if (row?.suspended) throw schoolSuspended();
 }
 
 export async function readSchoolEntitlements(db: Queryable, schoolId: string, at: Date = new Date()) {

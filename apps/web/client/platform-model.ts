@@ -109,7 +109,7 @@ export const platformCommercialRequestSchema = z.object({
   revisions: z.array(z.object({ action: token, previousEffectiveOn: isoDay, newEffectiveOn: isoDay.nullable(), response: z.string().max(1000), decidedAt: iso, decidedByName: z.string().max(200).nullable() })).max(100),
 });
 export const platformCommercialDetailSchema = z.object({
-  state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5) }).nullable(),
+  state: token, lifecycle: token, restriction: z.object({ reason: token, closes: z.array(token).max(5), causes: z.array(token).max(2).optional() }).nullable(),
   offer: platformOfferBriefSchema.nullable(), scheduledOffer: platformOfferBriefSchema.nullable(),
   milestones: z.object({ codeIssuedAt: iso.nullable(), schoolCreatedAt: iso.nullable(), schoolLinkedAt: iso.nullable(), activatedAt: iso.nullable(),
     trialStartsAt: iso.nullable(), paidStartsOn: isoDay.nullable() }),
@@ -138,6 +138,66 @@ export const platformCommercialNoticeSchema = z.object({ id, clientId: id, clien
 export const platformCommercialNoticesResult = z.object({ data: z.object({ items: z.array(platformCommercialNoticeSchema).max(50) }) });
 export const platformCommercialNoticesReadResult = z.object({ data: z.object({ read: z.number().int().min(0) }) });
 export type PlatformCommercialNotice = z.infer<typeof platformCommercialNoticeSchema>;
+
+// --- Relances et suspension (R01-T09) : tout est calculé par l'API ; l'écran n'en déduit ni retard, ni date, ni dette. ---
+export const dunningDeliveries = ['SKIPPED', 'CONFIRMED', 'NO_RECIPIENT', 'READ', 'SENT', 'PENDING', 'FAILED'] as const;
+export const commercialAlertKinds = ['TRIAL_ENDING', 'TRIAL_ENDED', 'NEW_OVERDUE', 'DELIVERY_FAILED', 'SUSPENSION_UPCOMING', 'SUSPENDED'] as const;
+const dunningMonths = z.number().int().min(1).max(24);
+const dunningCount = z.number().int().min(0);
+const suspensionCause = z.enum(['PAYMENT', 'MANUAL']);
+export const platformDunningPolicySchema = z.object({ remindersEnabled: z.boolean(), autoSuspend: z.boolean(),
+  reminderDays: z.array(z.number().int().min(1).max(365)).min(1).max(6), suspensionMonths: z.number().int().min(1).max(12),
+  warningDays: z.number().int().min(3).max(28), trialAlertDays: z.number().int().min(1).max(30), version: z.number().int().min(1), updatedAt: iso,
+  updatedByName: z.string().nullable() });
+const platformDunningStateSchema = z.object({ overdue: z.boolean(), hold: z.boolean(), exceptionId: id.nullable(), invoiceId: id.nullable(),
+  invoiceNumber: z.string().nullable(), dueOn: isoDay.nullable(), balance: cents.nullable(), months: dunningMonths.nullable(), baseOn: isoDay.nullable(),
+  cycle: dunningCount, warningStepId: id.nullable(), warningDelivery: z.enum(dunningDeliveries).nullable(), warningOn: isoDay.nullable(),
+  suspensionOn: isoDay.nullable(), suspensionDue: z.boolean(), daysLate: dunningCount, nextReminderOn: isoDay.nullable() });
+const platformDunningExceptionSchema = z.object({ id, kind: z.enum(['DELAY', 'HOLD']), suspensionMonths: dunningMonths.nullable(), endsOn: isoDay,
+  reason: z.string(), status: z.enum(['ACTIVE', 'REVOKED', 'EXPIRED']), createdAt: iso, createdByName: z.string().nullable(), revokedAt: iso.nullable(),
+  revokeReason: z.string().nullable() });
+const platformSuspensionSchema = z.object({ id, cause: suspensionCause, origin: z.enum(['AUTOMATIC', 'OPERATOR']), status: z.enum(['ACTIVE', 'LIFTED']),
+  startsOn: isoDay, invoiceNumber: z.string().nullable(), dueOn: isoDay.nullable(), months: dunningMonths.nullable(), reason: z.string().nullable(),
+  createdByName: z.string().nullable(), liftedOn: isoDay.nullable(), liftCause: z.enum(['PAYMENT_CONFIRMED', 'OPERATOR']).nullable(),
+  liftReason: z.string().nullable(), liftedByName: z.string().nullable() });
+const platformDunningStepSchema = z.object({ id, kind: z.enum(['REMINDER', 'WARNING']), invoiceNumber: z.string(), dueOn: isoDay, offsetDays: dunningCount,
+  plannedOn: isoDay, doneOn: isoDay, status: z.enum(['RECORDED', 'SKIPPED']), suspensionOn: isoDay.nullable(), recipientCount: dunningCount,
+  delivery: z.enum(dunningDeliveries), confirmedAt: iso.nullable(), confirmedByName: z.string().nullable(), confirmReason: z.string().nullable() });
+export const platformDunningPolicyResult = z.object({ data: platformDunningPolicySchema });
+export const platformDunningViewResult = z.object({ data: z.object({ today: isoDay, state: platformDunningStateSchema, recipients: dunningCount,
+  exceptions: z.array(platformDunningExceptionSchema).max(20), suspensions: z.array(platformSuspensionSchema).max(20),
+  steps: z.array(platformDunningStepSchema).max(40), version: z.number().int().min(1) }) });
+export const platformCommercialAlertsResult = z.object({ data: z.object({ items: z.array(z.object({ id, clientId: id, clientName: z.string(),
+  kind: z.enum(commercialAlertKinds), invoiceNumber: z.string().nullable(), onDate: isoDay.nullable(), openedAt: iso })).max(100) }) });
+export const platformDunningRunResult = z.object({ data: z.union([z.object({ skipped: z.literal(true) }),
+  z.object({ skipped: z.literal(false), today: isoDay, clients: dunningCount, reminders: dunningCount, warnings: dunningCount, suspended: dunningCount,
+    lifted: dunningCount, failed: dunningCount })]) });
+export type PlatformDunningPolicy = z.infer<typeof platformDunningPolicySchema>;
+export type PlatformDunningView = z.infer<typeof platformDunningViewResult>['data'];
+export type PlatformDunningException = PlatformDunningView['exceptions'][number];
+export type PlatformSuspension = PlatformDunningView['suspensions'][number];
+export type PlatformDunningStep = PlatformDunningView['steps'][number];
+export type PlatformDunningDelivery = (typeof dunningDeliveries)[number];
+export type PlatformCommercialAlert = z.infer<typeof platformCommercialAlertsResult>['data']['items'][number];
+export type PlatformDunningRun = z.infer<typeof platformDunningRunResult>['data'];
+const dunningDeliveryLabels: Record<PlatformDunningDelivery, string> = {
+  SKIPPED: 'Sans envoi', CONFIRMED: 'Remise confirmée', NO_RECIPIENT: 'Aucun destinataire', READ: 'Lu', SENT: 'Remis', PENDING: 'En attente', FAILED: 'Non remis',
+};
+export const dunningDeliveryLabel = (value: PlatformDunningDelivery) => dunningDeliveryLabels[value];
+/** Un avertissement non remis bloque la suspension automatique tant qu'un opérateur n'a pas confirmé une remise par un autre canal. */
+export const dunningDeliveryFailed = (value: PlatformDunningDelivery | null) => value === 'FAILED' || value === 'NO_RECIPIENT';
+const alertKindLabels: Record<PlatformCommercialAlert['kind'], string> = {
+  TRIAL_ENDING: 'Fin d’essai proche', TRIAL_ENDED: 'Essai terminé', NEW_OVERDUE: 'Facture en retard', DELIVERY_FAILED: 'Avertissement non remis',
+  SUSPENSION_UPCOMING: 'Suspension prévue', SUSPENDED: 'École suspendue',
+};
+export const alertKindLabel = (kind: PlatformCommercialAlert['kind']) => alertKindLabels[kind];
+export const suspensionCauseLabel = (cause: PlatformSuspension['cause']) => (cause === 'PAYMENT' ? 'Impayé' : 'Autre décision');
+export const suspensionOriginLabel = (origin: PlatformSuspension['origin']) => (origin === 'AUTOMATIC' ? 'automatique' : 'par un opérateur');
+export const liftCauseLabel = (cause: NonNullable<PlatformSuspension['liftCause']>) => (cause === 'PAYMENT_CONFIRMED' ? 'Levée après paiement' : 'Levée par un opérateur');
+export const exceptionKindLabel = (kind: PlatformDunningException['kind']) => (kind === 'DELAY' ? 'Délai propre' : 'Relances arrêtées');
+export const exceptionStatusLabel = (status: PlatformDunningException['status']) => ({ ACTIVE: 'Active', REVOKED: 'Révoquée', EXPIRED: 'Échue' })[status];
+export const dunningStepLabel = (kind: PlatformDunningStep['kind']) => (kind === 'REMINDER' ? 'Rappel' : 'Avertissement');
+export const reminderDaysLabel = (days: readonly number[]) => days.map(day => `J+${day}`).join(', ');
 
 // --- Facturation (R01-T05) : factures, avoirs et échéancier relus par l'API ; l'écran ne calcule aucun montant. ---
 export const invoiceStatuses = ['DRAFT', 'ISSUED', 'CANCELLED'] as const;
@@ -376,6 +436,17 @@ const actionLabels: Record<string, string> = {
   CORRECT_PAYMENT: 'Règlement corrigé',
   REGULARIZE_PAYMENT: 'Régularisation enregistrée',
   CANCEL_REGULARIZATION: 'Régularisation annulée',
+  UPDATE_DUNNING_POLICY: 'Relances modifiées',
+  RUN_DUNNING: 'Relances lancées',
+  ACKNOWLEDGE_COMMERCIAL_ALERT: 'Alerte traitée',
+  GRANT_DUNNING_EXCEPTION: 'Exception de relance accordée',
+  REVOKE_DUNNING_EXCEPTION: 'Exception de relance révoquée',
+  SUSPEND_SCHOOL: 'École suspendue',
+  LIFT_SUSPENSION: 'Suspension levée',
+  CONFIRM_DUNNING_WARNING: 'Remise d’avertissement confirmée',
+  SEND_PAYMENT_REMINDER: 'Rappel de paiement envoyé',
+  SEND_SUSPENSION_WARNING: 'Avertissement de suspension envoyé',
+  LIFT_SCHOOL_SUSPENSION: 'Suspension levée après paiement',
 };
 export const actionLabel = (action: string) => actionLabels[action] ?? 'Action enregistrée';
 const reasonLabels: Record<string, string> = {
@@ -456,6 +527,21 @@ const reasonLabels: Record<string, string> = {
   ALLOCATION_FIXED: 'Affectation figée',
   REGULARIZATION_CANCELLED: 'Régularisation déjà annulée',
   REGULARIZATION_FIXED: 'Régularisation figée',
+  DUNNING_POLICY_INVALID: 'Relances incohérentes',
+  DUNNING_EXCEPTION_DATE: 'Date d’exception hors limites',
+  DUNNING_EXCEPTION_INVALID: 'Exception incomplète',
+  DUNNING_EXCEPTION_ACTIVE: 'Exception déjà active',
+  DUNNING_EXCEPTION_CLOSED: 'Exception close',
+  SUSPENSION_NO_SCHOOL: 'Aucune école rattachée',
+  SUSPENSION_ACTIVE: 'Suspension déjà en cours',
+  SUSPENSION_NO_DEBT: 'Aucune dette à échéance',
+  SUSPENSION_HOLD: 'Relances arrêtées',
+  SUSPENSION_LIFTED: 'Suspension déjà levée',
+  SUSPENSION_DEBT_REMAINING: 'Dette encore due',
+  SUSPENSION_FIXED: 'Suspension figée',
+  DUNNING_STEP_CLOSED: 'Avertissement clos',
+  ALERT_CLOSED: 'Alerte déjà traitée',
+  INVOICE_PERIOD_PAUSED: 'Période en pause',
 };
 export const reasonLabel = (code: string | null) => (code ? reasonLabels[code] ?? null : null);
 
@@ -751,6 +837,22 @@ const failures: Record<string, string> = {
   ALLOCATION_FIXED: 'Une affectation ne se modifie pas. Libérez-la puis affectez à nouveau.',
   REGULARIZATION_CANCELLED: 'Cette régularisation est déjà annulée.',
   REGULARIZATION_FIXED: 'Une régularisation ne se modifie pas.',
+  DUNNING_POLICY_INVALID: 'Ces réglages de relance ne sont pas cohérents. La suspension automatique exige les rappels.',
+  DUNNING_EXCEPTION_DATE: 'La fin doit être entre aujourd’hui et dans un an.',
+  DUNNING_EXCEPTION_INVALID: 'Un délai exige un nombre de mois ; un arrêt n’en prend pas.',
+  DUNNING_EXCEPTION_ACTIVE: 'Une exception est déjà active pour cette école. Révoquez-la d’abord.',
+  DUNNING_EXCEPTION_CLOSED: 'Cette exception n’est plus active.',
+  SUSPENSION_NO_SCHOOL: 'Cette fiche n’est rattachée à aucune école.',
+  SCHOOL_ARCHIVED: 'Cette école est archivée. L’archivage n’est pas une suspension.',
+  SUSPENSION_ACTIVE: 'Une suspension pour cette cause est déjà en cours.',
+  SUSPENSION_NO_DEBT: 'Aucune somme due n’a atteint le délai de suspension.',
+  SUSPENSION_HOLD: 'Une exception arrête les relances de cette école. Révoquez-la avant de suspendre.',
+  SUSPENSION_LIFTED: 'Cette suspension est déjà levée.',
+  SUSPENSION_DEBT_REMAINING: 'La somme due reste impayée. Enregistrez le règlement ou accordez d’abord une exception.',
+  SUSPENSION_FIXED: 'Une suspension ne se modifie pas : levez-la ou créez-en une autre.',
+  DUNNING_STEP_CLOSED: 'Cet avertissement est déjà confirmé ou n’existe plus.',
+  ALERT_CLOSED: 'Cette alerte est déjà traitée.',
+  INVOICE_PERIOD_PAUSED: 'Le contrat prévoit une pause de facturation pendant la suspension de cette période.',
   PLATFORM_CODE_IN_PROGRESS: 'Un code est déjà en cours de création. Affichez-le ou fermez-le avant d’en créer un autre.',
   NOT_FOUND: 'Cet élément n’existe plus. L’écran a été actualisé.',
   LAST_PLATFORM_OPERATOR: 'Le dernier opérateur actif ne peut pas être retiré.',

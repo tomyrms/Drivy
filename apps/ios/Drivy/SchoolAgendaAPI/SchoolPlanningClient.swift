@@ -385,8 +385,16 @@ enum SchoolPlanningFailure: Error, LocalizedError, Equatable {
     }
     static let slotConflictMessage = "Le moniteur ou l’élève a déjà un rendez-vous sur ce créneau."
     static let startNowConflictMessage = "Toi ou l’élève avez un rendez-vous pendant la durée de cette leçon. Planifie-la à un autre moment."
+    static let commercialClosureMessage = "L’abonnement de ton école ne permet pas cette action. L’historique reste consultable."
     static func failure(_ status: Int, _ code: String?, title: String? = nil) -> SchoolPlanningFailure {
-        if status == 401 { return .unauthorized }; if status == 403 { return .forbidden }
+        if status == 401 { return .unauthorized }
+        // Fermeture commerciale (essai terminé, contrat résilié, école suspendue) : ce n’est pas un accès perdu. Le titre de l’école
+        // dit la marche à suivre ; le refus est définitif, la demande n’est pas renvoyée.
+        if status == 403 && code == "MODULE_NOT_ENTITLED" {
+            let text = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return .rejected(text.isEmpty || text.count > 300 ? commercialClosureMessage : text)
+        }
+        if status == 403 { return .forbidden }
         if status == 404 { return .notFound }; if status == 412 && code == "VERSION_CONFLICT" { return .conflict }
         let messages = [
             "SLOT_UNAVAILABLE": "Ce créneau n’est pas disponible pour ce moniteur.",

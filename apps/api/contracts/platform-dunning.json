@@ -1,0 +1,2541 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:drivy:contract:platform-dunning:1",
+  "title": "Relances des impayés, alertes commerciales, suspension et réactivation (R01-T09, #461)",
+  "description": "GET et POST /v1/platform/dunning/policy (If-Match), POST /v1/platform/dunning/run, GET /v1/platform/commercial-alerts, POST /v1/platform/commercial-alerts/{alertId}/acknowledge, GET /v1/platform/clients/{id}/dunning, POST /v1/platform/clients/{id}/dunning/exceptions, /dunning/exceptions/{exceptionId}/revoke, /dunning/suspensions, /dunning/suspensions/{suspensionId}/lift et /dunning/steps/{stepId}/confirm (If-Match). Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). If-Match \"N\" porte la version de la politique, ou la version du dossier de relance de la fiche (412 VERSION_CONFLICT si elle a changé, 428 sans version). La politique est globale et créée désactivée : ni rappel, ni avertissement, ni suspension automatique avant qu’un opérateur l’active. Règle V1 : la plus ancienne facture émise encore due fixe l’ancienneté ; un règlement partiel ne la remet pas à zéro. Les rappels tombent aux jours de retard de reminderDays ; la suspension automatique tombe suspensionMonths mois calendaires après l’échéance (jour ramené au dernier jour des mois plus courts), jamais moins de warningDays jours après l’avertissement, et seulement si celui-ci est remis (READ, SENT ou CONFIRMED). Un avertissement non remis (FAILED, NO_RECIPIENT) ouvre une alerte DELIVERY_FAILED et bloque la suspension automatique tant qu’un opérateur n’a pas confirmé la remise par un autre canal. Exception temporaire motivée, une seule active par école : DELAY (autre délai en mois) ou HOLD (ni relance ni suspension automatique). Chaque décision est recalculée sous le verrou de la fiche, commun à la facturation et aux règlements ; une étape est unique par facture, cycle et palier, si bien qu’un passage relancé ne produit aucun double effet. Une suspension pour impayé est levée par le passage dès que la dette est réglée (PAYMENT_CONFIRMED) ; elle ne lève jamais une suspension d’une autre cause. Pendant une suspension, une période dont le contrat prévoit suspension_billing = PAUSE n’est pas facturée ; une facture déjà émise ne change jamais. Une suspension ne modifie pas l’état de l’école (ni archivage, ni fin d’essai, ni résiliation). Alertes : TRIAL_ENDING, TRIAL_ENDED, NEW_OVERDUE, DELIVERY_FAILED, SUSPENSION_UPCOMING, SUSPENDED ; les prendre en compte ne règle, ne suspend et ne lève rien. Le journal commercial reçoit l’action, la cause et les dates, jamais un motif.",
+  "$defs": {
+    "DunningPolicy": {
+      "type": "object",
+      "properties": {
+        "remindersEnabled": {
+          "type": "boolean"
+        },
+        "autoSuspend": {
+          "type": "boolean"
+        },
+        "reminderDays": {
+          "minItems": 1,
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          }
+        },
+        "suspensionMonths": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "warningDays": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 28
+        },
+        "trialAlertDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "updatedByName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "remindersEnabled",
+        "autoSuspend",
+        "reminderDays",
+        "suspensionMonths",
+        "warningDays",
+        "trialAlertDays",
+        "version",
+        "updatedAt",
+        "updatedByName"
+      ],
+      "additionalProperties": false
+    },
+    "DunningState": {
+      "type": "object",
+      "properties": {
+        "overdue": {
+          "type": "boolean"
+        },
+        "hold": {
+          "type": "boolean"
+        },
+        "exceptionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invoiceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "invoiceNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dueOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "balance": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "months": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "baseOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cycle": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "warningStepId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warningDelivery": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "SKIPPED",
+                "CONFIRMED",
+                "NO_RECIPIENT",
+                "READ",
+                "SENT",
+                "PENDING",
+                "FAILED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "warningOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suspensionOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suspensionDue": {
+          "type": "boolean"
+        },
+        "daysLate": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "nextReminderOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "overdue",
+        "hold",
+        "exceptionId",
+        "invoiceId",
+        "invoiceNumber",
+        "dueOn",
+        "balance",
+        "months",
+        "baseOn",
+        "cycle",
+        "warningStepId",
+        "warningDelivery",
+        "warningOn",
+        "suspensionOn",
+        "suspensionDue",
+        "daysLate",
+        "nextReminderOn"
+      ],
+      "additionalProperties": false
+    },
+    "DunningException": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "DELAY",
+            "HOLD"
+          ]
+        },
+        "suspensionMonths": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endsOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "REVOKED",
+            "EXPIRED"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        },
+        "createdByName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "revokedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "revokeReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "suspensionMonths",
+        "endsOn",
+        "reason",
+        "status",
+        "createdAt",
+        "createdByName",
+        "revokedAt",
+        "revokeReason"
+      ],
+      "additionalProperties": false
+    },
+    "Suspension": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "cause": {
+          "type": "string",
+          "enum": [
+            "PAYMENT",
+            "MANUAL"
+          ]
+        },
+        "origin": {
+          "type": "string",
+          "enum": [
+            "AUTOMATIC",
+            "OPERATOR"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "ACTIVE",
+            "LIFTED"
+          ]
+        },
+        "startsOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "invoiceNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dueOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "months": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 24
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdByName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "liftedOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "liftCause": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "PAYMENT_CONFIRMED",
+                "OPERATOR"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "liftReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "liftedByName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "cause",
+        "origin",
+        "status",
+        "startsOn",
+        "invoiceNumber",
+        "dueOn",
+        "months",
+        "reason",
+        "createdByName",
+        "liftedOn",
+        "liftCause",
+        "liftReason",
+        "liftedByName"
+      ],
+      "additionalProperties": false
+    },
+    "DunningStep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "REMINDER",
+            "WARNING"
+          ]
+        },
+        "invoiceNumber": {
+          "type": "string"
+        },
+        "dueOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "offsetDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "plannedOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "doneOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "RECORDED",
+            "SKIPPED"
+          ]
+        },
+        "suspensionOn": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recipientCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "delivery": {
+          "type": "string",
+          "enum": [
+            "SKIPPED",
+            "CONFIRMED",
+            "NO_RECIPIENT",
+            "READ",
+            "SENT",
+            "PENDING",
+            "FAILED"
+          ]
+        },
+        "confirmedAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "confirmedByName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confirmReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "invoiceNumber",
+        "dueOn",
+        "offsetDays",
+        "plannedOn",
+        "doneOn",
+        "status",
+        "suspensionOn",
+        "recipientCount",
+        "delivery",
+        "confirmedAt",
+        "confirmedByName",
+        "confirmReason"
+      ],
+      "additionalProperties": false
+    },
+    "DunningView": {
+      "type": "object",
+      "properties": {
+        "today": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "state": {
+          "type": "object",
+          "properties": {
+            "overdue": {
+              "type": "boolean"
+            },
+            "hold": {
+              "type": "boolean"
+            },
+            "exceptionId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invoiceId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "invoiceNumber": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "dueOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "balance": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "months": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 24
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "baseOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "cycle": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "warningStepId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "warningDelivery": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "SKIPPED",
+                    "CONFIRMED",
+                    "NO_RECIPIENT",
+                    "READ",
+                    "SENT",
+                    "PENDING",
+                    "FAILED"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "warningOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "suspensionOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "suspensionDue": {
+              "type": "boolean"
+            },
+            "daysLate": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "nextReminderOn": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "overdue",
+            "hold",
+            "exceptionId",
+            "invoiceId",
+            "invoiceNumber",
+            "dueOn",
+            "balance",
+            "months",
+            "baseOn",
+            "cycle",
+            "warningStepId",
+            "warningDelivery",
+            "warningOn",
+            "suspensionOn",
+            "suspensionDue",
+            "daysLate",
+            "nextReminderOn"
+          ],
+          "additionalProperties": false
+        },
+        "recipients": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "exceptions": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "DELAY",
+                  "HOLD"
+                ]
+              },
+              "suspensionMonths": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "endsOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 500
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ACTIVE",
+                  "REVOKED",
+                  "EXPIRED"
+                ]
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              },
+              "createdByName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "revokedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "revokeReason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "suspensionMonths",
+              "endsOn",
+              "reason",
+              "status",
+              "createdAt",
+              "createdByName",
+              "revokedAt",
+              "revokeReason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "suspensions": {
+          "maxItems": 20,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "cause": {
+                "type": "string",
+                "enum": [
+                  "PAYMENT",
+                  "MANUAL"
+                ]
+              },
+              "origin": {
+                "type": "string",
+                "enum": [
+                  "AUTOMATIC",
+                  "OPERATOR"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "ACTIVE",
+                  "LIFTED"
+                ]
+              },
+              "startsOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "invoiceNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "dueOn": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "months": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 24
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "reason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "createdByName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "liftedOn": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "liftCause": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "PAYMENT_CONFIRMED",
+                      "OPERATOR"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "liftReason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "liftedByName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "cause",
+              "origin",
+              "status",
+              "startsOn",
+              "invoiceNumber",
+              "dueOn",
+              "months",
+              "reason",
+              "createdByName",
+              "liftedOn",
+              "liftCause",
+              "liftReason",
+              "liftedByName"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "steps": {
+          "maxItems": 40,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "REMINDER",
+                  "WARNING"
+                ]
+              },
+              "invoiceNumber": {
+                "type": "string"
+              },
+              "dueOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "offsetDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "plannedOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "doneOn": {
+                "type": "string",
+                "format": "date",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "RECORDED",
+                  "SKIPPED"
+                ]
+              },
+              "suspensionOn": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "recipientCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "delivery": {
+                "type": "string",
+                "enum": [
+                  "SKIPPED",
+                  "CONFIRMED",
+                  "NO_RECIPIENT",
+                  "READ",
+                  "SENT",
+                  "PENDING",
+                  "FAILED"
+                ]
+              },
+              "confirmedAt": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "confirmedByName": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "confirmReason": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "invoiceNumber",
+              "dueOn",
+              "offsetDays",
+              "plannedOn",
+              "doneOn",
+              "status",
+              "suspensionOn",
+              "recipientCount",
+              "delivery",
+              "confirmedAt",
+              "confirmedByName",
+              "confirmReason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "today",
+        "state",
+        "recipients",
+        "exceptions",
+        "suspensions",
+        "steps",
+        "version"
+      ],
+      "additionalProperties": false
+    },
+    "CommercialAlert": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "clientId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "clientName": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "TRIAL_ENDING",
+            "TRIAL_ENDED",
+            "NEW_OVERDUE",
+            "DELIVERY_FAILED",
+            "SUSPENSION_UPCOMING",
+            "SUSPENDED"
+          ]
+        },
+        "invoiceNumber": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "onDate": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "openedAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "clientName",
+        "kind",
+        "invoiceNumber",
+        "onDate",
+        "openedAt"
+      ],
+      "additionalProperties": false
+    },
+    "CommercialAlerts": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "maxItems": 100,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "clientId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+              },
+              "clientName": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "TRIAL_ENDING",
+                  "TRIAL_ENDED",
+                  "NEW_OVERDUE",
+                  "DELIVERY_FAILED",
+                  "SUSPENSION_UPCOMING",
+                  "SUSPENDED"
+                ]
+              },
+              "invoiceNumber": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "onDate": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "openedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+              }
+            },
+            "required": [
+              "id",
+              "clientId",
+              "clientName",
+              "kind",
+              "invoiceNumber",
+              "onDate",
+              "openedAt"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false
+    },
+    "DunningRun": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "skipped": {
+              "type": "boolean",
+              "const": true
+            }
+          },
+          "required": [
+            "skipped"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "skipped": {
+              "type": "boolean",
+              "const": false
+            },
+            "today": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "clients": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "reminders": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "warnings": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "suspended": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "lifted": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "failed": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "skipped",
+            "today",
+            "clients",
+            "reminders",
+            "warnings",
+            "suspended",
+            "lifted",
+            "failed"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PolicyBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "remindersEnabled": {
+          "type": "boolean"
+        },
+        "autoSuspend": {
+          "type": "boolean"
+        },
+        "reminderDays": {
+          "minItems": 1,
+          "maxItems": 6,
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          }
+        },
+        "suspensionMonths": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 12
+        },
+        "warningDays": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 28
+        },
+        "trialAlertDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        }
+      },
+      "required": [
+        "operationId",
+        "remindersEnabled",
+        "autoSuspend",
+        "reminderDays",
+        "suspensionMonths",
+        "warningDays",
+        "trialAlertDays"
+      ],
+      "additionalProperties": false
+    },
+    "ExceptionBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "DELAY",
+            "HOLD"
+          ]
+        },
+        "suspensionMonths": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 24
+        },
+        "endsOn": {
+          "type": "string",
+          "format": "date",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "endsOn",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "SuspensionBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "cause": {
+          "type": "string",
+          "enum": [
+            "PAYMENT",
+            "MANUAL"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "operationId",
+        "cause",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "ReasonBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "operationId",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "CommandBody": {
+      "type": "object",
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "operationId"
+      ],
+      "additionalProperties": false
+    },
+    "DunningPolicyEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "remindersEnabled": {
+              "type": "boolean"
+            },
+            "autoSuspend": {
+              "type": "boolean"
+            },
+            "reminderDays": {
+              "minItems": 1,
+              "maxItems": 6,
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 365
+              }
+            },
+            "suspensionMonths": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 12
+            },
+            "warningDays": {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 28
+            },
+            "trialAlertDays": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 30
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+            },
+            "updatedByName": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "remindersEnabled",
+            "autoSuspend",
+            "reminderDays",
+            "suspensionMonths",
+            "warningDays",
+            "trialAlertDays",
+            "version",
+            "updatedAt",
+            "updatedByName"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "DunningViewEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "today": {
+              "type": "string",
+              "format": "date",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+            },
+            "state": {
+              "type": "object",
+              "properties": {
+                "overdue": {
+                  "type": "boolean"
+                },
+                "hold": {
+                  "type": "boolean"
+                },
+                "exceptionId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "invoiceId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "invoiceNumber": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "dueOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "balance": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "months": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 24
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "baseOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "cycle": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "warningStepId": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "warningDelivery": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "SKIPPED",
+                        "CONFIRMED",
+                        "NO_RECIPIENT",
+                        "READ",
+                        "SENT",
+                        "PENDING",
+                        "FAILED"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "warningOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "suspensionOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "suspensionDue": {
+                  "type": "boolean"
+                },
+                "daysLate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "nextReminderOn": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "format": "date",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "overdue",
+                "hold",
+                "exceptionId",
+                "invoiceId",
+                "invoiceNumber",
+                "dueOn",
+                "balance",
+                "months",
+                "baseOn",
+                "cycle",
+                "warningStepId",
+                "warningDelivery",
+                "warningOn",
+                "suspensionOn",
+                "suspensionDue",
+                "daysLate",
+                "nextReminderOn"
+              ],
+              "additionalProperties": false
+            },
+            "recipients": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "exceptions": {
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "DELAY",
+                      "HOLD"
+                    ]
+                  },
+                  "suspensionMonths": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 24
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "endsOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "REVOKED",
+                      "EXPIRED"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  },
+                  "createdByName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "revokedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "revokeReason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "suspensionMonths",
+                  "endsOn",
+                  "reason",
+                  "status",
+                  "createdAt",
+                  "createdByName",
+                  "revokedAt",
+                  "revokeReason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "suspensions": {
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "cause": {
+                    "type": "string",
+                    "enum": [
+                      "PAYMENT",
+                      "MANUAL"
+                    ]
+                  },
+                  "origin": {
+                    "type": "string",
+                    "enum": [
+                      "AUTOMATIC",
+                      "OPERATOR"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "ACTIVE",
+                      "LIFTED"
+                    ]
+                  },
+                  "startsOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "invoiceNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "dueOn": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "months": {
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 24
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "reason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "createdByName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "liftedOn": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "liftCause": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "PAYMENT_CONFIRMED",
+                          "OPERATOR"
+                        ]
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "liftReason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "liftedByName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "cause",
+                  "origin",
+                  "status",
+                  "startsOn",
+                  "invoiceNumber",
+                  "dueOn",
+                  "months",
+                  "reason",
+                  "createdByName",
+                  "liftedOn",
+                  "liftCause",
+                  "liftReason",
+                  "liftedByName"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "steps": {
+              "maxItems": 40,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "REMINDER",
+                      "WARNING"
+                    ]
+                  },
+                  "invoiceNumber": {
+                    "type": "string"
+                  },
+                  "dueOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "offsetDays": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "plannedOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "doneOn": {
+                    "type": "string",
+                    "format": "date",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "RECORDED",
+                      "SKIPPED"
+                    ]
+                  },
+                  "suspensionOn": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "recipientCount": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "delivery": {
+                    "type": "string",
+                    "enum": [
+                      "SKIPPED",
+                      "CONFIRMED",
+                      "NO_RECIPIENT",
+                      "READ",
+                      "SENT",
+                      "PENDING",
+                      "FAILED"
+                    ]
+                  },
+                  "confirmedAt": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "confirmedByName": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "confirmReason": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 500
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "kind",
+                  "invoiceNumber",
+                  "dueOn",
+                  "offsetDays",
+                  "plannedOn",
+                  "doneOn",
+                  "status",
+                  "suspensionOn",
+                  "recipientCount",
+                  "delivery",
+                  "confirmedAt",
+                  "confirmedByName",
+                  "confirmReason"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "today",
+            "state",
+            "recipients",
+            "exceptions",
+            "suspensions",
+            "steps",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "CommercialAlertsEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "clientId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "clientName": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "TRIAL_ENDING",
+                      "TRIAL_ENDED",
+                      "NEW_OVERDUE",
+                      "DELIVERY_FAILED",
+                      "SUSPENSION_UPCOMING",
+                      "SUSPENDED"
+                    ]
+                  },
+                  "invoiceNumber": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "onDate": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "openedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                  }
+                },
+                "required": [
+                  "id",
+                  "clientId",
+                  "clientName",
+                  "kind",
+                  "invoiceNumber",
+                  "onDate",
+                  "openedAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "DunningRunEnvelope": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "skipped": {
+                  "type": "boolean",
+                  "const": true
+                }
+              },
+              "required": [
+                "skipped"
+              ],
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "properties": {
+                "skipped": {
+                  "type": "boolean",
+                  "const": false
+                },
+                "today": {
+                  "type": "string",
+                  "format": "date",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))$"
+                },
+                "clients": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "reminders": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "warnings": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "suspended": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "lifted": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "failed": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                }
+              },
+              "required": [
+                "skipped",
+                "today",
+                "clients",
+                "reminders",
+                "warnings",
+                "suspended",
+                "lifted",
+                "failed"
+              ],
+              "additionalProperties": false
+            }
+          ]
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
+        "serverTime": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+        }
+      },
+      "required": [
+        "data",
+        "requestId",
+        "serverTime"
+      ],
+      "additionalProperties": false
+    },
+    "PlatformError": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "INVALID_REQUEST",
+            "AUTHENTICATION_REQUIRED",
+            "PLATFORM_OPERATOR_REQUIRED",
+            "NOT_FOUND",
+            "PRECONDITION_REQUIRED",
+            "VERSION_CONFLICT",
+            "IDEMPOTENCY_MISMATCH",
+            "LAST_PLATFORM_OPERATOR",
+            "PLATFORM_OPERATOR_REVOKED",
+            "PLATFORM_OPERATOR_EXISTS",
+            "PLATFORM_ALREADY_MEMBER",
+            "PLATFORM_INVITATION_PENDING",
+            "PLATFORM_INVITATION_USED",
+            "PLATFORM_INVITATION_REVOKED",
+            "PLATFORM_INVITATION_EXPIRED",
+            "PLATFORM_INVITATION_CLOSED",
+            "PLATFORM_INVITATION_INVALID",
+            "PLATFORM_INVITATION_EMAIL_MISMATCH",
+            "PLATFORM_CODE_TAKEN",
+            "EMAIL_VERIFICATION_REQUIRED",
+            "INVITATION_CODE_ATTEMPTS",
+            "SERVICE_UNAVAILABLE",
+            "INVALID_CURSOR",
+            "CLIENT_CODE_PENDING",
+            "CLIENT_SCHOOL_LINKED",
+            "CLIENT_SCHOOL_ALREADY_LINKED",
+            "OPENING_CODE_TAKEN",
+            "OPENING_LINK_USED",
+            "OPENING_LINK_REVOKED",
+            "OFFER_NAME_TAKEN",
+            "OFFER_ARCHIVED",
+            "OFFER_NOT_ARCHIVED",
+            "EFFECTIVE_DATE_PAST",
+            "ASSIGNMENT_NOT_PENDING",
+            "ADJUSTMENT_REQUIRES_OFFER",
+            "ADJUSTMENT_NO_EFFECT",
+            "ADJUSTMENT_ACTIVE",
+            "ADJUSTMENT_NOT_ACTIVE",
+            "MODULE_UNKNOWN"
+          ]
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

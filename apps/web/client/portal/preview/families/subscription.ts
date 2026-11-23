@@ -22,7 +22,7 @@ const view = {
   requests: [{ id: previewId(7804), kind: 'OFFER_CHANGE', status: 'RECEIVED', source: 'SCHOOL', requestedOn: '2026-11-18', requestedOfferId: null, requestedOfferName: null,
     requestedModules: ['COLLECTIVE_COURSES'], desiredOn: null, details: null, response: null, effectiveOn: null, decidedAt: null, version: 1, createdAt: '2026-11-18T09:00:00.000Z', revisions: [] }],
   availableOffers: [{ id: previewId(7805), name: 'Offre complète d’aperçu', modules: ['MESSAGING', 'COLLECTIVE_COURSES'] }],
-  notices: [], version: 3,
+  notices: [], dunning: null, version: 3,
 };
 
 export const subscriptionFamily: PreviewFamily = {

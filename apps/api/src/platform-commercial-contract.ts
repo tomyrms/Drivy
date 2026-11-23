@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { actionClasses, commercialLifecycles, commercialStates, restrictionReasons } from './entitlements-model.js';
+import { actionClasses, commercialLifecycles, commercialStates, restrictionCauses, restrictionReasons } from './entitlements-model.js';
 import { commercialOfferSchema } from './platform-clients-contract.js';
 import {
   missingFields, noticeEvents, paidStartStatuses, requestKinds, requestSources, requestStatuses, revisionActions, suspensionBillings, termsPhases, termsStatuses, trialKinds, trialPhases,
@@ -15,7 +15,9 @@ const day = z.iso.date();
 const cents = z.number().int().min(0);
 const nullableText = z.string().nullable();
 
-export const commercialRestrictionSchema = z.object({ reason: z.enum(restrictionReasons), closes: z.array(z.enum(actionClasses)) }).strict();
+export const commercialRestrictionSchema = z.object({
+  reason: z.enum(restrictionReasons), closes: z.array(z.enum(actionClasses)), causes: z.array(z.enum(restrictionCauses)).optional(),
+}).strict();
 export const termsVersionSchema = z.object({
   id: z.uuid(), sequence: z.number().int().min(1), currency: z.literal('CHF'), initialAmount: cents.nullable(), initialDiscount: cents,
   initialDueOn: day.nullable(), monthlyAmount: cents.nullable(), recurringDiscount: cents, recurringDiscountMonths: z.number().int().min(1).nullable(),

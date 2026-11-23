@@ -249,7 +249,7 @@ export const schoolEntitlementsSchema = z.object({
   // Cycle commercial (R01-T04) : optionnel pour qu'une API antérieure reste lisible. Un essai terminé ou une résiliation rend déjà
   // chaque module non accordé ; ces champs ne servent qu'à dire pourquoi.
   lifecycle: entitlementToken.optional(),
-  restriction: z.object({ reason: entitlementToken, closes: z.array(entitlementToken).max(5) }).nullable().optional(),
+  restriction: z.object({ reason: entitlementToken, closes: z.array(entitlementToken).max(5), causes: z.array(entitlementToken).max(2).optional() }).nullable().optional(),
   trialEndsAt: timestamp.nullable().optional(), paidStartsOn: z.iso.date().nullable().optional(), terminationOn: z.iso.date().nullable().optional(),
 });
 export type SchoolEntitlements = z.infer<typeof schoolEntitlementsSchema>;

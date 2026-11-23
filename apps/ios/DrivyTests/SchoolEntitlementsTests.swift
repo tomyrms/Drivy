@@ -124,6 +124,31 @@ struct SchoolEntitlementsTests {
         for module in SchoolModuleCode.allCases { #expect(unknown.isEntitled(module)) }
     }
 
+    // Suspension (R01-T09, #461) : écrit, jamais exécuté (règle du porteur ; aucune chaîne Swift sur la machine de développement).
+
+    @Test func decodesASuspensionAndItsCause() throws {
+        let suspended = """
+        {"state":"OFFER_ACTIVE","modules":[{"code":"MESSAGING","entitled":false}],"version":4,"nextChangeAt":null,
+         "computedAt":"2026-11-21T08:00:00Z","lifecycle":"PAID","restriction":{"reason":"SUSPENDED","closes":["WRITE_NEW"],"causes":["PAYMENT"]}}
+        """
+        let value = try JSONDecoder().decode(SchoolEntitlements.self, from: Data(suspended.utf8))
+        #expect(value.isWellFormed)
+        #expect(value.restriction == .init(reason: "SUSPENDED", closes: ["WRITE_NEW"], causes: ["PAYMENT"]))
+        #expect(!value.isEntitled(.messaging))
+        // Une API antérieure ne donne pas de cause : la restriction reste lisible.
+        let older = try JSONDecoder().decode(SchoolEntitlements.Restriction.self, from: Data(#"{"reason":"TERMINATED","closes":["WRITE_NEW"]}"#.utf8))
+        #expect(older.causes == nil)
+    }
+
+    @Test func aCommercialClosureIsShownAsTheSchoolWordsItAndNeverRetried() {
+        let title = "L’abonnement de cette école est suspendu. L’historique reste consultable. Contactez Drivy pour le rétablir."
+        let failure = SchoolPlanningClient.failure(403, "MODULE_NOT_ENTITLED", title: title)
+        #expect(failure == .rejected(title))
+        #expect(failure.definitiveRejection)
+        #expect(SchoolPlanningClient.failure(403, "MODULE_NOT_ENTITLED") == .rejected(SchoolPlanningClient.commercialClosureMessage))
+        #expect(SchoolPlanningClient.failure(403, "SETUP_ACCESS_REQUIRED") == .forbidden)
+    }
+
     @Test func refusesImplausibleProjections() {
         #expect(!SchoolEntitlements(state: "OFFER_ACTIVE", modules: [], version: 0, nextChangeAt: nil,
                                     computedAt: "2026-11-15T10:00:00Z").isWellFormed)

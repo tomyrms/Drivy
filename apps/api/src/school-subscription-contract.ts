@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { commercialLifecycles, commercialStates, moduleCodes } from './entitlements-model.js';
+import { commercialLifecycles, commercialStates, moduleCodes, restrictionCauses } from './entitlements-model.js';
 import { debtSchema, settlementSchema } from './platform-billing-contract.js';
 import { invoiceKinds } from './platform-billing-model.js';
 import { commercialRestrictionSchema } from './platform-commercial-contract.js';
@@ -45,7 +45,14 @@ export const schoolSubscriptionSchema = z.object({
   terms: termsSchema.nullable(), scheduledTerms: termsSchema.nullable(), debt: debtSchema.nullable(),
   invoices: z.array(subscriptionInvoiceSchema).max(200), payments: z.array(subscriptionPaymentSchema).max(200), requests: z.array(subscriptionRequestSchema).max(50),
   availableOffers: z.array(z.object({ id: z.uuid(), name: z.string(), modules: z.array(z.string()) }).strict()),
-  notices: z.array(z.object({ id: z.uuid(), requestId: z.uuid(), event: z.enum(noticeEvents), createdAt: timestamp }).strict()).max(20),
+  // Un avis de relance ou de suspension (R01-T09) n'a pas de demande d'origine : requestId vaut null.
+  notices: z.array(z.object({ id: z.uuid(), requestId: z.uuid().nullable(), event: z.enum(noticeEvents), createdAt: timestamp }).strict()).max(20),
+  // Retard et suspension (R01-T09, #461) : null sans somme en retard ni suspension. Ni motif, ni auteur, ni exception ; la date de
+  // suspension n'apparaît qu'une fois annoncée par un avertissement.
+  dunning: z.object({
+    suspended: z.boolean(), causes: z.array(z.enum(restrictionCauses)), since: day.nullable(), invoiceNumber: z.string().nullable(),
+    dueOn: day.nullable(), balance: z.number().int().min(0).nullable(), suspensionOn: day.nullable(),
+  }).strict().nullable(),
   version: z.number().int().min(0),
 }).strict();
 export type SchoolSubscription = z.infer<typeof schoolSubscriptionSchema>;

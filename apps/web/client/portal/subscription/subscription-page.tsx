@@ -36,7 +36,7 @@ export function SubscriptionPage() {
   return <section className="subscription-page" aria-labelledby="subscription-title">
     <header className="subscription-head">
       <h1 id="subscription-title">Abonnement</h1>
-      {data?.hasClient && <Badge variant={data.restriction ? 'destructive' : 'outline'}>{lifecycleLabels[data.lifecycle]}</Badge>}
+      {data?.hasClient && <Badge variant={data.restriction ? 'destructive' : 'outline'}>{data.restriction?.reason === 'SUSPENDED' ? 'Suspendu' : lifecycleLabels[data.lifecycle]}</Badge>}
     </header>
     {!data && <ReadFeedback loaded={loaded} label="Chargement de l’abonnement" />}
     {data && loaded.status === 'error' && <ReadFeedback loaded={loaded} />}
@@ -97,8 +97,9 @@ function SubscriptionBody({ data, reload }: { data: SchoolSubscription; reload: 
     </Alert>}
     {data.notices.length > 0 && <div className="subscription-notices" role="group" aria-label="Réponses de Drivy">
       <ul>{data.notices.slice(0, 3).map(item => {
-        const request = data.requests.find(entry => entry.id === item.requestId);
-        return <li key={item.id}><strong>{noticeLabels[item.event]}</strong><span>{request ? requestKindLabels[request.kind] : 'Demande'} · {instantDayLabel(item.createdAt)}</span></li>;
+        // Un avis de relance ou de suspension n'a pas de demande d'origine : seule sa date est montrée.
+        const request = item.requestId ? data.requests.find(entry => entry.id === item.requestId) : undefined;
+        return <li key={item.id}><strong>{noticeLabels[item.event]}</strong><span>{item.requestId ? `${request ? requestKindLabels[request.kind] : 'Demande'} · ` : ''}{instantDayLabel(item.createdAt)}</span></li>;
       })}</ul>
       <Button variant="outline" disabled={disabled} onClick={() => void acknowledge()}>Marquer comme lu</Button>
     </div>}

@@ -21,6 +21,7 @@ import { PortalSelect } from '../components/portal-select';
 import { AttachDialog, ClientsSection, CodeDialog } from './clients-section';
 import { OfferDialog, OffersSection } from './offers-section';
 import { BillingDialog, InvoicesSection } from './billing-section';
+import { DunningDialog } from './dunning-section';
 import { CommercialDialog } from './commercial-section';
 import { RightsDialog } from './rights-section';
 import { usePlatformConsole, type PlatformConsoleState } from './use-platform-console';
@@ -70,6 +71,7 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
     <RightsDialog state={state} />
     <CommercialDialog state={state} />
     <BillingDialog state={state} openClient={id => { setTab('clients'); void state.clients.openClient(id); }} />
+    <DunningDialog state={state} />
   </EntryFrame>;
 }
 

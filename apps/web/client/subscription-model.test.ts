@@ -10,7 +10,7 @@ const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0
 const base: SchoolSubscription = {
   hasClient: true, today, contact: { name: 'Drivy Exemple', email: 'contact@example.invalid' }, lifecycle: 'PAID', state: 'OFFER_ACTIVE', restriction: null, trial: null,
   paidStartsOn: '2026-11-01', terminationOn: null, nextPeriodStart: '2026-12-01', nextDueOn: null, offer: null, scheduledOffer: null, modules: [], terms: null, scheduledTerms: null,
-  debt: null, invoices: [], payments: [], requests: [], availableOffers: [], notices: [], version: 1,
+  debt: null, invoices: [], payments: [], requests: [], availableOffers: [], notices: [], dunning: null, version: 1,
 };
 const request = (patch: Partial<SubscriptionRequest> = {}): SubscriptionRequest => ({
   id: uuid(1), kind: 'TERMINATION', status: 'RECEIVED', source: 'SCHOOL', requestedOn: '2026-11-20', requestedOfferId: null, requestedOfferName: null, requestedModules: [],
@@ -87,6 +87,39 @@ describe('fait le plus urgent', () => {
   test('l’essai terminé reste un état distinct', () => {
     expect(subscriptionAttention({ ...base, lifecycle: 'TRIAL_EXPIRED', trial: { startsAt: '2026-10-01T00:00:00.000Z', endsAt: '2026-11-01T00:00:00.000Z' } }))
       .toMatchObject({ title: 'Essai terminé', regularize: true });
+  });
+});
+
+/** R01-T09 (#461) : suspension et avertissement vus par l'école. Écrit sans être exécuté (règle du porteur). Données synthétiques. */
+describe('suspension', () => {
+  const restriction = { reason: 'SUSPENDED' as const, closes: ['WRITE_NEW'], causes: ['PAYMENT' as const] };
+  const unpaid = { suspended: true, causes: ['PAYMENT' as const], since: '2026-11-20', invoiceNumber: '2026-0001', dueOn: '2026-08-01', balance: 4_900, suspensionOn: null };
+
+  test('le contrat accepte une suspension et des avis sans demande d’origine', () => {
+    expect(schoolSubscriptionSchema.safeParse({ ...base, restriction, dunning: unpaid,
+      notices: [{ id: uuid(3), requestId: null, event: 'SUSPENDED', createdAt: '2026-11-20T08:00:00.000Z' }] }).success).toBe(true);
+  });
+  test('un impayé nomme la facture, son échéance et le reste dû, puis rassure sur l’historique', () => {
+    const attention = subscriptionAttention({ ...base, restriction, dunning: unpaid });
+    expect(attention).toMatchObject({ tone: 'danger', title: 'Abonnement suspendu', regularize: true });
+    expect(attention?.detail).toMatch(/^Facture 2026-0001 échue le .+, reste .+\. L’historique reste consultable\.$/);
+  });
+  test('une autre décision ne parle pas d’argent', () => {
+    expect(subscriptionAttention({ ...base, restriction: { ...restriction, causes: ['MANUAL'] },
+      dunning: { ...unpaid, causes: ['MANUAL'], invoiceNumber: null, dueOn: null, balance: null } }))
+      .toMatchObject({ title: 'Abonnement suspendu', detail: 'Décision de Drivy. L’historique reste consultable.' });
+  });
+  test('la restriction seule suffit si le dossier de relance manque', () => {
+    expect(subscriptionAttention({ ...base, restriction })).toMatchObject({ title: 'Abonnement suspendu', detail: 'Facture impayée. L’historique reste consultable.' });
+  });
+  test('la résiliation passe avant la suspension, la suspension avant l’essai terminé', () => {
+    expect(subscriptionAttention({ ...base, lifecycle: 'TERMINATED', terminationOn: today, restriction, dunning: unpaid })).toMatchObject({ title: 'Abonnement résilié' });
+    expect(subscriptionAttention({ ...base, lifecycle: 'TRIAL_EXPIRED', restriction, dunning: unpaid })).toMatchObject({ title: 'Abonnement suspendu' });
+  });
+  test('un avertissement remis annonce la date, sans dire que l’école est suspendue', () => {
+    const attention = subscriptionAttention({ ...base, dunning: { ...unpaid, suspended: false, causes: [], since: null, suspensionOn: '2026-12-05' } });
+    expect(attention?.title).toMatch(/^Suspension prévue le /);
+    expect(attention?.title).not.toBe('Abonnement suspendu');
   });
 });
 

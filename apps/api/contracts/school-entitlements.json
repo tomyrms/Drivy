@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "urn:drivy:contract:school-entitlements:1",
   "title": "Droits commerciaux aux modules, côté école (R01-T03, #455)",
-  "description": "GET /v1/schools/{schoolId}/entitlements. Réservé aux membres actifs de l’école, tous rôles confondus. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. La réponse dit seulement l’état commercial, le cycle commercial (lifecycle, restriction, fin d’essai, début payant, résiliation) et les modules accordés (version, prochain changement, heure de calcul) : ni offre, ni montant, ni motif, ni auteur, ni historique. Un essai terminé ou un contrat résilié ferme tout usage nouveau (restriction.closes = WRITE_NEW) avec le même 403 MODULE_NOT_ENTITLED, dont le titre dit la marche à suivre ; la consultation et la fin des engagements déjà pris restent permises. Une école pilote sans essai ni début payant reste NONE, sans restriction. La web et l’iPhone relisent cette projection à l’ouverture et au retour en avant-plan ; un client ancien ou hors ligne n’est jamais l’autorité, car chaque écriture concernée est de toute façon refusée au serveur par 403 MODULE_NOT_ENTITLED. L’ETag porte la version des droits ; la réponse n’est jamais mise en cache (Cache-Control: no-store).",
+  "description": "GET /v1/schools/{schoolId}/entitlements. Réservé aux membres actifs de l’école, tous rôles confondus. Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. La réponse dit seulement l’état commercial, le cycle commercial (lifecycle, restriction, fin d’essai, début payant, résiliation) et les modules accordés (version, prochain changement, heure de calcul) : ni offre, ni montant, ni motif, ni auteur, ni historique. Un essai terminé, un contrat résilié ou une école suspendue (R01-T09, #461) ferme tout usage nouveau (restriction.closes = WRITE_NEW) avec le même 403 MODULE_NOT_ENTITLED, dont le titre dit la marche à suivre ; une suspension porte restriction.reason = SUSPENDED et restriction.causes (PAYMENT pour un impayé, MANUAL pour une autre décision de l’équipe), ferme les modules (access SUSPENDED) et les commandes de base qui ouvrent un engagement nouveau (rendez-vous, leçon improvisée, déplacement, invitation, formation, attribution, examen). Précédence de la restriction : TERMINATED > SUSPENDED > TRIAL_EXPIRED. Une suspension ne change jamais l’état de l’école : elle n’est ni un archivage, ni une fin d’essai, ni une résiliation. la consultation et la fin des engagements déjà pris restent permises. Une école pilote sans essai ni début payant reste NONE, sans restriction. La web et l’iPhone relisent cette projection à l’ouverture et au retour en avant-plan ; un client ancien ou hors ligne n’est jamais l’autorité, car chaque écriture concernée est de toute façon refusée au serveur par 403 MODULE_NOT_ENTITLED. L’ETag porte la version des droits ; la réponse n’est jamais mise en cache (Cache-Control: no-store).",
   "$defs": {
     "SchoolEntitlements": {
       "type": "object",
@@ -33,7 +33,8 @@
                   "type": "string",
                   "enum": [
                     "TRIAL_EXPIRED",
-                    "TERMINATED"
+                    "TERMINATED",
+                    "SUSPENDED"
                   ]
                 },
                 "closes": {
@@ -187,7 +188,8 @@
                       "type": "string",
                       "enum": [
                         "TRIAL_EXPIRED",
-                        "TERMINATED"
+                        "TERMINATED",
+                        "SUSPENDED"
                       ]
                     },
                     "closes": {

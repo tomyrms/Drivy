@@ -41,6 +41,11 @@ import {
 import {
   activationBody, activationStopBody, cancelBody, creditBody, deliveryBody, documentBody, documentQuery, invoiceListQuery, issueBody, issuerBody, prepareBody, runBody, sentBody
 } from '../src/platform-billing-model.js';
+import {
+  commercialAlertSchema, commercialAlertsEnvelope, commercialAlertsSchema, dunningExceptionSchema, dunningPolicyEnvelope, dunningPolicySchema, dunningRunEnvelope,
+  dunningRunSchema, dunningStateSchema, dunningStepSchema, dunningViewEnvelope, dunningViewSchema, suspensionSchema
+} from '../src/platform-dunning-contract.js';
+import { commandBody as dunningCommandBody, exceptionBody, policyBody, reasonBody, suspensionBody } from '../src/platform-dunning-model.js';
 
 // Extension d'implémentation ; le contrat OpenAPI canonique 3.11.0 reste inchangé.
 const project = (schema: z.ZodType) => { const { $schema: _ignored, ...definition } = z.toJSONSchema(schema, { io: 'input' }); return definition; };
@@ -171,7 +176,10 @@ await writeFile(new URL('../contracts/school-entitlements.json', import.meta.url
     + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
     + 'La réponse dit seulement l’état commercial, le cycle commercial (lifecycle, restriction, fin d’essai, début payant, résiliation) et les modules accordés '
     + '(version, prochain changement, heure de calcul) : ni offre, ni montant, ni motif, ni auteur, ni historique. '
-    + 'Un essai terminé ou un contrat résilié ferme tout usage nouveau (restriction.closes = WRITE_NEW) avec le même 403 MODULE_NOT_ENTITLED, dont le titre dit la marche à suivre ; '
+    + 'Un essai terminé, un contrat résilié ou une école suspendue (R01-T09, #461) ferme tout usage nouveau (restriction.closes = WRITE_NEW) avec le même 403 MODULE_NOT_ENTITLED, dont le titre dit la marche à suivre ; '
+    + 'une suspension porte restriction.reason = SUSPENDED et restriction.causes (PAYMENT pour un impayé, MANUAL pour une autre décision de l’équipe), ferme les modules '
+    + '(access SUSPENDED) et les commandes de base qui ouvrent un engagement nouveau (rendez-vous, leçon improvisée, déplacement, invitation, formation, attribution, examen). '
+    + 'Précédence de la restriction : TERMINATED > SUSPENDED > TRIAL_EXPIRED. Une suspension ne change jamais l’état de l’école : elle n’est ni un archivage, ni une fin d’essai, ni une résiliation. '
     + 'la consultation et la fin des engagements déjà pris restent permises. Une école pilote sans essai ni début payant reste NONE, sans restriction. '
     + 'La web et l’iPhone relisent cette projection à l’ouverture et au retour en avant-plan ; un client ancien ou hors ligne n’est jamais l’autorité, '
     + 'car chaque écriture concernée est de toute façon refusée au serveur par 403 MODULE_NOT_ENTITLED. '
@@ -191,7 +199,10 @@ await writeFile(new URL('../contracts/school-subscription.json', import.meta.url
     + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
     + 'Réservé au rôle ADMIN actif de l’école, quel que soit l’état de l’école (403 COMMERCIAL_ACCESS_REQUIRED sinon). '
     + 'Une demande ne change ni offre, ni module, ni date de fin : seule une décision de l’équipe Drivy le fait. Une seule demande ouverte par type (409 REQUEST_ALREADY_OPEN). '
-    + 'Les montants sont ceux des factures émises et des règlements enregistrés, en centimes de CHF.',
+    + 'Les montants sont ceux des factures émises et des règlements enregistrés, en centimes de CHF. '
+    + 'Relances et suspension (R01-T09, #461) : dunning vaut null sans somme en retard ni suspension ; sinon il donne la suspension en cours (suspended, causes, since), '
+    + 'la plus ancienne facture encore due (numéro, échéance, reste) et la date de suspension annoncée par un avertissement (suspensionOn, sinon null). '
+    + 'Les avis PAYMENT_REMINDER, SUSPENSION_WARNING, SUSPENDED et REACTIVATED n’ont pas de demande d’origine (requestId null). Ni motif, ni auteur, ni exception ne sont exposés.',
   $defs: {
     SchoolSubscription: project(schoolSubscriptionSchema),
     SchoolSubscriptionEnvelope: project(schoolSubscriptionEnvelope),
@@ -270,7 +281,7 @@ await writeFile(new URL('../contracts/platform-billing.json', import.meta.url), 
     + '(gardé, avec son auteur) et réaffecte le nouveau règlement aux mêmes factures ; une régularisation explicite sort un reste du règlement, '
     + 'aucun remboursement n’est déduit d’un avoir ni d’une correction. Un avoir est refusé tant qu’une facture porte des affectations (409 INVOICE_PAID). '
     + 'Solde, état de règlement, retard et dette sont calculés par la base (platform_invoice_settlement, platform_client_debt), le même calcul pour '
-    + 'l’équipe, l’espace école et la suspension. La lecture par l’école (#460) et la suspension (#461) ne sont pas couvertes. '
+    + 'l’équipe, l’espace école (#460, contrat school-subscription) et les relances (#461, contrat platform-dunning). '
     + 'Documents (R01-T07) : POST /v1/platform/clients/{id}/invoices/{invoiceId}/document, GET du même chemin (application/pdf, ?revision=, attachment, no-store), '
     + 'GET /invoices/{invoiceId}/delivery/preview et POST /invoices/{invoiceId}/delivery ({confirm:true, resend}). Un document est rendu une fois depuis l’instantané '
     + 'de la facture émise puis conservé. Section QR selon les directives SIX v2.4 : adresses structurées, compte CH/LI, QR-IBAN avec QRR ou IBAN avec SCOR, montant égal au total. '
@@ -316,6 +327,50 @@ await writeFile(new URL('../contracts/platform-billing.json', import.meta.url), 
     InvoicePageEnvelope: project(invoicePageEnvelope),
     BillingEnvelope: project(billingEnvelope),
     BillingRunEnvelope: project(billingRunEnvelope),
+    PlatformError: project(platformErrorSchema)
+  }
+}, null, 2) + '\n');
+
+await writeFile(new URL('../contracts/platform-dunning.json', import.meta.url), JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:platform-dunning:1',
+  title: 'Relances des impayés, alertes commerciales, suspension et réactivation (R01-T09, #461)',
+  description: 'GET et POST /v1/platform/dunning/policy (If-Match), POST /v1/platform/dunning/run, GET /v1/platform/commercial-alerts, '
+    + 'POST /v1/platform/commercial-alerts/{alertId}/acknowledge, GET /v1/platform/clients/{id}/dunning, POST /v1/platform/clients/{id}/dunning/exceptions, '
+    + '/dunning/exceptions/{exceptionId}/revoke, /dunning/suspensions, /dunning/suspensions/{suspensionId}/lift et /dunning/steps/{stepId}/confirm (If-Match). '
+    + 'Le dossier de conception 3.11.0 reste immuable : aucune route n’y est ajoutée, ce fichier est le contrat exécutable. '
+    + 'Mêmes règles d’accès que le contrat des opérateurs (équipe relue en base, 403 PLATFORM_OPERATOR_REQUIRED sinon, Idempotency-Key égal à operationId). '
+    + 'If-Match "N" porte la version de la politique, ou la version du dossier de relance de la fiche (412 VERSION_CONFLICT si elle a changé, 428 sans version). '
+    + 'La politique est globale et créée désactivée : ni rappel, ni avertissement, ni suspension automatique avant qu’un opérateur l’active. '
+    + 'Règle V1 : la plus ancienne facture émise encore due fixe l’ancienneté ; un règlement partiel ne la remet pas à zéro. Les rappels tombent aux jours de retard '
+    + 'de reminderDays ; la suspension automatique tombe suspensionMonths mois calendaires après l’échéance (jour ramené au dernier jour des mois plus courts), '
+    + 'jamais moins de warningDays jours après l’avertissement, et seulement si celui-ci est remis (READ, SENT ou CONFIRMED). Un avertissement non remis (FAILED, NO_RECIPIENT) ouvre une alerte '
+    + 'DELIVERY_FAILED et bloque la suspension automatique tant qu’un opérateur n’a pas confirmé la remise par un autre canal. '
+    + 'Exception temporaire motivée, une seule active par école : DELAY (autre délai en mois) ou HOLD (ni relance ni suspension automatique). '
+    + 'Chaque décision est recalculée sous le verrou de la fiche, commun à la facturation et aux règlements ; une étape est unique par facture, cycle et palier, '
+    + 'si bien qu’un passage relancé ne produit aucun double effet. Une suspension pour impayé est levée par le passage dès que la dette est réglée (PAYMENT_CONFIRMED) ; '
+    + 'elle ne lève jamais une suspension d’une autre cause. Pendant une suspension, une période dont le contrat prévoit suspension_billing = PAUSE n’est pas facturée ; '
+    + 'une facture déjà émise ne change jamais. Une suspension ne modifie pas l’état de l’école (ni archivage, ni fin d’essai, ni résiliation). '
+    + 'Alertes : TRIAL_ENDING, TRIAL_ENDED, NEW_OVERDUE, DELIVERY_FAILED, SUSPENSION_UPCOMING, SUSPENDED ; les prendre en compte ne règle, ne suspend et ne lève rien. '
+    + 'Le journal commercial reçoit l’action, la cause et les dates, jamais un motif.',
+  $defs: {
+    DunningPolicy: project(dunningPolicySchema),
+    DunningState: project(dunningStateSchema),
+    DunningException: project(dunningExceptionSchema),
+    Suspension: project(suspensionSchema),
+    DunningStep: project(dunningStepSchema),
+    DunningView: project(dunningViewSchema),
+    CommercialAlert: project(commercialAlertSchema),
+    CommercialAlerts: project(commercialAlertsSchema),
+    DunningRun: project(dunningRunSchema),
+    PolicyBody: project(policyBody),
+    ExceptionBody: project(exceptionBody),
+    SuspensionBody: project(suspensionBody),
+    ReasonBody: project(reasonBody),
+    CommandBody: project(dunningCommandBody),
+    DunningPolicyEnvelope: project(dunningPolicyEnvelope),
+    DunningViewEnvelope: project(dunningViewEnvelope),
+    CommercialAlertsEnvelope: project(commercialAlertsEnvelope),
+    DunningRunEnvelope: project(dunningRunEnvelope),
     PlatformError: project(platformErrorSchema)
   }
 }, null, 2) + '\n');

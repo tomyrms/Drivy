@@ -257,6 +257,25 @@ const billingMessages: [string, number, string, string][] = [
   ['platform_invoice_delivery_settled', 409, 'INVOICE_DELIVERY_SETTLED', 'Cette facture est déjà réglée au moins en partie : son QR ne correspond plus au solde.'],
   ['platform_invoice_delivery_active', 409, 'INVOICE_DELIVERY_ACTIVE', 'Un envoi de cette facture est déjà en cours.'],
   ['platform_invoice_delivery_resend_required', 409, 'INVOICE_DELIVERY_RESEND_REQUIRED', 'Cette facture a peut-être déjà été envoyée. Confirmez le renvoi.'],
+  // Relances et suspension (R01-T09, #461).
+  ['platform_dunning_policy_stale', 412, 'VERSION_CONFLICT', 'La politique de relance a changé. Rechargez-la avant de confirmer.'],
+  ['platform_dunning_policy_invalid', 409, 'DUNNING_POLICY_INVALID', 'Ces réglages de relance ne sont pas cohérents. La suspension automatique exige les rappels.'],
+  ['platform_dunning_exception_date', 409, 'DUNNING_EXCEPTION_DATE', 'La fin doit être entre aujourd’hui et dans un an.'],
+  ['platform_dunning_exception_invalid', 409, 'DUNNING_EXCEPTION_INVALID', 'Un délai exige un nombre de mois ; un arrêt n’en prend pas.'],
+  ['platform_dunning_exception_active', 409, 'DUNNING_EXCEPTION_ACTIVE', 'Une exception est déjà active pour cette école. Révoquez-la d’abord.'],
+  ['platform_dunning_exception_closed', 409, 'DUNNING_EXCEPTION_CLOSED', 'Cette exception n’est plus active.'],
+  ['platform_suspension_no_school', 409, 'SUSPENSION_NO_SCHOOL', 'Cette fiche n’est rattachée à aucune école.'],
+  ['platform_suspension_archived', 409, 'SCHOOL_ARCHIVED', 'Cette école est archivée. L’archivage n’est pas une suspension.'],
+  ['platform_suspension_active', 409, 'SUSPENSION_ACTIVE', 'Une suspension pour cette cause est déjà en cours.'],
+  ['platform_suspension_no_debt', 409, 'SUSPENSION_NO_DEBT', 'Aucune somme due n’a atteint le délai de suspension.'],
+  ['platform_suspension_hold', 409, 'SUSPENSION_HOLD', 'Une exception arrête les relances de cette école. Révoquez-la avant de suspendre.'],
+  ['platform_suspension_unknown', 404, 'NOT_FOUND', 'Ressource introuvable.'],
+  ['platform_suspension_lifted', 409, 'SUSPENSION_LIFTED', 'Cette suspension est déjà levée.'],
+  ['platform_suspension_debt_remaining', 409, 'SUSPENSION_DEBT_REMAINING', 'La somme due reste impayée. Enregistrez le règlement ou accordez d’abord une exception.'],
+  ['platform_suspension_fixed', 409, 'SUSPENSION_FIXED', 'Une suspension ne se modifie pas : levez-la ou créez-en une autre.'],
+  ['platform_dunning_step_closed', 409, 'DUNNING_STEP_CLOSED', 'Cet avertissement est déjà confirmé ou n’existe plus.'],
+  ['platform_alert_closed', 409, 'ALERT_CLOSED', 'Cette alerte est déjà traitée.'],
+  ['platform_invoice_period_paused', 409, 'INVOICE_PERIOD_PAUSED', 'Le contrat prévoit une pause de facturation pendant la suspension de cette période.'],
 ];
 const billingConstraints: Record<string, [number, string, string]> = {
   platform_billing_activation_active: [409, 'BILLING_ACTIVE', 'La facturation planifiée est déjà active pour cette école.'],
@@ -266,6 +285,8 @@ const billingConstraints: Record<string, [number, string, string]> = {
   platform_invoice_credit_once: [409, 'INVOICE_CREDITED', 'Un avoir a déjà été émis pour cette facture.'],
   platform_billing_issuer_sequence_key: [412, 'VERSION_CONFLICT', 'Les paramètres de facturation ont changé. Rechargez-les avant de confirmer.'],
   platform_payment_corrected_once: [409, 'PAYMENT_VOIDED', 'Ce règlement a déjà été corrigé.'],
+  platform_dunning_exception_active: [409, 'DUNNING_EXCEPTION_ACTIVE', 'Une exception est déjà active pour cette école. Révoquez-la d’abord.'],
+  platform_commercial_suspension_active: [409, 'SUSPENSION_ACTIVE', 'Une suspension pour cette cause est déjà en cours.'],
 };
 function billingRefusal(code: unknown, message: string, constraint: string): ApiError | undefined {
   if (code === '23514') {

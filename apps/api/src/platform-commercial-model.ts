@@ -24,7 +24,9 @@ export const decisionStatuses = ['IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAW
 /** Origine d'une demande et révision d'une résiliation confirmée (R01-T08). */
 export const requestSources = ['OPERATOR', 'SCHOOL'] as const;
 export const revisionActions = ['CHANGE_DATE', 'RESUME'] as const;
-export const noticeEvents = ['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'DATE_CHANGED', 'RESUMED'] as const;
+export const noticeEvents = ['RECEIVED', 'IN_PROGRESS', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'DATE_CHANGED', 'RESUMED',
+  // Relances et suspension (R01-T09, #461) : avis à l'école sans demande d'origine.
+  'PAYMENT_REMINDER', 'SUSPENSION_WARNING', 'SUSPENDED', 'REACTIVATED'] as const;
 export const paidStartStatuses = ['ACTIVE', 'CANCELLED'] as const;
 
 /** Plus lointaine date acceptée pour une échéance commerciale saisie (essai, début payant, effet) : une saison, pas une décennie. */
@@ -276,7 +278,8 @@ export function commercialDetailView(row: CommercialRow, now: Date) {
 }
 export type CommercialDetail = ReturnType<typeof commercialDetailView>;
 
-export const restrictionView = (value: CommercialRestriction | null) => value ? { reason: value.reason, closes: [...value.closes] } : null;
+export const restrictionView = (value: CommercialRestriction | null) => value
+  ? { reason: value.reason, closes: [...value.closes], ...(value.causes ? { causes: [...value.causes] } : {}) } : null;
 
 export const requestView = (item: RequestRow) => ({
   id: item.id, kind: item.kind, status: item.status, requestedOn: item.requestedOn, requestedOfferId: item.requestedOfferId,
