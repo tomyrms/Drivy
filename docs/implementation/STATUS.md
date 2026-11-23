@@ -3,6 +3,9 @@
 - Branche `tomyrms/r01-t11-qualification`, issue de T10. Aucune PR, rien de fusionné, déployé ni poussé. L'issue reste ouverte.
 - Écrit : `docs/implementation/mise-en-service-r01-20261123.md` (paramètres privés, mise en service progressive, arrêt, retour arrière, grille de recette).
 - **Non exécuté** : toute la recette. 13 lignes sur 14 sont `NOT_EXECUTED`, l'envoi de test est `BLOCKED` faute de SMTP.
+- **Exécuté** sur PostgreSQL 17 locale : suites R01 320/320 ; suite API complète 1 461 réussis, 8 ignorés, 2 échecs faute de Mailpit, fichier rejoué avec Mailpit 64/64 ; `tsc` API sans erreur.
+- Corrigé : correction de règlement en 503, demande tranchée en 404 au lieu de 409, cause de suspension absente de la vue école, 88 codes d'erreur absents du contrat.
+- **À qualifier** : recette, navigateur, Swift et runner Apple, SMTP réel, migration sur une copie du homelab.
 - Aucune fonction de l'épic R01 n'est déclarée opérationnelle par ce relevé.
 
 ## 23 novembre 2026 — R01-T10 : tableau de bord commercial (#462)

@@ -68,6 +68,23 @@ Statuts possibles : PASS, FAIL, BLOCKED, NOT_EXECUTED. Prérequis : deux écoles
 | 12 | PDF contrôlé à l'œil, QR décodé et comparé aux exemples SIX | PDF, lecteur QR | NOT_EXECUTED |
 | 13 | Migration sur une copie de la base du homelab | PostgreSQL | NOT_EXECUTED |
 
+## Tests automatisés exécutés le 23 novembre 2026
+
+PostgreSQL 17 locale (même image que la CI). Ces résultats ne remplacent aucune ligne de la recette ci-dessus, qui reste à jouer de bout en bout.
+
+- Suites de l'épic R01 : 21 fichiers, 320 tests sur 320 réussis. Premier passage : 39 échecs.
+- Suite API complète : 1 471 tests, 1 461 réussis, 8 ignorés, 2 échecs dus à l'absence de Mailpit. Le fichier concerné, rejoué avec Mailpit, réussit ses 64 tests.
+- `tsc` de l'API : sans erreur. Contrats de la plateforme régénérés.
+
+Défauts du code corrigés :
+
+- Toute correction de règlement répondait 503 : le contrôle du journal refusait la profondeur des affectations.
+- Une demande commerciale déjà tranchée répondait 404 au lieu de 409 `REQUEST_CLOSED`.
+- La vue de l'école perdait la cause d'une suspension (impayé ou décision de l'équipe), et son contrat ne la déclarait pas.
+- 88 codes d'erreur émis par les routes commerciales manquaient au contrat de la plateforme.
+
+Non exécutés : navigateur, Swift et runner Apple, SMTP réel, migration sur une copie de la base du homelab.
+
 ## Points connus avant la recette
 
 - Des tests anciens figent un nombre de tables à RLS forcée, par exemple `capture-observations.integration.test.ts:90` attend 67. Les tables de R01 les feront échouer sans régression réelle : le compteur est à mettre à jour.
