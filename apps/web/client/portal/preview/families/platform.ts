@@ -62,6 +62,16 @@ export const platformFamily: PreviewFamily = {
       if (path === 'join') return tools.reply(200, { pending: !join.accepted && join.submitted, uncertain: !join.accepted && join.submitted, accepted: join.accepted });
       if (path === 'commercial-notices') return tools.reply(200, { data: { items: [] } });
       // Relances (R01-T09) : la politique telle que la migration la crée, désactivée ; aucune alerte.
+      // Tableau de bord (R01-T10) : une école fictive à traiter ; les totaux sont la somme de ses lignes.
+      if (path === 'dashboard') return tools.reply(200, { serverTime: '2026-11-22T08:00:00.000Z', data: {
+        today: '2026-11-22', from: '2026-11-01', to: '2026-11-22', horizonOn: '2026-12-22', autoSuspend: false,
+        totals: { clients: 1, invoiced: 18000, invoiceCount: 1, credited: 0, creditCount: 0, collected: 6000, paymentCount: 1, regularized: 0, outstanding: 12000, overdue: 12000,
+          overdueInvoices: 1, monthly: 18000, monthlyClients: 1, monthlyMissing: 0, monthlyPaused: 0, renewalsSoon: 1, trialsEndingSoon: 0, withActions: 1 },
+        situations: { PREPARATION: 0, TRIAL: 0, TRIAL_EXPIRED: 0, ACTIVE: 1, SUSPENDED: 0, TERMINATED: 0, ARCHIVED: 0 },
+        preparations: { AWAITING_SCHOOL: 0, IN_PREPARATION: 0, ACTIVE: 1, ARCHIVED: 0 }, truncated: false,
+        clients: [{ id: previewId(900), name: 'Auto-école Exemple', situation: 'ACTIVE', preparation: 'ACTIVE', invoiced: 18000, credited: 0, collected: 6000, regularized: 0,
+          outstanding: 12000, overdue: 12000, monthly: 18000, monthlyState: 'DEFINED', nextRenewalOn: '2026-12-01', trialLastDay: null, terminationOn: null,
+          actions: [{ kind: 'OVERDUE', onDate: '2026-11-10', amount: 12000, count: 1, codes: [] }] }] } });
       if (path === 'commercial-alerts') return tools.reply(200, { data: { items: [] } });
       if (path === 'dunning/policy') return tools.reply(200, { data: { remindersEnabled: false, autoSuspend: false, reminderDays: [10, 30], suspensionMonths: 3,
         warningDays: 14, trialAlertDays: 7, version: 1, updatedAt: '2026-11-21T08:00:00.000Z', updatedByName: null } });

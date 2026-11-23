@@ -20,6 +20,7 @@ import { registerPlatformOffers } from './platform-offers.js';
 import { registerEntitlements } from './entitlements.js';
 import { registerPlatformCommercial } from './platform-commercial.js';
 import { registerPlatformBilling } from './platform-billing.js';
+import { registerPlatformDashboard } from './platform-dashboard.js';
 import { registerPlatformDunning } from './platform-dunning.js';
 import { registerSchoolSubscription } from './school-subscription.js';
 import type { SchoolOpeningConfig } from './school-opening-model.js';
@@ -243,6 +244,7 @@ export function buildApp(options: { metricsClock?: () => Date; gpsOnlyQualificat
   registerPlatformCommercial(app,options);
   registerPlatformBilling(app,options);
   registerPlatformDunning(app,options);
+  registerPlatformDashboard(app,options);
   registerSchoolSubscription(app,options);
   registerInvitations(app,options);
   registerAccounts(app,options);

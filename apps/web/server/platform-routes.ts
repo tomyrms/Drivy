@@ -86,6 +86,8 @@ const dayRule: QueryRule = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && z.iso.d
 const invoiceListRules: Record<string, QueryRule> = { clientId: uuidRule, status: oneOf(invoiceStatuses), kind: oneOf(invoiceKinds), sendStatus: oneOf(sendStatuses),
   settlement: oneOf(settlementStates), from: dayRule, to: dayRule, dueBefore: dayRule, overdue: oneOf(['true']), limit: limitUpTo(100), offset: value => /^(0|[1-9][0-9]{0,5})$/.test(value) && Number(value) <= 100_000 };
 
+const dashboardRules: Record<string, QueryRule> = { from: dayRule, to: dayRule };
+
 /** Liste fermée des appels que le relais peut émettre vers l'API de la plateforme : toute autre route reste inaccessible. */
 export function allowedPlatformRequest(request: PlatformRequest): boolean {
   const cut = request.path.indexOf('?');
@@ -101,6 +103,7 @@ export function allowedPlatformRequest(request: PlatformRequest): boolean {
     // L'aperçu des conséquences porte toujours l'offre visée : sans elle il n'y a rien à prévoir.
     if (previewPath.test(path)) return new URLSearchParams(query).has('offerId') && validQuery(query, previewRules);
     if (path === '/v1/platform/invoices') return validQuery(query, invoiceListRules);
+    if (path === '/v1/platform/dashboard') { const params = new URLSearchParams(query); return params.has('from') && params.has('to') && validQuery(query, dashboardRules); }
     return query === '' && (staticReads.has(path) || operationPath.test(path) || clientPath.test(path) || entitlementsPath.test(path) || commercialPath.test(path)
       || path === '/v1/platform/billing/issuer' || billingPath.test(path) || invoicePath.test(path) || deliveryPreviewPath.test(path)
       || dunningPath.test(path));
@@ -346,6 +349,23 @@ const dunningStepSchema = z.object({ id: z.uuid(), kind: token, invoiceNumber: t
   status: token, suspensionOn: isoDay.nullable(), recipientCount: dunningCount, delivery: token, confirmedAt: iso.nullable(), confirmedByName: nullableText(200),
   confirmReason: nullableText(500) });
 const dunningPolicyResult = z.object({ data: dunningPolicySchema });
+// Tableau de bord commercial (R01-T10) : relayé tel quel, sans aucun champ hors de cette liste.
+const dashboardCents = z.number().int().min(0), dashboardDay = z.iso.date();
+const dashboardSituationKeys = ['PREPARATION', 'TRIAL', 'TRIAL_EXPIRED', 'ACTIVE', 'SUSPENDED', 'TERMINATED', 'ARCHIVED'] as const;
+const dashboardPreparationKeys = ['AWAITING_SCHOOL', 'IN_PREPARATION', 'ACTIVE', 'ARCHIVED'] as const;
+const dashboardAction = z.object({ kind: z.enum(['SUSPENSION_UPCOMING', 'OVERDUE', 'DELIVERY_FAILED', 'REQUEST_OPEN', 'TERMS_MISSING', 'OPENING_INCOMPLETE']),
+  onDate: dashboardDay.nullable(), amount: dashboardCents.nullable(), count: z.number().int().min(1), codes: z.array(z.string().min(1).max(40)).max(10) }).strict();
+const dashboardClient = z.object({ id: z.uuid(), name: z.string(), situation: z.enum(dashboardSituationKeys), preparation: z.enum(dashboardPreparationKeys),
+  invoiced: dashboardCents, credited: dashboardCents, collected: dashboardCents, regularized: dashboardCents, outstanding: dashboardCents, overdue: dashboardCents,
+  monthly: dashboardCents.nullable(), monthlyState: z.enum(['NONE', 'DEFINED', 'MISSING', 'PAUSED']), nextRenewalOn: dashboardDay.nullable(),
+  trialLastDay: dashboardDay.nullable(), terminationOn: dashboardDay.nullable(), actions: z.array(dashboardAction).max(8) }).strict();
+const dashboardTotals = z.object(Object.fromEntries(['clients', 'invoiced', 'invoiceCount', 'credited', 'creditCount', 'collected', 'paymentCount', 'regularized', 'outstanding',
+  'overdue', 'overdueInvoices', 'monthly', 'monthlyClients', 'monthlyMissing', 'monthlyPaused', 'renewalsSoon', 'trialsEndingSoon', 'withActions'].map(key => [key, dashboardCents]))).strict();
+const dashboardResult = z.object({ data: z.object({ today: dashboardDay, from: dashboardDay, to: dashboardDay, horizonOn: dashboardDay, autoSuspend: z.boolean(), totals: dashboardTotals,
+  situations: z.object(Object.fromEntries(dashboardSituationKeys.map(key => [key, dashboardCents]))).strict(),
+  preparations: z.object(Object.fromEntries(dashboardPreparationKeys.map(key => [key, dashboardCents]))).strict(),
+  truncated: z.boolean(), clients: z.array(dashboardClient).max(500) }).strict(), requestId: z.string().optional(), serverTime: z.iso.datetime() });
+const dashboardParams = z.object({ from: z.iso.date(), to: z.iso.date() }).strict();
 const dunningViewResult = z.object({ data: z.object({ today: isoDay, state: dunningStateSchema, recipients: dunningCount,
   exceptions: z.array(dunningExceptionSchema).max(20), suspensions: z.array(suspensionSchema).max(20), steps: z.array(dunningStepSchema).max(40),
   version: z.number().int().min(1) }) });
@@ -851,6 +871,10 @@ export function registerPlatformRoutes(app: FastifyInstance, deps: {
     empty.parse(request.query);
     const body = codeRevokeBody.parse(request.body);
     return relay(reply, deps.protect(request), { method: 'POST', path: '/v1/platform/dunning/run', idempotencyKey: body.operationId, body }, dunningRunResult);
+  });
+  app.get('/app/bff/platform/dashboard', async (request, reply) => {
+    const { from, to } = dashboardParams.parse(request.query);
+    return relay(reply, deps.current(request), { method: 'GET', path: `/v1/platform/dashboard?from=${from}&to=${to}` }, dashboardResult);
   });
   app.get('/app/bff/platform/commercial-alerts', read('/v1/platform/commercial-alerts', commercialAlertsResult));
   app.post('/app/bff/platform/commercial-alerts/:alertId/acknowledge', async (request, reply) => {

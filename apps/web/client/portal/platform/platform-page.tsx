@@ -14,6 +14,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '../../components/ui/f
 import { Input } from '../../components/ui/input';
 import { Skeleton } from '../../components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { DashboardSection } from './dashboard-section';
 import { AccountEntryPanel } from '../entry/account-entry-panel';
 import { EntryFrame } from '../entry/entry-frame';
 import { entryRoutes, type EntryRoutes } from '../entry/entry-model';
@@ -34,7 +35,9 @@ const validities = [{ value: '1', label: '1 jour' }, { value: '3', label: '3 jou
 /** Console privée des opérateurs de la plateforme : écoles clientes, équipe, invitations, journal. Hors de toute école. */
 export function PlatformConsolePage({ routes = entryRoutes, platform = platformRoutes }: { routes?: EntryRoutes; platform?: PlatformRoutes }) {
   const state = usePlatformConsole();
-  const [tab, setTab] = useState<'clients' | 'offers' | 'invoices' | 'team' | 'invitations' | 'journal'>('clients');
+  const [tab, setTab] = useState<'dashboard' | 'clients' | 'offers' | 'invoices' | 'team' | 'invitations' | 'journal'>('dashboard');
+  // Fiche ouverte depuis le tableau de bord : son retour y ramène, période et filtres intacts.
+  const [fromDashboard, setFromDashboard] = useState(false);
   useEffect(() => { document.title = 'Plateforme · Drivy'; }, []);
   const busy = !state.loaded || state.busy;
   const signedIn = state.session?.authenticated === true;
@@ -52,11 +55,14 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
       {state.loaded && signedIn && state.access === 'denied' && <Empty className="platform-denied" role="alert">
         <EmptyHeader><EmptyMedia variant="icon"><Users aria-hidden="true" /></EmptyMedia><EmptyTitle>Accès refusé</EmptyTitle></EmptyHeader>
         <a className={buttonVariants({ variant: 'outline' })} href={platform.join}>Saisir un code d’accès</a></Empty>}
-      {state.access === 'allowed' && <Tabs value={tab} onValueChange={value => setTab(value as typeof tab)}>
+      {state.access === 'allowed' && <Tabs value={tab} onValueChange={value => { setFromDashboard(false); setTab(value as typeof tab); }}>
         <TabsList variant="line" aria-label="Sections de la console">
-          <TabsTrigger value="clients">Écoles</TabsTrigger><TabsTrigger value="offers">Offres</TabsTrigger><TabsTrigger value="invoices">Factures</TabsTrigger><TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>
+          <TabsTrigger value="dashboard">Tableau de bord</TabsTrigger><TabsTrigger value="clients">Écoles</TabsTrigger><TabsTrigger value="offers">Offres</TabsTrigger><TabsTrigger value="invoices">Factures</TabsTrigger><TabsTrigger value="team">Équipe</TabsTrigger><TabsTrigger value="invitations">Invitations</TabsTrigger><TabsTrigger value="journal">Journal</TabsTrigger>
         </TabsList>
-        <TabsContent value="clients"><ClientsSection state={state} /></TabsContent>
+        <TabsContent value="dashboard"><DashboardSection dashboard={state.dashboard} busy={state.busy}
+          openClient={id => { setFromDashboard(true); setTab('clients'); void state.clients.openClient(id); }} /></TabsContent>
+        <TabsContent value="clients"><ClientsSection state={state} onBack={fromDashboard
+          ? { label: 'Tableau de bord', action: () => { state.clients.closeClient(); setFromDashboard(false); setTab('dashboard'); } } : undefined} /></TabsContent>
         <TabsContent value="offers"><OffersSection state={state} /></TabsContent>
         <TabsContent value="invoices"><InvoicesSection state={state} /></TabsContent>
         <TabsContent value="team"><TeamSection state={state} /></TabsContent>
@@ -70,7 +76,7 @@ export function PlatformConsolePage({ routes = entryRoutes, platform = platformR
     <OfferDialog state={state} />
     <RightsDialog state={state} />
     <CommercialDialog state={state} />
-    <BillingDialog state={state} openClient={id => { setTab('clients'); void state.clients.openClient(id); }} />
+    <BillingDialog state={state} openClient={id => { setFromDashboard(false); setTab('clients'); void state.clients.openClient(id); }} />
     <DunningDialog state={state} />
   </EntryFrame>;
 }

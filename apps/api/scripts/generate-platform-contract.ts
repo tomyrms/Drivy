@@ -45,6 +45,8 @@ import {
   commercialAlertSchema, commercialAlertsEnvelope, commercialAlertsSchema, dunningExceptionSchema, dunningPolicyEnvelope, dunningPolicySchema, dunningRunEnvelope,
   dunningRunSchema, dunningStateSchema, dunningStepSchema, dunningViewEnvelope, dunningViewSchema, suspensionSchema
 } from '../src/platform-dunning-contract.js';
+import { dashboardEnvelope, dashboardSchema } from '../src/platform-dashboard-contract.js';
+import { dashboardQuery } from '../src/platform-dashboard.js';
 import { commandBody as dunningCommandBody, exceptionBody, policyBody, reasonBody, suspensionBody } from '../src/platform-dunning-model.js';
 
 // Extension d'implémentation ; le contrat OpenAPI canonique 3.11.0 reste inchangé.
@@ -373,4 +375,12 @@ await writeFile(new URL('../contracts/platform-dunning.json', import.meta.url), 
     DunningRunEnvelope: project(dunningRunEnvelope),
     PlatformError: project(platformErrorSchema)
   }
+}, null, 2) + '\n');
+
+await writeFile(new URL('../contracts/platform-dashboard.json', import.meta.url), JSON.stringify({
+  $schema: 'https://json-schema.org/draft/2020-12/schema', $id: 'urn:drivy:contract:platform-dashboard:1',
+  title: 'Tableau de bord commercial de l’équipe Drivy (R01-T10, #462)',
+  description: 'GET /v1/platform/dashboard?from&to (jours de Zurich, 367 jours au plus). Lecture seule, calculée par la base. Facturé, avoirs, encaissé et régularisé '
+    + 'suivent la période ; restant dû, retard et revenu mensuel contractuel sont ceux du jour. Montants en centimes de CHF.',
+  query: project(dashboardQuery), dashboard: project(dashboardSchema), envelope: project(dashboardEnvelope),
 }, null, 2) + '\n');

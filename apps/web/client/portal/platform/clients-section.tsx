@@ -31,11 +31,11 @@ const filters: readonly { value: ClientFilter; label: string }[] = [
 ];
 
 /** Écoles clientes : l'annuaire, puis la fiche d'une école. Le code d'ouverture se crée d'ici, sans autre saisie que le nom. */
-export function ClientsSection({ state }: { state: PlatformConsoleState }) {
+export function ClientsSection({ state, onBack }: { state: PlatformConsoleState; onBack?: { label: string; action: () => void } | undefined }) {
   const selected = state.clients.selected;
   return <section className="platform-section" aria-labelledby="platform-clients-title">
     <h2 id="platform-clients-title">Écoles</h2>
-    {selected ? <ClientFiche state={state} client={selected} /> : <ClientDirectory state={state} />}
+    {selected ? <ClientFiche state={state} client={selected} onBack={onBack} /> : <ClientDirectory state={state} />}
   </section>;
 }
 
@@ -103,12 +103,12 @@ function ClientDirectory({ state }: { state: PlatformConsoleState }) {
   </>;
 }
 
-function ClientFiche({ state, client }: { state: PlatformConsoleState; client: PlatformClientDetail }) {
+function ClientFiche({ state, client, onBack }: { state: PlatformConsoleState; client: PlatformClientDetail; onBack?: { label: string; action: () => void } | undefined }) {
   const { clients } = state;
   const hasAvailableCode = client.codes.some(code => code.state === 'AVAILABLE');
   const open = !client.schoolId && !hasAvailableCode;
   return <div className="platform-fiche">
-    <Button variant="ghost" className="platform-back" disabled={state.busy} onClick={clients.closeClient}><ArrowLeft aria-hidden="true" data-icon="inline-start" />Écoles</Button>
+    <Button variant="ghost" className="platform-back" disabled={state.busy} onClick={onBack?.action ?? clients.closeClient}><ArrowLeft aria-hidden="true" data-icon="inline-start" />{onBack?.label ?? 'Écoles'}</Button>
     <header className="platform-fiche-head">
       <div className="platform-summary"><h3>{clientTitle(client)}</h3><span>{preparationLabel(client.preparation)}</span></div>
       {open && <div className="platform-actions">

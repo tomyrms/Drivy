@@ -1,3 +1,12 @@
+## 23 novembre 2026 — R01-T10 : tableau de bord commercial (#462)
+
+- Branche `tomyrms/r01-t10-tableau-commercial`, issue de la tête de `tomyrms/r01-t09-relances-suspension`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/tableau-commercial-20261122.md` donne les définitions et les limites.
+- API : migration `20261122_platform_commercial_dashboard.sql` (une fonction, aucune table), route `GET /v1/platform/dashboard`, contrat `platform-dashboard.json` généré, OpenAPI canonique inchangé.
+- Web : onglet « Tableau de bord » ouvert par défaut, période, situations, recherche, actions, accès à la fiche et retour avec filtres conservés.
+- Exécuté le 23 novembre 2026 : `tsc` de l'API (tests compris), `tsc` du client, des vérifications et du serveur web, `vite build`, génération du contrat.
+- **Écrit, jamais exécuté** (règle du porteur du 13 novembre) : `platform-dashboard.integration.test.ts` (5 cas). La migration n'a été appliquée à aucune base.
+- Reste à qualifier : fonction SQL sur PostgreSQL, réconciliation sur données réelles, interface, responsive, accessibilité.
+
 ## 23 novembre 2026 — R01-T09 : relances, suspension et réactivation (#461)
 
 - Branche `tomyrms/r01-t09-relances-suspension`, issue de la tête de `tomyrms/r01-t08-espace-ecole`. Aucune PR, rien de fusionné, déployé ni poussé. La note `docs/implementation/relances-suspension-20261121.md` détaille les règles et les limites.
