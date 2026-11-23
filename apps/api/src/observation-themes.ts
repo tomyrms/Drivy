@@ -37,10 +37,13 @@ export type ObservationThemeKey=typeof observationThemes[number]['key'];
 const keys=observationThemes.map(theme=>theme.key) as [ObservationThemeKey,...ObservationThemeKey[]];
 export const observationThemeKey=z.enum(keys);
 
-const command=z.object({operationId:z.uuid(),themes:z.array(z.object({key:observationThemeKey,visible:z.boolean()}).strict()).length(keys.length)
- .refine(themes=>new Set(themes.map(theme=>theme.key)).size===themes.length).refine(themes=>themes.some(theme=>theme.visible))}).strict();
-interface SettingsRow {version:number;theme_order:string[];hidden_themes:string[]}
-export interface ObservationThemeSettings {id:string;schoolId:string;version:number;canManage:boolean;
+/** Ordre et affichage complets du catalogue : le corps commun de l'école et du compte. */
+export const themeArrangement=z.array(z.object({key:observationThemeKey,visible:z.boolean()}).strict()).length(keys.length)
+ .refine(themes=>new Set(themes.map(theme=>theme.key)).size===themes.length).refine(themes=>themes.some(theme=>theme.visible));
+// `personalizationAllowed` est facultatif : un client antérieur au 11 novembre 2026 ne l'envoie pas, et la politique de l'école reste alors telle quelle.
+const command=z.object({operationId:z.uuid(),themes:themeArrangement,personalizationAllowed:z.boolean().optional()}).strict();
+interface SettingsRow {version:number;theme_order:string[];hidden_themes:string[];personalization_allowed:boolean}
+export interface ObservationThemeSettings {id:string;schoolId:string;version:number;canManage:boolean;personalizationAllowed:boolean;
  themes:{key:ObservationThemeKey;title:string;competencyKeys:readonly string[];visible:boolean;defaultVisible:boolean;defaultPosition:number}[]}
 
 /**
@@ -57,17 +60,17 @@ export function arrangeObservationThemes(row:Pick<SettingsRow,'theme_order'|'hid
  if(!stored.some(theme=>theme.visible))return projected;
  return stored;
 }
-/** Clés des thèmes que l'école affiche, dans son ordre : l'ordre manuel de « Signaler ». */
-export async function visibleObservationThemes(db:PoolClient,schoolId:string):Promise<ObservationThemeKey[]>{
- const row=(await db.query<SettingsRow>('SELECT version,theme_order,hidden_themes FROM drivy.observation_theme_settings WHERE school_id=$1',[schoolId])).rows[0];
- return arrangeObservationThemes(row).filter(theme=>theme.visible).map(theme=>theme.key);
+/** Configuration de l'école : sa référence (ordre et affichage) et sa politique. Sans ligne, rien n'est personnalisable. */
+export async function schoolObservationConfiguration(db:PoolClient,schoolId:string){
+ const row=(await db.query<SettingsRow>('SELECT version,theme_order,hidden_themes,personalization_allowed FROM drivy.observation_theme_settings WHERE school_id=$1',[schoolId])).rows[0];
+ return {personalizationAllowed:row?.personalization_allowed===true,themes:arrangeObservationThemes(row)};
 }
 async function canManage(db:PoolClient,schoolId:string):Promise<boolean>{
  return (await db.query<{ok:boolean}>('SELECT drivy.can_manage_observation_themes($1) AS ok',[schoolId])).rows[0]?.ok===true;
 }
 export async function observationThemeSettings(db:PoolClient,schoolId:string,lock=false):Promise<ObservationThemeSettings>{
- const row=(await db.query<SettingsRow>(`SELECT version,theme_order,hidden_themes FROM drivy.observation_theme_settings WHERE school_id=$1 ${lock?'FOR UPDATE':''}`,[schoolId])).rows[0];
- return {id:schoolId,schoolId,version:row?.version??1,canManage:await canManage(db,schoolId),themes:arrangeObservationThemes(row)};
+ const row=(await db.query<SettingsRow>(`SELECT version,theme_order,hidden_themes,personalization_allowed FROM drivy.observation_theme_settings WHERE school_id=$1 ${lock?'FOR UPDATE':''}`,[schoolId])).rows[0];
+ return {id:schoolId,schoolId,version:row?.version??1,canManage:await canManage(db,schoolId),personalizationAllowed:row?.personalization_allowed===true,themes:arrangeObservationThemes(row)};
 }
 
 export function registerObservationThemes(app:FastifyInstance,options:{pool:Pool;verifyToken:TokenVerifier}){
@@ -88,9 +91,12 @@ export function registerObservationThemes(app:FastifyInstance,options:{pool:Pool
    // La ligne de l'école est déjà verrouillée par la commande : deux enregistrements concurrents se suivent, le second relit la version.
    const previous=await observationThemeSettings(db,schoolId,true);checkVersion(previous.version,expected);
    const order=body.themes.map(theme=>theme.key),hidden=body.themes.filter(theme=>!theme.visible).map(theme=>theme.key);
-   await db.query(`INSERT INTO drivy.observation_theme_settings(school_id,version,theme_order,hidden_themes,updated_by) VALUES($1,2,$2,$3,$4)
-    ON CONFLICT(school_id) DO UPDATE SET version=observation_theme_settings.version+1,theme_order=EXCLUDED.theme_order,hidden_themes=EXCLUDED.hidden_themes,updated_by=EXCLUDED.updated_by,updated_at=now()`,[schoolId,order,hidden,actor.membershipId]);
-   return {data:await observationThemeSettings(db,schoolId),action:'ObservationThemesSaved',resourceType:'ObservationThemeSettings',resourceId:schoolId,changedFields:['order','visibility']};
+   // Politique absente du corps : elle reste ce qu'elle était (fausse pour une première ligne).
+   await db.query(`INSERT INTO drivy.observation_theme_settings(school_id,version,theme_order,hidden_themes,updated_by,personalization_allowed) VALUES($1,2,$2,$3,$4,coalesce($5::boolean,false))
+    ON CONFLICT(school_id) DO UPDATE SET version=observation_theme_settings.version+1,theme_order=EXCLUDED.theme_order,hidden_themes=EXCLUDED.hidden_themes,updated_by=EXCLUDED.updated_by,
+     personalization_allowed=coalesce($5::boolean,observation_theme_settings.personalization_allowed),updated_at=now()`,[schoolId,order,hidden,actor.membershipId,body.personalizationAllowed??null]);
+   const changedFields=['order','visibility',...(body.personalizationAllowed!==undefined&&body.personalizationAllowed!==previous.personalizationAllowed?['personalizationAllowed']:[])];
+   return {data:await observationThemeSettings(db,schoolId),action:'ObservationThemesSaved',resourceType:'ObservationThemeSettings',resourceId:schoolId,changedFields};
   },['ADMIN','INSTRUCTOR'],{
    // Le rôle ouvre la commande, le droit l'autorise : relu en base à chaque écriture, y compris pour un rejeu.
    authorize:async db=>{if(!(await canManage(db,schoolId)))throw new ApiError(403,'OBSERVATION_THEMES_ACCESS_REQUIRED','La gestion des signalements demande le droit correspondant.');},

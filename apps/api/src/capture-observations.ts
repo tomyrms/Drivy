@@ -9,7 +9,7 @@ import {checkIdempotency,checkVersion,requireVersion,schoolCommand,type CommandA
 import {getLesson,type LessonRow} from './lessons.js';
 import {geoObservationCommand,geoObservationUpdateCommand,geoObservationProjection,uuid,type GeoObservationInput,type GeoObservationRow,type CaptureRow,type ChunkRow} from './capture-contracts.js';
 import {chunkAAD,decryptPoints,type CaptureConfig} from './capture-crypto.js';
-import {palettePosition} from './observation-ranking.js';
+import {palettePosition} from './observation-preferences.js';
 
 const empty=z.object({}).strict();
 const reasonCommand=z.object({operationId:uuid,reason:z.string().refine(v=>v.trim().length>0&&[...v].length<=1000)}).strict();
@@ -149,7 +149,7 @@ export function registerCaptureObservations(app:FastifyInstance,options:{pool:Po
    if(body.observedAt&&Date.parse(body.observedAt)>Date.now()+300_000)throw new ApiError(422,'OBSERVATION_TIME_INVALID','L’instant indiqué est futur. Conservez l’intention et relisez son heure.');
    await validateCompetency(db,lesson,body.competencyId);await validateAnchor(db,lesson,body,options.capture);
    // Rang de la tuile au moment du geste, pour le classement intelligent : noté ici, l'app n'a rien à envoyer.
-   const position=body.themeKey&&body.origin==='LIVE'?await palettePosition(db,school.id,actor.membershipId,body.themeKey):null;
+   const position=body.themeKey&&body.origin==='LIVE'?await palettePosition(db,school.id,actor.personId,body.themeKey):null;
    const row=(await db.query<GeoObservationRow>(`INSERT INTO drivy.geo_observation(school_id,lesson_id,training_id,author_membership_id,draft_id,capture_id,segment_id,point_sequence,competency_id,text,origin,observed_at,event_kind,event_status,theme_key,palette_position)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING *`,[school.id,lessonId,lesson.training_id,actor.membershipId,draftId,body.captureId,body.segmentId,body.pointSequence,body.competencyId,body.text,body.origin??'REVIEW',body.observedAt??null,body.eventKind??null,body.eventStatus??null,body.themeKey??null,position])).rows[0]!;
    await touchDraft(db,school.id,[draftId]);

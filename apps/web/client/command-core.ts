@@ -17,6 +17,7 @@ export type CommandKind =
   | 'createTraining' | 'createAssignment' | 'transitionTraining' | 'endAssignment' | 'archiveLearner' | 'restoreLearner' | 'deactivateMember'
   | 'updateModules' | 'recordPermitCheck'
   | 'saveObservationThemes' | 'updateAdministrativeProfile'
+  | 'saveObservationPreferences' | 'resetObservationPresentation' | 'resetObservationLearning'
   | 'createAvailabilityRule' | 'updateAvailabilityRule' | 'removeAvailabilityRule' | 'createClosure' | 'removeClosure'
   | 'createFormation' | 'saveFormationProgramme' | 'saveTariff' | 'reviseSharedTerms'
   | 'createCourseType' | 'createCourseSeries' | 'updateCourseSeries' | 'publishCourseSeries' | 'changeCourseCapacity'
@@ -69,6 +70,10 @@ export const commandSpecs: Readonly<Record<CommandKind, CommandSpec>> = {
   recordPermitCheck: { operationType: 'RECORD_PERMIT_CHECK', resourceType: 'PermitCheck', target: 'created', method: 'POST', expectedStatus: 200, label: 'Contrôle du permis' },
   updateAdministrativeProfile: { operationType: 'UPDATE_ADMINISTRATIVE_PROFILE', resourceType: 'AdministrativeProfile', target: 'resource', method: 'PATCH', expectedStatus: 200, label: 'Complétion du profil d’un élève' },
   saveObservationThemes: { operationType: 'SAVE_OBSERVATION_THEMES', resourceType: 'ObservationThemeSettings', target: 'school', method: 'PUT', expectedStatus: 200, label: 'Enregistrement des signalements' },
+  // Préférences du COMPTE (R08) : la ressource est la personne, pas l'école. Le reçu porte l'identifiant de la personne.
+  saveObservationPreferences: { operationType: 'SAVE_OBSERVATION_PRESENTATION', resourceType: 'ObservationPreferences', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Enregistrement de vos signalements' },
+  resetObservationPresentation: { operationType: 'RESET_OBSERVATION_PRESENTATION', resourceType: 'ObservationPreferences', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retour à l’ordre et à l’affichage de l’école' },
+  resetObservationLearning: { operationType: 'RESET_OBSERVATION_LEARNING', resourceType: 'ObservationPreferences', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Nouvel apprentissage du classement' },
   createAvailabilityRule: { operationType: 'CREATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'created', method: 'POST', expectedStatus: 201, label: 'Ajout d’une disponibilité' },
   updateAvailabilityRule: { operationType: 'UPDATE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'PUT', expectedStatus: 200, label: 'Modification d’une disponibilité' },
   removeAvailabilityRule: { operationType: 'REMOVE_AVAILABILITY_RULE', resourceType: 'AvailabilityRule', target: 'resource', method: 'POST', expectedStatus: 200, label: 'Retrait d’une disponibilité' },
@@ -315,6 +320,7 @@ export function commandMessage(code: string): string {
     COMMERCIAL_CLIENT_MISSING: 'Aucun abonnement n’est rattaché à cette école.',
     DOCUMENT_UNAVAILABLE: 'Ce document n’est pas encore disponible.',
     REQUEST_CLOSED: 'Cette demande est déjà traitée.',
+    OBSERVATION_PERSONALIZATION_DISABLED: 'Cette école impose les signalements affichés. Rien n’a été modifié.',
     SETUP_ACCESS_REQUIRED: 'Vos accès ne permettent plus cette opération dans l’école.',
     ACCESS_DENIED: 'Vos accès ne permettent plus cette opération dans l’école.',
     FORBIDDEN: 'Vos accès ne permettent plus cette opération dans l’école.',

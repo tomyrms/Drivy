@@ -67,11 +67,9 @@ struct SchoolVisualReview: View {
                     // L’écran de gestion des signalements, lu sur l’école fictive ; ses écritures échouent ici
                     // (transport en lecture seule) et montrent donc le retour à l’état confirmé.
                     NavigationStack {
-                        if let themes = context.agenda.observationThemeStore(person: context.workspace.person,
-                                                                           membership: context.workspace.membership) {
-                            SchoolObservationThemeSettingsView(store: themes,
-                                ranking: context.agenda.observationRankingStore(person: context.workspace.person,
-                                                                                 membership: context.workspace.membership))
+                        if let preferences = context.agenda.observationPreferencesStore(person: context.workspace.person,
+                                                                                         membership: context.workspace.membership) {
+                            SchoolObservationThemeSettingsView(store: preferences, isAdministrator: true)
                         }
                     }
                 case "profile-tab":
@@ -205,8 +203,9 @@ struct SchoolVisualShell: View {
         let baseURL = URL(string: "https://visual.drivy.invalid")!
         // Aucun fichier sur le simulateur : la configuration des signalements reste en mémoire.
         SchoolObservationThemeStores.makeCache = { SchoolVisualThemeCache() }
-        // De même pour le classement du moniteur et l’ordre figé d’une leçon.
-        SchoolObservationRankingStores.makeCache = { SchoolVisualRankingCache() }
+        // De même pour les préférences du compte, la politique de l’école et la palette figée d’une leçon.
+        SchoolObservationPreferencesStores.makeAccountCache = { SchoolVisualAccountCache() }
+        SchoolObservationPreferencesStores.makePolicyCache = { SchoolVisualPolicyCache() }
         SchoolLessonSignalOrderStores.make = { _ in SchoolLessonSignalOrderMemoryStore() }
         // Gestes de cours (#126, #128 à #130) : aucun fichier ni clé sur le simulateur.
         SchoolCourseIntentStores.shared = SchoolCourseIntentMemoryStore()
@@ -585,12 +584,20 @@ struct SchoolVisualShell: View {
             let themes = SchoolObservationThemeSettings(id: schoolID, schoolId: schoolID, version: 1, canManage: true,
                 themes: catalog)
             objects["\(root)/observation-themes"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(themes))
-            // Classement du moniteur fictif : jamais réglé (ordre de l’école, version 1). L’écran des signalements
-            // montre donc l’interrupteur ; l’activer échoue ici (transport en lecture seule) et revient à cet état.
-            let ranking: [String: Any] = ["id": membershipID.uuidString, "schoolId": schoolID.uuidString,
-                "membershipId": membershipID.uuidString, "version": 1, "mode": SchoolObservationRankingMode.manual.rawValue,
-                "order": [String](), "rankedOn": null]
-            objects["\(root)/observation-ranking"] = ranking
+            // Préférences du moniteur fictif : jamais réglées (ordre et affichage de l’école, version 1, mode manuel,
+            // école qui laisse chacun régler). Régler quoi que ce soit échoue ici (transport en lecture seule) et
+            // revient à cet état.
+            let preferenceThemes: [[String: Any]] = catalog.map { theme in
+                ["key": theme.key, "title": theme.title, "competencyKeys": [String](), "defaultVisible": theme.defaultVisible,
+                 "defaultPosition": theme.defaultPosition, "visible": theme.visible, "schoolVisible": theme.visible,
+                 "visibilityEditable": true]
+            }
+            let preferences: [String: Any] = ["id": personID.uuidString, "schoolId": schoolID.uuidString, "version": 1,
+                "personalizationAllowed": true, "orderCustomized": false, "visibilityCustomized": false,
+                "mode": SchoolObservationRankingMode.manual.rawValue, "themes": preferenceThemes,
+                "palette": catalog.filter(\.visible).map(\.key), "rankedOn": null,
+                "learning": ["generation": 0, "since": null] as [String: Any], "adoption": null]
+            objects["\(root)/observation-preferences"] = preferences
         }
         // Fiche d’une leçon annulée (clés nouvelles : aucun écran existant n’en dépend).
         objects.merge(cancelledLessonObjects()) { _, new in new }
@@ -688,10 +695,16 @@ struct SchoolVisualTransport: SchoolHTTPTransport {
     func write(_ configuration: SchoolObservationThemeConfiguration, scope: SchoolCommandScope) { }
 }
 
-/// Copie locale du classement pour les rendus de contrôle : rien n’est lu ni écrit sur le simulateur.
-@MainActor final class SchoolVisualRankingCache: SchoolObservationRankingCache {
-    func read(scope: SchoolCommandScope) -> SchoolObservationRanking? { nil }
-    func write(_ ranking: SchoolObservationRanking, scope: SchoolCommandScope) { }
+/// Copies locales des préférences pour les rendus de contrôle : rien n’est lu ni écrit sur le simulateur.
+@MainActor final class SchoolVisualAccountCache: SchoolObservationAccountCache {
+    func read(scope: SchoolCommandScope) -> SchoolObservationAccountSnapshot? { nil }
+    func write(_ snapshot: SchoolObservationAccountSnapshot, scope: SchoolCommandScope) { }
+    func remove(scope: SchoolCommandScope) { }
+}
+
+@MainActor final class SchoolVisualPolicyCache: SchoolObservationPolicyCache {
+    func read(scope: SchoolCommandScope) -> SchoolObservationPolicySnapshot? { nil }
+    func write(_ snapshot: SchoolObservationPolicySnapshot, scope: SchoolCommandScope) { }
     func remove(scope: SchoolCommandScope) { }
 }
 

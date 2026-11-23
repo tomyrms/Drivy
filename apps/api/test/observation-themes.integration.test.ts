@@ -94,38 +94,56 @@ describe('configuration des signalements par école',()=>{
   for(const body of bodies){const response=await call('PUT',path,body,3,'demo-admin');expect(response.statusCode,response.body).toBe(400);}
   expect((await call('GET',path)).json().data.version).toBe(3);
  });
- it('le droit « Gérer les signalements » ouvre la modification au moniteur, son retrait la referme',async()=>{
+ it('l’ancien droit « Gérer les signalements » ne donne plus aucun pouvoir à un moniteur : la gestion de l’école est réservée à l’administrateur',async()=>{
   const given=await grant(['MANAGE_OBSERVATION_THEMES']);expect(given.statusCode,given.body).toBe(200);expect(given.json().data.grants).toEqual(['MANAGE_OBSERVATION_THEMES']);
-  expect((await call('GET',path)).json().data.canManage).toBe(true);
-  const body=save(first('speed')),saved=await call('PUT',path,body,3);expect(saved.statusCode,saved.body).toBe(200);
-  expect(saved.json().data.version).toBe(4);expect(keysOf(saved.json().data)[0]).toBe('speed');
-  expect((await call('GET',`/operations/${body.operationId}`)).statusCode).toBe(200);
-  expect((await pool.query('SELECT updated_by FROM drivy.observation_theme_settings WHERE school_id=$1',[id.schoolA])).rows[0].updated_by).toBe(id.instructorMember);
-  const removed=await grant([]);expect(removed.statusCode,removed.body).toBe(200);
+  // Le droit reste enregistré (rien n'est supprimé) mais la lecture ne l'honore plus.
   expect((await call('GET',path)).json().data.canManage).toBe(false);
-  expect((await call('PUT',path,save(defaults),4)).json().code).toBe('OBSERVATION_THEMES_ACCESS_REQUIRED');
-  // Le rejeu de sa propre commande ne contourne pas le retrait du droit.
-  expect((await call('PUT',path,body,3)).statusCode).toBe(403);
-  expect((await call('GET',`/operations/${body.operationId}`)).statusCode).toBe(403);
-  expect((await call('GET',path)).json().data.version).toBe(4);
+  const body=save(first('speed')),refused=await call('PUT',path,body,3);
+  expect(refused.statusCode,refused.body).toBe(403);expect(refused.json().code).toBe('OBSERVATION_THEMES_ACCESS_REQUIRED');
+  expect((await call('PUT',path,{...save(defaults),personalizationAllowed:true},3)).statusCode).toBe(403);
+  expect((await call('GET',`/operations/${body.operationId}`)).statusCode).toBe(404);
+  expect((await pool.query("SELECT count(*)::int AS n FROM drivy.operation WHERE operation_id=$1",[body.operationId])).rows[0].n).toBe(0);
+  // La RLS porte la même règle : même avec le droit, la base refuse l'écriture du moniteur.
+  const db=await pool.connect();
+  try{
+   await db.query('BEGIN');await db.query('SET LOCAL ROLE drivy_app');
+   await db.query("SELECT set_config('app.issuer',$1,true),set_config('app.subject','demo-instructor',true),set_config('app.school_id',$2,true),set_config('app.person_id',$3,true),set_config('app.membership_id',$4,true)",[issuer,id.schoolA,id.instructor,id.instructorMember]);
+   const updated=await db.query('UPDATE drivy.observation_theme_settings SET version=version+1 WHERE school_id=$1',[id.schoolA]);expect(updated.rowCount).toBe(0);
+   await db.query('ROLLBACK');
+  }finally{db.release();}
+  const removed=await grant([]);expect(removed.statusCode,removed.body).toBe(200);
+  expect((await call('GET',path)).json().data.version).toBe(3);
+ });
+ it('la politique de l’école : imposée par défaut, modifiable par l’administrateur seul, conservée par un ancien client qui ne l’envoie pas',async()=>{
+  expect((await call('GET',path)).json().data.personalizationAllowed).toBe(false);
+  // Corps d'un client antérieur : pas de personalizationAllowed, la politique reste ce qu'elle est.
+  const legacy=await call('PUT',path,save(first('right-priority').map(theme=>({...theme,visible:!['motorway','manoeuvres','braking'].includes(theme.key)}))),3,'demo-admin');
+  expect(legacy.statusCode,legacy.body).toBe(200);expect(legacy.json().data).toMatchObject({version:4,personalizationAllowed:false});
+  const openBody={...save(defaults),personalizationAllowed:true},open=await call('PUT',path,openBody,4,'demo-admin');
+  expect(open.statusCode,open.body).toBe(200);expect(open.json().data).toMatchObject({version:5,personalizationAllowed:true});
+  expect((await pool.query('SELECT changed_fields FROM drivy.audit_event WHERE operation_id=$1',[openBody.operationId])).rows[0].changed_fields).toContain('personalizationAllowed');
+  const kept=await call('PUT',path,save(defaults),5,'demo-admin');expect(kept.json().data).toMatchObject({version:6,personalizationAllowed:true});
+  expect((await call('PUT',path,{...save(defaults),personalizationAllowed:'oui'},6,'demo-admin')).statusCode).toBe(400);
+  expect((await call('GET',path)).json().data.personalizationAllowed).toBe(true);
+  const closed=await call('PUT',path,{...save(defaults),personalizationAllowed:false},6,'demo-admin');expect(closed.json().data).toMatchObject({version:7,personalizationAllowed:false});
  });
  it('deux écoles gardent des configurations indépendantes',async()=>{
   const other=await call('GET',schoolB);expect(other.statusCode,other.body).toBe(200);
   expect(other.json().data).toMatchObject({schoolId:id.schoolB,version:1});expect(keysOf(other.json().data)).toEqual(defaults.map(theme=>theme.key));
   expect((await call('GET',schoolB,undefined,null,'demo-admin')).statusCode).toBe(403);
   expect((await call('PUT',schoolB,save(defaults),1,'demo-admin')).statusCode).toBeGreaterThanOrEqual(403);
-  expect(keysOf((await call('GET',path)).json().data)[0]).toBe('speed');
+  expect(keysOf((await call('GET',path)).json().data)[0]).toBe('vehicle');
  });
  it('deux enregistrements concurrents : un seul passe, l’autre reçoit un conflit de version',async()=>{
-  const writes=await Promise.all([call('PUT',path,save(first('braking')),4,'demo-admin'),call('PUT',path,save(first('signage')),4,'demo-admin')]);
+  const writes=await Promise.all([call('PUT',path,save(first('braking')),7,'demo-admin'),call('PUT',path,save(first('signage')),7,'demo-admin')]);
   expect(writes.map(response=>response.statusCode).sort()).toEqual([200,412]);
-  expect((await call('GET',path)).json().data.version).toBe(5);
+  expect((await call('GET',path)).json().data.version).toBe(8);
  });
  it('réinitialise par l’ordre et l’affichage d’origine publiés par le service',async()=>{
   const current=(await call('GET',path,undefined,null,'demo-admin')).json().data;
   const original=[...current.themes].sort((a:{defaultPosition:number},b:{defaultPosition:number})=>a.defaultPosition-b.defaultPosition).map((theme:{key:string;defaultVisible:boolean})=>({key:theme.key,visible:theme.defaultVisible}));
-  const reset=await call('PUT',path,save(original),5,'demo-admin');expect(reset.statusCode,reset.body).toBe(200);
-  expect(keysOf(reset.json().data)).toEqual(defaults.map(theme=>theme.key));expect(visibleOf(reset.json().data)).toHaveLength(12);expect(reset.json().data.version).toBe(6);
+  const reset=await call('PUT',path,save(original),8,'demo-admin');expect(reset.statusCode,reset.body).toBe(200);
+  expect(keysOf(reset.json().data)).toEqual(defaults.map(theme=>theme.key));expect(visibleOf(reset.json().data)).toHaveLength(12);expect(reset.json().data.version).toBe(9);
  });
 });
 

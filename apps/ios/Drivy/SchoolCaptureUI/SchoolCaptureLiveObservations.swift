@@ -67,15 +67,22 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     /// Instantané de la configuration, pris à l’ouverture de « Signaler » : une modification faite ailleurs
     /// pendant que la palette est ouverte ne déplace aucune tuile ; elle s’applique à l’ouverture suivante.
     private(set) var themeConfiguration: SchoolObservationThemeConfiguration
-    /// Ordre automatique appliqué aux tuiles : celui que la leçon a pris à sa première ouverture de « Signaler »,
-    /// figé jusqu’à sa fin. `nil` en mode manuel : l’ordre de l’école, tel que la configuration le donne.
-    private(set) var signalOrder: [String]?
-    /// Les thèmes affichés dans l’ordre figé, puis ceux que l’école a affichés depuis. Aucune lecture du référentiel :
-    /// la palette est prête dès l’ouverture, avec ou sans réseau.
+    /// Palette de la leçon, en clés : celle que la leçon a prise à sa première ouverture de « Signaler » (ordre
+    /// personnel filtré par la visibilité effective), figée jusqu’à sa fin. `nil` tant que les préférences du compte
+    /// n’ont rien confirmé : la configuration de l’école, telle que le référentiel la donne, sert alors.
+    private(set) var paletteKeys: [String]?
+    /// Les thèmes de la palette de la leçon. Aucune lecture du référentiel : la palette est prête dès l’ouverture,
+    /// avec ou sans réseau. Une clé que le référentiel ne liste plus n’a pas de tuile.
     var themes: [SchoolLiveObservationTheme] {
-        SchoolLiveObservationTheme.tiles(
-            for: SchoolObservationRankingOrder.arranged(themeConfiguration.themes, order: signalOrder),
-            unlisted: themeConfiguration.unlisted)
+        if let paletteKeys {
+            let byKey = Dictionary(themeConfiguration.themes.map { ($0.key, $0) }, uniquingKeysWith: { first, _ in first })
+            let tiles = paletteKeys.compactMap { key -> SchoolLiveObservationTheme? in
+                guard let theme = byKey[key], !themeConfiguration.unlisted.contains(key) else { return nil }
+                return SchoolLiveObservationTheme(key: theme.key, title: theme.title)
+            }
+            if !tiles.isEmpty { return tiles }
+        }
+        return SchoolLiveObservationTheme.tiles(for: themeConfiguration.themes, unlisted: themeConfiguration.unlisted)
     }
     /// Hauteur de la palette dès l’ouverture : les tuiles ne dépendent d’aucune lecture.
     var expectedTileCount: Int { themes.count }
@@ -93,7 +100,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private let permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)?
     @ObservationIgnored private let prepareAnchor: (@MainActor (SchoolLiveObservationAnchor) async throws -> Void)?
     @ObservationIgnored private let themeStore: SchoolObservationThemeStore?
-    @ObservationIgnored private let rankingStore: SchoolObservationRankingStore?
+    @ObservationIgnored private let preferencesStore: SchoolObservationPreferencesStore?
     @ObservationIgnored private let signalOrders: (any SchoolLessonSignalOrderStore)?
     @ObservationIgnored private var stopped = false
     @ObservationIgnored private var lastAddedCommand: PendingSchoolCommand?
@@ -114,11 +121,11 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     @ObservationIgnored private var waitsForNetwork = false
 
     /// Sans `themeStore`, la palette garde le catalogue embarqué et n’envoie aucune clé de thème.
-    /// Sans `rankingStore`, l’ordre est toujours celui de l’école. `signalOrders` garde l’ordre figé de la leçon
-    /// d’un enregistreur au suivant ; à défaut, il ne tient que pour cette instance.
+    /// Sans `preferencesStore`, la palette est toujours celle de l’école. `signalOrders` garde la palette figée de la
+    /// leçon d’un enregistreur au suivant ; à défaut, elle ne tient que pour cette instance.
     init(scope: SchoolCommandScope, lessonID: UUID, client: SchoolObservationClient,
          themeStore: SchoolObservationThemeStore? = nil,
-         rankingStore: SchoolObservationRankingStore? = nil,
+         preferencesStore: SchoolObservationPreferencesStore? = nil,
          signalOrders: (any SchoolLessonSignalOrderStore)? = nil,
          outbox: any SchoolCommandOutbox = EncryptedSchoolCommandOutbox(),
          permitsAnchor: (@MainActor (SchoolLiveObservationAnchor) -> Bool)? = nil,
@@ -128,9 +135,9 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         self.scope = scope; self.lessonID = lessonID; self.client = client; self.outbox = outbox
         self.themeStore = themeStore
         themeConfiguration = themeStore?.configuration ?? .embedded
-        self.rankingStore = rankingStore
+        self.preferencesStore = preferencesStore
         let orders: (any SchoolLessonSignalOrderStore)?
-        if rankingStore == nil { orders = nil }
+        if preferencesStore == nil { orders = nil }
         else if let signalOrders { orders = signalOrders }
         else { orders = SchoolLessonSignalOrderMemoryStore() }
         self.signalOrders = orders
@@ -138,7 +145,7 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
         self.retryDelays = retryDelays
         self.permitsAnchor = permitsAnchor; self.prepareAnchor = prepareAnchor
         // Avant la première ouverture : l’ordre déjà figé pour cette leçon (reprise), sans rien figer encore.
-        signalOrder = Self.resolvedSignalOrder(ranking: rankingStore, orders: orders, lessonID: lessonID, freezing: false)
+        paletteKeys = Self.resolvedPalette(preferences: preferencesStore, orders: orders, lessonID: lessonID, freezing: false)
         do { try reload() }
         catch { stopped = true; errorMessage = "Le stockage protégé est indisponible. Aucune observation n’a été ajoutée." }
         for command in queue {
@@ -153,29 +160,35 @@ struct SchoolLiveObservationTheme: Identifiable, Equatable {
     }
 
     /// Ouverture de « Signaler » : la palette prend la dernière configuration confirmée, puis demande une
-    /// relecture dont le résultat ne servira qu’à l’ouverture suivante. L’ordre automatique, lui, n’est pris
-    /// qu’une fois par leçon ; la relecture du classement ne sert qu’à une leçon suivante.
+    /// relecture dont le résultat ne servira qu’à l’ouverture suivante. La palette, elle, n’est prise qu’une fois par
+    /// leçon (dans les deux modes) ; une relecture ne sert qu’à une leçon suivante, et un thème masqué depuis disparaît
+    /// seul de la palette figée.
     func openPalette() {
         if let themeStore {
             if themeConfiguration != themeStore.configuration { themeConfiguration = themeStore.configuration }
             Task { await themeStore.refresh() }
         }
-        guard let rankingStore else { return }
-        let order = Self.resolvedSignalOrder(ranking: rankingStore, orders: signalOrders, lessonID: lessonID, freezing: true)
-        if signalOrder != order { signalOrder = order }
-        Task { await rankingStore.refresh() }
+        guard let preferencesStore else { return }
+        let keys = Self.resolvedPalette(preferences: preferencesStore, orders: signalOrders, lessonID: lessonID, freezing: true)
+        if paletteKeys != keys { paletteKeys = keys }
+        Task { await preferencesStore.refresh() }
     }
 
-    /// Mode manuel : aucun ordre automatique, et rien n’est figé (un ordre figé plus tôt est ignoré, sans être
-    /// effacé). Mode automatique : l’ordre figé pour la leçon s’il existe ; sinon l’ordre confirmé du classement,
-    /// figé pour elle si `freezing`.
-    private static func resolvedSignalOrder(ranking: SchoolObservationRankingStore?, orders: (any SchoolLessonSignalOrderStore)?,
-                                            lessonID: UUID, freezing: Bool) -> [String]? {
-        guard let ranking, ranking.mode == .smart else { return nil }
-        if let frozen = orders?.order(for: lessonID), !frozen.isEmpty { return frozen }
-        guard let order = ranking.effectiveOrder else { return nil }
-        if freezing { orders?.freeze(order, lessonID: lessonID) }
-        return order
+    /// La palette confirmée du compte, figée pour la leçon à sa première ouverture : si une palette a déjà été prise pour
+    /// elle (reprise après arrêt de l’app comprise), elle sert, filtrée par ce qui est encore affiché. Sinon, la palette
+    /// courante, mémorisée si `freezing`. `nil` : rien n'est confirmé, l'école décide.
+    private static func resolvedPalette(preferences: SchoolObservationPreferencesStore?, orders: (any SchoolLessonSignalOrderStore)?,
+                                        lessonID: UUID, freezing: Bool) -> [String]? {
+        guard let preferences, let current = preferences.palette, !current.isEmpty else {
+            // Reprise sans réseau ni copie : la palette déjà figée vaut mieux que le catalogue de l'école.
+            if let frozen = orders?.order(for: lessonID), !frozen.isEmpty { return frozen }
+            return nil
+        }
+        if let frozen = orders?.order(for: lessonID), !frozen.isEmpty {
+            return SchoolObservationPalette.arranged(current: current, frozen: frozen)
+        }
+        if freezing { orders?.freeze(current, lessonID: lessonID) }
+        return current
     }
 
     /// Le thème vient du catalogue de l’école, le statut est un choix explicite. Un thème masqué depuis l’ouverture

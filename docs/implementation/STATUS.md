@@ -186,6 +186,16 @@
 - JAMAIS EXÉCUTÉ : `scripts/dev/check-platform-clients.ts` (étape de recette « écoles clientes » appelée par `check-school-opening.ts` après la création de l'école : fiche retrouvée par recherche, liaison unique en base, journal, création d'un code depuis l'interface, code absent des tables de la plateforme, révocation), ajoutée au commit `56a43940` après les runs ci-dessus ; non rejouée faute de Keycloak sur le poste. L'étape ajoutée dans `check-school-opening.ts` ne s'est donc jamais déroulée, y compris dans la CI ; si elle échoue, c'est un défaut de la recette à corriger avant d'accuser le produit. Même statut pour `check-platform-team.ts` (T01), relu à la main seulement après l'ajout de l'onglet Écoles, lui aussi premier onglet par défaut.
 - Non écrit, non exécuté : rien de Swift (aucun changement), aucun résultat GPS, batterie, VoiceOver ni appareil. La reprise après fermeture ou redémarrage de l'app est prouvée côté API et relais par les tests d'intégration, côté iOS par lecture.
 - Reste à qualifier à la fin de l'épic R01 : toutes les suites ci-dessus sur la tête finale, l'étape `check-platform-clients.ts`, la migration `20261114_platform_clients.sql` sur une copie de la base du homelab avant tout déploiement (sauvegarde préalable, décision du porteur), l'essai du parcours sur iPhone et iPad.
+## 22 novembre 2026 — R08 fusionné et déployé, premier opérateur de la plateforme en service
+
+- **Fusionné dans `master`** : R08 serveur (PR #479), web (#481), iPhone et iPad (#482), qualification multi-écoles (#470) et cadrage (#471). Fusion `e465fb8c`, correction de test `ee6a4c0c`, cadrage `4f22bc33`. Une seule attente de test changée : l'administrateur de l'école A qui écrit la politique de B reçoit 404 `NOT_FOUND` et non 403, car `schoolCommand` ne révèle pas l'existence d'une école dont on n'est pas membre. La règle du serveur est inchangée.
+- **Exécuté** : CI « Refonte · vérifications » [run 45073695696](https://github.com/tomyrms/Drivy/actions/runs/45073695696) sur `4f22bc33`, verte. API et PostgreSQL : 1239 tests sur 1239 (110 fichiers). Web et BFF : 1044 réussis et 1 échec attendu (96 fichiers). Intégrité, contrats et suites concernées : verts. En local, sur PostgreSQL réelle et Mailpit, la suite API passe sauf `course-worker-process`, qui exige Node 24 (Node 26 sur le poste) ; la CI la couvre.
+- **Déployé sur le homelab** : release `4f22bc33`, après `1778ed7d`. Sauvegarde préalable `drivy_refonte-before-4f22bc33-20261122T215917Z.dump` : 4,67 Mo, 98 tables, tous les blocs lus. La restauration de répétition est identique (1791 lignes, 65 migrations). Une copie locale est dans `.local/backups/`, avec le même sha256. Sept migrations appliquées (65 → 72) : `20261107_identity_versions_photo_generation`, `20261107_planning_coherence`, `20261110_messaging_otk_consumption_proof`, `20261110_push_delivery_event_identity`, `20261111_observation_preferences`, `20261113_platform_operators` et `20261113b_platform_invitation_creator_active`.
+- **Contrôles après la bascule** : les quatre services sont actifs, sans redémarrage automatique, et leurs journaux sont sans erreur. Les noms et empreintes des migrations sont égaux à ceux de la release. La page publique est identique au build. Le parcours OIDC est complet. Les pages `/app/plateforme` et `/app/preferences/signalements` sont servies par le nouveau build. Les routes `observation-preferences` et `platform/me` répondaient 404 avant la release et répondent maintenant 401 sans session, par l'API et par la passerelle. Les routes déjà en service sont inchangées.
+- **Premier opérateur de la plateforme (R01-T01)** : l'installeur refuse de basculer sans opérateur actif. Le compte Keycloak du porteur, relié à une personne active, a été écrit dans `migration.env` juste avant l'installation, puis amorcé par `install-api-release.py --bootstrap-operators` (1 ajouté, 1 événement au journal). L'entrée d'amorçage a été retirée de la configuration après la vérification. Il y a 1 opérateur ACTIVE. Ne pas relancer `--bootstrap-operators` ; les opérateurs suivants passent par une invitation de la console.
+- **IPA** : [run 45075221751](https://github.com/tomyrms/Drivy/actions/runs/45075221751) « IPA d'essai · iLoader » sur `4f22bc33`, lancé à la fin du déploiement.
+- **Issues** : #466, #467 et #468 sont fermées. Restent ouvertes : #469 (iPhone et iPad), #470 (qualification multi-écoles) et l'épopée #465.
+- **Reste à qualifier** : rien de R08 n'a été essayé avec de vrais comptes sur le serveur déployé, ni la bascule libre puis imposée d'une école, ni les préférences web d'un moniteur. La console `/app/plateforme` n'a pas encore été ouverte par le porteur. Sur iPhone et iPad, les parcours UI des préférences n'ont pas été rejoués. Le glisser réel, VoiceOver, Dynamic Type et l'essai sur appareil restent à faire. Côté web, le lecteur d'écran réel et le tactile n'ont pas été essayés.
 
 ## 13 novembre 2026 — R01-T01 : console des opérateurs de la plateforme (#453)
 
@@ -2484,6 +2494,40 @@ nouveaux tests et les parcours iPhone/iPad doivent encore être compilés et ex�
 La prochaine qualification porte sur le candidat complet ; aucune fusion master ou bascule
 homelab n'est encore annoncée. Leur autorisation est acquise, avec sauvegarde préalable vérifiée.
 
+## 11 novembre 2026 — R08 serveur (#465, #466, #467)
+
+Branche `tomyrms/r08-serveur`. Contrat : `r08-contrat-serveur-20261111.md` ; contrat machine : `apps/api/contracts/observation-preferences.json`.
+
+**Livré (API + migration `20261111_observation_preferences.sql`)**
+
+- Politique de l'école séparée des préférences du compte : `personalization_allowed` (faux pour toutes les écoles existantes), gestion de la référence réservée à l'administrateur.
+- Préférences et classement intelligent au niveau du compte (`person_observation_preference`, RLS forcée), routes `observation-preferences` (GET, PUT, `presentation-reset`, `learning-reset`) ; anciennes routes `observation-themes` et `observation-ranking` compatibles.
+- « Recommencer l'apprentissage » : borne durable (génération + date) lue par la fonction d'usage ; aucune donnée pédagogique supprimée.
+- Reprise de l'existant répétable, sans écrasement ; divergences exposées comme candidats, jamais départagées.
+
+**Exécuté, sur une vraie PostgreSQL 55373 (Docker `drivy-r08-pg`)**
+
+- `npm run typecheck` : propre.
+- Sept fichiers ciblés (préférences 16, apprentissage 7, migration 5, classement, thèmes, capture, capture-observations) : 7 fichiers, 62/62 réussis.
+- Suite API complète : 4 fichiers en échec sur 105, 1168 réussis, 7 ignorés. Les échecs ne relèvent pas de R08 : `course-worker-process` (exige Node 24, runtime local 26.8.1) ; `g1c` (deux tests SMTP réel, Mailpit absent) ; `capture` et `capture-observations` échouaient sur un compteur de tables que j'avais modifié à tort, rétabli, puis relancés verts (inventaires limités aux migrations numérotées).
+
+**Reste à qualifier**
+
+- Garde de génération d'une opération quotidienne périmée : couvert par le code et la borne SQL, sans test dédié.
+- Web (#468) et iOS (#469) : déclarer les routes dans la passerelle, écrans non réalisés ici. Aucun résultat sur appareil, aucune CI Apple, aucun déploiement.
+- Décisions conservatrices à valider : voir § 8 du contrat.
+
+### Mise à jour du 12 novembre 2026 — corrections de revue de la PR #479
+
+- Ordre toujours personnel : en visibilité imposée, l'ordre est accepté et seule la visibilité personnelle est refusée (`403 OBSERVATION_PERSONALIZATION_DISABLED`, rien d'écrit) ; la visibilité enregistrée reste en réserve. Corps du `PUT` : `{operationId, mode?, order?, visibility?}` (ancien `themes` retiré). `GET themes` : ordre personnel, visibilité effective, `schoolVisible`, `visibilityEditable`.
+- Classement du compte sur le catalogue complet (18 clés), filtré seulement pour la palette ; un thème masqué dans l'école A garde rang et habitudes dans l'école B, y compris après un rafraîchissement fait depuis A.
+- Reset de présentation : administrateur toujours, moniteur en école libre seulement ; la référence de l'école ouverte est copiée sur le compte.
+- Preuves ajoutées : course « Recommencer l'apprentissage » contre un recalcul quotidien démarré avant (seam `afterRead` de `loadPreferences`) ; reset scolaire vers les valeurs d'origine de Drivy (`PUT observation-themes`, aucun compte touché) ; libre, imposé, libre avec ordre déplacé pendant la phase imposée.
+- Trois décisions marquées « validées par le porteur » (11 novembre 2026) dans le contrat : jour `Europe/Zurich`, divergences non départagées, ancien droit inerte.
+- Vérifications : typecheck propre ; suites ciblées préférences 22, apprentissage 9, classement et migration verts ; suite API complète : 103 fichiers sur 105 réussis, 1178 tests réussis, 7 ignorés, 2 en échec hors R08 (`g1c` SMTP, Mailpit absent) et `course-worker-process` (exige Node 24, local 26.8.1).
+- Base de test : conteneur `drivy-r08-pg2` sur le port 55640 (le port 55373 est tombé dans une plage réservée par Windows).
+- Reste à qualifier : web (#468) et iOS (#469) ; routes à déclarer dans `apps/web/server/school-routes.ts` ; aucun appareil, aucune CI Apple, aucun déploiement.
+
 ## 11 novembre 2026 — CI de master rouge corrigée, restes serveur de #37 et #50
 
 **Exécuté.** Les workflows « Refonte · vérifications » (job « Web et BFF ») et « Refonte · ouverture école
@@ -2508,3 +2552,25 @@ envoyé. Restent hors dépôt : choix du fournisseur SMTP (#50), réception APNs
 appareil (#37, #50), recomptage de la matrice #83. Rien n'est déployé, aucune issue n'est fermée par ce lot.
 
 **Contenu de messagerie encodé à clés triées (12 novembre).** `MessagingPlainContent.encoded()` ne fixait pas l'ordre des clés : deux encodages du même contenu pouvaient différer, alors que le signalement promet les mêmes octets (`MessagingThreadTests` ligne 401, rouge sur le run 43200045962 relancé). L'encodeur trie désormais les clés ; le décodage est inchangé. À qualifier : run Apple sur le commit suivant.
+
+## 12 novembre 2026 — R08 web (#468), préférences de signalements du compte
+
+**Exécuté.** Deux destinations distinctes. « Mon compte, Préférences, Signalements » (`/app/preferences/signalements`, hors console) est ouverte aux moniteurs et administrateurs sans ouvrir la gestion de l'école ; absente pour un élève seul. Elle sépare l'ordre (toujours modifiable) de la visibilité (lecture seule « Géré par l'école » quand l'école l'impose), propose le classement intelligent, une seule action « Rétablir l'ordre et la visibilité » (administrateur toujours, moniteur en école libre) et, plus discrètement, « Recommencer l'apprentissage du classement intelligent », chacune avec une confirmation brève. « Signalements de l'école » (gestion) ne sert plus que l'administrateur : case « Autoriser les moniteurs à personnaliser les signalements », référence collective et retour aux valeurs Drivy. Les quatre routes `observation-preferences` sont déclarées dans `apps/web/server/school-routes.ts` et couvertes dans `school-bff.test.ts`. Brouillons liés à la version du compte et à la politique ; un envoi incertain reste « Résultat à vérifier ».
+
+**Aperçu et gardes (compléments).** L'aperçu rejoue la matrice R08 dans `portal/preview/families/signals.ts` (lecture, enregistrement avec If-Match, remises à zéro, 403 `OBSERVATION_PERSONALIZATION_DISABLED` en école imposée, administrateur et moniteur), couvert par `signals.test.ts`. Deux gardes sont prouvées par `observation-preferences-guards.test.ts` : le brouillon d'un autre compte n'est jamais affiché (`ScopedDrafts`, magasin de commandes) et un envoi incertain ne devient jamais « Enregistré » sans reçu (`saveStatus`).
+
+**Vérifié en local.** `tsc` (client, serveur, contrôle) propre ; suite web entière verte (94 fichiers, 1010 tests). Aucun test API ni PostgreSQL exécuté ici.
+
+**Vu dans un vrai navigateur** (Edge piloté par Playwright sur l'aperçu local, captures hors dépôt) : déplacement au clavier avec focus conservé, noms accessibles (arbre d'accessibilité), écran imposé (un seul interrupteur, pas de remise de l'affichage), états conflit, refus et réponse perdue sans « Enregistré », focus clavier visible sur la case de l'école, 375 px et bureau en clair et en sombre. Défauts trouvés et corrigés : colonne étroite qui écrasait les noms lettre par lettre, débordement horizontal de 45 px à 375 px, focus de la case peu visible.
+
+**Reste à qualifier.** Lecteur d'écran réel, tactile et glisser au pointeur sur appareil, iPhone/Safari, parcours sur un serveur réel (bascule libre/imposée), la CI de la branche (voir la PR).
+
+## 12 novembre 2026 — R08 iPhone et iPad (#469)
+
+Branche `tomyrms/r08-ios` (contient aussi le serveur de `tomyrms/r08-serveur`, PR #479).
+
+**Exécuté** : Profil, Paramètres, Signalements lit et écrit `observation-preferences` (GET, PUT ordre / mode / visibilité séparables, `presentation-reset`, `learning-reset`). Copies locales séparées : compte (version, mode, ordre, borne d'apprentissage) et politique de l'école (visibilité effective, palette), isolées par origine d'API et identité, versions suivies à part ; la copie des thèmes de l'école passe au format 2 avec l'identité. Palette = ordre personnel filtré par la visibilité effective, jamais réécrite comme ordre global ; instantané de leçon (clés de palette, format 2) conservé après arrêt de l'app. Écran absent pour l'élève seul ; rétablir ordre et visibilité selon la matrice ; « Recommencer l'apprentissage » discret avec confirmation ; choix des anciennes configurations hors leçon ; purge de tous les caches à la déconnexion. Anciens fichiers par école ou adhésion effacés au premier usage.
+
+**Qualifié** : run Apple 43223060940 (`unit_only`, périmètre `all`, SHA 2eabd4f5), succès : toute la suite métier DrivyTests, dont les nouveaux tests des préférences (contrat, store, copies locales, palette de leçon, instantané). Deux essais précédents ont échoué sur des attentes de test (isolation MainActor, ordre d'envoi de la visibilité, palette du mode intelligent), corrigées.
+
+**Reste à qualifier** : parcours UI iPhone et iPad non rejoués ; glisser réel, VoiceOver, Dynamic Type et iPad sur appareil : non essayés ; aucun déploiement.

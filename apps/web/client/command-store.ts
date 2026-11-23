@@ -303,7 +303,7 @@ class CommandStore {
 export const commandStore = new CommandStore();
 
 export function useCommandSnapshot(): Snapshot {
-  return useSyncExternalStore(commandStore.subscribe, commandStore.getSnapshot);
+  return useSyncExternalStore(commandStore.subscribe, commandStore.getSnapshot, commandStore.getSnapshot);
 }
 
 /** A number that changes when a command of one of these kinds was confirmed (or a request was given up): a targeted read key. */
